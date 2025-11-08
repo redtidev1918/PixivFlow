@@ -10,7 +10,7 @@
 ## [未发布]
 
 ### 新增
-- ✨ 添加全局安装文档和说明（2025-11-XX）
+- ✨ 添加全局安装文档和说明（2025-11-08）
   - 在 README.md 中添加全局安装方式说明
   - 在 QUICKSTART.md 中添加全局安装步骤
   - 在 START_HERE.md 中添加全局安装选项
@@ -51,6 +51,12 @@
   - 在 `docker-compose.yml` 中正确配置 `STATIC_PATH` 环境变量
   - 前端文件路径：`/app/webui-frontend/dist`
   - 验证了静态文件服务和 SPA 路由回退功能正常工作
+- 🐛 修复文件组织模式中重复类型目录的问题（2025-11-08）
+  - 修复了在使用 `byDate`、`byDateAndAuthor`、`byDay`、`byDayAndAuthor` 模式时，当基础目录已经是 `novels` 或 `illustrations` 时，会重复创建类型目录的问题
+  - 改进了类型目录检测逻辑，现在通过检查路径最后一段来准确判断是否已包含类型目录
+  - 优化了代码结构，提取了日期处理函数，提高了代码可读性和维护性
+  - 修复前：`downloads/novels/2025-11-04/novels/文件名.txt`
+  - 修复后：`downloads/novels/2025-11-04/文件名.txt`
 
 ### 改进
 - ⚡ 优化排名下载性能，避免速率限制（2025-11-08）

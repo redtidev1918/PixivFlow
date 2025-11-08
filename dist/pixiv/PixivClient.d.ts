@@ -60,6 +60,17 @@ export declare class PixivClient {
      */
     private parseDate;
     /**
+     * Parse date range from target config
+     * Returns { startDate, endDate } as Date objects, or null if invalid
+     * Validates that startDate <= endDate
+     */
+    private parseDateRange;
+    /**
+     * Check if item date is within the specified range
+     * Handles invalid dates gracefully
+     */
+    private isDateInRange;
+    /**
      * Get popularity score for sorting
      * Uses bookmarks as primary metric, views as secondary
      * Handles missing or invalid values gracefully

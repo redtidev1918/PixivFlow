@@ -1,6 +1,7 @@
 import { StandaloneConfig, TargetConfig } from '../config';
 import { logger } from '../logger';
 import { DownloadError, NetworkError, getErrorMessage, is404Error, isSkipableError } from '../utils/errors';
+import { parseDateRange, isDateInRange } from '../utils/date-utils';
 import { PixivClient, PixivIllust, PixivIllustPage, PixivNovel } from '../pixiv/PixivClient';
 import { Database } from '../storage/Database';
 import { FileService, FileMetadata, PixivMetadata } from './FileService';
@@ -340,30 +341,37 @@ export class DownloadManager {
     // Filter by date range
     if (target.startDate || target.endDate) {
       const beforeCount = filtered.length;
-      const startDate = target.startDate ? new Date(target.startDate + 'T00:00:00') : null;
-      const endDate = target.endDate ? new Date(target.endDate + 'T23:59:59') : null;
-
-      filtered = filtered.filter(item => {
-        if (!item.create_date) {
-          return false; // Skip items without create_date
-        }
-        const itemDate = new Date(item.create_date);
+      const dateRange = parseDateRange(target.startDate, target.endDate);
+      
+      if (dateRange === null) {
+        logger.warn('Invalid date range in filterItems, skipping date filter', {
+          startDate: target.startDate,
+          endDate: target.endDate
+        });
+      } else {
+        const { startDate, endDate } = dateRange;
         
-        if (startDate && itemDate < startDate) {
-          return false;
-        }
-        if (endDate && itemDate > endDate) {
-          return false;
-        }
-        return true;
-      });
+        filtered = filtered.filter(item => {
+          if (!item.create_date) {
+            return false; // Skip items without create_date
+          }
+          const itemDate = new Date(item.create_date);
+          
+          // Check if date is valid
+          if (!itemDate || isNaN(itemDate.getTime())) {
+            return false; // Skip items with invalid dates
+          }
+          
+          return isDateInRange(itemDate, startDate, endDate);
+        });
 
-      if (filtered.length < beforeCount) {
-        const dateRange = [
-          target.startDate || 'unlimited',
-          target.endDate || 'unlimited'
-        ].join(' ~ ');
-        logger.info(`Filtered by date range (${dateRange}): ${beforeCount} -> ${filtered.length} ${itemType}(s)`);
+        if (filtered.length < beforeCount) {
+          const dateRangeStr = [
+            target.startDate || 'unlimited',
+            target.endDate || 'unlimited'
+          ].join(' ~ ');
+          logger.info(`Filtered by date range (${dateRangeStr}): ${beforeCount} -> ${filtered.length} ${itemType}(s)`);
+        }
       }
     }
 

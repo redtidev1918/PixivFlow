@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.DownloadManager = void 0;
 const logger_1 = require("../logger");
 const errors_1 = require("../utils/errors");
+const date_utils_1 = require("../utils/date-utils");
 const language_detection_1 = require("../utils/language-detection");
 const node_fs_1 = require("node:fs");
 const node_path_1 = require("node:path");
@@ -292,27 +293,33 @@ class DownloadManager {
         // Filter by date range
         if (target.startDate || target.endDate) {
             const beforeCount = filtered.length;
-            const startDate = target.startDate ? new Date(target.startDate + 'T00:00:00') : null;
-            const endDate = target.endDate ? new Date(target.endDate + 'T23:59:59') : null;
-            filtered = filtered.filter(item => {
-                if (!item.create_date) {
-                    return false; // Skip items without create_date
+            const dateRange = (0, date_utils_1.parseDateRange)(target.startDate, target.endDate);
+            if (dateRange === null) {
+                logger_1.logger.warn('Invalid date range in filterItems, skipping date filter', {
+                    startDate: target.startDate,
+                    endDate: target.endDate
+                });
+            }
+            else {
+                const { startDate, endDate } = dateRange;
+                filtered = filtered.filter(item => {
+                    if (!item.create_date) {
+                        return false; // Skip items without create_date
+                    }
+                    const itemDate = new Date(item.create_date);
+                    // Check if date is valid
+                    if (!itemDate || isNaN(itemDate.getTime())) {
+                        return false; // Skip items with invalid dates
+                    }
+                    return (0, date_utils_1.isDateInRange)(itemDate, startDate, endDate);
+                });
+                if (filtered.length < beforeCount) {
+                    const dateRangeStr = [
+                        target.startDate || 'unlimited',
+                        target.endDate || 'unlimited'
+                    ].join(' ~ ');
+                    logger_1.logger.info(`Filtered by date range (${dateRangeStr}): ${beforeCount} -> ${filtered.length} ${itemType}(s)`);
                 }
-                const itemDate = new Date(item.create_date);
-                if (startDate && itemDate < startDate) {
-                    return false;
-                }
-                if (endDate && itemDate > endDate) {
-                    return false;
-                }
-                return true;
-            });
-            if (filtered.length < beforeCount) {
-                const dateRange = [
-                    target.startDate || 'unlimited',
-                    target.endDate || 'unlimited'
-                ].join(' ~ ');
-                logger_1.logger.info(`Filtered by date range (${dateRange}): ${beforeCount} -> ${filtered.length} ${itemType}(s)`);
             }
         }
         if (filtered.length < originalCount) {

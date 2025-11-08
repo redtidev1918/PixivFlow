@@ -1214,11 +1214,16 @@ PixivFlow 支持多种目录组织方式，让文件自动分类存储：
 | `flat` | 扁平结构（默认） | `illustrations/123456_标题_1.jpg` |
 | `byAuthor` | 按作者组织 | `illustrations/作者名/123456_标题_1.jpg` |
 | `byTag` | 按标签组织 | `illustrations/标签名/123456_标题_1.jpg` |
-| `byDate` | 按日期组织 | `illustrations/2024-12/123456_标题_1.jpg` |
+| `byDate` | 按日期组织（YYYY-MM） | `illustrations/2024-12/illustrations/123456_标题_1.jpg` |
+| `byDay` | 按日组织（YYYY-MM-DD） | `illustrations/2024-12-25/illustrations/123456_标题_1.jpg` |
 | `byAuthorAndTag` | 按作者和标签 | `illustrations/作者名/标签名/123456_标题_1.jpg` |
 | `byDateAndAuthor` | 按日期和作者 | `illustrations/2024-12/作者名/123456_标题_1.jpg` |
+| `byDayAndAuthor` | 按日和作者 | `illustrations/2024-12-25/作者名/123456_标题_1.jpg` |
 
-> 💡 **提示**：使用组织模式可以让下载的文件更有条理，便于管理和查找。
+> 💡 **提示**：
+> - 使用组织模式可以让下载的文件更有条理，便于管理和查找
+> - 使用 `byDate` 或 `byDay` 模式时，会在日期文件夹下自动创建 `novels` 和 `illustrations` 子文件夹，分别存放小说和图片
+> - 例如：`{baseDir}/2024-12-25/novels/` 和 `{baseDir}/2024-12-25/illustrations/`
 
 ### 7.3 使用代理
 
@@ -2142,9 +2147,18 @@ PixivFlow 支持多种目录组织方式，让文件自动分类存储，便于�
 | `flat` | 扁平结构（默认） | 文件少，不需要分类 | `illustrations/123456_标题_1.jpg` |
 | `byAuthor` | 按作者组织 | 关注特定作者 | `illustrations/作者名/123456_标题_1.jpg` |
 | `byTag` | 按标签组织 | 按主题分类 | `illustrations/風景/123456_标题_1.jpg` |
-| `byDate` | 按日期组织（YYYY-MM） | 按时间顺序查看 | `illustrations/2024-12/123456_标题_1.jpg` |
+| `byDate` | 按日期组织（YYYY-MM） | 按月份查看，自动按类型分类 | `illustrations/2024-12/illustrations/123456_标题_1.jpg` |
+| `byDay` | 按日组织（YYYY-MM-DD） | 按日查看，自动按类型分类 | `illustrations/2024-12-25/illustrations/123456_标题_1.jpg` |
 | `byAuthorAndTag` | 按作者和标签 | 既想按作者又想按主题 | `illustrations/作者名/風景/123456_标题_1.jpg` |
-| `byDateAndAuthor` | 按日期和作者 | 按时间顺序，再按作者分类 | `illustrations/2024-12/作者名/123456_标题_1.jpg` |
+| `byDateAndAuthor` | 按日期和作者 | 按月份顺序，再按作者分类 | `illustrations/2024-12/作者名/123456_标题_1.jpg` |
+| `byDayAndAuthor` | 按日和作者 | 按日顺序，再按作者分类，自动按类型分类 | `illustrations/2024-12-25/作者名/123456_标题_1.jpg` |
+
+> **💡 重要提示**：
+> - 使用 `byDate` 或 `byDay` 模式时，会在日期文件夹下自动创建 `novels` 和 `illustrations` 子文件夹
+> - 这样可以方便地在同一个日期文件夹下区分不同类型的内容
+> - 例如使用 `byDay` 模式时：
+>   - 图片保存在：`{baseDir}/2024-12-25/illustrations/123456_标题_1.jpg`
+>   - 小说保存在：`{baseDir}/2024-12-25/novels/123456_标题.txt`
 
 **详细目录结构示例**：
 
@@ -2193,11 +2207,35 @@ downloads/
             └── 123457_插画作品_1.jpg
 ```
 
+**5. 使用 `byDay`（按日组织，自动按类型分类）**：
+```
+downloads/
+└── 2024-12-25/
+    ├── illustrations/
+    │   └── 123456_作品标题_1.jpg
+    └── novels/
+        └── 123457_小说标题.txt
+```
+
+**6. 使用 `byDayAndAuthor`（按日和作者组织）**：
+```
+downloads/
+└── illustrations/
+    └── 2024-12-25/
+        ├── illustrations/
+        │   ├── 作者A/
+        │   │   └── 123456_作品1_1.jpg
+        │   └── 作者B/
+        │       └── 123457_作品2_1.jpg
+```
+
 **选择建议**：
 - 📁 **文件少（< 1000）**：使用 `flat` 或 `byAuthor`
-- 📁 **关注特定作者**：使用 `byAuthor` 或 `byDateAndAuthor`
+- 📁 **关注特定作者**：使用 `byAuthor` 或 `byDateAndAuthor` 或 `byDayAndAuthor`
 - 📁 **按主题分类**：使用 `byTag` 或 `byAuthorAndTag`
-- 📁 **长期使用**：使用 `byDate` 或 `byDateAndAuthor`，便于按时间查找
+- 📁 **长期使用**：使用 `byDate` 或 `byDateAndAuthor`，便于按月查找
+- 📁 **每日下载**：使用 `byDay` 或 `byDayAndAuthor`，便于按日查找，自动按类型分类
+- 📁 **同时下载图片和小说**：使用 `byDate` 或 `byDay`，会自动在日期文件夹下创建类型子文件夹
 - 📁 **大量文件**：使用 `byDateAndAuthor` 或 `byAuthorAndTag`，避免单目录文件过多
 
 详细说明请参考 [配置指南](STANDALONE-SETUP-GUIDE.md#4-存储配置)。

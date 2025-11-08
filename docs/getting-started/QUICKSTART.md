@@ -425,39 +425,13 @@ code config/standalone.config.json
 ```
 
 **配置说明**：
-- `"tag": "明日方舟 アークナイツ アーミヤ"` - 搜索同时包含这三个标签的作品（AND关系，默认行为）
+- `"tag": "明日方舟 アークナイツ アーミヤ"` - 搜索同时包含这三个标签的作品（AND关系）
 - 支持中文、日文、英文标签混合使用
-
-#### 示例 3.1：多标签搜索（OR关系）
-
-如果需要搜索包含**任意一个**标签的作品，可以使用 `tagRelation: "or"`：
-
-```json
-{
-  "targets": [
-    {
-      "type": "illustration",
-      "tag": "大肚 主题乙 テーマ甲関連 孕妇",
-      "tagRelation": "or",
-      "limit": 50,
-      "mode": "search",
-      "searchTarget": "partial_match_for_tags",
-      "sort": "popular_desc"
-    }
-  ]
-}
-```
-
-**配置说明**：
-- `"tagRelation": "or"` - 表示OR关系，作品只需包含任意一个标签即可
-- 系统会分别搜索每个标签，合并结果并自动去重
-- 适合需要扩大搜索范围，收集包含相关标签的所有作品
 
 > 💡 **术语解释**：
 > - **minBookmarks**：最低收藏数，用于筛选高质量作品
 > - **limit**：下载数量限制，防止一次性下载过多
-> - **多标签搜索（AND）**：在 `tag` 中用空格分隔多个标签，表示作品必须同时包含这些标签（默认行为）
-> - **多标签搜索（OR）**：设置 `"tagRelation": "or"` 后，作品只需包含任意一个标签即可
+> - **多标签搜索（AND）**：在 `tag` 中用空格分隔多个标签，表示作品必须同时包含这些标签
 
 > 📚 **更多配置选项**：查看 [配置文件使用指南](../guides/CONFIG_GUIDE.md) 了解所有配置选项和详细示例
 
@@ -497,9 +471,13 @@ downloads/
 | `flat` | 扁平结构（默认） | 所有文件放在一个文件夹 |
 | `byAuthor` | 按作者组织 | 想按作者分类查看 |
 | `byTag` | 按标签组织 | 想按标签分类查看 |
-| `byDate` | 按日期组织（YYYY-MM） | 想按时间顺序查看 |
+| `byDate` | 按日期组织（YYYY-MM） | 想按月份查看，自动按类型分类 |
+| `byDay` | 按日组织（YYYY-MM-DD） | 想按日查看，自动按类型分类 |
 | `byAuthorAndTag` | 按作者和标签 | 既想按作者又想按标签 |
-| `byDateAndAuthor` | 按日期和作者 | 按时间顺序，再按作者分类 |
+| `byDateAndAuthor` | 按日期和作者 | 按月份顺序，再按作者分类 |
+| `byDayAndAuthor` | 按日和作者 | 按日顺序，再按作者分类，自动按类型分类 |
+
+> **💡 提示**：使用 `byDate` 或 `byDay` 模式时，会在日期文件夹下自动创建 `novels` 和 `illustrations` 子文件夹，方便区分不同类型的内容。
 
 详细说明请参考 [配置指南](STANDALONE-SETUP-GUIDE.md#4-存储配置)。
 

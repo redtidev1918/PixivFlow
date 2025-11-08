@@ -1,10 +1,8 @@
 {
   "_comment": "下载指定标签下昨天热度前五的中文小说",
   "_note": "标签：大肚、主题乙、テーマ乙、テーマ甲関連、孕妇、主题甲相关、テーマ甲、テーマ甲人物、inflation、主题甲、主题甲扩展、破裂寸前、多胎、samesize、等身、topic-beta、birth、unbirth、出产、破水、胎内回归、胎内回帰",
-  "_date": "昨天日期：2025-11-07",
-  
+  "_date": "昨天日期：2025-11-08",
   "logLevel": "info",
-  
   "pixiv": {
     "clientId": "MOBrBDS8blbauoSck0ZfDbtuzpyT",
     "clientSecret": "lsACyCD94FhDUtGTXi3QzcFE2uU1hqtDaKeqrdwj",
@@ -12,7 +10,6 @@
     "refreshToken": "REDACTED_TOKEN",
     "userAgent": "PixivAndroidApp/5.0.234 (Android 11; Pixel 6)"
   },
-  
   "network": {
     "timeoutMs": 120000,
     "retries": 3,
@@ -24,46 +21,313 @@
       "protocol": "http"
     }
   },
-  
   "storage": {
     "databasePath": "/Users/yaoxiaohang/Documents/PixivBatchDownloader-master/data/pixiv-downloader.db",
     "downloadDirectory": "./downloads",
     "illustrationDirectory": "/Users/yaoxiaohang/Documents/PixivBatchDownloader-master/downloads/downloads/illustrations",
-    "novelDirectory": "/Users/yaoxiaohang/Documents/PixivBatchDownloader-master/downloads/downloads/novels"
+    "novelDirectory": "/Users/yaoxiaohang/Documents/PixivBatchDownloader-master/downloads/downloads/novels",
+    "novelOrganization": "byDay",
+    "illustrationOrganization": "byDay"
   },
-  
   "scheduler": {
     "enabled": false
   },
-  
   "download": {
-    "concurrency": 3,
-    "requestDelay": 500,
-    "dynamicConcurrency": true,
+    "concurrency": 1,
+    "requestDelay": 5000,
+    "dynamicConcurrency": false,
     "minConcurrency": 1,
     "maxRetries": 3,
-    "retryDelay": 2000,
+    "retryDelay": 5000,
     "timeout": 60000
   },
-  
   "targets": [
     {
-      "_comment": "下载包含指定标签的昨天热度前五的中文小说",
-      "_note": "使用OR关系：包含任意一个标签的作品都会被下载",
+      "_comment": "下载包含'大肚'标签的昨天热度前五的中文小说",
       "type": "novel",
-      "tag": "大肚 主题乙 テーマ乙 テーマ甲関連 孕妇 主题甲相关 テーマ甲 テーマ甲人物 inflation 主题甲 主题甲扩展 破裂寸前 多胎 samesize 等身 topic-beta birth unbirth 出产 破水 胎内回归 胎内回帰",
-      "tagRelation": "or",
+      "tag": "大肚",
       "limit": 5,
       "mode": "search",
       "searchTarget": "partial_match_for_tags",
       "sort": "popular_desc",
-      "startDate": "2025-11-07",
-      "endDate": "2025-11-07",
+      "startDate": "2025-11-08",
+      "endDate": "2025-11-08",
+      "languageFilter": "chinese",
+      "detectLanguage": true
+    },
+    {
+      "_comment": "下载包含'主题乙'标签的昨天热度前五的中文小说",
+      "type": "novel",
+      "tag": "主题乙",
+      "limit": 5,
+      "mode": "search",
+      "searchTarget": "partial_match_for_tags",
+      "sort": "popular_desc",
+      "startDate": "2025-11-08",
+      "endDate": "2025-11-08",
+      "languageFilter": "chinese",
+      "detectLanguage": true
+    },
+    {
+      "_comment": "下载包含'テーマ乙'标签的昨天热度前五的中文小说",
+      "type": "novel",
+      "tag": "テーマ乙",
+      "limit": 5,
+      "mode": "search",
+      "searchTarget": "partial_match_for_tags",
+      "sort": "popular_desc",
+      "startDate": "2025-11-08",
+      "endDate": "2025-11-08",
+      "languageFilter": "chinese",
+      "detectLanguage": true
+    },
+    {
+      "_comment": "下载包含'テーマ甲関連'标签的昨天热度前五的中文小说",
+      "type": "novel",
+      "tag": "テーマ甲関連",
+      "limit": 5,
+      "mode": "search",
+      "searchTarget": "partial_match_for_tags",
+      "sort": "popular_desc",
+      "startDate": "2025-11-08",
+      "endDate": "2025-11-08",
+      "languageFilter": "chinese",
+      "detectLanguage": true
+    },
+    {
+      "_comment": "下载包含'孕妇'标签的昨天热度前五的中文小说",
+      "type": "novel",
+      "tag": "孕妇",
+      "limit": 5,
+      "mode": "search",
+      "searchTarget": "partial_match_for_tags",
+      "sort": "popular_desc",
+      "startDate": "2025-11-08",
+      "endDate": "2025-11-08",
+      "languageFilter": "chinese",
+      "detectLanguage": true
+    },
+    {
+      "_comment": "下载包含'主题甲相关'标签的昨天热度前五的中文小说",
+      "type": "novel",
+      "tag": "主题甲相关",
+      "limit": 5,
+      "mode": "search",
+      "searchTarget": "partial_match_for_tags",
+      "sort": "popular_desc",
+      "startDate": "2025-11-08",
+      "endDate": "2025-11-08",
+      "languageFilter": "chinese",
+      "detectLanguage": true
+    },
+    {
+      "_comment": "下载包含'テーマ甲'标签的昨天热度前五的中文小说",
+      "type": "novel",
+      "tag": "テーマ甲",
+      "limit": 5,
+      "mode": "search",
+      "searchTarget": "partial_match_for_tags",
+      "sort": "popular_desc",
+      "startDate": "2025-11-08",
+      "endDate": "2025-11-08",
+      "languageFilter": "chinese",
+      "detectLanguage": true
+    },
+    {
+      "_comment": "下载包含'テーマ甲人物'标签的昨天热度前五的中文小说",
+      "type": "novel",
+      "tag": "テーマ甲人物",
+      "limit": 5,
+      "mode": "search",
+      "searchTarget": "partial_match_for_tags",
+      "sort": "popular_desc",
+      "startDate": "2025-11-08",
+      "endDate": "2025-11-08",
+      "languageFilter": "chinese",
+      "detectLanguage": true
+    },
+    {
+      "_comment": "下载包含'inflation'标签的昨天热度前五的中文小说",
+      "type": "novel",
+      "tag": "inflation",
+      "limit": 5,
+      "mode": "search",
+      "searchTarget": "partial_match_for_tags",
+      "sort": "popular_desc",
+      "startDate": "2025-11-08",
+      "endDate": "2025-11-08",
+      "languageFilter": "chinese",
+      "detectLanguage": true
+    },
+    {
+      "_comment": "下载包含'主题甲'标签的昨天热度前五的中文小说",
+      "type": "novel",
+      "tag": "主题甲",
+      "limit": 5,
+      "mode": "search",
+      "searchTarget": "partial_match_for_tags",
+      "sort": "popular_desc",
+      "startDate": "2025-11-08",
+      "endDate": "2025-11-08",
+      "languageFilter": "chinese",
+      "detectLanguage": true
+    },
+    {
+      "_comment": "下载包含'主题甲扩展'标签的昨天热度前五的中文小说",
+      "type": "novel",
+      "tag": "主题甲扩展",
+      "limit": 5,
+      "mode": "search",
+      "searchTarget": "partial_match_for_tags",
+      "sort": "popular_desc",
+      "startDate": "2025-11-08",
+      "endDate": "2025-11-08",
+      "languageFilter": "chinese",
+      "detectLanguage": true
+    },
+    {
+      "_comment": "下载包含'破裂寸前'标签的昨天热度前五的中文小说",
+      "type": "novel",
+      "tag": "破裂寸前",
+      "limit": 5,
+      "mode": "search",
+      "searchTarget": "partial_match_for_tags",
+      "sort": "popular_desc",
+      "startDate": "2025-11-08",
+      "endDate": "2025-11-08",
+      "languageFilter": "chinese",
+      "detectLanguage": true
+    },
+    {
+      "_comment": "下载包含'多胎'标签的昨天热度前五的中文小说",
+      "type": "novel",
+      "tag": "多胎",
+      "limit": 5,
+      "mode": "search",
+      "searchTarget": "partial_match_for_tags",
+      "sort": "popular_desc",
+      "startDate": "2025-11-08",
+      "endDate": "2025-11-08",
+      "languageFilter": "chinese",
+      "detectLanguage": true
+    },
+    {
+      "_comment": "下载包含'samesize'标签的昨天热度前五的中文小说",
+      "type": "novel",
+      "tag": "samesize",
+      "limit": 5,
+      "mode": "search",
+      "searchTarget": "partial_match_for_tags",
+      "sort": "popular_desc",
+      "startDate": "2025-11-08",
+      "endDate": "2025-11-08",
+      "languageFilter": "chinese",
+      "detectLanguage": true
+    },
+    {
+      "_comment": "下载包含'等身'标签的昨天热度前五的中文小说",
+      "type": "novel",
+      "tag": "等身",
+      "limit": 5,
+      "mode": "search",
+      "searchTarget": "partial_match_for_tags",
+      "sort": "popular_desc",
+      "startDate": "2025-11-08",
+      "endDate": "2025-11-08",
+      "languageFilter": "chinese",
+      "detectLanguage": true
+    },
+    {
+      "_comment": "下载包含'topic-beta'标签的昨天热度前五的中文小说",
+      "type": "novel",
+      "tag": "topic-beta",
+      "limit": 5,
+      "mode": "search",
+      "searchTarget": "partial_match_for_tags",
+      "sort": "popular_desc",
+      "startDate": "2025-11-08",
+      "endDate": "2025-11-08",
+      "languageFilter": "chinese",
+      "detectLanguage": true
+    },
+    {
+      "_comment": "下载包含'birth'标签的昨天热度前五的中文小说",
+      "type": "novel",
+      "tag": "birth",
+      "limit": 5,
+      "mode": "search",
+      "searchTarget": "partial_match_for_tags",
+      "sort": "popular_desc",
+      "startDate": "2025-11-08",
+      "endDate": "2025-11-08",
+      "languageFilter": "chinese",
+      "detectLanguage": true
+    },
+    {
+      "_comment": "下载包含'unbirth'标签的昨天热度前五的中文小说",
+      "type": "novel",
+      "tag": "unbirth",
+      "limit": 5,
+      "mode": "search",
+      "searchTarget": "partial_match_for_tags",
+      "sort": "popular_desc",
+      "startDate": "2025-11-08",
+      "endDate": "2025-11-08",
+      "languageFilter": "chinese",
+      "detectLanguage": true
+    },
+    {
+      "_comment": "下载包含'出产'标签的昨天热度前五的中文小说",
+      "type": "novel",
+      "tag": "出产",
+      "limit": 5,
+      "mode": "search",
+      "searchTarget": "partial_match_for_tags",
+      "sort": "popular_desc",
+      "startDate": "2025-11-08",
+      "endDate": "2025-11-08",
+      "languageFilter": "chinese",
+      "detectLanguage": true
+    },
+    {
+      "_comment": "下载包含'破水'标签的昨天热度前五的中文小说",
+      "type": "novel",
+      "tag": "破水",
+      "limit": 5,
+      "mode": "search",
+      "searchTarget": "partial_match_for_tags",
+      "sort": "popular_desc",
+      "startDate": "2025-11-08",
+      "endDate": "2025-11-08",
+      "languageFilter": "chinese",
+      "detectLanguage": true
+    },
+    {
+      "_comment": "下载包含'胎内回归'标签的昨天热度前五的中文小说",
+      "type": "novel",
+      "tag": "胎内回归",
+      "limit": 5,
+      "mode": "search",
+      "searchTarget": "partial_match_for_tags",
+      "sort": "popular_desc",
+      "startDate": "2025-11-08",
+      "endDate": "2025-11-08",
+      "languageFilter": "chinese",
+      "detectLanguage": true
+    },
+    {
+      "_comment": "下载包含'胎内回帰'标签的昨天热度前五的中文小说",
+      "type": "novel",
+      "tag": "胎内回帰",
+      "limit": 5,
+      "mode": "search",
+      "searchTarget": "partial_match_for_tags",
+      "sort": "popular_desc",
+      "startDate": "2025-11-08",
+      "endDate": "2025-11-08",
       "languageFilter": "chinese",
       "detectLanguage": true
     }
   ],
-  
   "initialDelay": 0
 }
-

@@ -1,7 +1,7 @@
 import { ensureDir } from '../utils/fs';
 import { StorageConfig, OrganizationMode } from '../config';
 import { promises as fs } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { join, dirname, basename } from 'node:path';
 
 export interface FileMetadata {
   author?: string;
@@ -102,44 +102,54 @@ export class FileService {
       return baseDirectory;
     }
 
+    // Check if baseDirectory already ends with a type-specific directory name
+    // This prevents duplicate type directories when baseDirectory is already novelDirectory or illustrationDirectory
+    const baseDirNormalized = baseDirectory.replace(/[\/\\]+$/, ''); // Remove trailing slashes
+    const lastSegment = baseDirNormalized.split(/[\/\\]/).pop()?.toLowerCase() || '';
+    const alreadyHasTypeDir = lastSegment === 'novels' || lastSegment === 'illustrations';
+
     const parts: string[] = [];
 
-    if (mode === 'byDate' || mode === 'byDateAndAuthor') {
+    // Extract date information once for reuse
+    const getDateParts = () => {
       const date = metadata?.date
         ? typeof metadata.date === 'string'
           ? new Date(metadata.date)
           : metadata.date
         : new Date();
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, '0');
+      return {
+        year: date.getFullYear(),
+        month: String(date.getMonth() + 1).padStart(2, '0'),
+        day: String(date.getDate()).padStart(2, '0'),
+      };
+    };
+
+    // Handle date-based organization modes
+    if (mode === 'byDate' || mode === 'byDateAndAuthor') {
+      const { year, month } = getDateParts();
       parts.push(`${year}-${month}`);
-      // Add type subdirectory in date folder
-      if (fileType) {
+      // Add type subdirectory only if baseDirectory doesn't already end with a type directory
+      if (fileType && !alreadyHasTypeDir) {
         parts.push(fileType === 'novel' ? 'novels' : 'illustrations');
       }
     }
 
     if (mode === 'byDay' || mode === 'byDayAndAuthor') {
-      const date = metadata?.date
-        ? typeof metadata.date === 'string'
-          ? new Date(metadata.date)
-          : metadata.date
-        : new Date();
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const day = String(date.getDate()).padStart(2, '0');
+      const { year, month, day } = getDateParts();
       parts.push(`${year}-${month}-${day}`);
-      // Add type subdirectory in date folder
-      if (fileType) {
+      // Add type subdirectory only if baseDirectory doesn't already end with a type directory
+      if (fileType && !alreadyHasTypeDir) {
         parts.push(fileType === 'novel' ? 'novels' : 'illustrations');
       }
     }
 
+    // Handle author-based organization
     if (mode === 'byAuthor' || mode === 'byAuthorAndTag' || mode === 'byDateAndAuthor' || mode === 'byDayAndAuthor') {
       const author = metadata?.author ? this.sanitizeDirectoryName(metadata.author) : 'unknown';
       parts.push(author);
     }
 
+    // Handle tag-based organization
     if (mode === 'byTag' || mode === 'byAuthorAndTag') {
       const tag = metadata?.tag ? this.sanitizeDirectoryName(metadata.tag) : 'untagged';
       parts.push(tag);
@@ -183,7 +193,8 @@ export class FileService {
    * @param metadata Metadata to save
    */
   public async saveMetadata(filePath: string, metadata: PixivMetadata): Promise<string> {
-    const { baseName } = this.splitExtension(filePath);
+    const fileName = basename(filePath);
+    const { baseName } = this.splitExtension(fileName);
     const metadataPath = join(dirname(filePath), `${baseName}.json`);
     const jsonContent = JSON.stringify(metadata, null, 2);
     await fs.writeFile(metadataPath, jsonContent, 'utf-8');

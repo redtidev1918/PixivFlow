@@ -11,9 +11,9 @@
     "userAgent": "PixivAndroidApp/5.0.234 (Android 11; Pixel 6)"
   },
   "network": {
-    "timeoutMs": 120000,
-    "retries": 3,
-    "retryDelay": 5000,
+    "timeoutMs": 60000,
+    "retries": 2,
+    "retryDelay": 3000,
     "proxy": {
       "enabled": true,
       "host": "127.0.0.1",
@@ -24,8 +24,6 @@
   "storage": {
     "databasePath": "/Users/yaoxiaohang/Documents/PixivBatchDownloader-master/data/pixiv-downloader.db",
     "downloadDirectory": "./downloads",
-    "illustrationDirectory": "/Users/yaoxiaohang/Documents/PixivBatchDownloader-master/downloads/downloads/illustrations",
-    "novelDirectory": "/Users/yaoxiaohang/Documents/PixivBatchDownloader-master/downloads/downloads/novels",
     "novelOrganization": "byDay",
     "illustrationOrganization": "byDay"
   },
@@ -33,12 +31,12 @@
     "enabled": false
   },
   "download": {
-    "concurrency": 1,
-    "requestDelay": 5000,
-    "dynamicConcurrency": false,
+    "concurrency": 2,
+    "requestDelay": 2000,
+    "dynamicConcurrency": true,
     "minConcurrency": 1,
-    "maxRetries": 3,
-    "retryDelay": 5000,
+    "maxRetries": 2,
+    "retryDelay": 3000,
     "timeout": 60000
   },
   "targets": [

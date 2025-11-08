@@ -21,7 +21,7 @@ class FileService {
     async saveImage(buffer, fileName, metadata) {
         const baseDirectory = this.storage.illustrationDirectory ?? this.storage.downloadDirectory;
         const organizationMode = this.storage.illustrationOrganization ?? 'flat';
-        const targetDirectory = this.getOrganizedDirectory(baseDirectory, organizationMode, metadata);
+        const targetDirectory = this.getOrganizedDirectory(baseDirectory, organizationMode, metadata, 'illustration');
         const uniquePath = await this.findUniquePath(targetDirectory, fileName);
         await node_fs_1.promises.writeFile(uniquePath, Buffer.from(buffer));
         return uniquePath;
@@ -29,7 +29,7 @@ class FileService {
     async saveText(content, fileName, metadata) {
         const baseDirectory = this.storage.novelDirectory ?? this.storage.downloadDirectory;
         const organizationMode = this.storage.novelOrganization ?? 'flat';
-        const targetDirectory = this.getOrganizedDirectory(baseDirectory, organizationMode, metadata);
+        const targetDirectory = this.getOrganizedDirectory(baseDirectory, organizationMode, metadata, 'novel');
         const uniquePath = await this.findUniquePath(targetDirectory, fileName);
         await node_fs_1.promises.writeFile(uniquePath, content, 'utf-8');
         return uniquePath;
@@ -49,7 +49,7 @@ class FileService {
             .replace(/^_+|_+$/g, '')
             .trim() || 'unknown';
     }
-    getOrganizedDirectory(baseDirectory, mode, metadata) {
+    getOrganizedDirectory(baseDirectory, mode, metadata, fileType) {
         if (mode === 'flat') {
             return baseDirectory;
         }
@@ -63,8 +63,27 @@ class FileService {
             const year = date.getFullYear();
             const month = String(date.getMonth() + 1).padStart(2, '0');
             parts.push(`${year}-${month}`);
+            // Add type subdirectory in date folder
+            if (fileType) {
+                parts.push(fileType === 'novel' ? 'novels' : 'illustrations');
+            }
         }
-        if (mode === 'byAuthor' || mode === 'byAuthorAndTag' || mode === 'byDateAndAuthor') {
+        if (mode === 'byDay' || mode === 'byDayAndAuthor') {
+            const date = metadata?.date
+                ? typeof metadata.date === 'string'
+                    ? new Date(metadata.date)
+                    : metadata.date
+                : new Date();
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            parts.push(`${year}-${month}-${day}`);
+            // Add type subdirectory in date folder
+            if (fileType) {
+                parts.push(fileType === 'novel' ? 'novels' : 'illustrations');
+            }
+        }
+        if (mode === 'byAuthor' || mode === 'byAuthorAndTag' || mode === 'byDateAndAuthor' || mode === 'byDayAndAuthor') {
             const author = metadata?.author ? this.sanitizeDirectoryName(metadata.author) : 'unknown';
             parts.push(author);
         }

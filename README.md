@@ -1038,7 +1038,7 @@ pixivflow/
 | `searchTarget` | 搜索范围 | `"partial_match_for_tags"`（部分匹配）<br>`"exact_match_for_tags"`（精确匹配） |
 | `sort` | 排序方式 | `"date_desc"`（最新）<br>`"popular_desc"`（最受欢迎）<br>`"date_asc"`（最旧） |
 | `minBookmarks` | 最低收藏数 | `500` |
-| `startDate` / `endDate` | 日期范围 | `"2024-01-01"` |
+| `startDate` / `endDate` | 日期范围 | `"2024-01-01"`<br>**注意**：使用 `date_desc` 排序时，遇到晚于 `endDate` 的作品会跳过但继续搜索，遇到早于 `startDate` 的作品会停止搜索 |
 | `random` | 随机选择 | `true` |
 | `seriesId` | 小说系列ID | `14690617`（仅 `type="novel"`） |
 | `novelId` | 单篇小说ID | `26132156`（仅 `type="novel"`） |

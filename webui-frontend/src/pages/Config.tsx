@@ -136,7 +136,9 @@ export default function Config() {
 
   useEffect(() => {
     if (configData?.data) {
-      form.setFieldsValue(configData.data);
+      // Remove _meta from form data
+      const { _meta, ...configWithoutMeta } = configData.data;
+      form.setFieldsValue(configWithoutMeta);
     }
   }, [configData, form]);
 
@@ -224,8 +226,15 @@ export default function Config() {
   };
 
   const handleExportConfig = () => {
-    const values = form.getFieldsValue();
-    const jsonStr = JSON.stringify(values, null, 2);
+    // Export the actual server config, not form values (which may be unsaved)
+    if (!configData?.data) {
+      message.warning('配置数据未加载，请稍后再试');
+      return;
+    }
+    
+    // Remove _meta from exported config
+    const { _meta, ...configToExport } = configData.data;
+    const jsonStr = JSON.stringify(configToExport, null, 2);
     const blob = new Blob([jsonStr], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -244,13 +253,36 @@ export default function Config() {
       const file = e.target.files[0];
       if (file) {
         const reader = new FileReader();
-        reader.onload = (event) => {
+        reader.onload = async (event) => {
           try {
             const config = JSON.parse(event.target?.result as string);
-            form.setFieldsValue(config);
-            message.success('配置已导入');
+            // Remove _meta if present
+            const { _meta, ...configToImport } = config;
+            
+            // Validate before importing
+            try {
+              const validationResult = await api.validateConfig(configToImport);
+              if (!validationResult.data.valid) {
+                message.error(`配置验证失败: ${validationResult.data.errors?.join(', ')}`);
+                return;
+              }
+            } catch (error) {
+              // If validation fails, still allow import but warn user
+              console.warn('Config validation error:', error);
+            }
+            
+            // Set form values
+            form.setFieldsValue(configToImport);
+            
+            // Auto-save after import
+            try {
+              await updateConfigMutation.mutateAsync(configToImport);
+              message.success('配置已导入并保存');
+            } catch (error: any) {
+              message.warning('配置已导入到表单，但保存失败。请检查配置后手动保存。');
+            }
           } catch (error) {
-            message.error('配置文件格式错误');
+            message.error('配置文件格式错误，请确保是有效的 JSON 文件');
           }
         };
         reader.readAsText(file);
@@ -403,12 +435,19 @@ export default function Config() {
     return <div>加载中...</div>;
   }
 
+  const currentConfigPath = configData?.data?._meta?.configPathRelative || configData?.data?._meta?.configPath || '未知';
+
   return (
     <div>
       <Space style={{ marginBottom: 16, width: '100%', justifyContent: 'space-between' }}>
-        <Title level={2} style={{ margin: 0 }}>
-          配置管理
-        </Title>
+        <div>
+          <Title level={2} style={{ margin: 0 }}>
+            配置管理
+          </Title>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            当前配置文件: {currentConfigPath}
+          </Text>
+        </div>
         <Space>
           <Button icon={<ReloadOutlined />} onClick={() => queryClient.invalidateQueries({ queryKey: ['config'] })}>
             刷新

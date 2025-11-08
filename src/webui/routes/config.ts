@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { relative } from 'path';
 import { loadConfig, getConfigPath, StandaloneConfig } from '../../config';
 import { logger } from '../../logger';
 import { validateConfig } from '../utils/config-validator';
@@ -25,7 +26,14 @@ router.get('/', async (req: Request, res: Response) => {
       },
     };
 
-    res.json(safeConfig);
+    // Include config path information
+    res.json({
+      ...safeConfig,
+      _meta: {
+        configPath,
+        configPathRelative: relative(process.cwd(), configPath),
+      },
+    });
   } catch (error) {
     logger.error('Failed to get config', { error });
     res.status(500).json({ error: 'Failed to get config' });

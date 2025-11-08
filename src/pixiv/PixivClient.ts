@@ -220,7 +220,9 @@ export class PixivClient {
     logger.debug('Searching illustrations', { 
       tag, 
       sort: target.sort,
-      searchTarget: target.searchTarget 
+      searchTarget: target.searchTarget,
+      startDate: target.startDate,
+      endDate: target.endDate
     });
     
     // Try to use API sort parameter if available, fallback to local sorting
@@ -236,6 +238,10 @@ export class PixivClient {
       params.sort = target.sort;
     }
     
+    // Parse date range for early stopping
+    const startDate = target.startDate ? new Date(target.startDate + 'T00:00:00') : null;
+    const endDate = target.endDate ? new Date(target.endDate + 'T23:59:59') : null;
+    
     let nextUrl: string | null = this.createRequestUrl('v1/search/illust', params);
 
     // Fetch all results first (or up to a reasonable limit for sorting)
@@ -248,8 +254,9 @@ export class PixivClient {
     // Get request delay from config to avoid rate limiting between pagination requests
     const requestDelay = this.config.download?.requestDelay ?? 3000;
     let pageCount = 0;
+    let shouldStop = false;
     
-    while (nextUrl && (!fetchLimit || results.length < fetchLimit)) {
+    while (nextUrl && (!fetchLimit || results.length < fetchLimit) && !shouldStop) {
       const requestUrl = nextUrl;
       pageCount++;
       
@@ -260,6 +267,50 @@ export class PixivClient {
       );
 
       for (const illust of response.illusts) {
+        // Early stopping and skipping based on date range when using date-based sorting
+        // Default sort is date_desc (newest first), so check for undefined or date_desc
+        const sortMode = target.sort || 'date_desc';
+        
+        if (!illust.create_date) {
+          // If no date, add it and let filterItems handle it later
+          results.push(illust);
+          if (fetchLimit && results.length >= fetchLimit) {
+            break;
+          }
+          continue;
+        }
+        
+        const itemDate = new Date(illust.create_date);
+        
+        if (sortMode === 'date_desc') {
+          // When sorting by date_desc (newest first):
+          // - Skip items after endDate (too new), but continue searching
+          // - Stop when encountering items before startDate (too old)
+          if (endDate && itemDate > endDate) {
+            logger.debug(`Skipping item ${illust.id} with date ${illust.create_date} after endDate ${target.endDate}`);
+            continue; // Skip this item but continue searching
+          }
+          if (startDate && itemDate < startDate) {
+            logger.debug(`Stopping search: encountered item ${illust.id} with date ${illust.create_date} before startDate ${target.startDate}`);
+            shouldStop = true;
+            break; // Stop searching entirely
+          }
+        } else if (sortMode === 'date_asc') {
+          // When sorting by date_asc (oldest first):
+          // - Skip items before startDate (too old), but continue searching
+          // - Stop when encountering items after endDate (too new)
+          if (startDate && itemDate < startDate) {
+            logger.debug(`Skipping item ${illust.id} with date ${illust.create_date} before startDate ${target.startDate}`);
+            continue; // Skip this item but continue searching
+          }
+          if (endDate && itemDate > endDate) {
+            logger.debug(`Stopping search: encountered item ${illust.id} with date ${illust.create_date} after endDate ${target.endDate}`);
+            shouldStop = true;
+            break; // Stop searching entirely
+          }
+        }
+        
+        // Item is within date range (or no date filter), add it
         results.push(illust);
         if (fetchLimit && results.length >= fetchLimit) {
           break;
@@ -269,7 +320,7 @@ export class PixivClient {
       nextUrl = response.next_url;
       
       // Add delay between pagination requests to avoid rate limiting (except after last page)
-      if (nextUrl && requestDelay > 0) {
+      if (nextUrl && requestDelay > 0 && !shouldStop) {
         logger.debug(`Tag "${tag}" page ${pageCount}: found ${response.illusts.length} illusts, waiting ${requestDelay}ms before next page...`);
         await delay(requestDelay);
       }
@@ -304,7 +355,9 @@ export class PixivClient {
     logger.debug('Searching novels', { 
       tag, 
       sort: target.sort,
-      searchTarget: target.searchTarget 
+      searchTarget: target.searchTarget,
+      startDate: target.startDate,
+      endDate: target.endDate
     });
     
     // Try to use API sort parameter if available, fallback to local sorting
@@ -318,6 +371,10 @@ export class PixivClient {
       params.sort = target.sort;
     }
     
+    // Parse date range for early stopping
+    const startDate = target.startDate ? new Date(target.startDate + 'T00:00:00') : null;
+    const endDate = target.endDate ? new Date(target.endDate + 'T23:59:59') : null;
+    
     let nextUrl: string | null = this.createRequestUrl('v1/search/novel', params);
 
     // Fetch all results first (or up to a reasonable limit for sorting)
@@ -330,8 +387,9 @@ export class PixivClient {
     // Get request delay from config to avoid rate limiting between pagination requests
     const requestDelay = this.config.download?.requestDelay ?? 3000;
     let pageCount = 0;
+    let shouldStop = false;
     
-    while (nextUrl && (!fetchLimit || results.length < fetchLimit)) {
+    while (nextUrl && (!fetchLimit || results.length < fetchLimit) && !shouldStop) {
       const requestUrl = nextUrl;
       pageCount++;
       
@@ -342,6 +400,50 @@ export class PixivClient {
       );
 
       for (const novel of response.novels) {
+        // Early stopping and skipping based on date range when using date-based sorting
+        // Default sort is date_desc (newest first), so check for undefined or date_desc
+        const sortMode = target.sort || 'date_desc';
+        
+        if (!novel.create_date) {
+          // If no date, add it and let filterItems handle it later
+          results.push(novel);
+          if (fetchLimit && results.length >= fetchLimit) {
+            break;
+          }
+          continue;
+        }
+        
+        const itemDate = new Date(novel.create_date);
+        
+        if (sortMode === 'date_desc') {
+          // When sorting by date_desc (newest first):
+          // - Skip items after endDate (too new), but continue searching
+          // - Stop when encountering items before startDate (too old)
+          if (endDate && itemDate > endDate) {
+            logger.debug(`Skipping novel ${novel.id} with date ${novel.create_date} after endDate ${target.endDate}`);
+            continue; // Skip this item but continue searching
+          }
+          if (startDate && itemDate < startDate) {
+            logger.debug(`Stopping search: encountered novel ${novel.id} with date ${novel.create_date} before startDate ${target.startDate}`);
+            shouldStop = true;
+            break; // Stop searching entirely
+          }
+        } else if (sortMode === 'date_asc') {
+          // When sorting by date_asc (oldest first):
+          // - Skip items before startDate (too old), but continue searching
+          // - Stop when encountering items after endDate (too new)
+          if (startDate && itemDate < startDate) {
+            logger.debug(`Skipping novel ${novel.id} with date ${novel.create_date} before startDate ${target.startDate}`);
+            continue; // Skip this item but continue searching
+          }
+          if (endDate && itemDate > endDate) {
+            logger.debug(`Stopping search: encountered novel ${novel.id} with date ${novel.create_date} after endDate ${target.endDate}`);
+            shouldStop = true;
+            break; // Stop searching entirely
+          }
+        }
+        
+        // Item is within date range (or no date filter), add it
         results.push(novel);
         if (fetchLimit && results.length >= fetchLimit) {
           break;
@@ -351,7 +453,7 @@ export class PixivClient {
       nextUrl = response.next_url;
       
       // Add delay between pagination requests to avoid rate limiting (except after last page)
-      if (nextUrl && requestDelay > 0) {
+      if (nextUrl && requestDelay > 0 && !shouldStop) {
         logger.debug(`Tag "${tag}" page ${pageCount}: found ${response.novels.length} novels, waiting ${requestDelay}ms before next page...`);
         await delay(requestDelay);
       }

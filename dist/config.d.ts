@@ -11,15 +11,6 @@ export interface TargetConfig {
      */
     searchTarget?: 'partial_match_for_tags' | 'exact_match_for_tags' | 'title_and_caption';
     /**
-     * Tag relation for multiple tags: 'and' (default) or 'or'
-     * - 'and': Works must contain all tags (default behavior, space-separated tags)
-     * - 'or': Works containing any of the tags will be included
-     *
-     * When 'or' is used, the tag field should contain space-separated tags.
-     * Each tag will be searched separately and results will be merged and deduplicated.
-     */
-    tagRelation?: 'and' | 'or';
-    /**
      * Sort order for search results.
      * - 'date_desc': Sort by date (newest first)
      * - 'date_asc': Sort by date (oldest first)
@@ -139,7 +130,7 @@ export interface NetworkConfig {
 /**
  * Directory organization mode
  */
-export type OrganizationMode = 'flat' | 'byAuthor' | 'byTag' | 'byDate' | 'byAuthorAndTag' | 'byDateAndAuthor';
+export type OrganizationMode = 'flat' | 'byAuthor' | 'byTag' | 'byDate' | 'byDay' | 'byAuthorAndTag' | 'byDateAndAuthor' | 'byDayAndAuthor';
 export interface StorageConfig {
     /**
      * Path to SQLite database file

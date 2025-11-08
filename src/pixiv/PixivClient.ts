@@ -207,70 +207,8 @@ export class PixivClient {
       throw new Error('tag is required for illustration search');
     }
     
-    const tagRelation = target.tagRelation || 'and';
-    
-    // If OR relation is requested, search each tag separately and merge results
-    if (tagRelation === 'or') {
-      const tags = target.tag.split(/\s+/).filter(t => t.trim().length > 0);
-      if (tags.length === 0) {
-        throw new Error('At least one tag is required for illustration search');
-      }
-      
-      if (tags.length === 1) {
-        // Single tag, use normal search
-        return this.searchIllustrationsSingleTag(target, tags[0]);
-      }
-      
-      logger.info(`Searching illustrations with OR relation for ${tags.length} tags`, { tags });
-      
-      // Search each tag separately
-      const allResults: PixivIllust[] = [];
-      const seenIds = new Set<number>();
-      
-      // For OR relation, we need to fetch more results per tag to ensure we have enough after deduplication
-      const perTagLimit = target.limit 
-        ? Math.max(Math.ceil(target.limit * 1.5), 50) // Fetch 1.5x more per tag
-        : undefined;
-      
-      for (const tag of tags) {
-        try {
-          const tagTarget: TargetConfig = {
-            ...target,
-            tag,
-            limit: perTagLimit,
-          };
-          const tagResults = await this.searchIllustrationsSingleTag(tagTarget, tag);
-          
-          // Deduplicate by ID
-          for (const illust of tagResults) {
-            if (!seenIds.has(illust.id)) {
-              seenIds.add(illust.id);
-              allResults.push(illust);
-            }
-          }
-          
-          logger.debug(`Found ${tagResults.length} results for tag "${tag}" (${allResults.length} unique total)`);
-        } catch (error) {
-          logger.warn(`Failed to search for tag "${tag}"`, {
-            error: error instanceof Error ? error.message : String(error),
-          });
-          // Continue with other tags even if one fails
-        }
-      }
-      
-      // Sort all merged results
-      const sortedResults = this.sortItems(allResults, target.sort);
-      
-      // Apply limit after sorting and deduplication
-      if (target.limit && sortedResults.length > target.limit) {
-        return sortedResults.slice(0, target.limit);
-      }
-      
-      logger.info(`OR search completed: ${sortedResults.length} unique illustrations from ${tags.length} tags`);
-      return sortedResults;
-    }
-    
-    // Default AND relation (existing behavior)
+    // AND relation: multiple tags separated by spaces are searched together
+    // Pixiv API will return works that contain all specified tags
     return this.searchIllustrationsSingleTag(target, target.tag);
   }
   
@@ -307,8 +245,14 @@ export class PixivClient {
       ? (target.limit < 50 ? Math.max(target.limit * 5, 100) : Math.max(target.limit * 2, 200))
       : undefined;
     
+    // Get request delay from config to avoid rate limiting between pagination requests
+    const requestDelay = this.config.download?.requestDelay ?? 3000;
+    let pageCount = 0;
+    
     while (nextUrl && (!fetchLimit || results.length < fetchLimit)) {
       const requestUrl = nextUrl;
+      pageCount++;
+      
       const response: { illusts: PixivIllust[]; next_url: string | null } =
         await this.request<{ illusts: PixivIllust[]; next_url: string | null }>(
           requestUrl,
@@ -323,6 +267,12 @@ export class PixivClient {
       }
 
       nextUrl = response.next_url;
+      
+      // Add delay between pagination requests to avoid rate limiting (except after last page)
+      if (nextUrl && requestDelay > 0) {
+        logger.debug(`Tag "${tag}" page ${pageCount}: found ${response.illusts.length} illusts, waiting ${requestDelay}ms before next page...`);
+        await delay(requestDelay);
+      }
     }
 
     // Sort results according to sort parameter
@@ -341,70 +291,8 @@ export class PixivClient {
       throw new Error('tag is required for novel search');
     }
     
-    const tagRelation = target.tagRelation || 'and';
-    
-    // If OR relation is requested, search each tag separately and merge results
-    if (tagRelation === 'or') {
-      const tags = target.tag.split(/\s+/).filter(t => t.trim().length > 0);
-      if (tags.length === 0) {
-        throw new Error('At least one tag is required for novel search');
-      }
-      
-      if (tags.length === 1) {
-        // Single tag, use normal search
-        return this.searchNovelsSingleTag(target, tags[0]);
-      }
-      
-      logger.info(`Searching novels with OR relation for ${tags.length} tags`, { tags });
-      
-      // Search each tag separately
-      const allResults: PixivNovel[] = [];
-      const seenIds = new Set<number>();
-      
-      // For OR relation, we need to fetch more results per tag to ensure we have enough after deduplication
-      const perTagLimit = target.limit 
-        ? Math.max(Math.ceil(target.limit * 1.5), 50) // Fetch 1.5x more per tag
-        : undefined;
-      
-      for (const tag of tags) {
-        try {
-          const tagTarget: TargetConfig = {
-            ...target,
-            tag,
-            limit: perTagLimit,
-          };
-          const tagResults = await this.searchNovelsSingleTag(tagTarget, tag);
-          
-          // Deduplicate by ID
-          for (const novel of tagResults) {
-            if (!seenIds.has(novel.id)) {
-              seenIds.add(novel.id);
-              allResults.push(novel);
-            }
-          }
-          
-          logger.debug(`Found ${tagResults.length} results for tag "${tag}" (${allResults.length} unique total)`);
-        } catch (error) {
-          logger.warn(`Failed to search for tag "${tag}"`, {
-            error: error instanceof Error ? error.message : String(error),
-          });
-          // Continue with other tags even if one fails
-        }
-      }
-      
-      // Sort all merged results
-      const sortedResults = this.sortItems(allResults, target.sort);
-      
-      // Apply limit after sorting and deduplication
-      if (target.limit && sortedResults.length > target.limit) {
-        return sortedResults.slice(0, target.limit);
-      }
-      
-      logger.info(`OR search completed: ${sortedResults.length} unique novels from ${tags.length} tags`);
-      return sortedResults;
-    }
-    
-    // Default AND relation (existing behavior)
+    // AND relation: multiple tags separated by spaces are searched together
+    // Pixiv API will return works that contain all specified tags
     return this.searchNovelsSingleTag(target, target.tag);
   }
   
@@ -439,8 +327,14 @@ export class PixivClient {
       ? (target.limit < 50 ? Math.max(target.limit * 5, 100) : Math.max(target.limit * 2, 200))
       : undefined;
     
+    // Get request delay from config to avoid rate limiting between pagination requests
+    const requestDelay = this.config.download?.requestDelay ?? 3000;
+    let pageCount = 0;
+    
     while (nextUrl && (!fetchLimit || results.length < fetchLimit)) {
       const requestUrl = nextUrl;
+      pageCount++;
+      
       const response: { novels: PixivNovel[]; next_url: string | null } =
         await this.request<{ novels: PixivNovel[]; next_url: string | null }>(
           requestUrl,
@@ -455,6 +349,12 @@ export class PixivClient {
       }
 
       nextUrl = response.next_url;
+      
+      // Add delay between pagination requests to avoid rate limiting (except after last page)
+      if (nextUrl && requestDelay > 0) {
+        logger.debug(`Tag "${tag}" page ${pageCount}: found ${response.novels.length} novels, waiting ${requestDelay}ms before next page...`);
+        await delay(requestDelay);
+      }
     }
 
     // Sort results according to sort parameter

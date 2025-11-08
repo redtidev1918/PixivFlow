@@ -98,6 +98,8 @@ export function isSkipableError(error: unknown): boolean {
       'ETIMEDOUT',
       'ECONNRESET',
       '403', // Forbidden (private content)
+      'language filter', // Language filter mismatch (should skip)
+      'skipped:', // Explicitly skipped items (e.g., "Novel X skipped: ...")
     ];
     
     return skipablePatterns.some(pattern => 

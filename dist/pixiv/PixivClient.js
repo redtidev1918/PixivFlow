@@ -148,11 +148,16 @@ class PixivClient {
             // Search each tag separately
             const allResults = [];
             const seenIds = new Set();
-            // For OR relation, we need to fetch more results per tag to ensure we have enough after deduplication
-            const perTagLimit = target.limit
-                ? Math.max(Math.ceil(target.limit * 1.5), 50) // Fetch 1.5x more per tag
-                : undefined;
-            for (const tag of tags) {
+            // For OR relation, fetch enough results from each tag to ensure we can properly sort and select top N
+            // Each tag should fetch a reasonable amount (e.g., 200-300) so we have enough data to sort globally
+            // Then merge all results, sort globally, and apply final limit
+            // Use a reasonable per-tag limit to ensure we have enough data for global sorting without fetching too much
+            const perTagLimit = 200; // Fetch 200 results per tag to ensure enough data for global sorting
+            // Get request delay from config to avoid rate limiting
+            const requestDelay = this.config.download?.requestDelay ?? 3000;
+            for (let i = 0; i < tags.length; i++) {
+                const tag = tags[i];
+                logger_1.logger.info(`[${i + 1}/${tags.length}] Searching tag: "${tag}"`);
                 try {
                     const tagTarget = {
                         ...target,
@@ -160,30 +165,69 @@ class PixivClient {
                         limit: perTagLimit,
                     };
                     const tagResults = await this.searchIllustrationsSingleTag(tagTarget, tag);
-                    // Deduplicate by ID
+                    // Deduplicate by ID - skip duplicates
+                    let newCount = 0;
                     for (const illust of tagResults) {
                         if (!seenIds.has(illust.id)) {
                             seenIds.add(illust.id);
                             allResults.push(illust);
+                            newCount++;
                         }
                     }
-                    logger_1.logger.debug(`Found ${tagResults.length} results for tag "${tag}" (${allResults.length} unique total)`);
+                    logger_1.logger.info(`Tag "${tag}": found ${tagResults.length} results, ${newCount} new (${tagResults.length - newCount} duplicates skipped), ${allResults.length} unique total`);
+                    // Add delay between tag searches to avoid rate limiting (except after last tag)
+                    if (i < tags.length - 1 && requestDelay > 0) {
+                        logger_1.logger.info(`Waiting ${requestDelay}ms before next tag search...`);
+                        await (0, promises_1.setTimeout)(requestDelay);
+                    }
                 }
                 catch (error) {
                     logger_1.logger.warn(`Failed to search for tag "${tag}"`, {
                         error: error instanceof Error ? error.message : String(error),
                     });
                     // Continue with other tags even if one fails
+                    // Still add delay even after error to avoid rate limiting
+                    if (i < tags.length - 1 && requestDelay > 0) {
+                        logger_1.logger.info(`Waiting ${requestDelay}ms before next tag search (after error)...`);
+                        await (0, promises_1.setTimeout)(requestDelay);
+                    }
                 }
             }
             // Sort all merged results
             const sortedResults = this.sortItems(allResults, target.sort);
-            // Apply limit after sorting and deduplication
-            if (target.limit && sortedResults.length > target.limit) {
-                return sortedResults.slice(0, target.limit);
+            // Apply date filtering before applying limit to ensure we get enough valid results
+            let filteredResults = sortedResults;
+            if (target.startDate || target.endDate) {
+                const beforeCount = filteredResults.length;
+                const startDate = target.startDate ? new Date(target.startDate + 'T00:00:00') : null;
+                const endDate = target.endDate ? new Date(target.endDate + 'T23:59:59') : null;
+                filteredResults = filteredResults.filter(illust => {
+                    if (!illust.create_date) {
+                        return false; // Skip items without create_date
+                    }
+                    const itemDate = new Date(illust.create_date);
+                    if (startDate && itemDate < startDate) {
+                        return false;
+                    }
+                    if (endDate && itemDate > endDate) {
+                        return false;
+                    }
+                    return true;
+                });
+                if (filteredResults.length < beforeCount) {
+                    const dateRange = [
+                        target.startDate || 'unlimited',
+                        target.endDate || 'unlimited'
+                    ].join(' ~ ');
+                    logger_1.logger.info(`Date filtering (${dateRange}): ${beforeCount} -> ${filteredResults.length} illustrations`);
+                }
             }
-            logger_1.logger.info(`OR search completed: ${sortedResults.length} unique illustrations from ${tags.length} tags`);
-            return sortedResults;
+            // Apply limit after sorting, deduplication, and date filtering
+            if (target.limit && filteredResults.length > target.limit) {
+                return filteredResults.slice(0, target.limit);
+            }
+            logger_1.logger.info(`OR search completed: ${filteredResults.length} unique illustrations from ${tags.length} tags`);
+            return filteredResults;
         }
         // Default AND relation (existing behavior)
         return this.searchIllustrationsSingleTag(target, target.tag);
@@ -216,8 +260,12 @@ class PixivClient {
         const fetchLimit = target.limit
             ? (target.limit < 50 ? Math.max(target.limit * 5, 100) : Math.max(target.limit * 2, 200))
             : undefined;
+        // Get request delay from config to avoid rate limiting between pagination requests
+        const requestDelay = this.config.download?.requestDelay ?? 3000;
+        let pageCount = 0;
         while (nextUrl && (!fetchLimit || results.length < fetchLimit)) {
             const requestUrl = nextUrl;
+            pageCount++;
             const response = await this.request(requestUrl, { method: 'GET' });
             for (const illust of response.illusts) {
                 results.push(illust);
@@ -226,6 +274,11 @@ class PixivClient {
                 }
             }
             nextUrl = response.next_url;
+            // Add delay between pagination requests to avoid rate limiting (except after last page)
+            if (nextUrl && requestDelay > 0) {
+                logger_1.logger.debug(`Tag "${tag}" page ${pageCount}: found ${response.illusts.length} illusts, waiting ${requestDelay}ms before next page...`);
+                await (0, promises_1.setTimeout)(requestDelay);
+            }
         }
         // Sort results according to sort parameter
         const sortedResults = this.sortItems(results, target.sort);
@@ -254,11 +307,16 @@ class PixivClient {
             // Search each tag separately
             const allResults = [];
             const seenIds = new Set();
-            // For OR relation, we need to fetch more results per tag to ensure we have enough after deduplication
-            const perTagLimit = target.limit
-                ? Math.max(Math.ceil(target.limit * 1.5), 50) // Fetch 1.5x more per tag
-                : undefined;
-            for (const tag of tags) {
+            // For OR relation, fetch enough results from each tag to ensure we can properly sort and select top N
+            // Each tag should fetch a reasonable amount (e.g., 200-300) so we have enough data to sort globally
+            // Then merge all results, sort globally, and apply final limit
+            // Use a reasonable per-tag limit to ensure we have enough data for global sorting without fetching too much
+            const perTagLimit = 200; // Fetch 200 results per tag to ensure enough data for global sorting
+            // Get request delay from config to avoid rate limiting
+            const requestDelay = this.config.download?.requestDelay ?? 3000;
+            for (let i = 0; i < tags.length; i++) {
+                const tag = tags[i];
+                logger_1.logger.info(`[${i + 1}/${tags.length}] Searching tag: "${tag}"`);
                 try {
                     const tagTarget = {
                         ...target,
@@ -266,30 +324,69 @@ class PixivClient {
                         limit: perTagLimit,
                     };
                     const tagResults = await this.searchNovelsSingleTag(tagTarget, tag);
-                    // Deduplicate by ID
+                    // Deduplicate by ID - skip duplicates
+                    let newCount = 0;
                     for (const novel of tagResults) {
                         if (!seenIds.has(novel.id)) {
                             seenIds.add(novel.id);
                             allResults.push(novel);
+                            newCount++;
                         }
                     }
-                    logger_1.logger.debug(`Found ${tagResults.length} results for tag "${tag}" (${allResults.length} unique total)`);
+                    logger_1.logger.info(`Tag "${tag}": found ${tagResults.length} results, ${newCount} new (${tagResults.length - newCount} duplicates skipped), ${allResults.length} unique total`);
+                    // Add delay between tag searches to avoid rate limiting (except after last tag)
+                    if (i < tags.length - 1 && requestDelay > 0) {
+                        logger_1.logger.info(`Waiting ${requestDelay}ms before next tag search...`);
+                        await (0, promises_1.setTimeout)(requestDelay);
+                    }
                 }
                 catch (error) {
                     logger_1.logger.warn(`Failed to search for tag "${tag}"`, {
                         error: error instanceof Error ? error.message : String(error),
                     });
                     // Continue with other tags even if one fails
+                    // Still add delay even after error to avoid rate limiting
+                    if (i < tags.length - 1 && requestDelay > 0) {
+                        logger_1.logger.info(`Waiting ${requestDelay}ms before next tag search (after error)...`);
+                        await (0, promises_1.setTimeout)(requestDelay);
+                    }
                 }
             }
             // Sort all merged results
             const sortedResults = this.sortItems(allResults, target.sort);
-            // Apply limit after sorting and deduplication
-            if (target.limit && sortedResults.length > target.limit) {
-                return sortedResults.slice(0, target.limit);
+            // Apply date filtering before applying limit to ensure we get enough valid results
+            let filteredResults = sortedResults;
+            if (target.startDate || target.endDate) {
+                const beforeCount = filteredResults.length;
+                const startDate = target.startDate ? new Date(target.startDate + 'T00:00:00') : null;
+                const endDate = target.endDate ? new Date(target.endDate + 'T23:59:59') : null;
+                filteredResults = filteredResults.filter(novel => {
+                    if (!novel.create_date) {
+                        return false; // Skip items without create_date
+                    }
+                    const itemDate = new Date(novel.create_date);
+                    if (startDate && itemDate < startDate) {
+                        return false;
+                    }
+                    if (endDate && itemDate > endDate) {
+                        return false;
+                    }
+                    return true;
+                });
+                if (filteredResults.length < beforeCount) {
+                    const dateRange = [
+                        target.startDate || 'unlimited',
+                        target.endDate || 'unlimited'
+                    ].join(' ~ ');
+                    logger_1.logger.info(`Date filtering (${dateRange}): ${beforeCount} -> ${filteredResults.length} novels`);
+                }
             }
-            logger_1.logger.info(`OR search completed: ${sortedResults.length} unique novels from ${tags.length} tags`);
-            return sortedResults;
+            // Apply limit after sorting, deduplication, and date filtering
+            if (target.limit && filteredResults.length > target.limit) {
+                return filteredResults.slice(0, target.limit);
+            }
+            logger_1.logger.info(`OR search completed: ${filteredResults.length} unique novels from ${tags.length} tags`);
+            return filteredResults;
         }
         // Default AND relation (existing behavior)
         return this.searchNovelsSingleTag(target, target.tag);
@@ -320,8 +417,12 @@ class PixivClient {
         const fetchLimit = target.limit
             ? (target.limit < 50 ? Math.max(target.limit * 5, 100) : Math.max(target.limit * 2, 200))
             : undefined;
+        // Get request delay from config to avoid rate limiting between pagination requests
+        const requestDelay = this.config.download?.requestDelay ?? 3000;
+        let pageCount = 0;
         while (nextUrl && (!fetchLimit || results.length < fetchLimit)) {
             const requestUrl = nextUrl;
+            pageCount++;
             const response = await this.request(requestUrl, { method: 'GET' });
             for (const novel of response.novels) {
                 results.push(novel);
@@ -330,6 +431,11 @@ class PixivClient {
                 }
             }
             nextUrl = response.next_url;
+            // Add delay between pagination requests to avoid rate limiting (except after last page)
+            if (nextUrl && requestDelay > 0) {
+                logger_1.logger.debug(`Tag "${tag}" page ${pageCount}: found ${response.novels.length} novels, waiting ${requestDelay}ms before next page...`);
+                await (0, promises_1.setTimeout)(requestDelay);
+            }
         }
         // Sort results according to sort parameter
         const sortedResults = this.sortItems(results, target.sort);

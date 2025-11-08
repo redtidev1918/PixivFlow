@@ -44,6 +44,24 @@ const DEFAULT_CONFIG = {
     initialDelay: 0,
 };
 /**
+ * Get current date in YYYY-MM-DD format (Japan timezone)
+ * Pixiv rankings are based on Japan time (JST, UTC+9)
+ */
+function getTodayDate() {
+    const now = new Date();
+    const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Asia/Tokyo',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+    });
+    const parts = formatter.formatToParts(now);
+    const year = parts.find(p => p.type === 'year').value;
+    const month = parts.find(p => p.type === 'month').value;
+    const day = parts.find(p => p.type === 'day').value;
+    return `${year}-${month}-${day}`;
+}
+/**
  * Get yesterday's date in YYYY-MM-DD format (Japan timezone)
  * Pixiv rankings are based on Japan time (JST, UTC+9)
  */
@@ -71,6 +89,36 @@ function getYesterdayDate() {
     const yesterdayMonth = yesterdayParts.find(p => p.type === 'month').value;
     const yesterdayDay = yesterdayParts.find(p => p.type === 'day').value;
     return `${yesterdayYear}-${yesterdayMonth}-${yesterdayDay}`;
+}
+/**
+ * Get date range for last N days in YYYY-MM-DD format (Japan timezone)
+ * Returns { startDate, endDate } where endDate is yesterday
+ */
+function getLastNDaysDateRange(days) {
+    const endDate = getYesterdayDate();
+    const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Asia/Tokyo',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+    });
+    // Parse endDate to get components
+    const endParts = endDate.split('-');
+    const year = parseInt(endParts[0], 10);
+    const month = parseInt(endParts[1], 10) - 1; // 0-indexed
+    const day = parseInt(endParts[2], 10);
+    // Create a date object in JST and subtract N days
+    const jstNoon = new Date(Date.UTC(year, month, day, 3, 0, 0, 0)); // 12:00 JST = 03:00 UTC
+    jstNoon.setUTCDate(jstNoon.getUTCDate() - (days - 1));
+    // Format the start date
+    const startParts = formatter.formatToParts(jstNoon);
+    const startYear = startParts.find(p => p.type === 'year').value;
+    const startMonth = startParts.find(p => p.type === 'month').value;
+    const startDay = startParts.find(p => p.type === 'day').value;
+    return {
+        startDate: `${startYear}-${startMonth}-${startDay}`,
+        endDate,
+    };
 }
 /**
  * Apply default values to configuration
@@ -127,15 +175,67 @@ function applyDefaults(config) {
 }
 /**
  * Process placeholders in config (e.g., "YESTERDAY" -> actual yesterday date)
+ * Supported placeholders:
+ * - YESTERDAY: Yesterday's date
+ * - TODAY: Today's date
+ * - LAST_7_DAYS: Date range for last 7 days (startDate to endDate)
+ * - LAST_30_DAYS: Date range for last 30 days (startDate to endDate)
+ * - LAST_N_DAYS: Date range for last N days (format: LAST_N_DAYS:7)
  */
 function processConfigPlaceholders(config) {
     const processed = JSON.parse(JSON.stringify(config));
-    // Replace "YESTERDAY" placeholder in rankingDate
     for (const target of processed.targets) {
+        // Process rankingDate placeholder
         if (target.rankingDate === 'YESTERDAY') {
             const yesterday = getYesterdayDate();
             target.rankingDate = yesterday;
             logger_1.logger.debug(`Replaced rankingDate placeholder with: ${yesterday}`);
+        }
+        // Process endDate placeholder first (before startDate to avoid conflicts)
+        if (target.endDate) {
+            if (target.endDate === 'YESTERDAY') {
+                target.endDate = getYesterdayDate();
+                logger_1.logger.debug(`Replaced endDate placeholder YESTERDAY with: ${target.endDate}`);
+            }
+            else if (target.endDate === 'TODAY') {
+                target.endDate = getTodayDate();
+                logger_1.logger.debug(`Replaced endDate placeholder TODAY with: ${target.endDate}`);
+            }
+        }
+        // Process startDate placeholder
+        if (target.startDate) {
+            const originalStartDate = target.startDate;
+            if (target.startDate === 'YESTERDAY') {
+                target.startDate = getYesterdayDate();
+                logger_1.logger.debug(`Replaced startDate placeholder YESTERDAY with: ${target.startDate}`);
+            }
+            else if (target.startDate === 'TODAY') {
+                target.startDate = getTodayDate();
+                logger_1.logger.debug(`Replaced startDate placeholder TODAY with: ${target.startDate}`);
+            }
+            else if (target.startDate.startsWith('LAST_')) {
+                // Handle LAST_7_DAYS, LAST_30_DAYS, or LAST_N_DAYS:N
+                let days = 7;
+                if (target.startDate === 'LAST_7_DAYS') {
+                    days = 7;
+                }
+                else if (target.startDate === 'LAST_30_DAYS') {
+                    days = 30;
+                }
+                else if (target.startDate.startsWith('LAST_N_DAYS:')) {
+                    const n = parseInt(target.startDate.split(':')[1], 10);
+                    if (!isNaN(n) && n > 0) {
+                        days = n;
+                    }
+                }
+                const dateRange = getLastNDaysDateRange(days);
+                target.startDate = dateRange.startDate;
+                // Only set endDate if it wasn't already processed (still a placeholder or not set)
+                if (!target.endDate || target.endDate === 'YESTERDAY' || target.endDate === 'TODAY') {
+                    target.endDate = dateRange.endDate;
+                }
+                logger_1.logger.debug(`Replaced startDate placeholder ${originalStartDate} with date range: ${dateRange.startDate} to ${dateRange.endDate}`);
+            }
         }
     }
     return processed;
@@ -506,6 +606,9 @@ function validateConfig(config, location) {
             }
             if (target.searchTarget && !['partial_match_for_tags', 'exact_match_for_tags', 'title_and_caption'].includes(target.searchTarget)) {
                 errors.push(`targets[${index}].searchTarget: Invalid value, must be one of: partial_match_for_tags, exact_match_for_tags, title_and_caption`);
+            }
+            if (target.tagRelation && !['and', 'or'].includes(target.tagRelation)) {
+                errors.push(`targets[${index}].tagRelation: Invalid value, must be "and" or "or"`);
             }
             if (target.rankingDate && !/^\d{4}-\d{2}-\d{2}$/.test(target.rankingDate) && target.rankingDate !== 'YESTERDAY') {
                 errors.push(`targets[${index}].rankingDate: Invalid format, must be YYYY-MM-DD or "YESTERDAY"`);

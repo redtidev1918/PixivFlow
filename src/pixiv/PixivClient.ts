@@ -4,6 +4,7 @@ import { ProxyAgent } from 'undici';
 import { StandaloneConfig, TargetConfig } from '../config';
 import { logger } from '../logger';
 import { NetworkError, is404Error } from '../utils/errors';
+import { parseDateRange as parseDateRangeUtil, isDateInRange as isDateInRangeUtil } from '../utils/date-utils';
 import { PixivAuth } from './AuthClient';
 
 export interface PixivUser {
@@ -102,6 +103,23 @@ export class PixivClient {
       return 0;
     }
     return timestamp;
+  }
+
+  /**
+   * Parse date range from target config
+   * Returns { startDate, endDate } as Date objects, or null if invalid
+   * Validates that startDate <= endDate
+   */
+  private parseDateRange(target: TargetConfig): { startDate: Date | null; endDate: Date | null } | null {
+    return parseDateRangeUtil(target.startDate, target.endDate);
+  }
+
+  /**
+   * Check if item date is within the specified range
+   * Handles invalid dates gracefully
+   */
+  private isDateInRange(itemDate: Date | null, startDate: Date | null, endDate: Date | null): boolean {
+    return isDateInRangeUtil(itemDate, startDate, endDate);
   }
 
   /**
@@ -238,17 +256,30 @@ export class PixivClient {
       params.sort = target.sort;
     }
     
-    // Parse date range for early stopping
-    const startDate = target.startDate ? new Date(target.startDate + 'T00:00:00') : null;
-    const endDate = target.endDate ? new Date(target.endDate + 'T23:59:59') : null;
+    // Parse date range for early stopping and filtering
+    const dateRange = this.parseDateRange(target);
+    if (dateRange === null && (target.startDate || target.endDate)) {
+      // Invalid date range, return empty results
+      logger.warn('Invalid date range specified, returning empty results', {
+        startDate: target.startDate,
+        endDate: target.endDate
+      });
+      return [];
+    }
+    
+    const { startDate, endDate } = dateRange || { startDate: null, endDate: null };
     
     let nextUrl: string | null = this.createRequestUrl('v1/search/illust', params);
 
     // Fetch all results first (or up to a reasonable limit for sorting)
     // If limit is specified, fetch more to ensure we have enough to sort properly
-    // For small limits, fetch more data to ensure accurate sorting
+    // For popular_desc with date filtering, fetch even more to account for filtered items
+    const sortMode = target.sort || 'date_desc';
+    const hasDateFilter = startDate || endDate;
     const fetchLimit = target.limit 
-      ? (target.limit < 50 ? Math.max(target.limit * 5, 100) : Math.max(target.limit * 2, 200))
+      ? (target.limit < 50 
+          ? Math.max(target.limit * (sortMode === 'popular_desc' && hasDateFilter ? 10 : 5), 100)
+          : Math.max(target.limit * (sortMode === 'popular_desc' && hasDateFilter ? 3 : 2), 200))
       : undefined;
     
     // Get request delay from config to avoid rate limiting between pagination requests
@@ -267,53 +298,72 @@ export class PixivClient {
       );
 
       for (const illust of response.illusts) {
-        // Early stopping and skipping based on date range when using date-based sorting
-        // Default sort is date_desc (newest first), so check for undefined or date_desc
-        const sortMode = target.sort || 'date_desc';
+        // Parse item date
+        const itemDate = illust.create_date ? new Date(illust.create_date) : null;
         
-        if (!illust.create_date) {
-          // If no date, add it and let filterItems handle it later
-          results.push(illust);
-          if (fetchLimit && results.length >= fetchLimit) {
-            break;
+        // Check if date is valid
+        if (!itemDate || isNaN(itemDate.getTime())) {
+          // Invalid date: only include if no date filter is specified
+          if (!startDate && !endDate) {
+            results.push(illust);
+            if (fetchLimit && results.length >= fetchLimit) {
+              break;
+            }
+          } else {
+            logger.debug(`Skipping item ${illust.id} with invalid date ${illust.create_date}`);
           }
           continue;
         }
         
-        const itemDate = new Date(illust.create_date);
+        // Check date range
+        const inRange = this.isDateInRange(itemDate, startDate, endDate);
         
         if (sortMode === 'date_desc') {
           // When sorting by date_desc (newest first):
           // - Skip items after endDate (too new), but continue searching
           // - Stop when encountering items before startDate (too old)
-          if (endDate && itemDate > endDate) {
-            logger.debug(`Skipping item ${illust.id} with date ${illust.create_date} after endDate ${target.endDate}`);
-            continue; // Skip this item but continue searching
-          }
-          if (startDate && itemDate < startDate) {
-            logger.debug(`Stopping search: encountered item ${illust.id} with date ${illust.create_date} before startDate ${target.startDate}`);
-            shouldStop = true;
-            break; // Stop searching entirely
+          if (!inRange) {
+            if (endDate && itemDate > endDate) {
+              logger.debug(`Skipping item ${illust.id} with date ${illust.create_date} after endDate ${target.endDate}`);
+              continue; // Skip this item but continue searching
+            }
+            if (startDate && itemDate < startDate) {
+              logger.debug(`Stopping search: encountered item ${illust.id} with date ${illust.create_date} before startDate ${target.startDate}`);
+              shouldStop = true;
+              break; // Stop searching entirely
+            }
           }
         } else if (sortMode === 'date_asc') {
           // When sorting by date_asc (oldest first):
           // - Skip items before startDate (too old), but continue searching
           // - Stop when encountering items after endDate (too new)
-          if (startDate && itemDate < startDate) {
-            logger.debug(`Skipping item ${illust.id} with date ${illust.create_date} before startDate ${target.startDate}`);
-            continue; // Skip this item but continue searching
+          if (!inRange) {
+            if (startDate && itemDate < startDate) {
+              logger.debug(`Skipping item ${illust.id} with date ${illust.create_date} before startDate ${target.startDate}`);
+              continue; // Skip this item but continue searching
+            }
+            if (endDate && itemDate > endDate) {
+              logger.debug(`Stopping search: encountered item ${illust.id} with date ${illust.create_date} after endDate ${target.endDate}`);
+              shouldStop = true;
+              break; // Stop searching entirely
+            }
           }
-          if (endDate && itemDate > endDate) {
-            logger.debug(`Stopping search: encountered item ${illust.id} with date ${illust.create_date} after endDate ${target.endDate}`);
-            shouldStop = true;
-            break; // Stop searching entirely
+        } else if (sortMode === 'popular_desc') {
+          // When sorting by popular_desc (most popular first):
+          // Results are not ordered by date, so we can't early stop
+          // But we can filter items outside date range to reduce memory usage
+          if (!inRange) {
+            logger.debug(`Skipping item ${illust.id} with date ${illust.create_date} outside date range (popular_desc mode)`);
+            continue; // Skip this item but continue searching
           }
         }
         
         // Item is within date range (or no date filter), add it
-        results.push(illust);
-        if (fetchLimit && results.length >= fetchLimit) {
-          break;
+        if (inRange || (!startDate && !endDate)) {
+          results.push(illust);
+          if (fetchLimit && results.length >= fetchLimit) {
+            break;
+          }
         }
       }
 
@@ -321,17 +371,40 @@ export class PixivClient {
       
       // Add delay between pagination requests to avoid rate limiting (except after last page)
       if (nextUrl && requestDelay > 0 && !shouldStop) {
-        logger.debug(`Tag "${tag}" page ${pageCount}: found ${response.illusts.length} illusts, waiting ${requestDelay}ms before next page...`);
+        logger.debug(`Tag "${tag}" page ${pageCount}: found ${response.illusts.length} illusts, total collected: ${results.length}, waiting ${requestDelay}ms before next page...`);
         await delay(requestDelay);
       }
     }
 
+    // Log filtering statistics for popular_desc mode with date filtering
+    if (sortMode === 'popular_desc' && hasDateFilter && results.length > 0) {
+      const validResults = results.filter(item => {
+        if (!item.create_date) return false;
+        const itemDate = new Date(item.create_date);
+        return itemDate && !isNaN(itemDate.getTime()) && this.isDateInRange(itemDate, startDate, endDate);
+      });
+      if (validResults.length < results.length) {
+        logger.debug(`Date filtering in popular_desc mode: ${results.length} total results, ${validResults.length} within date range`);
+      }
+    }
+    
     // Sort results according to sort parameter
     const sortedResults = this.sortItems(results, target.sort);
     
     // Apply limit after sorting
     if (target.limit && sortedResults.length > target.limit) {
       return sortedResults.slice(0, target.limit);
+    }
+    
+    // Warn if we didn't get enough results in popular_desc mode with date filtering
+    if (sortMode === 'popular_desc' && hasDateFilter && target.limit && sortedResults.length < target.limit) {
+      logger.warn(`Only found ${sortedResults.length} result(s) within date range, requested ${target.limit}`, {
+        tag,
+        startDate: target.startDate,
+        endDate: target.endDate,
+        found: sortedResults.length,
+        requested: target.limit
+      });
     }
     
     return sortedResults;
@@ -371,17 +444,30 @@ export class PixivClient {
       params.sort = target.sort;
     }
     
-    // Parse date range for early stopping
-    const startDate = target.startDate ? new Date(target.startDate + 'T00:00:00') : null;
-    const endDate = target.endDate ? new Date(target.endDate + 'T23:59:59') : null;
+    // Parse date range for early stopping and filtering
+    const dateRange = this.parseDateRange(target);
+    if (dateRange === null && (target.startDate || target.endDate)) {
+      // Invalid date range, return empty results
+      logger.warn('Invalid date range specified, returning empty results', {
+        startDate: target.startDate,
+        endDate: target.endDate
+      });
+      return [];
+    }
+    
+    const { startDate, endDate } = dateRange || { startDate: null, endDate: null };
     
     let nextUrl: string | null = this.createRequestUrl('v1/search/novel', params);
 
     // Fetch all results first (or up to a reasonable limit for sorting)
     // If limit is specified, fetch more to ensure we have enough to sort properly
-    // For small limits, fetch more data to ensure accurate sorting
+    // For popular_desc with date filtering, fetch even more to account for filtered items
+    const sortMode = target.sort || 'date_desc';
+    const hasDateFilter = startDate || endDate;
     const fetchLimit = target.limit 
-      ? (target.limit < 50 ? Math.max(target.limit * 5, 100) : Math.max(target.limit * 2, 200))
+      ? (target.limit < 50 
+          ? Math.max(target.limit * (sortMode === 'popular_desc' && hasDateFilter ? 10 : 5), 100)
+          : Math.max(target.limit * (sortMode === 'popular_desc' && hasDateFilter ? 3 : 2), 200))
       : undefined;
     
     // Get request delay from config to avoid rate limiting between pagination requests
@@ -400,53 +486,72 @@ export class PixivClient {
       );
 
       for (const novel of response.novels) {
-        // Early stopping and skipping based on date range when using date-based sorting
-        // Default sort is date_desc (newest first), so check for undefined or date_desc
-        const sortMode = target.sort || 'date_desc';
+        // Parse item date
+        const itemDate = novel.create_date ? new Date(novel.create_date) : null;
         
-        if (!novel.create_date) {
-          // If no date, add it and let filterItems handle it later
-          results.push(novel);
-          if (fetchLimit && results.length >= fetchLimit) {
-            break;
+        // Check if date is valid
+        if (!itemDate || isNaN(itemDate.getTime())) {
+          // Invalid date: only include if no date filter is specified
+          if (!startDate && !endDate) {
+            results.push(novel);
+            if (fetchLimit && results.length >= fetchLimit) {
+              break;
+            }
+          } else {
+            logger.debug(`Skipping novel ${novel.id} with invalid date ${novel.create_date}`);
           }
           continue;
         }
         
-        const itemDate = new Date(novel.create_date);
+        // Check date range
+        const inRange = this.isDateInRange(itemDate, startDate, endDate);
         
         if (sortMode === 'date_desc') {
           // When sorting by date_desc (newest first):
           // - Skip items after endDate (too new), but continue searching
           // - Stop when encountering items before startDate (too old)
-          if (endDate && itemDate > endDate) {
-            logger.debug(`Skipping novel ${novel.id} with date ${novel.create_date} after endDate ${target.endDate}`);
-            continue; // Skip this item but continue searching
-          }
-          if (startDate && itemDate < startDate) {
-            logger.debug(`Stopping search: encountered novel ${novel.id} with date ${novel.create_date} before startDate ${target.startDate}`);
-            shouldStop = true;
-            break; // Stop searching entirely
+          if (!inRange) {
+            if (endDate && itemDate > endDate) {
+              logger.debug(`Skipping novel ${novel.id} with date ${novel.create_date} after endDate ${target.endDate}`);
+              continue; // Skip this item but continue searching
+            }
+            if (startDate && itemDate < startDate) {
+              logger.debug(`Stopping search: encountered novel ${novel.id} with date ${novel.create_date} before startDate ${target.startDate}`);
+              shouldStop = true;
+              break; // Stop searching entirely
+            }
           }
         } else if (sortMode === 'date_asc') {
           // When sorting by date_asc (oldest first):
           // - Skip items before startDate (too old), but continue searching
           // - Stop when encountering items after endDate (too new)
-          if (startDate && itemDate < startDate) {
-            logger.debug(`Skipping novel ${novel.id} with date ${novel.create_date} before startDate ${target.startDate}`);
-            continue; // Skip this item but continue searching
+          if (!inRange) {
+            if (startDate && itemDate < startDate) {
+              logger.debug(`Skipping novel ${novel.id} with date ${novel.create_date} before startDate ${target.startDate}`);
+              continue; // Skip this item but continue searching
+            }
+            if (endDate && itemDate > endDate) {
+              logger.debug(`Stopping search: encountered novel ${novel.id} with date ${novel.create_date} after endDate ${target.endDate}`);
+              shouldStop = true;
+              break; // Stop searching entirely
+            }
           }
-          if (endDate && itemDate > endDate) {
-            logger.debug(`Stopping search: encountered novel ${novel.id} with date ${novel.create_date} after endDate ${target.endDate}`);
-            shouldStop = true;
-            break; // Stop searching entirely
+        } else if (sortMode === 'popular_desc') {
+          // When sorting by popular_desc (most popular first):
+          // Results are not ordered by date, so we can't early stop
+          // But we can filter items outside date range to reduce memory usage
+          if (!inRange) {
+            logger.debug(`Skipping novel ${novel.id} with date ${novel.create_date} outside date range (popular_desc mode)`);
+            continue; // Skip this item but continue searching
           }
         }
         
         // Item is within date range (or no date filter), add it
-        results.push(novel);
-        if (fetchLimit && results.length >= fetchLimit) {
-          break;
+        if (inRange || (!startDate && !endDate)) {
+          results.push(novel);
+          if (fetchLimit && results.length >= fetchLimit) {
+            break;
+          }
         }
       }
 
@@ -454,17 +559,40 @@ export class PixivClient {
       
       // Add delay between pagination requests to avoid rate limiting (except after last page)
       if (nextUrl && requestDelay > 0 && !shouldStop) {
-        logger.debug(`Tag "${tag}" page ${pageCount}: found ${response.novels.length} novels, waiting ${requestDelay}ms before next page...`);
+        logger.debug(`Tag "${tag}" page ${pageCount}: found ${response.novels.length} novels, total collected: ${results.length}, waiting ${requestDelay}ms before next page...`);
         await delay(requestDelay);
       }
     }
 
+    // Log filtering statistics for popular_desc mode with date filtering
+    if (sortMode === 'popular_desc' && hasDateFilter && results.length > 0) {
+      const validResults = results.filter(item => {
+        if (!item.create_date) return false;
+        const itemDate = new Date(item.create_date);
+        return itemDate && !isNaN(itemDate.getTime()) && this.isDateInRange(itemDate, startDate, endDate);
+      });
+      if (validResults.length < results.length) {
+        logger.debug(`Date filtering in popular_desc mode: ${results.length} total results, ${validResults.length} within date range`);
+      }
+    }
+    
     // Sort results according to sort parameter
     const sortedResults = this.sortItems(results, target.sort);
     
     // Apply limit after sorting
     if (target.limit && sortedResults.length > target.limit) {
       return sortedResults.slice(0, target.limit);
+    }
+    
+    // Warn if we didn't get enough results in popular_desc mode with date filtering
+    if (sortMode === 'popular_desc' && hasDateFilter && target.limit && sortedResults.length < target.limit) {
+      logger.warn(`Only found ${sortedResults.length} result(s) within date range, requested ${target.limit}`, {
+        tag,
+        startDate: target.startDate,
+        endDate: target.endDate,
+        found: sortedResults.length,
+        requested: target.limit
+      });
     }
     
     return sortedResults;

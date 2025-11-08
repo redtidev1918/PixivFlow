@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const fs_1 = require("fs");
+const path_1 = require("path");
 const config_1 = require("../../config");
 const logger_1 = require("../../logger");
 const config_validator_1 = require("../utils/config-validator");
@@ -23,7 +24,14 @@ router.get('/', async (req, res) => {
                 clientSecret: config.pixiv?.clientSecret ? '***' : undefined,
             },
         };
-        res.json(safeConfig);
+        // Include config path information
+        res.json({
+            ...safeConfig,
+            _meta: {
+                configPath,
+                configPathRelative: (0, path_1.relative)(process.cwd(), configPath),
+            },
+        });
     }
     catch (error) {
         logger_1.logger.error('Failed to get config', { error });

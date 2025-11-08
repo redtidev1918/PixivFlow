@@ -507,9 +507,6 @@ function validateConfig(config, location) {
             if (target.searchTarget && !['partial_match_for_tags', 'exact_match_for_tags', 'title_and_caption'].includes(target.searchTarget)) {
                 errors.push(`targets[${index}].searchTarget: Invalid value, must be one of: partial_match_for_tags, exact_match_for_tags, title_and_caption`);
             }
-            if (target.tagRelation && !['and', 'or'].includes(target.tagRelation)) {
-                errors.push(`targets[${index}].tagRelation: Invalid value, must be "and" or "or"`);
-            }
             if (target.rankingDate && !/^\d{4}-\d{2}-\d{2}$/.test(target.rankingDate) && target.rankingDate !== 'YESTERDAY') {
                 errors.push(`targets[${index}].rankingDate: Invalid format, must be YYYY-MM-DD or "YESTERDAY"`);
             }

@@ -133,15 +133,74 @@ class PixivClient {
         if (!target.tag) {
             throw new Error('tag is required for illustration search');
         }
+        const tagRelation = target.tagRelation || 'and';
+        // If OR relation is requested, search each tag separately and merge results
+        if (tagRelation === 'or') {
+            const tags = target.tag.split(/\s+/).filter(t => t.trim().length > 0);
+            if (tags.length === 0) {
+                throw new Error('At least one tag is required for illustration search');
+            }
+            if (tags.length === 1) {
+                // Single tag, use normal search
+                return this.searchIllustrationsSingleTag(target, tags[0]);
+            }
+            logger_1.logger.info(`Searching illustrations with OR relation for ${tags.length} tags`, { tags });
+            // Search each tag separately
+            const allResults = [];
+            const seenIds = new Set();
+            // For OR relation, we need to fetch more results per tag to ensure we have enough after deduplication
+            const perTagLimit = target.limit
+                ? Math.max(Math.ceil(target.limit * 1.5), 50) // Fetch 1.5x more per tag
+                : undefined;
+            for (const tag of tags) {
+                try {
+                    const tagTarget = {
+                        ...target,
+                        tag,
+                        limit: perTagLimit,
+                    };
+                    const tagResults = await this.searchIllustrationsSingleTag(tagTarget, tag);
+                    // Deduplicate by ID
+                    for (const illust of tagResults) {
+                        if (!seenIds.has(illust.id)) {
+                            seenIds.add(illust.id);
+                            allResults.push(illust);
+                        }
+                    }
+                    logger_1.logger.debug(`Found ${tagResults.length} results for tag "${tag}" (${allResults.length} unique total)`);
+                }
+                catch (error) {
+                    logger_1.logger.warn(`Failed to search for tag "${tag}"`, {
+                        error: error instanceof Error ? error.message : String(error),
+                    });
+                    // Continue with other tags even if one fails
+                }
+            }
+            // Sort all merged results
+            const sortedResults = this.sortItems(allResults, target.sort);
+            // Apply limit after sorting and deduplication
+            if (target.limit && sortedResults.length > target.limit) {
+                return sortedResults.slice(0, target.limit);
+            }
+            logger_1.logger.info(`OR search completed: ${sortedResults.length} unique illustrations from ${tags.length} tags`);
+            return sortedResults;
+        }
+        // Default AND relation (existing behavior)
+        return this.searchIllustrationsSingleTag(target, target.tag);
+    }
+    /**
+     * Search illustrations for a single tag (internal method)
+     */
+    async searchIllustrationsSingleTag(target, tag) {
         const results = [];
         logger_1.logger.debug('Searching illustrations', {
-            tag: target.tag,
+            tag,
             sort: target.sort,
             searchTarget: target.searchTarget
         });
         // Try to use API sort parameter if available, fallback to local sorting
         const params = {
-            word: target.tag,
+            word: tag,
             search_target: target.searchTarget ?? 'partial_match_for_tags',
             filter: 'for_ios',
             include_translated_tag_results: 'true',
@@ -180,15 +239,74 @@ class PixivClient {
         if (!target.tag) {
             throw new Error('tag is required for novel search');
         }
+        const tagRelation = target.tagRelation || 'and';
+        // If OR relation is requested, search each tag separately and merge results
+        if (tagRelation === 'or') {
+            const tags = target.tag.split(/\s+/).filter(t => t.trim().length > 0);
+            if (tags.length === 0) {
+                throw new Error('At least one tag is required for novel search');
+            }
+            if (tags.length === 1) {
+                // Single tag, use normal search
+                return this.searchNovelsSingleTag(target, tags[0]);
+            }
+            logger_1.logger.info(`Searching novels with OR relation for ${tags.length} tags`, { tags });
+            // Search each tag separately
+            const allResults = [];
+            const seenIds = new Set();
+            // For OR relation, we need to fetch more results per tag to ensure we have enough after deduplication
+            const perTagLimit = target.limit
+                ? Math.max(Math.ceil(target.limit * 1.5), 50) // Fetch 1.5x more per tag
+                : undefined;
+            for (const tag of tags) {
+                try {
+                    const tagTarget = {
+                        ...target,
+                        tag,
+                        limit: perTagLimit,
+                    };
+                    const tagResults = await this.searchNovelsSingleTag(tagTarget, tag);
+                    // Deduplicate by ID
+                    for (const novel of tagResults) {
+                        if (!seenIds.has(novel.id)) {
+                            seenIds.add(novel.id);
+                            allResults.push(novel);
+                        }
+                    }
+                    logger_1.logger.debug(`Found ${tagResults.length} results for tag "${tag}" (${allResults.length} unique total)`);
+                }
+                catch (error) {
+                    logger_1.logger.warn(`Failed to search for tag "${tag}"`, {
+                        error: error instanceof Error ? error.message : String(error),
+                    });
+                    // Continue with other tags even if one fails
+                }
+            }
+            // Sort all merged results
+            const sortedResults = this.sortItems(allResults, target.sort);
+            // Apply limit after sorting and deduplication
+            if (target.limit && sortedResults.length > target.limit) {
+                return sortedResults.slice(0, target.limit);
+            }
+            logger_1.logger.info(`OR search completed: ${sortedResults.length} unique novels from ${tags.length} tags`);
+            return sortedResults;
+        }
+        // Default AND relation (existing behavior)
+        return this.searchNovelsSingleTag(target, target.tag);
+    }
+    /**
+     * Search novels for a single tag (internal method)
+     */
+    async searchNovelsSingleTag(target, tag) {
         const results = [];
         logger_1.logger.debug('Searching novels', {
-            tag: target.tag,
+            tag,
             sort: target.sort,
             searchTarget: target.searchTarget
         });
         // Try to use API sort parameter if available, fallback to local sorting
         const params = {
-            word: target.tag,
+            word: tag,
             search_target: target.searchTarget ?? 'partial_match_for_tags',
         };
         // Add sort parameter if specified (API may support: date_desc, date_asc, popular_desc)

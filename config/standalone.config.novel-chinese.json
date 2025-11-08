@@ -1,0 +1,69 @@
+{
+  "_comment": "下载指定标签下昨天热度前五的中文小说",
+  "_note": "标签：大肚、主题乙、テーマ乙、テーマ甲関連、孕妇、主题甲相关、テーマ甲、テーマ甲人物、inflation、主题甲、主题甲扩展、破裂寸前、多胎、samesize、等身、topic-beta、birth、unbirth、出产、破水、胎内回归、胎内回帰",
+  "_date": "昨天日期：2025-11-07",
+  
+  "logLevel": "info",
+  
+  "pixiv": {
+    "clientId": "MOBrBDS8blbauoSck0ZfDbtuzpyT",
+    "clientSecret": "lsACyCD94FhDUtGTXi3QzcFE2uU1hqtDaKeqrdwj",
+    "deviceToken": "pixiv",
+    "refreshToken": "YOUR_REFRESH_TOKEN_HERE",
+    "userAgent": "PixivAndroidApp/5.0.234 (Android 11; Pixel 6)"
+  },
+  
+  "network": {
+    "timeoutMs": 120000,
+    "retries": 3,
+    "retryDelay": 5000,
+    "proxy": {
+      "enabled": true,
+      "host": "127.0.0.1",
+      "port": 6152,
+      "protocol": "http"
+    }
+  },
+  
+  "storage": {
+    "databasePath": "/Users/yaoxiaohang/Documents/PixivBatchDownloader-master/data/pixiv-downloader.db",
+    "downloadDirectory": "./downloads",
+    "illustrationDirectory": "/Users/yaoxiaohang/Documents/PixivBatchDownloader-master/downloads/downloads/illustrations",
+    "novelDirectory": "/Users/yaoxiaohang/Documents/PixivBatchDownloader-master/downloads/downloads/novels"
+  },
+  
+  "scheduler": {
+    "enabled": false
+  },
+  
+  "download": {
+    "concurrency": 3,
+    "requestDelay": 500,
+    "dynamicConcurrency": true,
+    "minConcurrency": 1,
+    "maxRetries": 3,
+    "retryDelay": 2000,
+    "timeout": 60000
+  },
+  
+  "targets": [
+    {
+      "_comment": "下载包含指定标签的昨天热度前五的中文小说",
+      "_note": "使用OR关系：包含任意一个标签的作品都会被下载",
+      "type": "novel",
+      "tag": "大肚 主题乙 テーマ乙 テーマ甲関連 孕妇 主题甲相关 テーマ甲 テーマ甲人物 inflation 主题甲 主题甲扩展 破裂寸前 多胎 samesize 等身 topic-beta birth unbirth 出产 破水 胎内回归 胎内回帰",
+      "tagRelation": "or",
+      "limit": 5,
+      "mode": "search",
+      "searchTarget": "partial_match_for_tags",
+      "sort": "popular_desc",
+      "startDate": "2025-11-07",
+      "endDate": "2025-11-07",
+      "languageFilter": "chinese",
+      "detectLanguage": true
+    }
+  ],
+  
+  "initialDelay": 0
+}
+

@@ -71,7 +71,15 @@ export declare class PixivClient {
      */
     private sortItems;
     searchIllustrations(target: TargetConfig): Promise<PixivIllust[]>;
+    /**
+     * Search illustrations for a single tag (internal method)
+     */
+    private searchIllustrationsSingleTag;
     searchNovels(target: TargetConfig): Promise<PixivNovel[]>;
+    /**
+     * Search novels for a single tag (internal method)
+     */
+    private searchNovelsSingleTag;
     /**
      * Get ranking illustrations
      * @param mode Ranking mode (day, week, month, etc.)

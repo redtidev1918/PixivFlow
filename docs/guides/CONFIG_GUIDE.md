@@ -78,7 +78,7 @@ pixivflow download --config config/my-custom-config.json
 
 | 字段 | 说明 | 类型 | 默认值 | 示例 |
 |------|------|------|--------|------|
-| `tag` | 搜索标签（支持多个标签，用空格分隔，表示AND关系） | `string` | - | `"原神"` 或 `"明日方舟 アークナイツ"` |
+| `tag` | 搜索标签（支持多个标签，用空格分隔。默认AND关系，可通过`tagRelation`设置为OR关系） | `string` | - | `"原神"` 或 `"明日方舟 アークナイツ"` |
 | `limit` | 每次运行下载数量限制 | `number` | - | `10` |
 | `mode` | 下载模式 | `"search"` 或 `"ranking"` | `"search"` | `"search"` |
 
@@ -97,6 +97,17 @@ pixivflow download --config config/my-custom-config.json
 | `rankingMode` | 排行榜模式 | `"day"`（日榜）<br>`"week"`（周榜）<br>`"month"`（月榜）<br>`"day_male"`（男性向日榜）<br>`"day_female"`（女性向日榜）<br>`"day_ai"`（AI作品日榜）<br>`"week_original"`（原创周榜）<br>`"week_rookie"`（新人周榜）<br>`"day_r18"`（R18日榜）<br>`"day_male_r18"`（男性向R18日榜）<br>`"day_female_r18"`（女性向R18日榜） | `"day"` | `"day"` |
 | `rankingDate` | 排行榜日期 | `"YYYY-MM-DD"` 格式或 `"YESTERDAY"` | 今天 | `"2024-01-15"` 或 `"YESTERDAY"` |
 | `filterTag` | 过滤标签（从排行榜结果中筛选包含此标签的作品） | `string` 或 `null` | `null`（不过滤） | `"アークナイツ"` |
+
+### 标签关系字段
+
+| 字段 | 说明 | 类型 | 示例 |
+|------|------|------|------|
+| `tagRelation` | 标签关系：`"and"`（默认，必须同时包含所有标签）或 `"or"`（包含任意一个标签即可） | `"and"` \| `"or"` | `"and"` |
+
+**说明**：
+- 当 `tag` 字段包含多个标签（空格分隔）时，`tagRelation` 决定这些标签的关系
+- `"and"`（默认）：作品必须同时包含所有标签
+- `"or"`：作品只需包含任意一个标签即可
 
 ### 筛选条件字段
 
@@ -159,9 +170,36 @@ pixivflow download --config config/my-custom-config.json
 ```
 
 **说明**：
-- 在 `tag` 字段中用**空格分隔多个标签**，表示作品必须**同时包含**所有这些标签（AND关系）
+- 在 `tag` 字段中用**空格分隔多个标签**，表示作品必须**同时包含**所有这些标签（AND关系，默认行为）
 - 支持中文、日文、英文标签混合使用
 - 建议使用 `"searchTarget": "partial_match_for_tags"` 以获得更好的匹配效果
+
+#### 1.2.1 多标签搜索（OR关系）
+
+**场景**：下载包含任意一个标签的作品
+
+```json
+{
+  "targets": [
+    {
+      "type": "illustration",
+      "tag": "大肚 主题乙 テーマ甲関連 孕妇",
+      "tagRelation": "or",
+      "limit": 50,
+      "mode": "search",
+      "searchTarget": "partial_match_for_tags",
+      "sort": "popular_desc"
+    }
+  ]
+}
+```
+
+**说明**：
+- 设置 `"tagRelation": "or"` 后，在 `tag` 字段中用**空格分隔多个标签**，表示作品只需**包含任意一个**标签即可（OR关系）
+- 系统会分别搜索每个标签，合并结果并自动去重
+- 支持中文、日文、英文标签混合使用
+- 适合需要扩大搜索范围，收集包含相关标签的所有作品
+- 注意：OR关系会搜索更多结果，可能需要更长时间
 
 #### 1.3 按收藏数筛选
 

@@ -19,6 +19,15 @@ export interface TargetConfig {
    */
   searchTarget?: 'partial_match_for_tags' | 'exact_match_for_tags' | 'title_and_caption';
   /**
+   * Tag relation for multiple tags: 'and' (default) or 'or'
+   * - 'and': Works must contain all tags (default behavior, space-separated tags)
+   * - 'or': Works containing any of the tags will be included
+   * 
+   * When 'or' is used, the tag field should contain space-separated tags.
+   * Each tag will be searched separately and results will be merged and deduplicated.
+   */
+  tagRelation?: 'and' | 'or';
+  /**
    * Sort order for search results.
    * - 'date_desc': Sort by date (newest first)
    * - 'date_asc': Sort by date (oldest first)
@@ -827,6 +836,9 @@ function validateConfig(config: Partial<StandaloneConfig>, location: string): vo
       }
       if (target.searchTarget && !['partial_match_for_tags', 'exact_match_for_tags', 'title_and_caption'].includes(target.searchTarget)) {
         errors.push(`targets[${index}].searchTarget: Invalid value, must be one of: partial_match_for_tags, exact_match_for_tags, title_and_caption`);
+      }
+      if (target.tagRelation && !['and', 'or'].includes(target.tagRelation)) {
+        errors.push(`targets[${index}].tagRelation: Invalid value, must be "and" or "or"`);
       }
       if (target.rankingDate && !/^\d{4}-\d{2}-\d{2}$/.test(target.rankingDate) && target.rankingDate !== 'YESTERDAY') {
         errors.push(`targets[${index}].rankingDate: Invalid format, must be YYYY-MM-DD or "YESTERDAY"`);

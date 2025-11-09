@@ -18,6 +18,9 @@ import {
   Spin,
   Input,
   Statistic,
+  Checkbox,
+  Alert,
+  Descriptions,
 } from 'antd';
 import {
   FolderOutlined,
@@ -31,6 +34,7 @@ import {
   SortAscendingOutlined,
   SortDescendingOutlined,
   FileOutlined,
+  ToolOutlined,
 } from '@ant-design/icons';
 import { api } from '../services/api';
 
@@ -67,6 +71,15 @@ export default function Files() {
   const [previewFile, setPreviewFile] = useState<FileItem | null>(null);
   const [previewContent, setPreviewContent] = useState<string>('');
   const [loadingPreview, setLoadingPreview] = useState(false);
+  const [normalizeModalVisible, setNormalizeModalVisible] = useState(false);
+  const [normalizeOptions, setNormalizeOptions] = useState({
+    dryRun: true,
+    normalizeNames: true,
+    reorganize: true,
+    updateDatabase: true,
+    type: 'all' as 'illustration' | 'novel' | 'all',
+  });
+  const [normalizeResult, setNormalizeResult] = useState<any>(null);
 
   const { data, isLoading } = useQuery<{ data: FilesResponse }>({
     queryKey: ['files', currentPath, fileType, sortBy, sortOrder],
@@ -82,6 +95,23 @@ export default function Files() {
     },
     onError: (error: any) => {
       message.error(error.response?.data?.error || '删除文件失败');
+    },
+  });
+
+  const normalizeFilesMutation = useMutation({
+    mutationFn: (options: typeof normalizeOptions) => api.normalizeFiles(options),
+    onSuccess: (response) => {
+      const result = response.data.result;
+      setNormalizeResult(result);
+      if (!normalizeOptions.dryRun) {
+        message.success('文件规范化完成');
+        queryClient.invalidateQueries({ queryKey: ['files'] });
+      } else {
+        message.success('预览完成，请查看结果');
+      }
+    },
+    onError: (error: any) => {
+      message.error(error.response?.data?.error || error.response?.data?.message || '文件规范化失败');
     },
   });
 
@@ -430,6 +460,16 @@ export default function Files() {
                 <FileTextOutlined /> 小说
               </Option>
             </Select>
+            <Button
+              type="primary"
+              icon={<ToolOutlined />}
+              onClick={() => {
+                setNormalizeModalVisible(true);
+                setNormalizeResult(null);
+              }}
+            >
+              规范化文件
+            </Button>
           </Space>
         </Col>
       </Row>
@@ -585,6 +625,188 @@ export default function Files() {
             ) : null}
           </>
         )}
+      </Modal>
+
+      {/* File Normalization Modal */}
+      <Modal
+        open={normalizeModalVisible}
+        onCancel={() => {
+          setNormalizeModalVisible(false);
+          setNormalizeResult(null);
+        }}
+        title="规范化文件"
+        width={700}
+        footer={[
+          <Button
+            key="cancel"
+            onClick={() => {
+              setNormalizeModalVisible(false);
+              setNormalizeResult(null);
+            }}
+          >
+            取消
+          </Button>,
+          <Button
+            key="preview"
+            onClick={() => {
+              normalizeFilesMutation.mutate({ ...normalizeOptions, dryRun: true });
+            }}
+            loading={normalizeFilesMutation.isPending}
+          >
+            预览（不执行）
+          </Button>,
+          <Button
+            key="execute"
+            type="primary"
+            onClick={() => {
+              normalizeFilesMutation.mutate({ ...normalizeOptions, dryRun: false });
+            }}
+            loading={normalizeFilesMutation.isPending}
+            danger={!normalizeOptions.dryRun}
+          >
+            执行规范化
+          </Button>,
+        ]}
+      >
+        <Space direction="vertical" style={{ width: '100%' }} size="large">
+          <Alert
+            message="文件规范化功能"
+            description="此功能将根据当前配置重新组织文件结构，规范化文件名，并更新数据库记录。建议先使用预览模式查看将要执行的操作。"
+            type="info"
+            showIcon
+          />
+
+          <div>
+            <Typography.Text strong>规范化选项：</Typography.Text>
+            <Space direction="vertical" style={{ marginTop: 8, width: '100%' }}>
+              <Checkbox
+                checked={normalizeOptions.normalizeNames}
+                onChange={(e) =>
+                  setNormalizeOptions({ ...normalizeOptions, normalizeNames: e.target.checked })
+                }
+              >
+                规范化文件名（清理特殊字符，统一格式）
+              </Checkbox>
+              <Checkbox
+                checked={normalizeOptions.reorganize}
+                onChange={(e) =>
+                  setNormalizeOptions({ ...normalizeOptions, reorganize: e.target.checked })
+                }
+              >
+                重新组织文件结构（根据当前配置的组织模式）
+              </Checkbox>
+              <Checkbox
+                checked={normalizeOptions.updateDatabase}
+                onChange={(e) =>
+                  setNormalizeOptions({ ...normalizeOptions, updateDatabase: e.target.checked })
+                }
+              >
+                更新数据库记录（更新文件路径）
+              </Checkbox>
+            </Space>
+          </div>
+
+          <div>
+            <Typography.Text strong>文件类型：</Typography.Text>
+            <Select
+              value={normalizeOptions.type}
+              onChange={(value) =>
+                setNormalizeOptions({ ...normalizeOptions, type: value })
+              }
+              style={{ width: '100%', marginTop: 8 }}
+            >
+              <Option value="all">全部（插画和小说）</Option>
+              <Option value="illustration">仅插画</Option>
+              <Option value="novel">仅小说</Option>
+            </Select>
+          </div>
+
+          {normalizeFilesMutation.isPending && (
+            <div style={{ textAlign: 'center', padding: '20px' }}>
+              <Spin size="large" />
+              <div style={{ marginTop: 16 }}>
+                <Typography.Text>正在处理文件，请稍候...</Typography.Text>
+              </div>
+            </div>
+          )}
+
+          {normalizeResult && (
+            <div>
+              <Typography.Text strong>规范化结果：</Typography.Text>
+              <Descriptions
+                bordered
+                column={1}
+                size="small"
+                style={{ marginTop: 8 }}
+              >
+                <Descriptions.Item label="总文件数">
+                  {normalizeResult.totalFiles}
+                </Descriptions.Item>
+                <Descriptions.Item label="已处理">
+                  {normalizeResult.processedFiles}
+                </Descriptions.Item>
+                <Descriptions.Item label="已移动">
+                  <Typography.Text type="success">
+                    {normalizeResult.movedFiles}
+                  </Typography.Text>
+                </Descriptions.Item>
+                <Descriptions.Item label="已重命名">
+                  <Typography.Text type="success">
+                    {normalizeResult.renamedFiles}
+                  </Typography.Text>
+                </Descriptions.Item>
+                <Descriptions.Item label="数据库已更新">
+                  <Typography.Text type="success">
+                    {normalizeResult.updatedDatabase}
+                  </Typography.Text>
+                </Descriptions.Item>
+                <Descriptions.Item label="已跳过">
+                  {normalizeResult.skippedFiles}
+                </Descriptions.Item>
+                <Descriptions.Item label="错误数">
+                  {normalizeResult.errors.length > 0 ? (
+                    <Typography.Text type="danger">
+                      {normalizeResult.errors.length}
+                    </Typography.Text>
+                  ) : (
+                    <Typography.Text type="success">0</Typography.Text>
+                  )}
+                </Descriptions.Item>
+              </Descriptions>
+
+              {normalizeResult.errors.length > 0 && (
+                <Alert
+                  message="处理错误"
+                  description={
+                    <div style={{ maxHeight: '200px', overflow: 'auto' }}>
+                      {normalizeResult.errors.map((error: any, index: number) => (
+                        <div key={index} style={{ marginBottom: 8 }}>
+                          <Typography.Text type="danger" strong>
+                            {error.file}:
+                          </Typography.Text>
+                          <Typography.Text type="danger" style={{ marginLeft: 8 }}>
+                            {error.error}
+                          </Typography.Text>
+                        </div>
+                      ))}
+                    </div>
+                  }
+                  type="error"
+                  style={{ marginTop: 16 }}
+                />
+              )}
+
+              {normalizeOptions.dryRun && (
+                <Alert
+                  message="预览模式"
+                  description="这是预览结果，文件尚未实际修改。要执行规范化，请点击执行规范化按钮。"
+                  type="warning"
+                  style={{ marginTop: 16 }}
+                />
+              )}
+            </div>
+          )}
+        </Space>
       </Modal>
     </div>
   );

@@ -654,6 +654,11 @@ npm run login
 ./scripts/config-manager.sh restore   # 恢复配置
 ./scripts/config-manager.sh validate  # 验证配置
 ./scripts/config-manager.sh edit      # 编辑配置
+
+# 配置路径迁移（自动修复绝对路径，适用于项目迁移）
+npm run start migrate-config          # 执行迁移
+npm run start migrate-config --dry-run # 预览更改
+npm run start migrate-config --json   # JSON 格式输出
 ```
 
 ### 📊 监控和维护
@@ -1193,6 +1198,13 @@ pixivflow/
   }
 }
 ```
+
+> **💡 路径迁移提示**：
+> - 配置文件中的路径支持**自动修复**：项目启动时会自动检测并修复路径问题
+> - **绝对路径转相对路径**：如果配置中的绝对路径位于项目根目录内，会自动转换为相对路径
+> - **路径不存在修复**：如果配置的路径不存在，会尝试使用默认路径
+> - **手动迁移**：使用 `npm run start migrate-config` 可以手动迁移配置路径
+> - 详细说明请查看 [配置路径迁移指南](docs/guides/CONFIG-PATH-MIGRATION.md)
 
 #### 目录组织方式
 

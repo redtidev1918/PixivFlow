@@ -5,6 +5,9 @@ const fs_1 = require("fs");
 const path_1 = require("path");
 const config_1 = require("../../config");
 const logger_1 = require("../../logger");
+const Database_1 = require("../../storage/Database");
+const FileService_1 = require("../../download/FileService");
+const FileNormalizationService_1 = require("../../download/FileNormalizationService");
 const router = (0, express_1.Router)();
 /**
  * GET /api/files/list
@@ -257,6 +260,51 @@ router.delete('/:id', async (req, res) => {
     catch (error) {
         logger_1.logger.error('Failed to delete file', { error });
         res.status(500).json({ error: 'Failed to delete file' });
+    }
+});
+/**
+ * POST /api/files/normalize
+ * Normalize and reorganize downloaded files
+ * Body: { dryRun?: boolean, normalizeNames?: boolean, reorganize?: boolean, updateDatabase?: boolean, type?: 'illustration' | 'novel' | 'all' }
+ */
+router.post('/normalize', async (req, res) => {
+    let database = null;
+    try {
+        const { dryRun = false, normalizeNames = true, reorganize = true, updateDatabase = true, type = 'all', } = req.body;
+        const configPath = (0, config_1.getConfigPath)();
+        const config = (0, config_1.loadConfig)(configPath);
+        // Initialize database and file service
+        database = new Database_1.Database(config.storage.databasePath);
+        database.migrate();
+        const fileService = new FileService_1.FileService(config.storage);
+        const normalizationService = new FileNormalizationService_1.FileNormalizationService(config.storage, fileService, database);
+        // Run normalization
+        const result = await normalizationService.normalizeFiles({
+            dryRun,
+            normalizeNames,
+            reorganize,
+            updateDatabase,
+            type: type,
+        });
+        database.close();
+        database = null;
+        res.json({
+            success: true,
+            result,
+        });
+    }
+    catch (error) {
+        if (database) {
+            try {
+                database.close();
+            }
+            catch (closeError) {
+                // Ignore close errors
+            }
+        }
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        logger_1.logger.error('Failed to normalize files', { error: { message: errorMessage } });
+        res.status(500).json({ error: 'Failed to normalize files', message: errorMessage });
     }
 });
 exports.default = router;

@@ -92,7 +92,7 @@ export class FileService {
       .trim() || 'unknown';
   }
 
-  private getOrganizedDirectory(
+  public getOrganizedDirectory(
     baseDirectory: string,
     mode: OrganizationMode,
     metadata?: FileMetadata,

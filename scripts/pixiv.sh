@@ -180,6 +180,7 @@ cmd_run() {
     
     log_info "下载器已启动（按 Ctrl+C 停止）"
     log_info "日志: data/pixiv-downloader.log"
+    log_info "提示: 这是完全独立的后端服务，无需前端支持"
     echo
     
     call_cli scheduler
@@ -190,6 +191,9 @@ cmd_once() {
     
     ensure_config
     ensure_deps
+    
+    log_info "开始执行下载任务..."
+    echo
     
     call_cli download
     
@@ -324,9 +328,13 @@ cmd_check() {
     
     local issues=0
     
+    log_info "检查后端独立运行环境..."
+    echo
+    
     # Node.js
     if command_exists node; then
-        log_success "Node.js $(node -v)"
+        local node_version=$(node -v)
+        log_success "Node.js $node_version"
     else
         log_error "Node.js 未安装"
         ((issues++))
@@ -334,7 +342,8 @@ cmd_check() {
     
     # npm
     if command_exists npm; then
-        log_success "npm $(npm -v)"
+        local npm_version=$(npm -v)
+        log_success "npm $npm_version"
     else
         log_error "npm 未安装"
         ((issues++))
@@ -370,9 +379,16 @@ cmd_check() {
         log_warn "无法访问 Pixiv（可能需要代理）"
     fi
     
+    # 后端独立性检查
+    if [[ -f "dist/index.js" ]]; then
+        log_success "后端 CLI 工具可用（完全独立，无需前端）"
+    else
+        log_info "后端 CLI 未编译（首次运行时会自动编译）"
+    fi
+    
     echo
     if [[ $issues -eq 0 ]]; then
-        log_success "环境正常！"
+        log_success "环境正常！后端可以独立运行，无需前端支持"
     else
         log_warn "发现 $issues 个问题"
         log_info "运行 '$0 setup' 初始化环境"

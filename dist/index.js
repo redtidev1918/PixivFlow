@@ -46,6 +46,7 @@ const terminal_login_1 = require("./terminal-login");
 const login_helper_1 = require("./utils/login-helper");
 const token_maintenance_1 = require("./utils/token-maintenance");
 const config_path_migrator_1 = require("./utils/config-path-migrator");
+const FileNormalizationService_1 = require("./download/FileNormalizationService");
 const path = __importStar(require("path"));
 const readline = __importStar(require("readline"));
 /**
@@ -122,6 +123,7 @@ Commands:
   random, rd                  Login (if needed) and download a random image
   scheduler                   Start scheduler (default if enabled in config)
   migrate-config, mc          Migrate configuration paths (convert absolute to relative)
+  normalize, nf               Normalize and reorganize downloaded files
   help, -h, --help            Show this help message
 
 Options:
@@ -141,6 +143,9 @@ Examples:
   pixivflow download --targets '[{"type":"novel","tag":"アークナイツ","limit":5,"mode":"ranking","rankingMode":"day","rankingDate":"YESTERDAY","filterTag":"アークナイツ"}]'  # Download with custom targets
   pixivflow random                   # Login (if needed) and download a random image
   pixivflow scheduler                # Start scheduler
+  pixivflow normalize                # Normalize and reorganize downloaded files
+  pixivflow normalize --dry-run      # Preview changes without applying them
+  pixivflow normalize --type novel   # Only normalize novel files
 
 Note: Login requires Python 3.9+ and gppt package (pip install gppt or pip3 install gppt)
 `);
@@ -661,6 +666,82 @@ async function handleMigrateConfig(args) {
     }
 }
 /**
+ * Handle normalize command
+ */
+async function handleNormalize(args) {
+    let database = null;
+    try {
+        const configPathArg = args.options.config || undefined;
+        const configPath = (0, config_1.getConfigPath)(configPathArg);
+        const config = (0, config_1.loadConfig)(configPath);
+        const dryRun = !!(args.options['dry-run'] || args.options.dryRun);
+        const json = !!(args.options.json || args.options.j);
+        const normalizeNames = !(args.options['no-normalize-names'] || args.options.noNormalizeNames);
+        const reorganize = !(args.options['no-reorganize'] || args.options.noReorganize);
+        const updateDatabase = !(args.options['no-update-db'] || args.options.noUpdateDb);
+        const type = args.options.type || 'all';
+        if (!json) {
+            console.log('[i]: Starting file normalization...');
+            if (dryRun) {
+                console.log('[i]: Dry run mode - no changes will be made');
+            }
+            console.log(`[i]: Type: ${type}`);
+            console.log(`[i]: Normalize names: ${normalizeNames}`);
+            console.log(`[i]: Reorganize: ${reorganize}`);
+            console.log(`[i]: Update database: ${updateDatabase}`);
+        }
+        // Initialize database and file service
+        database = new Database_1.Database(config.storage.databasePath);
+        database.migrate();
+        const fileService = new FileService_1.FileService(config.storage);
+        const normalizationService = new FileNormalizationService_1.FileNormalizationService(config.storage, fileService, database);
+        // Run normalization
+        const result = await normalizationService.normalizeFiles({
+            dryRun,
+            normalizeNames,
+            reorganize,
+            updateDatabase,
+            type: type,
+        });
+        database.close();
+        database = null;
+        if (json) {
+            console.log(JSON.stringify(result, null, 2));
+        }
+        else {
+            console.log('\n[+]: File normalization completed!');
+            console.log(`[i]: Total files: ${result.totalFiles}`);
+            console.log(`[i]: Processed: ${result.processedFiles}`);
+            console.log(`[i]: Moved: ${result.movedFiles}`);
+            console.log(`[i]: Renamed: ${result.renamedFiles}`);
+            console.log(`[i]: Database updated: ${result.updatedDatabase}`);
+            console.log(`[i]: Skipped: ${result.skippedFiles}`);
+            if (result.errors.length > 0) {
+                console.log(`\n[!]: ${result.errors.length} error(s) encountered:`);
+                result.errors.forEach((error) => {
+                    console.log(`  - ${error.file}: ${error.error}`);
+                });
+            }
+            if (dryRun) {
+                console.log('\n[i]: This was a dry run. Use without --dry-run to apply changes.');
+            }
+        }
+        process.exit(result.errors.length > 0 ? 1 : 0);
+    }
+    catch (error) {
+        if (database) {
+            try {
+                database.close();
+            }
+            catch (closeError) {
+                // Ignore close errors
+            }
+        }
+        console.error('[!]: Normalization failed:', error instanceof Error ? error.message : String(error));
+        process.exit(1);
+    }
+}
+/**
  * Main bootstrap function
  */
 async function bootstrap() {
@@ -707,6 +788,11 @@ async function bootstrap() {
     // Handle migrate-config command
     if (command === 'migrate-config' || command === 'mc') {
         await handleMigrateConfig(args);
+        return;
+    }
+    // Handle normalize command
+    if (command === 'normalize' || command === 'nf') {
+        await handleNormalize(args);
         return;
     }
     // Default behavior: run downloader (backward compatibility)

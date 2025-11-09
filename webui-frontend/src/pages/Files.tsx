@@ -55,12 +55,6 @@ interface FileItem {
   extension?: string;
 }
 
-interface FilesResponse {
-  files: FileItem[];
-  directories: FileItem[];
-  currentPath: string;
-}
-
 const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'];
 const textExtensions = ['.txt', '.md', '.text'];
 
@@ -87,7 +81,7 @@ export default function Files() {
   });
   const [normalizeResult, setNormalizeResult] = useState<any>(null);
 
-  const { data, isLoading } = useQuery<{ data: FilesResponse }>({
+  const { data, isLoading } = useQuery({
     queryKey: ['files', currentPath, fileType, sortBy, sortOrder, dateFilter],
     queryFn: () => api.listFiles({ 
       path: currentPath, 
@@ -114,7 +108,7 @@ export default function Files() {
   const normalizeFilesMutation = useMutation({
     mutationFn: (options: typeof normalizeOptions) => api.normalizeFiles(options),
     onSuccess: (response) => {
-      const result = response.data.result;
+      const result = response.data.data.result;
       setNormalizeResult(result);
       if (!normalizeOptions.dryRun) {
         message.success(t('files.normalizeCompleted'));
@@ -393,8 +387,8 @@ export default function Files() {
   // Filter and sort items
   const allItems = useMemo(() => {
     let items = [
-      ...(data?.data?.directories || []),
-      ...(data?.data?.files || []),
+      ...(data?.data?.data?.directories || []),
+      ...(data?.data?.data?.files || []),
     ];
 
     // Apply search filter
@@ -516,13 +510,13 @@ export default function Files() {
     });
 
     return items;
-  }, [data?.data?.directories, data?.data?.files, searchText, sortBy, sortOrder, dateFilter]);
+  }, [data?.data?.data?.directories, data?.data?.data?.files, searchText, sortBy, sortOrder, dateFilter]);
 
   // Calculate statistics
   const stats = useMemo(() => {
     const all = [
-      ...(data?.data?.directories || []),
-      ...(data?.data?.files || []),
+      ...(data?.data?.data?.directories || []),
+      ...(data?.data?.data?.files || []),
     ];
     const directories = all.filter((item) => item.type === 'directory').length;
     const files = all.filter((item) => item.type === 'file').length;
@@ -536,7 +530,7 @@ export default function Files() {
     ).length;
 
     return { directories, files, totalSize, images };
-  }, [data?.data]);
+  }, [data?.data?.data]);
 
   return (
     <div>

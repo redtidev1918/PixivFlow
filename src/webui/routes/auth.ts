@@ -20,10 +20,14 @@ router.get('/status', async (req: Request, res: Response) => {
     const config = loadConfig(configPath);
 
     const hasToken = !!config.pixiv?.refreshToken;
+    const authenticated = hasToken;
+
+    logger.debug('Auth status check', { authenticated, hasToken, configPath });
 
     res.json({
-      authenticated: hasToken,
+      authenticated,
       hasToken,
+      isAuthenticated: authenticated, // Alias for compatibility
     });
   } catch (error) {
     if (error instanceof ConfigError) {
@@ -42,6 +46,7 @@ router.get('/status', async (req: Request, res: Response) => {
       return res.json({
         authenticated: false,
         hasToken: false,
+        isAuthenticated: false,
         configReady: false,
         errors: validationErrors,
         warnings: validationWarnings,
@@ -156,6 +161,8 @@ router.post('/login', async (req: Request, res: Response) => {
       }
     }
 
+    logger.info('Starting login process', { headless, hasUsername: !!username });
+    
     const login = new TerminalLogin({
       headless: headless as boolean,
       username: username || undefined,
@@ -170,21 +177,32 @@ router.post('/login', async (req: Request, res: Response) => {
       proxy: proxyConfig,
     });
 
+    if (!loginInfo) {
+      throw new Error('Login returned null - login may have been cancelled or failed');
+    }
+
+    logger.info('Login successful, updating config file...');
     // Update config with refresh token
     const configPath = getConfigPath();
     try {
       await updateConfigWithToken(configPath, loginInfo.refresh_token);
+      logger.info('Config file updated successfully with refresh token');
     } catch (error) {
-      logger.warn('Login successful but config update failed', { error });
+      logger.error('Login successful but config update failed', { error });
+      // Still return success, but log the error
+      // The token is still valid, user can manually update config if needed
     }
 
+    logger.info('Login API returning success response');
     res.json({
       success: true,
       errorCode: ErrorCode.AUTH_LOGIN_SUCCESS,
-      accessToken: loginInfo.access_token,
-      refreshToken: loginInfo.refresh_token,
-      expiresIn: loginInfo.expires_in,
-      user: loginInfo.user,
+      data: {
+        accessToken: loginInfo.access_token,
+        refreshToken: loginInfo.refresh_token,
+        expiresIn: loginInfo.expires_in,
+        user: loginInfo.user,
+      },
     });
   } catch (error) {
     logger.error('Login failed', { error });
@@ -237,6 +255,69 @@ router.post('/refresh', async (req: Request, res: Response) => {
     logger.error('Token refresh failed', { error });
     res.status(401).json({
       errorCode: ErrorCode.AUTH_REFRESH_FAILED,
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+/**
+ * POST /api/auth/login-with-token
+ * Login with refresh token directly
+ * Validates the token and saves it to config file
+ */
+router.post('/login-with-token', async (req: Request, res: Response) => {
+  try {
+    const { refreshToken } = req.body;
+
+    if (!refreshToken || typeof refreshToken !== 'string' || refreshToken.trim() === '') {
+      return res.status(400).json({
+        errorCode: ErrorCode.AUTH_REFRESH_TOKEN_REQUIRED,
+        message: 'Refresh token is required',
+      });
+    }
+
+    const trimmedToken = refreshToken.trim();
+    logger.info('Validating refresh token...');
+
+    // Validate token by attempting to refresh it
+    let loginInfo;
+    try {
+      loginInfo = await TerminalLogin.refresh(trimmedToken);
+      logger.info('Refresh token validated successfully');
+    } catch (error) {
+      logger.error('Refresh token validation failed', { error });
+      return res.status(401).json({
+        errorCode: ErrorCode.AUTH_REFRESH_FAILED,
+        message: error instanceof Error ? error.message : 'Invalid refresh token',
+      });
+    }
+
+    // Update config file with the refresh token
+    const configPath = getConfigPath();
+    try {
+      await updateConfigWithToken(configPath, trimmedToken);
+      logger.info('Config file updated successfully with refresh token');
+    } catch (error) {
+      logger.error('Failed to update config file with refresh token', { error });
+      // Still return success if token is valid, but log the error
+      // User can manually update config if needed
+    }
+
+    logger.info('Login with token successful');
+    res.json({
+      success: true,
+      errorCode: ErrorCode.AUTH_LOGIN_SUCCESS,
+      data: {
+        accessToken: loginInfo.access_token,
+        refreshToken: loginInfo.refresh_token,
+        expiresIn: loginInfo.expires_in,
+        user: loginInfo.user,
+      },
+    });
+  } catch (error) {
+    logger.error('Login with token failed', { error });
+    res.status(500).json({
+      errorCode: ErrorCode.AUTH_LOGIN_FAILED,
       message: error instanceof Error ? error.message : String(error),
     });
   }

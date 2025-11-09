@@ -111,7 +111,13 @@ export async function loginWithPuppeteerInteractive(proxy?: ProxyConfig): Promis
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-blink-features=AutomationControlled',
+        '--disable-dev-shm-usage',
+        '--disable-accelerated-2d-canvas',
+        '--no-first-run',
+        '--no-zygote',
+        '--disable-gpu',
       ],
+      ignoreHTTPSErrors: true,
     };
     
     // Add proxy if configured
@@ -127,19 +133,52 @@ export async function loginWithPuppeteerInteractive(proxy?: ProxyConfig): Promis
     // Set user agent to avoid detection
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
     
+    // Set extra headers to avoid detection
+    await page.setExtraHTTPHeaders({
+      'Accept-Language': 'en-US,en;q=0.9',
+    });
+    
     // Navigate to login page
     console.log('[i]: Opening Pixiv login page...');
-    await page.goto(loginUrl, { waitUntil: 'networkidle2', timeout: 60000 });
+    try {
+      await page.goto(loginUrl, { waitUntil: 'networkidle2', timeout: 60000 });
+    } catch (error) {
+      // If networkidle2 times out, try with domcontentloaded
+      console.log('[i]: Retrying with domcontentloaded...');
+      await page.goto(loginUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    }
     
     console.log('[!]: Please log in using the browser window.');
     console.log('[i]: Waiting for login to complete...');
     console.log('[i]: The browser will remain open until login is complete.');
+    console.log('[i]: After logging in, Pixiv will redirect to a callback URL.');
+    console.log('[i]: The browser window will close automatically once login is successful.');
     
     // Wait for redirect to callback URL (up to 5 minutes)
     const code = await waitForAuthCode(page, 300000);
     
     if (!code) {
-      throw new Error('Failed to obtain authorization code. Login may have been cancelled or timed out.');
+      // Check if we're on a page that might indicate login completed
+      const currentUrl = page.url();
+      console.log(`[!]: Current page URL: ${currentUrl}`);
+      
+      // Try to extract code from current URL one more time
+      try {
+        const urlObj = new URL(currentUrl);
+        const codeFromUrl = urlObj.searchParams.get('code');
+        if (codeFromUrl) {
+          console.log('[+]: Found authorization code in current URL!');
+          const loginInfo = await exchangeCodeForToken(codeFromUrl, codeVerifier);
+          console.log('[+]: Login successful!');
+          await browser.close();
+          browser = null;
+          return loginInfo;
+        }
+      } catch (e) {
+        // URL parsing failed, continue with error
+      }
+      
+      throw new Error('Failed to obtain authorization code. Login may have been cancelled or timed out. Please try again.');
     }
     
     console.log('[+]: Authorization code obtained!');
@@ -149,10 +188,15 @@ export async function loginWithPuppeteerInteractive(proxy?: ProxyConfig): Promis
     const loginInfo = await exchangeCodeForToken(code, codeVerifier);
     
     console.log('[+]: Login successful!');
+    console.log('[i]: Closing browser window...');
     
     // Close browser
-    await browser.close();
-    browser = null;
+    try {
+      await browser.close();
+      browser = null;
+    } catch (e) {
+      console.warn('[!]: Warning: Failed to close browser, but login was successful');
+    }
     
     return loginInfo;
   } catch (error) {
@@ -213,7 +257,12 @@ export async function loginWithPuppeteerHeadless(
         '--disable-setuid-sandbox',
         '--disable-blink-features=AutomationControlled',
         '--disable-dev-shm-usage',
+        '--disable-accelerated-2d-canvas',
+        '--no-first-run',
+        '--no-zygote',
+        '--disable-gpu',
       ],
+      ignoreHTTPSErrors: true,
     };
     
     // Add proxy if configured
@@ -230,9 +279,20 @@ export async function loginWithPuppeteerHeadless(
     // Set user agent
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
     
+    // Set extra headers to avoid detection
+    await page.setExtraHTTPHeaders({
+      'Accept-Language': 'en-US,en;q=0.9',
+    });
+    
     // Navigate to login page
     console.log('[i]: Navigating to login page...');
-    await page.goto(loginUrl, { waitUntil: 'networkidle2', timeout: 60000 });
+    try {
+      await page.goto(loginUrl, { waitUntil: 'networkidle2', timeout: 60000 });
+    } catch (error) {
+      // If networkidle2 times out, try with domcontentloaded
+      console.log('[i]: Retrying with domcontentloaded...');
+      await page.goto(loginUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    }
     
     // Wait for login form to load
     console.log('[i]: Waiting for login form...');
@@ -394,27 +454,156 @@ export async function loginWithPuppeteerHeadless(
  * Wait for authorization code from redirect URL
  */
 async function waitForAuthCode(page: Page, timeoutMs: number): Promise<string | null> {
-  try {
-    // Wait for URL to change to redirect URI
-    await page.waitForFunction(
-      (redirectUri) => {
+  return new Promise((resolve) => {
+    let resolved = false;
+    let pollInterval: NodeJS.Timeout | null = null;
+    
+    // Cleanup function to ensure all listeners are removed
+    const cleanup = () => {
+      if (resolved) return;
+      resolved = true;
+      try {
+        page.off('response', onResponse);
+        page.off('framenavigated', onFrameNavigated);
+        if (pollInterval) {
+          clearInterval(pollInterval);
+          pollInterval = null;
+        }
+      } catch (e) {
+        // Ignore cleanup errors
+      }
+    };
+
+    const timeout = setTimeout(() => {
+      if (!resolved) {
+        cleanup();
+        console.log('[!]: Timeout waiting for authorization code');
+        resolve(null);
+      }
+    }, timeoutMs);
+
+    // Function to check and extract code from URL
+    const checkUrlForCode = (url: string): string | null => {
+      try {
+        const urlObj = new URL(url);
+        const code = urlObj.searchParams.get('code');
+        if (code) {
+          console.log('[+]: Found authorization code in URL');
+          return code;
+        }
+      } catch (e) {
+        // Invalid URL, ignore
+      }
+      return null;
+    };
+
+    // Check current URL immediately
+    try {
+      const currentUrl = page.url();
+      const currentCode = checkUrlForCode(currentUrl);
+      if (currentCode) {
+        cleanup();
+        clearTimeout(timeout);
+        resolve(currentCode);
+        return;
+      }
+    } catch (e) {
+      // Continue with listeners if immediate check fails
+    }
+
+    // Listen for navigation events
+    const onResponse = async (response: any) => {
+      if (resolved) return;
+      
+      try {
+        const url = response.url();
+        const code = checkUrlForCode(url);
+        if (code) {
+          cleanup();
+          clearTimeout(timeout);
+          resolve(code);
+        }
+      } catch (e) {
+        // Ignore errors
+      }
+    };
+
+    const onFrameNavigated = async (frame: any) => {
+      if (resolved || frame !== page.mainFrame()) return;
+      
+      try {
+        const url = frame.url();
+        const code = checkUrlForCode(url);
+        if (code) {
+          cleanup();
+          clearTimeout(timeout);
+          resolve(code);
+        }
+      } catch (e) {
+        // Ignore errors
+      }
+    };
+
+    // Also poll the URL periodically as a fallback
+    pollInterval = setInterval(async () => {
+      if (resolved) {
+        if (pollInterval) {
+          clearInterval(pollInterval);
+        }
+        return;
+      }
+
+      try {
+        const url = page.url();
+        const code = checkUrlForCode(url);
+        if (code) {
+          cleanup();
+          clearTimeout(timeout);
+          resolve(code);
+        }
+      } catch (e) {
+        // Ignore errors
+      }
+    }, 1000); // Check every second
+
+    // Set up listeners
+    page.on('response', onResponse);
+    page.on('framenavigated', onFrameNavigated);
+
+    // Also wait for the specific redirect URI as before (for compatibility)
+    // Use a shorter timeout for waitForFunction to avoid conflicts
+    const waitForFunctionTimeout = Math.min(timeoutMs, 60000);
+    page.waitForFunction(
+      () => {
         // @ts-ignore - This code runs in browser context
-        return window.location.href.startsWith(redirectUri);
+        const url = window.location.href;
+        // Check if URL contains code parameter
+        try {
+          return new URL(url).searchParams.has('code');
+        } catch {
+          return false;
+        }
       },
-      { timeout: timeoutMs },
-      REDIRECT_URI
-    );
-    
-    // Extract code from URL
-    const url = page.url();
-    const urlObj = new URL(url);
-    const code = urlObj.searchParams.get('code');
-    
-    return code;
-  } catch (error) {
-    // Timeout or other error
-    return null;
-  }
+      { timeout: waitForFunctionTimeout }
+    ).then(() => {
+      if (!resolved) {
+        try {
+          const url = page.url();
+          const code = checkUrlForCode(url);
+          if (code) {
+            cleanup();
+            clearTimeout(timeout);
+            resolve(code);
+          }
+        } catch (e) {
+          // If we reach here but no code found, continue waiting
+        }
+      }
+    }).catch(() => {
+      // Timeout or error - will be handled by the main timeout
+      // Don't resolve here, let the main timeout handle it
+    });
+  });
 }
 
 /**
@@ -470,9 +659,31 @@ async function exchangeCodeForToken(code: string, codeVerifier: string): Promise
 export async function checkPuppeteerAvailable(): Promise<boolean> {
   try {
     // Try to import puppeteer
+    // Use dynamic import to handle cases where module might not be available
     const puppeteer = await import('puppeteer');
+    
+    // Verify that puppeteer has the expected exports
+    if (!puppeteer || typeof puppeteer.launch !== 'function') {
+      console.warn('[Puppeteer] Module imported but missing expected exports');
+      return false;
+    }
+    
+    // In Electron environments, we might not be able to launch a separate browser
+    // So we just check if the module can be imported and has the expected API
+    // The actual browser launch will be tested during login
     return true;
-  } catch (error) {
+  } catch (error: any) {
+    // Log the error for debugging
+    const errorMessage = error?.message || String(error);
+    const errorCode = error?.code;
+    
+    // Check if it's a module not found error
+    if (errorCode === 'MODULE_NOT_FOUND' || errorMessage.includes('Cannot find module')) {
+      console.error('[Puppeteer] Module not found. Please ensure puppeteer is installed:', errorMessage);
+    } else {
+      console.error('[Puppeteer] Import failed:', errorMessage, errorCode);
+    }
+    
     return false;
   }
 }

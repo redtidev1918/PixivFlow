@@ -141,19 +141,14 @@ npm run login
 
 #### 核心功能
 
-- ✅ **终端交互式输入**：在终端提示输入用户名和密码（无头模式，不打开浏览器）
+- ✅ **终端交互式输入**：在终端提示输入用户名和密码
 - ✅ **自动更新配置**：登录成功后自动更新配置文件中的 refresh token
 - ✅ **默认使用 Python gppt**：自动使用 gppt 进行登录，避免被检测
-- ✅ **多种登录模式**：终端输入、命令行参数、环境变量等
 
 #### 登录选项
 
 | 选项 | 说明 | 示例 |
 |------|------|------|
-| `-i, --interactive` | 交互式登录（默认，打开浏览器窗口，在浏览器中手动登录） | `npm run login` |
-| `--headless` | 无头登录（通过参数提供用户名和密码，不打开浏览器） | `npm run login -- --headless -u user -p pass` |
-| `-u, --username <id>` | Pixiv 用户名/邮箱（无头模式必需） | `npm run login -- --headless -u user@example.com` |
-| `-p, --password <pass>` | Pixiv 密码（无头模式必需） | `npm run login -- --headless -p password123` |
 | `-c, --config <path>` | 配置文件路径（默认: config/standalone.config.json） | `npm run login -- -c custom.config.json` |
 | `--gppt-only` | 仅使用 Python gppt（默认已启用，此选项保留用于兼容） | `npm run login -- --gppt-only` |
 | `--python-fallback` | 使用 Python gppt 作为后备方案（默认已启用，此选项保留用于兼容） | `npm run login -- --python-fallback` |
@@ -161,31 +156,11 @@ npm run login
 
 #### 使用示例
 
-##### 默认交互式登录（推荐 ⭐）
+##### 默认登录（推荐 ⭐）
 
 ```bash
-# 默认模式：打开浏览器窗口，在浏览器中手动登录
+# 在终端中输入用户名和密码
 npm run login
-```
-
-**注意**：默认模式会打开浏览器窗口，需要在浏览器中手动完成登录。如果不想打开浏览器，请使用 headless 模式。
-
-##### 无头登录（通过参数提供用户名密码）
-
-```bash
-# 通过参数提供用户名和密码
-npm run login -- --headless -u your_username -p your_password
-```
-
-##### 使用环境变量
-
-```bash
-# 设置环境变量
-export PIXIV_USERNAME="your_username"
-export PIXIV_PASSWORD="your_password"
-
-# 无头登录
-npm run login -- --headless
 ```
 
 ##### 查看帮助
@@ -282,8 +257,6 @@ npm run login -- --help
 # 交互式登录（在终端输入用户名密码）
 ./scripts/pixiv.sh login
 
-# 无头登录（通过参数提供用户名密码）
-./scripts/pixiv.sh login -u your_username -p your_password
 
 # 查看登录帮助
 ./scripts/pixiv.sh login --help
@@ -349,7 +322,7 @@ npm run login -- --help
 
 #### 配置流程
 
-1. 🔐 **终端登录** - 在终端输入 Pixiv 账号和密码（无头模式，不打开浏览器）
+1. 🔐 **终端登录** - 在终端输入 Pixiv 账号和密码
 2. ⚙️ **配置选项** - 引导配置下载选项（标签、数量、定时任务等）
 3. ✅ **验证配置** - 自动验证配置正确性
 4. 💾 **保存配置** - 自动保存配置到文件
@@ -489,7 +462,6 @@ npm run login -- --help
 ```bash
 # 登录账号
 ./scripts/pixiv-cli.sh login
-./scripts/pixiv-cli.sh login -u username -p password  # 无头登录
 
 # 刷新令牌
 ./scripts/pixiv-cli.sh refresh <refresh_token>
@@ -918,8 +890,7 @@ npm run login
 ```
 
 **功能说明**：
-- ✅ 终端交互式输入：在终端提示输入用户名和密码（不会打开浏览器）
-- ✅ 无头模式：后台运行，不打开浏览器窗口，更安全
+- ✅ 终端交互式输入：在终端提示输入用户名和密码
 - ✅ 自动更新配置：登录成功后自动更新配置文件中的 refresh token
 
 ---

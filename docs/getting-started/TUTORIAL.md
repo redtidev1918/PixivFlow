@@ -354,10 +354,10 @@ npm run login
 [?]: Password: 
 ```
 
-**💡 提示**：也可以使用无头登录（通过参数提供用户名密码）：
+**💡 提示**：查看登录帮助：
 
 ```bash
-./scripts/pixiv.sh login -u your_username -p your_password
+./scripts/pixiv.sh login --help
 ```
 
 #### 步骤 3：等待登录完成

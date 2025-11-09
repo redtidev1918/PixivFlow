@@ -119,7 +119,7 @@ export default function Logs() {
 
   // Auto scroll to bottom when new logs arrive
   useEffect(() => {
-    if (autoScroll && autoRefresh && data?.data?.logs) {
+    if (autoScroll && autoRefresh && data?.data?.data?.logs) {
       if (scrollTimeoutRef.current) {
         clearTimeout(scrollTimeoutRef.current);
       }
@@ -135,7 +135,7 @@ export default function Logs() {
         clearTimeout(scrollTimeoutRef.current);
       }
     };
-  }, [data?.data?.logs, autoScroll, autoRefresh]);
+  }, [data?.data?.data?.logs, autoScroll, autoRefresh]);
 
   // Parse log line to extract level and timestamp
   const parseLogLine = (line: string): LogEntry => {
@@ -226,7 +226,7 @@ export default function Logs() {
   // Export logs to file
   const exportLogs = () => {
     const logEntries: LogEntry[] =
-      (data?.data?.logs?.map((line: string) => parseLogLine(line)) || []);
+      (data?.data?.data?.logs?.map((line: string) => parseLogLine(line)) || []);
     
     const content = logEntries.map(entry => entry.originalLine).join('\n');
     const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
@@ -252,10 +252,10 @@ export default function Logs() {
 
   // Calculate log statistics
   const logEntries: LogEntry[] =
-    (data?.data?.logs?.map((line: string) => parseLogLine(line)) || []);
+    (data?.data?.data?.logs?.map((line: string) => parseLogLine(line)) || []);
   
   const stats = {
-    total: data?.data?.total || 0,
+    total: data?.data?.data?.total || 0,
     error: logEntries.filter(e => e.level === 'ERROR' || e.level === 'FATAL').length,
     warn: logEntries.filter(e => e.level === 'WARN').length,
     info: logEntries.filter(e => e.level === 'INFO').length,
@@ -495,7 +495,7 @@ export default function Logs() {
               pagination={{
                 current: page,
                 pageSize: pageSize,
-                total: data?.data?.total || 0,
+                total: data?.data?.data?.total || 0,
                 showSizeChanger: false,
                 showTotal: (total, range) => 
                   t('logs.displaying', { start: range[0], end: range[1], total }),

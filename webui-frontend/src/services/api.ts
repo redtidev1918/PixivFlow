@@ -283,8 +283,20 @@ export const api = {
     password: string,
     headless: boolean = true,
     proxy?: any
-  ): Promise<AxiosResponse<ApiResponse<{ refreshToken: string }>>> =>
-    apiClient.post('/auth/login', { username, password, headless, proxy }),
+  ): Promise<AxiosResponse<ApiResponse<{ refreshToken: string }>>> => {
+    // For interactive mode, use a longer timeout (10 minutes) since user needs time to complete login
+    const timeout = headless ? 30000 : 600000; // 30s for headless, 10min for interactive
+    return apiClient.post('/auth/login', { username, password, headless, proxy }, { timeout });
+  },
+
+  /**
+   * Login with refresh token directly
+   * @param refreshToken - Refresh token to validate and save
+   */
+  loginWithToken: (
+    refreshToken: string
+  ): Promise<AxiosResponse<ApiResponse<{ refreshToken: string; accessToken: string; expiresIn: number; user?: any }>>> =>
+    apiClient.post('/auth/login-with-token', { refreshToken }),
 
   /**
    * Refresh authentication token

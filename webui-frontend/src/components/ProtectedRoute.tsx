@@ -20,6 +20,13 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes
   });
 
+  // Helper to check if authenticated from API response
+  const isAuthenticated = (response: any): boolean => {
+    // API response structure: response.data.data.authenticated or response.data.authenticated
+    const responseData = response?.data?.data || response?.data;
+    return responseData?.authenticated === true || responseData?.isAuthenticated === true;
+  };
+
   if (isLoading) {
     return (
       <div
@@ -36,7 +43,7 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   }
 
   // If not authenticated, redirect to login
-  if (!data?.data?.authenticated) {
+  if (!isAuthenticated(data)) {
     return <Navigate to="/login" replace />;
   }
 

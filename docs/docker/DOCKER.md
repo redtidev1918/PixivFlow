@@ -363,29 +363,9 @@ services:
 
    Docker 镜像已经包含了登录所需的所有依赖（Python gppt、Chromium 浏览器和 ChromeDriver），可以直接使用登录功能。
 
-   **默认登录模式说明**：
-   - **默认模式**（`node dist/index.js login`）：交互式登录，会打开浏览器窗口，需要在浏览器中手动登录
-   - **Headless 模式**（`node dist/index.js login -u username -p password`）：无头登录，不打开浏览器窗口，使用命令行提供的用户名和密码自动登录
+   **登录方式**：
 
-   **方式 1：Headless 登录（推荐，无需浏览器窗口）**
-
-   使用用户名和密码进行无头登录（适合 Docker 环境，无需图形界面）：
-
-   ```bash
-   docker run -it --rm \
-     -v $(pwd)/config:/app/config \
-     -e HTTPS_PROXY=http://host.docker.internal:7890 \
-     pixivflow:latest \
-     node dist/index.js login -u your_username -p your_password
-   ```
-
-   **方式 2：交互式登录（需要浏览器窗口，Docker 环境不推荐）**
-
-   交互式登录会打开浏览器窗口，但 Docker 容器默认无法显示图形界面。如果需要使用交互式登录，需要：
-
-   - 使用 X11 转发（Linux）或 XQuartz（macOS）
-   - 或者使用 VNC 服务器
-   - 或者直接使用 headless 模式（推荐）
+   在 Docker 容器中登录，需要在终端中输入用户名和密码：
 
    ```bash
    docker run -it --rm \
@@ -395,7 +375,7 @@ services:
      node dist/index.js login
    ```
 
-   **方式 3：使用配置向导**
+   **使用配置向导**：
 
    ```bash
    docker run -it --rm \
@@ -406,8 +386,7 @@ services:
 
    **注意事项**：
    - 如果在中国大陆，需要设置代理环境变量（`HTTPS_PROXY` 或 `ALL_PROXY`）
-   - **Docker 环境推荐使用 Headless 模式**（方式 1），因为容器默认无法显示图形界面
-   - 默认登录模式会尝试打开浏览器窗口，在 Docker 环境中可能无法正常工作
+   - 登录时会在终端中提示输入用户名和密码
    - 登录成功后，refresh token 会保存到配置文件中
 
 ### 环境变量

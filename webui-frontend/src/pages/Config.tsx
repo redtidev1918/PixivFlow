@@ -139,9 +139,9 @@ export default function Config() {
   });
 
   useEffect(() => {
-    if (configData?.data) {
+    if (configData?.data?.data) {
       // Remove _meta from form data
-      const { _meta, ...configWithoutMeta } = configData.data;
+      const { _meta, ...configWithoutMeta } = configData.data.data;
       form.setFieldsValue(configWithoutMeta);
     }
   }, [configData, form]);
@@ -176,10 +176,10 @@ export default function Config() {
   const validateConfigMutation = useMutation({
     mutationFn: (values: any) => api.validateConfig(values),
     onSuccess: (data) => {
-      if (data.data.valid) {
+      if (data.data.data.valid) {
         message.success(t('config.validationPassed'));
       } else {
-        message.error(`${t('config.validationFailed')}: ${data.data.errors?.join(', ')}`);
+        message.error(`${t('config.validationFailed')}: ${data.data.data.errors?.join(', ')}`);
       }
     },
   });
@@ -241,13 +241,13 @@ export default function Config() {
 
   const handleExportConfig = () => {
     // Export the actual server config, not form values (which may be unsaved)
-    if (!configData?.data) {
+    if (!configData?.data?.data) {
       message.warning(t('config.configNotLoaded'));
       return;
     }
     
     // Remove _meta from exported config
-    const { _meta, ...configToExport } = configData.data;
+    const { _meta, ...configToExport } = configData.data.data;
     const jsonStr = JSON.stringify(configToExport, null, 2);
     const blob = new Blob([jsonStr], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -276,8 +276,8 @@ export default function Config() {
             // Validate before importing
             try {
               const validationResult = await api.validateConfig(configToImport);
-              if (!validationResult.data.valid) {
-                message.error(`${t('config.validationFailed')}: ${validationResult.data.errors?.join(', ')}`);
+              if (!validationResult.data.data.valid) {
+                message.error(`${t('config.validationFailed')}: ${validationResult.data.data.errors?.join(', ')}`);
                 return;
               }
             } catch (error) {
@@ -449,7 +449,7 @@ export default function Config() {
     return <div>{t('common.loading')}</div>;
   }
 
-  const currentConfigPath = configData?.data?._meta?.configPathRelative || configData?.data?._meta?.configPath || t('config.unknown');
+  const currentConfigPath = configData?.data?.data?._meta?.configPathRelative || configData?.data?.data?._meta?.configPath || t('config.unknown');
 
   return (
     <div>

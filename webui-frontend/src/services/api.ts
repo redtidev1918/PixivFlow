@@ -81,8 +81,20 @@ export const api = {
   clearLogs: () => apiClient.delete('/logs'),
 
   // Files
-  listFiles: (params?: { path?: string; type?: string; sort?: string; order?: string }) =>
+  listFiles: (params?: { 
+    path?: string; 
+    type?: string; 
+    sort?: string; 
+    order?: string;
+    dateFilter?: 'today' | 'yesterday' | 'thisWeek' | 'lastWeek' | 'thisMonth' | 'lastMonth' | 'all';
+  }) =>
     apiClient.get('/files/list', { params }),
+  getRecentFiles: (params?: {
+    limit?: number;
+    type?: 'illustration' | 'novel';
+    filter?: 'today' | 'yesterday' | 'last7days' | 'last30days';
+  }) =>
+    apiClient.get('/files/recent', { params }),
   getFilePreview: (path: string, type?: string) =>
     apiClient.get('/files/preview', { params: { path, type }, responseType: 'blob' }),
   deleteFile: (id: string, params?: { path?: string; type?: string }) =>

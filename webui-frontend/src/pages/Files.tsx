@@ -51,6 +51,7 @@ interface FileItem {
   type: 'file' | 'directory';
   size?: number;
   modified?: string;
+  downloadedAt?: string | null;
   extension?: string;
 }
 
@@ -68,9 +69,10 @@ export default function Files() {
   const queryClient = useQueryClient();
   const [currentPath, setCurrentPath] = useState<string>('');
   const [fileType, setFileType] = useState<'illustration' | 'novel'>('illustration');
-  const [sortBy, setSortBy] = useState<'name' | 'time' | 'size' | 'type'>('type');
+  const [sortBy, setSortBy] = useState<'name' | 'time' | 'size' | 'type' | 'downloadedAt'>('type');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [searchText, setSearchText] = useState<string>('');
+  const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'yesterday' | 'thisWeek' | 'lastWeek' | 'thisMonth' | 'lastMonth'>('all');
   const [previewVisible, setPreviewVisible] = useState(false);
   const [previewFile, setPreviewFile] = useState<FileItem | null>(null);
   const [previewContent, setPreviewContent] = useState<string>('');
@@ -86,8 +88,14 @@ export default function Files() {
   const [normalizeResult, setNormalizeResult] = useState<any>(null);
 
   const { data, isLoading } = useQuery<{ data: FilesResponse }>({
-    queryKey: ['files', currentPath, fileType, sortBy, sortOrder],
-    queryFn: () => api.listFiles({ path: currentPath, type: fileType, sort: sortBy, order: sortOrder }),
+    queryKey: ['files', currentPath, fileType, sortBy, sortOrder, dateFilter],
+    queryFn: () => api.listFiles({ 
+      path: currentPath, 
+      type: fileType, 
+      sort: sortBy, 
+      order: sortOrder,
+      dateFilter: dateFilter === 'all' ? undefined : dateFilter,
+    }),
   });
 
   const deleteFileMutation = useMutation({
@@ -212,12 +220,12 @@ export default function Files() {
       : []),
   ];
 
-  const getSortIcon = (column: 'name' | 'time' | 'size' | 'type') => {
+  const getSortIcon = (column: 'name' | 'time' | 'size' | 'type' | 'downloadedAt') => {
     if (sortBy !== column) return null;
     return sortOrder === 'asc' ? <SortAscendingOutlined /> : <SortDescendingOutlined />;
   };
 
-  const handleSort = (column: 'name' | 'time' | 'size' | 'type') => {
+  const handleSort = (column: 'name' | 'time' | 'size' | 'type' | 'downloadedAt') => {
     if (sortBy === column) {
       setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
     } else {
@@ -329,6 +337,24 @@ export default function Files() {
       render: (time: string) => formatDate(time),
     },
     {
+      title: (
+        <span
+          style={{ cursor: 'pointer', userSelect: 'none' }}
+          onClick={() => handleSort('downloadedAt')}
+        >
+          {t('files.downloadedAt')} {getSortIcon('downloadedAt')}
+        </span>
+      ),
+      dataIndex: 'downloadedAt',
+      key: 'downloadedAt',
+      width: 180,
+      render: (time: string | null | undefined, record: FileItem) => {
+        if (record.type === 'directory') return '-';
+        if (!time) return <span style={{ color: '#999' }}>{t('files.unknown')}</span>;
+        return formatDate(time);
+      },
+    },
+    {
       title: t('files.actions'),
       key: 'action',
       width: 150,
@@ -379,6 +405,63 @@ export default function Files() {
       );
     }
 
+    // Apply date filter (only for files with downloadedAt)
+    if (dateFilter !== 'all') {
+      const now = new Date();
+      let startDate: Date;
+      let endDate: Date | null = null;
+
+      switch (dateFilter) {
+        case 'today':
+          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+          break;
+        case 'yesterday':
+          const yesterday = new Date(now);
+          yesterday.setDate(yesterday.getDate() - 1);
+          startDate = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate());
+          endDate = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate(), 23, 59, 59, 999);
+          break;
+        case 'thisWeek':
+          const dayOfWeek = now.getDay();
+          startDate = new Date(now);
+          startDate.setDate(now.getDate() - dayOfWeek);
+          startDate.setHours(0, 0, 0, 0);
+          break;
+        case 'lastWeek':
+          const lastWeekStart = new Date(now);
+          lastWeekStart.setDate(now.getDate() - now.getDay() - 7);
+          lastWeekStart.setHours(0, 0, 0, 0);
+          startDate = lastWeekStart;
+          const lastWeekEnd = new Date(lastWeekStart);
+          lastWeekEnd.setDate(lastWeekStart.getDate() + 6);
+          lastWeekEnd.setHours(23, 59, 59, 999);
+          endDate = lastWeekEnd;
+          break;
+        case 'thisMonth':
+          startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+          break;
+        case 'lastMonth':
+          startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+          endDate = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+          break;
+        default:
+          startDate = new Date(0);
+      }
+
+      items = items.filter((item) => {
+        // Directories are always included
+        if (item.type === 'directory') return true;
+        // Files without download time are excluded when filtering
+        if (!item.downloadedAt) return false;
+        
+        const downloadDate = new Date(item.downloadedAt);
+        const isAfterStart = downloadDate >= startDate;
+        const isBeforeEnd = endDate ? downloadDate <= endDate : true;
+        return isAfterStart && isBeforeEnd;
+      });
+    }
+
     // Apply sorting
     // Always group by type first (directories before files), then sort by selected field
     items = [...items].sort((a, b) => {
@@ -401,6 +484,20 @@ export default function Files() {
           const timeB = b.modified ? new Date(b.modified).getTime() : 0;
           comparison = timeA - timeB;
           break;
+        case 'downloadedAt':
+          // Sort by download time, files without download time go to the end
+          if (!a.downloadedAt && !b.downloadedAt) {
+            comparison = 0;
+          } else if (!a.downloadedAt) {
+            comparison = 1;
+          } else if (!b.downloadedAt) {
+            comparison = -1;
+          } else {
+            const downloadTimeA = new Date(a.downloadedAt).getTime();
+            const downloadTimeB = new Date(b.downloadedAt).getTime();
+            comparison = downloadTimeA - downloadTimeB;
+          }
+          break;
         case 'size':
           // For directories, use 0 as size for consistent sorting
           const sizeA = a.type === 'directory' ? 0 : (a.size || 0);
@@ -419,7 +516,7 @@ export default function Files() {
     });
 
     return items;
-  }, [data?.data?.directories, data?.data?.files, searchText, sortBy, sortOrder]);
+  }, [data?.data?.directories, data?.data?.files, searchText, sortBy, sortOrder, dateFilter]);
 
   // Calculate statistics
   const stats = useMemo(() => {
@@ -540,12 +637,26 @@ export default function Files() {
             <Col>
               <Space>
                 <Select
+                  value={dateFilter}
+                  onChange={(value) => setDateFilter(value)}
+                  style={{ width: 140 }}
+                >
+                  <Option value="all">{t('files.filterAll')}</Option>
+                  <Option value="today">{t('files.filterToday')}</Option>
+                  <Option value="yesterday">{t('files.filterYesterday')}</Option>
+                  <Option value="thisWeek">{t('files.filterThisWeek')}</Option>
+                  <Option value="lastWeek">{t('files.filterLastWeek')}</Option>
+                  <Option value="thisMonth">{t('files.filterThisMonth')}</Option>
+                  <Option value="lastMonth">{t('files.filterLastMonth')}</Option>
+                </Select>
+                <Select
                   value={sortBy}
                   onChange={(value) => setSortBy(value)}
-                  style={{ width: 130 }}
+                  style={{ width: 150 }}
                 >
                   <Option value="name">{t('files.sortByName')}</Option>
                   <Option value="time">{t('files.sortByTime')}</Option>
+                  <Option value="downloadedAt">{t('files.sortByDownloadTime')}</Option>
                   <Option value="size">{t('files.sortBySize')}</Option>
                   <Option value="type">{t('files.sortByType')}</Option>
                 </Select>

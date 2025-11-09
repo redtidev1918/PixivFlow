@@ -121,11 +121,18 @@ DELETE /api/logs                 # 清空日志
 ### 文件浏览 (`/api/files`)
 
 ```
-GET    /api/files/list            # 列出文件
+GET    /api/files/list            # 列出文件（支持排序、筛选、日期筛选）
 GET    /api/files/preview/:id     # 预览文件
 GET    /api/files/download/:id    # 下载文件
 DELETE /api/files/:id             # 删除文件
 ```
+
+**文件列表 API 参数**：
+- `path`: 文件路径（可选）
+- `type`: 文件类型（illustration/novel，可选）
+- `sort`: 排序方式（name/time/size/type/downloadedAt，可选）
+- `order`: 排序顺序（asc/desc，可选）
+- `dateFilter`: 日期筛选（today/yesterday/thisWeek/lastWeek/thisMonth/lastMonth，可选）
 
 ## 🎨 前端页面设计
 
@@ -161,6 +168,9 @@ DELETE /api/files/:id             # 删除文件
 - 文件树形结构
 - 图片预览
 - 文件管理（删除、下载）
+- 下载时间显示（从数据库查询）
+- 多种排序方式（名称、时间、大小、类型、下载时间）
+- 日期筛选功能（今天、昨天、本周、上周、本月、上月）
 
 ## 🔄 数据流设计
 

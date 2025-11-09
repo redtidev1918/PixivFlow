@@ -1,0 +1,79 @@
+{
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "confirm": "Confirm",
+    "reload": "Reload",
+    "search": "Search",
+    "reset": "Reset",
+    "submit": "Submit",
+    "close": "Close",
+    "back": "Back",
+    "next": "Next",
+    "previous": "Previous",
+    "loading": "Loading...",
+    "noData": "No Data",
+    "success": "Success",
+    "error": "Error",
+    "warning": "Warning",
+    "info": "Info"
+  },
+  "layout": {
+    "title": "PixivFlow WebUI",
+    "dashboard": "Dashboard",
+    "config": "Configuration",
+    "download": "Download Tasks",
+    "history": "Download History",
+    "logs": "Logs",
+    "files": "File Browser",
+    "language": "Language"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "totalDownloads": "Total Downloads",
+    "illustrations": "Illustrations",
+    "novels": "Novels",
+    "recentDownloads": "Recent Downloads",
+    "recentDownloadsDesc": "Downloads in last 7 days: {{count}} works"
+  },
+  "config": {
+    "title": "Configuration Management",
+    "basicSettings": "Basic Settings",
+    "downloadSettings": "Download Settings",
+    "targetSettings": "Download Targets",
+    "saveSuccess": "Configuration saved successfully",
+    "saveFailed": "Configuration save failed"
+  },
+  "download": {
+    "title": "Download Tasks",
+    "start": "Start Download",
+    "stop": "Stop Download",
+    "status": "Status",
+    "progress": "Progress",
+    "tasks": "Task List"
+  },
+  "history": {
+    "title": "Download History",
+    "date": "Date",
+    "type": "Type",
+    "title": "Title",
+    "author": "Author",
+    "status": "Status"
+  },
+  "logs": {
+    "title": "Log Viewer",
+    "level": "Level",
+    "message": "Message",
+    "time": "Time"
+  },
+  "files": {
+    "title": "File Browser",
+    "name": "File Name",
+    "size": "Size",
+    "modified": "Modified",
+    "actions": "Actions"
+  }
+}
+

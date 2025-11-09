@@ -15,8 +15,11 @@
     "antd": "^5.12.0",
     "axios": "^1.6.2",
     "dayjs": "^1.11.19",
+    "i18next": "^25.6.1",
+    "i18next-browser-languagedetector": "^8.2.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "react-i18next": "^16.2.4",
     "react-router-dom": "^6.20.0",
     "socket.io-client": "^4.6.1",
     "zustand": "^4.4.7"

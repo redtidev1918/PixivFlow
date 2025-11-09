@@ -32,27 +32,50 @@ router.get('/status', async (req: Request, res: Response) => {
 /**
  * POST /api/auth/login
  * Login to Pixiv
+ * 
+ * Supports two modes:
+ * - headless=true: Requires username and password, runs browser in background
+ * - headless=false: Interactive mode, opens browser window for manual login (no username/password needed)
+ * 
+ * Supports proxy configuration:
+ * - If proxy is provided in request body, use it
+ * - Otherwise, read from config file
+ * - Proxy format: { enabled: boolean, host: string, port: number, protocol: string, username?: string, password?: string }
  */
 router.post('/login', async (req: Request, res: Response) => {
   try {
-    const { username, password, headless = true } = req.body;
+    const { username, password, headless = true, proxy } = req.body;
 
-    if (!username || !password) {
+    // For headless mode, username and password are required
+    // For interactive mode (headless=false), username and password are optional
+    if (headless && (!username || !password)) {
       return res.status(400).json({
         errorCode: ErrorCode.AUTH_USERNAME_PASSWORD_REQUIRED,
       });
     }
 
+    // Get proxy configuration: use provided proxy or read from config
+    let proxyConfig = proxy;
+    if (!proxyConfig) {
+      const configPath = getConfigPath();
+      const config = loadConfig(configPath);
+      if (config.network?.proxy?.enabled) {
+        proxyConfig = config.network.proxy;
+      }
+    }
+
     const login = new TerminalLogin({
       headless: headless as boolean,
-      username,
-      password,
+      username: username || undefined,
+      password: password || undefined,
+      proxy: proxyConfig,
     });
 
     const loginInfo = await login.login({
       headless: headless as boolean,
-      username,
-      password,
+      username: username || undefined,
+      password: password || undefined,
+      proxy: proxyConfig,
     });
 
     // Update config with refresh token

@@ -14,6 +14,7 @@ import {
   installGppt,
   loginWithGpptInteractive,
   loginWithGpptHeadless,
+  ProxyConfig,
 } from './python-login-adapter';
 
 // Constants from gppt/consts.py
@@ -94,15 +95,18 @@ export class TerminalLogin {
   private headless: boolean;
   private username?: string;
   private password?: string;
+  private proxy?: ProxyConfig;
 
   constructor(options: {
     headless?: boolean;
     username?: string;
     password?: string;
+    proxy?: ProxyConfig;
   } = {}) {
     this.headless = options.headless ?? false;
     this.username = options.username;
     this.password = options.password;
+    this.proxy = options.proxy;
   }
 
   /**
@@ -112,6 +116,7 @@ export class TerminalLogin {
     headless?: boolean;
     username?: string;
     password?: string;
+    proxy?: ProxyConfig;
   } = {}): Promise<LoginInfo> {
     // Override instance options with method parameters
     if (options.headless !== undefined) {
@@ -122,6 +127,9 @@ export class TerminalLogin {
     }
     if (options.password !== undefined) {
       this.password = options.password;
+    }
+    if (options.proxy !== undefined) {
+      this.proxy = options.proxy;
     }
 
     // Check if Python gppt is available
@@ -140,7 +148,7 @@ export class TerminalLogin {
     
     if (this.headless && this.username && this.password) {
       try {
-        pythonResult = await loginWithGpptHeadless(this.username, this.password);
+        pythonResult = await loginWithGpptHeadless(this.username, this.password, this.proxy);
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);
         console.error('[!]: Headless login failed:', errorMsg);
@@ -152,7 +160,7 @@ export class TerminalLogin {
         throw error;
       }
     } else {
-      pythonResult = await loginWithGpptInteractive();
+      pythonResult = await loginWithGpptInteractive(this.proxy);
     }
     
     if (pythonResult) {

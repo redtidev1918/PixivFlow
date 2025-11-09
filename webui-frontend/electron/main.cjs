@@ -110,12 +110,8 @@ function getProjectRoot() {
 
 // 初始化应用的用户数据目录和配置文件
 function initializeAppData() {
-  if (isDev) {
-    // 开发模式下，使用项目根目录的配置
-    return null;
-  }
-  
-  // 生产模式下，使用应用的用户数据目录
+  // 无论是开发模式还是生产模式，都使用应用的用户数据目录
+  // 这样可以确保开发和生产环境使用相同的数据目录，避免数据混乱
   const userDataPath = app.getPath('userData');
   const appDataDir = path.join(userDataPath, 'PixivFlow');
   const configDir = path.join(appDataDir, 'config');
@@ -176,10 +172,41 @@ function validatePath(dirPath, description) {
   return true;
 }
 
+// 检查后端是否已启动
+function checkBackendReady(callback) {
+  const http = require('http');
+  const req = http.get(`http://localhost:${BACKEND_PORT}/api/health`, { timeout: 1000 }, (res) => {
+    if (res.statusCode === 200) {
+      callback(true);
+    } else {
+      callback(false);
+    }
+  });
+  req.on('error', () => callback(false));
+  req.on('timeout', () => {
+    req.destroy();
+    callback(false);
+  });
+}
+
+// 通知窗口后端已就绪
+function notifyBackendReady() {
+  if (mainWindow && !isAppClosing) {
+    safeLog('✅ 后端服务器已就绪，通知窗口');
+    mainWindow.webContents.send('backend-ready');
+  }
+}
+
 // 启动后端服务器
 function startBackend() {
   if (backendProcess) {
     console.log('⚠️  后端进程已存在，跳过启动');
+    // 检查后端是否已经就绪
+    checkBackendReady((ready) => {
+      if (ready) {
+        notifyBackendReady();
+      }
+    });
     return;
   }
 
@@ -208,12 +235,35 @@ function startBackend() {
       return;
     }
     
+    // 在开发模式下，也使用应用数据目录的配置文件
+    // 使用已初始化的应用数据目录（如果还没有初始化，则初始化）
+    if (!appData) {
+      appData = initializeAppData();
+      if (!appData) {
+        console.error('❌ 无法初始化应用数据目录');
+        if (mainWindow) {
+          mainWindow.webContents.send('backend-error', '无法初始化应用数据目录');
+        }
+        return;
+      }
+    }
+    
     // 在开发模式下，也设置 STATIC_PATH，以便后端可以提供静态文件服务
     // 前端构建目录在 webui-frontend/dist
     const frontendDistPath = path.join(__dirname, '..', 'dist');
     const staticPath = fs.existsSync(frontendDistPath) ? frontendDistPath : undefined;
     
-    console.log(`🚀 执行命令: npm run webui (在 ${projectRoot})`);
+    // 优化：检查是否已经构建过，如果已构建则直接运行，避免重复构建
+    const backendDistPath = path.join(projectRoot, 'dist', 'webui', 'index.js');
+    const needsBuild = !fs.existsSync(backendDistPath);
+    
+    if (needsBuild) {
+      console.log(`🚀 执行命令: npm run webui (需要先构建)`);
+    } else {
+      console.log(`🚀 执行命令: node dist/webui/index.js (使用已构建的文件)`);
+    }
+    console.log(`📁 配置文件路径: ${appData.configPath}`);
+    console.log(`📁 应用数据目录: ${appData.appDataDir}`);
     if (staticPath) {
       console.log(`📁 静态文件路径: ${staticPath}`);
       console.log(`📁 静态文件路径存在: ${fs.existsSync(staticPath)}`);
@@ -225,29 +275,102 @@ function startBackend() {
     const env = {
       ...process.env,
       STATIC_PATH: staticPath,
+      PIXIV_DOWNLOADER_CONFIG: appData.configPath, // 在开发模式下也使用应用数据目录的配置文件
     };
     
-    backendProcess = spawn('npm', ['run', 'webui'], {
-      cwd: projectRoot,
-      shell: true,
-      stdio: 'inherit',
-      env: env,
-    });
+    // 如果已经构建过，直接运行，避免重复构建
+    if (!needsBuild) {
+      backendProcess = spawn('node', [backendDistPath], {
+        cwd: projectRoot,
+        shell: false,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: env,
+      });
+    } else {
+      backendProcess = spawn('npm', ['run', 'webui'], {
+        cwd: projectRoot,
+        shell: true,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: env,
+      });
+    }
+    
+    // 监听后端进程输出，检测启动完成
+    let backendReady = false;
+    const checkReady = () => {
+      if (!backendReady) {
+        checkBackendReady((ready) => {
+          if (ready && !backendReady) {
+            backendReady = true;
+            notifyBackendReady();
+          }
+        });
+      }
+    };
+    
+    // 定期检查后端是否就绪（最多30秒）
+    let checkAttempts = 0;
+    const maxCheckAttempts = 60; // 30秒
+    const readyCheckInterval = safeSetInterval(() => {
+      if (backendReady || isAppClosing) {
+        clearInterval(readyCheckInterval);
+        activeTimers.delete(readyCheckInterval);
+        return;
+      }
+      checkAttempts++;
+      checkReady();
+      if (checkAttempts >= maxCheckAttempts) {
+        clearInterval(readyCheckInterval);
+        activeTimers.delete(readyCheckInterval);
+        safeError('⚠️  后端服务器启动检查超时');
+      }
+    }, 500);
+    
+    // 输出后端进程的 stdout 和 stderr（用于调试）
+    if (backendProcess.stdout) {
+      backendProcess.stdout.on('data', (data) => {
+        const output = data.toString().trim();
+        if (output) {
+          console.log(`[Backend] ${output}`);
+          // 检测后端启动完成的关键字
+          if (output.includes('Server started') || 
+              output.includes('Server ready') ||
+              output.includes('listening on') || 
+              output.includes('WebUI server') ||
+              output.includes('PORT:')) {
+            // 延迟一点再检查，确保服务器完全启动
+            safeSetTimeout(() => checkReady(), 500);
+          }
+        }
+      });
+    }
+    if (backendProcess.stderr) {
+      backendProcess.stderr.on('data', (data) => {
+        const output = data.toString().trim();
+        if (output) {
+          console.error(`[Backend Error] ${output}`);
+        }
+      });
+    }
   } else {
     // 生产模式下，从 extraResources 加载后端
     // electron-builder 会将后端文件复制到 resources/dist
+    // 直接使用 index.js，因为 dist/webui/package.json 明确指定了 "type": "commonjs"
     const backendPath = path.join(process.resourcesPath, 'dist', 'webui', 'index.js');
+    // 向后兼容：如果 index.js 不存在，尝试 index.cjs
+    const backendPathFallback = path.join(process.resourcesPath, 'dist', 'webui', 'index.cjs');
+    let finalBackendPath = fs.existsSync(backendPath) ? backendPath : backendPathFallback;
     // 前端静态文件路径（在打包后的应用中）
     // 前端 dist 也在 extraResources 中，路径为 resources/webui-dist
     const staticPath = path.join(process.resourcesPath, 'webui-dist');
     
     console.log(`🔧 生产模式：启动后端服务器`);
     console.log(`📁 resourcesPath: ${process.resourcesPath}`);
-    console.log(`📁 后端路径: ${backendPath}`);
+    console.log(`📁 后端路径: ${finalBackendPath}`);
     console.log(`📁 静态文件路径: ${staticPath}`);
     
     // 验证后端文件是否存在
-    if (!validatePath(backendPath, '后端文件')) {
+    if (!validatePath(finalBackendPath, '后端文件')) {
       console.error('❌ 无法启动后端：后端文件不存在');
       console.error('提示: 请确保构建时包含了后端文件');
       if (mainWindow) {
@@ -287,7 +410,7 @@ function startBackend() {
       process.env.NODE_PATH || '',
     ].filter(Boolean).join(path.delimiter);
     
-    console.log(`🚀 启动后端进程: node ${backendPath}`);
+    console.log(`🚀 启动后端进程: node ${finalBackendPath}`);
     console.log(`📦 NODE_PATH: ${nodePath}`);
     console.log(`📁 STATIC_PATH: ${staticPath}`);
     console.log(`📁 配置文件路径: ${appData.configPath}`);
@@ -296,7 +419,7 @@ function startBackend() {
     if (fs.existsSync(staticPath)) {
       console.log(`📁 STATIC_PATH 内容: ${fs.readdirSync(staticPath).join(', ')}`);
     }
-    backendProcess = spawn('node', [backendPath], {
+    backendProcess = spawn('node', [finalBackendPath], {
       stdio: ['ignore', 'pipe', 'pipe'], // 使用 pipe 以便捕获输出
       cwd: appData.appDataDir, // 设置工作目录为应用数据目录
       env: {
@@ -310,12 +433,52 @@ function startBackend() {
       },
     });
 
+    // 监听后端进程输出，检测启动完成
+    let backendReady = false;
+    const checkReady = () => {
+      if (!backendReady) {
+        checkBackendReady((ready) => {
+          if (ready && !backendReady) {
+            backendReady = true;
+            notifyBackendReady();
+          }
+        });
+      }
+    };
+    
+    // 定期检查后端是否就绪（最多30秒）
+    let checkAttempts = 0;
+    const maxCheckAttempts = 60; // 30秒
+    const readyCheckInterval = safeSetInterval(() => {
+      if (backendReady || isAppClosing) {
+        clearInterval(readyCheckInterval);
+        activeTimers.delete(readyCheckInterval);
+        return;
+      }
+      checkAttempts++;
+      checkReady();
+      if (checkAttempts >= maxCheckAttempts) {
+        clearInterval(readyCheckInterval);
+        activeTimers.delete(readyCheckInterval);
+        safeError('⚠️  后端服务器启动检查超时');
+      }
+    }, 500);
+    
     // 输出后端进程的 stdout 和 stderr（用于调试）
     if (backendProcess.stdout) {
       backendProcess.stdout.on('data', (data) => {
         const output = data.toString().trim();
         if (output) {
           console.log(`[Backend] ${output}`);
+          // 检测后端启动完成的关键字
+          if (output.includes('Server started') || 
+              output.includes('Server ready') ||
+              output.includes('listening on') || 
+              output.includes('WebUI server') ||
+              output.includes('PORT:')) {
+            // 延迟一点再检查，确保服务器完全启动
+            safeSetTimeout(() => checkReady(), 500);
+          }
         }
       });
     }
@@ -400,152 +563,182 @@ function createWindow() {
       webSecurity: true,
     },
     // icon: path.join(__dirname, '../build/icon.png'), // 可选：应用图标
-    show: false, // 先不显示，等加载完成后再显示
+    show: true, // 立即显示窗口，避免白屏
   });
 
   // 保存窗口状态
   mainWindow.on('moved', () => saveWindowState());
   mainWindow.on('resized', () => saveWindowState());
 
-  // 窗口准备好后显示
-  mainWindow.once('ready-to-show', () => {
-    mainWindow.show();
-  });
-
-  // 加载应用
-  if (isDev) {
-    // 开发模式：优先连接到 Vite 开发服务器，如果不可用则使用后端服务器
+  // 加载应用 - 使用智能加载页面，自动检测和连接
+  const loadingHTML = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>PixivFlow - 启动中...</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      color: white;
+    }
+    .container {
+      text-align: center;
+      max-width: 500px;
+      padding: 40px;
+    }
+    .spinner {
+      border: 4px solid rgba(255, 255, 255, 0.3);
+      border-top: 4px solid white;
+      border-radius: 50%;
+      width: 50px;
+      height: 50px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 20px;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    h1 { margin: 0 0 10px 0; font-size: 24px; font-weight: 600; }
+    .status { margin: 10px 0; opacity: 0.9; font-size: 14px; min-height: 20px; }
+    .error { color: #ffcccb; margin-top: 20px; padding: 15px; background: rgba(255,0,0,0.2); border-radius: 8px; display: none; }
+    .error.show { display: block; }
+    .retry-btn { 
+      margin-top: 15px; 
+      padding: 10px 20px; 
+      background: white; 
+      color: #667eea; 
+      border: none; 
+      border-radius: 6px; 
+      cursor: pointer; 
+      font-size: 14px;
+      font-weight: 600;
+      display: none;
+    }
+    .retry-btn.show { display: inline-block; }
+    .retry-btn:hover { background: #f0f0f0; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="spinner"></div>
+    <h1>PixivFlow</h1>
+    <div class="status" id="status">正在启动...</div>
+    <div class="error" id="error"></div>
+    <button class="retry-btn" id="retryBtn" onclick="retryConnection()">重试连接</button>
+  </div>
+  <script>
+    const isDev = ${isDev};
     const viteUrl = 'http://localhost:5173';
-    const backendUrl = `http://localhost:${BACKEND_PORT}`;
-    console.log(`🌐 开发模式：尝试连接到 Vite 服务器 ${viteUrl}`);
+    const backendUrl = 'http://localhost:${BACKEND_PORT}';
+    let currentUrl = null;
     
-    // 检查 Vite 服务器是否可用
-    const http = require('http');
-    const checkVite = http.get(viteUrl, (res) => {
-      safeLog(`✅ Vite 服务器可用，加载页面`);
-      if (mainWindow && !isAppClosing) {
-        mainWindow.loadURL(viteUrl);
-        // 打开开发者工具
-        mainWindow.webContents.openDevTools();
+    function updateStatus(text) {
+      document.getElementById('status').textContent = text;
+    }
+    
+    function showError(text) {
+      const errorEl = document.getElementById('error');
+      errorEl.textContent = text;
+      errorEl.classList.add('show');
+      document.getElementById('retryBtn').classList.add('show');
+    }
+    
+    function checkServer(url, callback) {
+      fetch(url + '/api/health', { 
+        method: 'GET',
+        signal: AbortSignal.timeout(2000)
+      })
+      .then(res => res.ok ? callback(true) : callback(false))
+      .catch(() => callback(false));
+    }
+    
+    function tryConnect() {
+      if (isDev) {
+        // 开发模式：先尝试 Vite
+        updateStatus('正在连接 Vite 开发服务器...');
+        checkServer(viteUrl, (available) => {
+          if (available) {
+            updateStatus('连接成功，正在加载...');
+            currentUrl = viteUrl;
+            window.location.href = viteUrl;
+          } else {
+            // 回退到后端
+            updateStatus('Vite 不可用，尝试后端服务器...');
+            tryBackend();
+          }
+        });
+      } else {
+        // 生产模式：直接使用后端
+        tryBackend();
       }
-    });
+    }
     
-    checkVite.on('error', (err) => {
-      safeError(`❌ 无法连接到 Vite 服务器 (${viteUrl})`);
-      safeError('提示: 请确保已运行 "npm run dev" 启动 Vite 开发服务器');
-      safeError('错误详情:', err.message);
-      safeLog(`🔄 回退到后端服务器: ${backendUrl}`);
+    function tryBackend() {
+      updateStatus('正在连接后端服务器...');
+      let attempts = 0;
+      const maxAttempts = 60; // 30秒
       
-      // 如果 Vite 服务器不可用，尝试使用后端服务器
-      // 等待后端服务器启动后再加载
-      let attempts = 0;
-      const maxAttempts = 40; // 最多尝试 40 次（20秒）
-      const checkBackend = safeSetInterval(() => {
-        if (isAppClosing) return;
+      const checkInterval = setInterval(() => {
         attempts++;
-        const req = http.get(`${backendUrl}/api/health`, (res) => {
-          if (res.statusCode === 200) {
-            clearInterval(checkBackend);
-            activeTimers.delete(checkBackend);
-            safeLog('✅ 后端服务器可用，加载页面');
-            if (mainWindow && !isAppClosing) {
-              mainWindow.loadURL(backendUrl);
-              mainWindow.webContents.openDevTools();
-            }
+        checkServer(backendUrl, (available) => {
+          if (available) {
+            clearInterval(checkInterval);
+            updateStatus('连接成功，正在加载...');
+            currentUrl = backendUrl;
+            window.location.href = backendUrl;
+          } else if (attempts >= maxAttempts) {
+            clearInterval(checkInterval);
+            showError('无法连接到后端服务器。请检查后端是否正常启动。');
           }
-        });
-        req.on('error', (err) => {
-          // 后端还未启动，继续等待
-          if (attempts >= maxAttempts) {
-            clearInterval(checkBackend);
-            activeTimers.delete(checkBackend);
-            safeError('❌ 后端服务器启动失败');
-            safeError('尝试加载后端服务器页面...');
-            if (mainWindow && !isAppClosing) {
-              mainWindow.loadURL(backendUrl);
-              mainWindow.webContents.openDevTools();
-            }
-          }
-        });
-        req.setTimeout(1000, () => {
-          req.destroy();
         });
       }, 500);
-    });
+    }
     
-    checkVite.setTimeout(2000, () => {
-      if (isAppClosing) return;
-      checkVite.destroy();
-      safeLog('⚠️  Vite 服务器检查超时，回退到后端服务器');
-      // 如果 Vite 服务器超时，尝试使用后端服务器
-      let attempts = 0;
-      const maxAttempts = 40;
-      const checkBackend = safeSetInterval(() => {
-        if (isAppClosing) return;
-        attempts++;
-        const req = http.get(`${backendUrl}/api/health`, (res) => {
-          if (res.statusCode === 200) {
-            clearInterval(checkBackend);
-            activeTimers.delete(checkBackend);
-            safeLog('✅ 后端服务器可用，加载页面');
-            if (mainWindow && !isAppClosing) {
-              mainWindow.loadURL(backendUrl);
-              mainWindow.webContents.openDevTools();
-            }
-          }
-        });
-        req.on('error', (err) => {
-          if (attempts >= maxAttempts) {
-            clearInterval(checkBackend);
-            activeTimers.delete(checkBackend);
-            safeError('❌ 后端服务器启动失败');
-            if (mainWindow && !isAppClosing) {
-              mainWindow.loadURL(backendUrl);
-              mainWindow.webContents.openDevTools();
-            }
-          }
-        });
-        req.setTimeout(1000, () => {
-          req.destroy();
-        });
-      }, 500);
-    });
+    function retryConnection() {
+      document.getElementById('error').classList.remove('show');
+      document.getElementById('retryBtn').classList.remove('show');
+      tryConnect();
+    }
+    
+    // 监听 Electron IPC 消息
+    if (window.electron && window.electron.onBackendReady) {
+      window.electron.onBackendReady(() => {
+        updateStatus('后端已就绪，正在加载...');
+        if (!currentUrl) {
+          currentUrl = backendUrl;
+          window.location.href = backendUrl;
+        }
+      });
+    }
+    
+    // 开始连接
+    tryConnect();
+  </script>
+</body>
+</html>`;
+  
+  if (isDev) {
+    // 开发模式：先显示加载页面，然后尝试连接
+    mainWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(loadingHTML)}`);
+    // 打开开发者工具
+    mainWindow.webContents.openDevTools();
   } else {
-    // 生产模式：通过后端服务器加载（后端会提供静态文件服务）
-    // 等待后端服务器启动后再加载
-    let attempts = 0;
-    const maxAttempts = 40; // 最多尝试 40 次（20秒）
-    const checkBackend = safeSetInterval(() => {
-      if (isAppClosing) return;
-      attempts++;
-      const http = require('http');
-      const req = http.get(`http://localhost:${BACKEND_PORT}/api/health`, (res) => {
-        if (res.statusCode === 200) {
-          clearInterval(checkBackend);
-          activeTimers.delete(checkBackend);
-          safeLog('Backend server is ready, loading window...');
-          if (mainWindow && !isAppClosing) {
-            mainWindow.loadURL(`http://localhost:${BACKEND_PORT}`);
-          }
-        }
-      });
-      req.on('error', (err) => {
-        // 后端还未启动，继续等待
-        if (attempts >= maxAttempts) {
-          clearInterval(checkBackend);
-          activeTimers.delete(checkBackend);
-          safeError('Backend server failed to start after 20 seconds');
-          safeError('Attempting to load anyway...');
-          if (mainWindow && !isAppClosing) {
-            mainWindow.loadURL(`http://localhost:${BACKEND_PORT}`);
-          }
-        }
-      });
-      req.setTimeout(1000, () => {
-        req.destroy();
-      });
-    }, 500);
+    // 生产模式：显示加载页面，自动连接后端
+    mainWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(loadingHTML)}`);
   }
+  
+  // 监听后端就绪事件
+  ipcMain.on('backend-ready', () => {
+    notifyBackendReady();
+  });
 
   // 处理外部链接
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -573,15 +766,11 @@ app.whenReady().then(() => {
     }
   }
   
+  // 立即创建窗口，避免白屏
+  createWindow();
+  
   // 启动后端服务器
   startBackend();
-
-  // 等待后端服务器启动（给一点时间）
-  safeSetTimeout(() => {
-    if (!isAppClosing) {
-      createWindow();
-    }
-  }, 2000);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

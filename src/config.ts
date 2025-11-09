@@ -433,8 +433,11 @@ function getLastNDaysDateRange(days: number): { startDate: string; endDate: stri
 
 /**
  * Apply default values to configuration
+ * @param config Partial configuration to apply defaults to
+ * @param basePath Base path for resolving relative paths (defaults to process.cwd())
  */
-function applyDefaults(config: Partial<StandaloneConfig>): StandaloneConfig {
+function applyDefaults(config: Partial<StandaloneConfig>, basePath?: string): StandaloneConfig {
+  const baseDir = basePath || process.cwd();
   const merged: StandaloneConfig = {
     ...config,
     logLevel: config.logLevel ?? DEFAULT_CONFIG.logLevel,
@@ -461,8 +464,11 @@ function applyDefaults(config: Partial<StandaloneConfig>): StandaloneConfig {
   };
 
   // Resolve storage paths - storage is guaranteed to exist after merge
+  // Use baseDir instead of process.cwd() to ensure paths are resolved relative to config file location
   const storage = merged.storage!;
-  const downloadDir = resolve(storage.downloadDirectory!);
+  const downloadDir = isAbsolute(storage.downloadDirectory!)
+    ? storage.downloadDirectory!
+    : resolve(baseDir, storage.downloadDirectory!);
   if (!storage.illustrationDirectory) {
     storage.illustrationDirectory = resolve(downloadDir, 'illustrations');
   } else if (!isAbsolute(storage.illustrationDirectory)) {
@@ -478,8 +484,10 @@ function applyDefaults(config: Partial<StandaloneConfig>): StandaloneConfig {
     storage.novelDirectory = resolve(storage.novelDirectory);
   }
 
-  // Resolve database path
-  storage.databasePath = resolve(storage.databasePath!);
+  // Resolve database path - use baseDir to ensure relative paths are resolved correctly
+  storage.databasePath = isAbsolute(storage.databasePath!)
+    ? storage.databasePath!
+    : resolve(baseDir, storage.databasePath!);
 
   return merged;
 }
@@ -602,7 +610,10 @@ export function loadConfig(configPath?: string): StandaloneConfig {
   parsed = adjustProxyForEnvironment(parsed);
 
   // Auto-fix paths in configuration (convert absolute to relative, fix missing paths)
-  const autoFixResult = ConfigPathMigrator.autoFixConfig(parsed, process.cwd());
+  // In Electron app, use the config file's directory as projectRoot to ensure paths are resolved correctly
+  // This prevents the app from accidentally using paths from the development machine
+  const configDir = dirname(resolvedPath);
+  const autoFixResult = ConfigPathMigrator.autoFixConfig(parsed, configDir);
   if (autoFixResult.fixed && autoFixResult.changes.length > 0) {
     logger.info('Auto-fixed configuration paths', {
       changes: autoFixResult.changes.map(c => ({
@@ -628,8 +639,9 @@ export function loadConfig(configPath?: string): StandaloneConfig {
   // Validate configuration
   validateConfig(parsed, resolvedPath);
 
-  // Apply defaults
-  const config = applyDefaults(parsed);
+  // Apply defaults - use config file directory as base path to ensure paths are resolved correctly
+  // This prevents the app from accidentally using paths from the development machine
+  const config = applyDefaults(parsed, configDir);
 
   // Set log level
   if (config.logLevel) {

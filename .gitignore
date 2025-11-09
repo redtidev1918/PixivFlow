@@ -53,3 +53,7 @@ webui-frontend/node_modules
 webui-frontend/dist
 webui-frontend/.vite
 webui-frontend/package-lock.json
+webui-frontend/release
+
+# Backend build output
+dist/

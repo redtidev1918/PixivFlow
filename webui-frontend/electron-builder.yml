@@ -1,0 +1,110 @@
+appId: com.pixivflow.webui
+productName: PixivFlow
+copyright: Copyright © 2024
+
+# 构建优化配置
+publish: null  # 不发布到任何地方，仅本地构建
+electronDownload:
+  cache: /tmp/electron-builder-cache  # 使用临时目录作为缓存
+
+directories:
+  buildResources: build
+  output: release
+
+files:
+  - electron/**/*
+  - package.json
+  # 注意：dist 和 ../../dist 都移到 extraResources，这样可以在运行时直接访问
+  # - dist/**/*  # 移到 extraResources
+  # - ../../dist/**/*  # 移到 extraResources
+  - ../../config/**/*  # 包含配置文件（如果需要）
+  - "!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}"
+  - "!**/node_modules/*/{test,__tests__,tests,powered-test,example,examples}"
+  - "!**/node_modules/*.d.ts"
+  - "!**/node_modules/.bin"
+  - "!**/*.{iml,o,hprof,orig,pyc,pyo,rbc,swp,csproj,sln,xproj}"
+  - "!.editorconfig"
+  - "!**/._*"
+  - "!**/{.DS_Store,.git,.hg,.svn,CVS,RCS,SCCS,.gitignore,.gitattributes}"
+  - "!**/{__pycache__,thumbs.db,.flowconfig,.idea,.vs,.nyc_output}"
+  - "!**/{appveyor.yml,.travis.yml,circle.yml}"
+  - "!**/{npm-debug.log,yarn.lock,.yarn-integrity,.yarn-metadata.json}"
+
+extraResources:
+  # 后端编译后的文件
+  # 使用相对于项目根目录的路径（从 webui-frontend 目录看是 ../dist）
+  - from: ../dist
+    to: dist
+    filter:
+      - "**/*"
+  # 后端 Node.js 依赖（只包含生产依赖）
+  # 注意：需要先运行 npm install --production 来确保只有生产依赖
+  - from: ../node_modules
+    to: backend-node_modules
+    filter:
+      - "**/*"
+      # 排除开发依赖和不需要的文件
+      - "!**/test/**"
+      - "!**/tests/**"
+      - "!**/__tests__/**"
+      - "!**/*.d.ts"
+      - "!**/.bin/**"
+      - "!**/README*"
+      - "!**/CHANGELOG*"
+      - "!**/LICENSE*"
+      - "!**/package.json"
+      - "!**/tsconfig.json"
+  # 前端构建后的静态文件（需要放在 extraResources 中，这样 Express 可以直接访问）
+  - from: dist
+    to: webui-dist
+    filter:
+      - "**/*"
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+        - ia32
+  icon: build/icon.ico  # 如果不存在，electron-builder 会使用默认图标
+  requestedExecutionLevel: asInvoker
+  artifactName: "${productName} Setup ${version}-${arch}.${ext}"
+
+mac:
+  target:
+    - target: dmg
+      arch:
+        - arm64
+  icon: build/icon.icns  # 如果不存在，electron-builder 会使用默认图标
+  category: public.app-category.utilities
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  # 如果没有图标文件，不报错
+  artifactName: "${productName}-${version}-${arch}.${ext}"
+
+linux:
+  target:
+    - target: AppImage
+      arch:
+        - x64
+  icon: build/icon.png  # 如果不存在，electron-builder 会使用默认图标
+  category: Utility
+  artifactName: "${productName}-${version}-${arch}.${ext}"
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+
+dmg:
+  contents:
+    - x: 130
+      y: 220
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications
+

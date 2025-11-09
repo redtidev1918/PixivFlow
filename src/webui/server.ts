@@ -206,15 +206,22 @@ export class WebUIServer {
   public start(): Promise<void> {
     return new Promise((resolve, reject) => {
       this.server.listen(this.port, this.host, () => {
-        logger.info(`WebUI server started on http://${this.host}:${this.port}`);
+        const message = `WebUI server started on http://${this.host}:${this.port}`;
+        logger.info(message);
+        // 同时输出到 stdout，方便 Electron 检测
+        console.log(`[WebUI] ${message}`);
+        console.log(`[WebUI] Server ready`);
         resolve();
       });
 
       this.server.on('error', (err: NodeJS.ErrnoException) => {
         if (err.code === 'EADDRINUSE') {
-          logger.error(`Port ${this.port} is already in use`);
+          const errorMsg = `Port ${this.port} is already in use`;
+          logger.error(errorMsg);
+          console.error(`[WebUI] ERROR: ${errorMsg}`);
         } else {
           logger.error('Server error', { error: err.message });
+          console.error(`[WebUI] ERROR: ${err.message}`);
         }
         reject(err);
       });

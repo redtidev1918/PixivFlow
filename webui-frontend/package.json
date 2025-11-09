@@ -17,7 +17,7 @@
     "build:backend": "cd .. && npm install --production=false && npm run build && cd webui-frontend",
     "electron:build:mac:verbose": "bash build-electron.sh",
     "electron:build:mac:simple": "bash build-electron-simple.sh",
-    "electron:build:mac:enhanced": "node build-electron-enhanced.js",
+    "electron:build:mac:enhanced": "node build-electron-enhanced.cjs",
     "electron:check": "bash check-build-env.sh",
     "electron:pack": "npm run build && electron-builder --dir"
   },

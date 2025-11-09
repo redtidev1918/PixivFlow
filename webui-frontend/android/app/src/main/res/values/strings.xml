@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">PixivFlow</string>
+    <string name="title_activity_main">PixivFlow</string>
+    <string name="package_name">com.pixivflow.webui</string>
+    <string name="custom_url_scheme">com.pixivflow.webui</string>
+</resources>

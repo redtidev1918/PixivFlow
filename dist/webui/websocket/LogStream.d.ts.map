@@ -1,1 +1,0 @@
-{"version":3,"file":"LogStream.d.ts","sourceRoot":"","sources":["../../../src/webui/websocket/LogStream.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,MAAM,IAAI,YAAY,EAAU,MAAM,WAAW,CAAC;AAO3D,UAAU,gBAAgB;IACxB,OAAO,CAAC,EAAE,MAAM,CAAC;IACjB,QAAQ,CAAC,EAAE,MAAM,CAAC;CACnB;AAED,wBAAgB,cAAc,CAAC,EAAE,EAAE,YAAY,EAAE,OAAO,GAAE,gBAAqB,GAAG,IAAI,CA2CrF"}

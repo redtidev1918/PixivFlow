@@ -965,7 +965,9 @@ pixivflow/
 │   │   └── novels/                  # 小说
 │   └── data/                        # 数据目录
 │       ├── pixiv-downloader.db      # SQLite 数据库
-│       └── pixiv-downloader.log     # 运行日志
+│       ├── pixiv-downloader.log     # 运行日志
+│       └── metadata/                # 元数据目录（自动创建）
+│           └── *.json               # 作品元数据 JSON 文件
 │
 └── 📚 文档
     ├── README.md                    # 项目主文档

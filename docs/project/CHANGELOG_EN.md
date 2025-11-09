@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Improved
+- ✨ Optimized metadata file storage location (2025-01-XX)
+  - Moved metadata JSON files from download directory to `data/metadata` directory to keep download directory clean
+  - Enhanced error handling and input validation in `saveMetadata` method
+  - Added filename sanitization to prevent filesystem errors from special characters
+  - Improved error handling: metadata save failures no longer cause download failures, only log warnings
+  - Updated project structure documentation to reflect new metadata directory location
+
 ### Added
 - ✨ Added global installation documentation and instructions (2025-01-XX)
   - Added global installation method in README.md

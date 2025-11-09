@@ -873,7 +873,9 @@ pixivflow/
 │   │   └── novels/                  # Novels
 │   └── data/                        # Data directory
 │       ├── pixiv-downloader.db      # SQLite database
-│       └── pixiv-downloader.log     # Run logs
+│       ├── pixiv-downloader.log     # Run logs
+│       └── metadata/                # Metadata directory (auto created)
+│           └── *.json               # Artwork metadata JSON files
 │
 └── 📚 Documentation
     ├── README.md                    # Main project doc

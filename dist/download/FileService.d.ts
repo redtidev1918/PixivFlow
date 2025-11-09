@@ -43,9 +43,12 @@ export declare class FileService {
     private findUniquePath;
     private splitExtension;
     /**
-     * Save metadata JSON file alongside the downloaded file
+     * Save metadata JSON file to hidden metadata directory (data/metadata)
+     * instead of alongside the downloaded file to keep download directory clean
      * @param filePath Path to the downloaded file
      * @param metadata Metadata to save
+     * @returns Path to the saved metadata file
+     * @throws Error if metadata cannot be saved
      */
     saveMetadata(filePath: string, metadata: PixivMetadata): Promise<string>;
 }

@@ -103,8 +103,8 @@ export default function AppLayout() {
               onChange={handleLanguageChange}
               style={{ width: 120 }}
               options={[
-                { label: '中文', value: 'zh-CN' },
-                { label: 'English', value: 'en-US' },
+                { label: t('layout.languageZh'), value: 'zh-CN' },
+                { label: t('layout.languageEn'), value: 'en-US' },
               ]}
             />
           </div>

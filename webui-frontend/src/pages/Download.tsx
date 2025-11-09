@@ -32,11 +32,13 @@ import {
   DownloadOutlined,
   DeleteOutlined,
 } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import { api } from '../services/api';
 
 const { Title, Text, Paragraph } = Typography;
 
 export default function Download() {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [form] = Form.useForm();
   const [showStartModal, setShowStartModal] = useState(false);
@@ -83,35 +85,35 @@ export default function Download() {
     mutationFn: (values: { targetId?: string; config?: any }) =>
       api.startDownload(values.targetId, values.config),
     onSuccess: () => {
-      message.success('下载任务已启动');
+      message.success(t('download.taskStarted'));
       setShowStartModal(false);
       form.resetFields();
       queryClient.invalidateQueries({ queryKey: ['download', 'status'] });
     },
     onError: (error: any) => {
-      message.error(error.response?.data?.error || '启动下载失败');
+      message.error(error.response?.data?.error || t('download.startFailed'));
     },
   });
 
   const stopDownloadMutation = useMutation({
     mutationFn: (taskId: string) => api.stopDownload(taskId),
     onSuccess: () => {
-      message.success('下载任务已停止');
+      message.success(t('download.taskStopped'));
       queryClient.invalidateQueries({ queryKey: ['download', 'status'] });
     },
     onError: (error: any) => {
-      message.error(error.response?.data?.error || '停止下载失败');
+      message.error(error.response?.data?.error || t('download.stopFailed'));
     },
   });
 
   const runAllMutation = useMutation({
     mutationFn: () => api.runAllDownloads(),
     onSuccess: () => {
-      message.success('已开始下载所有目标');
+      message.success(t('download.allTargetsStarted'));
       queryClient.invalidateQueries({ queryKey: ['download', 'status'] });
     },
     onError: (error: any) => {
-      message.error(error.response?.data?.error || '启动下载失败');
+      message.error(error.response?.data?.error || t('download.startFailed'));
     },
   });
 
@@ -119,23 +121,23 @@ export default function Download() {
     mutationFn: ({ tag, type }: { tag: string; type: 'illustration' | 'novel' }) =>
       api.resumeDownload(tag, type),
     onSuccess: (_, variables) => {
-      message.success(`已继续下载任务: ${variables.tag} (${variables.type})`);
+      message.success(t('download.taskResumedWithTag', { tag: variables.tag, type: variables.type === 'illustration' ? t('download.typeIllustration') : t('download.typeNovel') }));
       queryClient.invalidateQueries({ queryKey: ['download', 'status'] });
       refetchIncompleteTasks();
     },
     onError: (error: any) => {
-      message.error(error.response?.data?.error || '继续下载失败');
+      message.error(error.response?.data?.error || t('download.resumeFailed'));
     },
   });
 
   const deleteIncompleteTaskMutation = useMutation({
     mutationFn: (id: number) => api.deleteIncompleteTask(id),
     onSuccess: () => {
-      message.success('未完成任务已删除');
+      message.success(t('download.incompleteTaskDeleted'));
       refetchIncompleteTasks();
     },
     onError: (error: any) => {
-      message.error(error.response?.data?.error || '删除任务失败');
+      message.error(error.response?.data?.error || t('download.deleteFailed'));
     },
   });
 
@@ -144,14 +146,14 @@ export default function Download() {
     onSuccess: (response) => {
       const deletedCount = response.data?.deletedCount || 0;
       if (deletedCount === 0) {
-        message.info('没有未完成的任务需要删除');
+        message.info(t('download.noIncompleteTasks'));
       } else {
-        message.success(`已成功删除 ${deletedCount} 个未完成任务`);
+        message.success(t('download.allIncompleteTasksDeleted', { count: deletedCount }));
       }
       refetchIncompleteTasks();
     },
     onError: (error: any) => {
-      const errorMessage = error.response?.data?.message || error.response?.data?.error || error.message || '删除所有未完成任务失败';
+      const errorMessage = error.response?.data?.message || error.response?.data?.error || error.message || t('download.deleteAllFailed');
       message.error(errorMessage);
       console.error('Delete all incomplete tasks error:', error);
     },
@@ -173,10 +175,10 @@ export default function Download() {
 
   const getStatusTag = (status: string) => {
     const statusMap: Record<string, { color: string; icon: any; text: string }> = {
-      running: { color: 'processing', icon: <ClockCircleOutlined />, text: '运行中' },
-      completed: { color: 'success', icon: <CheckCircleOutlined />, text: '已完成' },
-      failed: { color: 'error', icon: <CloseCircleOutlined />, text: '失败' },
-      stopped: { color: 'default', icon: <StopOutlined />, text: '已停止' },
+      running: { color: 'processing', icon: <ClockCircleOutlined />, text: t('download.statusRunning') },
+      completed: { color: 'success', icon: <CheckCircleOutlined />, text: t('download.statusCompleted') },
+      failed: { color: 'error', icon: <CloseCircleOutlined />, text: t('download.statusFailed') },
+      stopped: { color: 'default', icon: <StopOutlined />, text: t('download.statusStopped') },
     };
     const statusInfo = statusMap[status] || statusMap.running;
     return (
@@ -193,15 +195,15 @@ export default function Download() {
     const duration = Math.floor((end - start) / 1000); // seconds
     
     if (duration < 60) {
-      return `${duration} 秒`;
+      return `${duration} ${t('download.seconds')}`;
     } else if (duration < 3600) {
       const minutes = Math.floor(duration / 60);
       const seconds = duration % 60;
-      return `${minutes} 分 ${seconds} 秒`;
+      return `${minutes} ${t('download.minutes')} ${seconds} ${t('download.seconds')}`;
     } else {
       const hours = Math.floor(duration / 3600);
       const minutes = Math.floor((duration % 3600) / 60);
-      return `${hours} 小时 ${minutes} 分`;
+      return `${hours} ${t('download.hours')} ${minutes} ${t('download.minutes')}`;
     }
   };
 
@@ -216,21 +218,21 @@ export default function Download() {
 
   const taskColumns = [
     {
-      title: '任务ID',
+      title: t('download.taskId'),
       dataIndex: 'taskId',
       key: 'taskId',
       width: 120,
       render: (taskId: string) => <Text code>{taskId.slice(0, 8)}...</Text>,
     },
     {
-      title: '状态',
+      title: t('download.status'),
       dataIndex: 'status',
       key: 'status',
       width: 100,
       render: (status: string) => getStatusTag(status),
     },
     {
-      title: '运行时长',
+      title: t('download.duration'),
       key: 'duration',
       width: 120,
       render: (_: any, record: any) => {
@@ -238,21 +240,21 @@ export default function Download() {
       },
     },
     {
-      title: '开始时间',
+      title: t('download.startTime'),
       dataIndex: 'startTime',
       key: 'startTime',
       width: 180,
-      render: (time: string) => new Date(time).toLocaleString('zh-CN'),
+      render: (time: string) => new Date(time).toLocaleString(),
     },
     {
-      title: '结束时间',
+      title: t('download.endTime'),
       dataIndex: 'endTime',
       key: 'endTime',
       width: 180,
-      render: (time: string | undefined) => (time ? new Date(time).toLocaleString('zh-CN') : '-'),
+      render: (time: string | undefined) => (time ? new Date(time).toLocaleString() : '-'),
     },
     {
-      title: '错误信息',
+      title: t('download.errorInfo'),
       dataIndex: 'error',
       key: 'error',
       ellipsis: true,
@@ -269,9 +271,9 @@ export default function Download() {
 
   return (
     <div>
-      <Title level={2}>下载任务管理</Title>
+      <Title level={2}>{t('download.title')}</Title>
       <Paragraph type="secondary" style={{ marginBottom: 24 }}>
-        在这里可以启动、停止和监控下载任务。支持下载单个目标或所有配置的目标。
+        {t('download.description')}
       </Paragraph>
 
       {/* Task Statistics */}
@@ -279,14 +281,14 @@ export default function Download() {
         <Row gutter={16}>
           <Col span={6}>
             <Statistic
-              title="总任务数"
+              title={t('download.totalTasks')}
               value={taskStats.total}
               prefix={<DownloadOutlined />}
             />
           </Col>
           <Col span={6}>
             <Statistic
-              title="已完成"
+              title={t('download.completed')}
               value={taskStats.completed}
               valueStyle={{ color: '#3f8600' }}
               prefix={<CheckCircleOutlined />}
@@ -294,7 +296,7 @@ export default function Download() {
           </Col>
           <Col span={6}>
             <Statistic
-              title="失败"
+              title={t('download.failed')}
               value={taskStats.failed}
               valueStyle={{ color: '#cf1322' }}
               prefix={<CloseCircleOutlined />}
@@ -302,7 +304,7 @@ export default function Download() {
           </Col>
           <Col span={6}>
             <Statistic
-              title="已停止"
+              title={t('download.stopped')}
               value={taskStats.stopped}
               valueStyle={{ color: '#8c8c8c' }}
               prefix={<StopOutlined />}
@@ -316,7 +318,7 @@ export default function Download() {
         title={
           <Space>
             <InfoCircleOutlined />
-            <span>任务操作</span>
+            <span>{t('download.taskOperations')}</span>
           </Space>
         }
         style={{ marginBottom: 16 }}
@@ -330,7 +332,7 @@ export default function Download() {
             disabled={statusData?.data?.hasActiveTask}
             loading={startDownloadMutation.isPending}
           >
-            启动下载任务
+            {t('download.startDownload')}
           </Button>
           <Button
             size="large"
@@ -339,7 +341,7 @@ export default function Download() {
             disabled={statusData?.data?.hasActiveTask}
             loading={runAllMutation.isPending}
           >
-            下载所有目标
+            {t('download.downloadAll')}
           </Button>
           <Button
             danger
@@ -349,13 +351,13 @@ export default function Download() {
             disabled={!statusData?.data?.hasActiveTask}
             loading={stopDownloadMutation.isPending}
           >
-            停止当前任务
+            {t('download.stopCurrent')}
           </Button>
         </Space>
         {statusData?.data?.hasActiveTask && (
           <Alert
-            message="当前有任务正在运行"
-            description="请等待当前任务完成或手动停止后再启动新任务"
+            message={t('download.hasActiveTask')}
+            description={t('download.hasActiveTaskDesc')}
             type="info"
             showIcon
             style={{ marginTop: 16 }}
@@ -365,34 +367,34 @@ export default function Download() {
           <Alert
             message={
               <Space>
-                <span>文件保存路径</span>
+                <span>{t('download.fileSavePath')}</span>
                 <Button
                   type="text"
                   size="small"
                   icon={<ReloadOutlined />}
                   onClick={() => refetchConfig()}
-                  title="刷新路径显示"
+                  title={t('download.refreshPath')}
                 />
               </Space>
             }
             description={
               <Space direction="vertical" size="small" style={{ width: '100%' }}>
                 <Text>
-                  <Text strong>插画目录：</Text>
+                  <Text strong>{t('download.illustrationPath')}</Text>
                   {configData.data.storage.illustrationDirectory || 
                    (configData.data.storage.downloadDirectory 
                      ? `${configData.data.storage.downloadDirectory}/illustrations` 
                      : './downloads/illustrations')}
                 </Text>
                 <Text>
-                  <Text strong>小说目录：</Text>
+                  <Text strong>{t('download.novelPath')}</Text>
                   {configData.data.storage.novelDirectory || 
                    (configData.data.storage.downloadDirectory 
                      ? `${configData.data.storage.downloadDirectory}/novels` 
                      : './downloads/novels')}
                 </Text>
                 <Text type="secondary" style={{ fontSize: '12px' }}>
-                  提示：路径会在配置更新后自动刷新，您也可以点击刷新按钮手动更新
+                  {t('download.pathTip')}
                 </Text>
               </Space>
             }
@@ -409,7 +411,7 @@ export default function Download() {
           title={
             <Space>
               <ClockCircleOutlined />
-              <span>当前运行的任务</span>
+              <span>{t('download.currentTask')}</span>
             </Space>
           }
           style={{ marginBottom: 16 }}
@@ -420,25 +422,25 @@ export default function Download() {
               onClick={handleStop}
               loading={stopDownloadMutation.isPending}
             >
-              停止任务
+              {t('download.stopTask')}
             </Button>
           }
         >
           <Descriptions column={2} bordered>
-            <Descriptions.Item label="任务ID" span={1}>
+            <Descriptions.Item label={t('download.taskId')} span={1}>
               <Text code>{statusData.data.activeTask.taskId}</Text>
             </Descriptions.Item>
-            <Descriptions.Item label="状态" span={1}>
+            <Descriptions.Item label={t('download.status')} span={1}>
               {getStatusTag(statusData.data.activeTask.status)}
             </Descriptions.Item>
-            <Descriptions.Item label="开始时间" span={1}>
-              {new Date(statusData.data.activeTask.startTime).toLocaleString('zh-CN')}
+            <Descriptions.Item label={t('download.startTime')} span={1}>
+              {new Date(statusData.data.activeTask.startTime).toLocaleString()}
             </Descriptions.Item>
-            <Descriptions.Item label="运行时长" span={1}>
+            <Descriptions.Item label={t('download.duration')} span={1}>
               <Text strong>{calculateDuration(statusData.data.activeTask.startTime, statusData.data.activeTask.endTime)}</Text>
             </Descriptions.Item>
             {statusData.data.activeTask.progress && (
-              <Descriptions.Item label="进度" span={2}>
+              <Descriptions.Item label={t('download.progress')} span={2}>
                 <Progress
                   percent={Math.round((statusData.data.activeTask.progress.current / statusData.data.activeTask.progress.total) * 100)}
                   status={statusData.data.activeTask.status === 'running' ? 'active' : 'success'}
@@ -452,12 +454,12 @@ export default function Download() {
               </Descriptions.Item>
             )}
             {statusData.data.activeTask.endTime && (
-              <Descriptions.Item label="结束时间" span={2}>
-                {new Date(statusData.data.activeTask.endTime).toLocaleString('zh-CN')}
+              <Descriptions.Item label={t('download.endTime')} span={2}>
+                {new Date(statusData.data.activeTask.endTime).toLocaleString()}
               </Descriptions.Item>
             )}
             {statusData.data.activeTask.error && (
-              <Descriptions.Item label="错误信息" span={2}>
+              <Descriptions.Item label={t('download.errorInfo')} span={2}>
                 <Alert
                   message={statusData.data.activeTask.error}
                   type="error"
@@ -477,7 +479,7 @@ export default function Download() {
                     label: (
                       <Space>
                         <InfoCircleOutlined />
-                        <span>实时日志 ({taskLogsData.data.logs.length} 条)</span>
+                        <span>{t('download.realtimeLogs')} ({taskLogsData.data.logs.length} {t('download.entries')})</span>
                       </Space>
                     ),
                     children: (
@@ -494,7 +496,7 @@ export default function Download() {
                         }}
                       >
                         {taskLogsData.data.logs.map((log: any, index: number) => {
-                          const timestamp = new Date(log.timestamp).toLocaleTimeString('zh-CN');
+                          const timestamp = new Date(log.timestamp).toLocaleTimeString();
                           const levelColor: Record<string, string> = {
                             error: '#ff4d4f',
                             warn: '#faad14',
@@ -543,7 +545,7 @@ export default function Download() {
           title={
             <Space>
               <InfoCircleOutlined />
-              <span>未完成的任务</span>
+              <span>{t('download.incompleteTasks')}</span>
             </Space>
           }
           style={{ marginBottom: 16 }}
@@ -554,7 +556,7 @@ export default function Download() {
                 icon={<ReloadOutlined />}
                 onClick={() => refetchIncompleteTasks()}
               >
-                刷新列表
+                {t('download.refreshList')}
               </Button>
               <Button
                 size="small"
@@ -562,11 +564,11 @@ export default function Download() {
                 icon={<DeleteOutlined />}
                 onClick={() => {
                   Modal.confirm({
-                    title: '确认删除所有未完成任务',
-                    content: `确定要删除所有 ${incompleteTasksData.data.tasks.length} 个未完成的任务吗？此操作不可恢复。`,
-                    okText: '删除',
+                    title: t('download.confirmDeleteAll'),
+                    content: t('download.confirmDeleteAllDesc', { count: incompleteTasksData.data.tasks.length }),
+                    okText: t('common.delete'),
                     okType: 'danger',
-                    cancelText: '取消',
+                    cancelText: t('common.cancel'),
                     onOk: () => {
                       deleteAllIncompleteTasksMutation.mutate();
                     },
@@ -575,14 +577,14 @@ export default function Download() {
                 loading={deleteAllIncompleteTasksMutation.isPending}
                 disabled={deleteAllIncompleteTasksMutation.isPending}
               >
-                一键删除所有
+                {t('download.deleteAll')}
               </Button>
             </Space>
           }
         >
           <Alert
-            message={`发现 ${incompleteTasksData.data.tasks.length} 个未完成的任务`}
-            description="这些任务可能因为网络问题或其他原因未能完成，您可以点击「继续下载」按钮重新尝试下载"
+            message={t('download.incompleteTasksFound', { count: incompleteTasksData.data.tasks.length })}
+            description={t('download.incompleteTasksDesc')}
             type="warning"
             showIcon
             style={{ marginBottom: 16 }}
@@ -590,39 +592,39 @@ export default function Download() {
           <Table
             columns={[
               {
-                title: '标签',
+                title: t('download.tag'),
                 dataIndex: 'tag',
                 key: 'tag',
                 width: 150,
                 render: (tag: string) => <Text strong>{tag}</Text>,
               },
               {
-                title: '类型',
+                title: t('download.type'),
                 dataIndex: 'type',
                 key: 'type',
                 width: 100,
                 render: (type: string) => (
                   <Tag color={type === 'illustration' ? 'blue' : 'purple'}>
-                    {type === 'illustration' ? '插画' : '小说'}
+                    {type === 'illustration' ? t('download.typeIllustration') : t('download.typeNovel')}
                   </Tag>
                 ),
               },
               {
-                title: '状态',
+                title: t('download.incompleteStatus'),
                 dataIndex: 'status',
                 key: 'status',
                 width: 120,
                 render: (status: string) => {
                   const statusMap: Record<string, { color: string; text: string }> = {
-                    failed: { color: 'error', text: '失败' },
-                    partial: { color: 'warning', text: '部分完成' },
+                    failed: { color: 'error', text: t('download.statusFailed') },
+                    partial: { color: 'warning', text: t('download.statusPartial') },
                   };
                   const statusInfo = statusMap[status] || { color: 'default', text: status };
                   return <Tag color={statusInfo.color}>{statusInfo.text}</Tag>;
                 },
               },
               {
-                title: '错误信息',
+                title: t('download.errorMessage'),
                 dataIndex: 'message',
                 key: 'message',
                 ellipsis: { showTitle: false },
@@ -637,13 +639,13 @@ export default function Download() {
                   let suggestion: string | null = null;
                   
                   if (msgLower.includes('401') || msgLower.includes('unauthorized')) {
-                    suggestion = '认证失败：请检查 refresh token 是否有效，尝试重新登录';
+                    suggestion = t('download.error401');
                   } else if (msgLower.includes('403') || msgLower.includes('forbidden')) {
-                    suggestion = '访问被拒绝：可能是 Pixiv API 限制，等待后重试';
+                    suggestion = t('download.error403');
                   } else if (msgLower.includes('timeout') || msgLower.includes('timed out')) {
-                    suggestion = '请求超时：检查网络连接或增加超时时间';
+                    suggestion = t('download.errorTimeout');
                   } else if (msgLower.includes('failed after')) {
-                    suggestion = '多次重试失败：检查网络连接和代理设置，等待后重试';
+                    suggestion = t('download.errorRetries');
                   }
                   
                   return (
@@ -663,14 +665,14 @@ export default function Download() {
                 },
               },
               {
-                title: '执行时间',
+                title: t('download.executedAt'),
                 dataIndex: 'executedAt',
                 key: 'executedAt',
                 width: 180,
-                render: (time: string) => new Date(time).toLocaleString('zh-CN'),
+                render: (time: string) => new Date(time).toLocaleString(),
               },
               {
-                title: '操作',
+                title: t('download.actions'),
                 key: 'action',
                 width: 150,
                 fixed: 'right' as const,
@@ -688,7 +690,7 @@ export default function Download() {
                       disabled={statusData?.data?.hasActiveTask || resumeDownloadMutation.isPending}
                       loading={resumeDownloadMutation.isPending}
                     >
-                      继续下载
+                      {t('download.resumeDownload')}
                     </Button>
                     <Button
                       type="link"
@@ -696,11 +698,14 @@ export default function Download() {
                       icon={<DeleteOutlined />}
                       onClick={() => {
                         Modal.confirm({
-                          title: '确认删除',
-                          content: `确定要删除未完成任务 "${record.tag}" (${record.type === 'illustration' ? '插画' : '小说'}) 吗？`,
-                          okText: '删除',
+                          title: t('download.confirmDelete'),
+                          content: t('download.confirmDeleteDesc', { 
+                            tag: record.tag, 
+                            type: record.type === 'illustration' ? t('download.typeIllustration') : t('download.typeNovel') 
+                          }),
+                          okText: t('common.delete'),
                           okType: 'danger',
-                          cancelText: '取消',
+                          cancelText: t('common.cancel'),
                           onOk: () => {
                             deleteIncompleteTaskMutation.mutate(record.id);
                           },
@@ -709,7 +714,7 @@ export default function Download() {
                       disabled={deleteIncompleteTaskMutation.isPending}
                       loading={deleteIncompleteTaskMutation.isPending}
                     >
-                      删除
+                      {t('download.deleteTask')}
                     </Button>
                   </Space>
                 ),
@@ -717,7 +722,7 @@ export default function Download() {
             ]}
             dataSource={incompleteTasksData.data.tasks}
             rowKey="id"
-            pagination={{ pageSize: 10, showSizeChanger: true, showTotal: (total) => `共 ${total} 条` }}
+            pagination={{ pageSize: 10, showSizeChanger: true, showTotal: (total) => t('download.totalEntries', { total }) }}
             size="small"
             scroll={{ x: 800 }}
           />
@@ -729,7 +734,7 @@ export default function Download() {
         title={
           <Space>
             <InfoCircleOutlined />
-            <span>任务历史记录</span>
+            <span>{t('download.taskHistory')}</span>
           </Space>
         }
       >
@@ -737,7 +742,7 @@ export default function Download() {
           <div style={{ textAlign: 'center', padding: '40px 0' }}>
             <Spin size="large" />
             <div style={{ marginTop: 16 }}>
-              <Text type="secondary">加载任务历史中...</Text>
+              <Text type="secondary">{t('download.loadingHistory')}</Text>
             </div>
           </div>
         ) : statusData?.data?.allTasks && statusData.data.allTasks.length > 0 ? (
@@ -748,7 +753,7 @@ export default function Download() {
             pagination={{ 
               pageSize: 10, 
               showSizeChanger: true,
-              showTotal: (total) => `共 ${total} 条任务记录`,
+              showTotal: (total) => t('download.taskRecords', { total }),
               pageSizeOptions: ['10', '20', '50', '100'],
             }}
             size="middle"
@@ -756,7 +761,7 @@ export default function Download() {
           />
         ) : (
           <div style={{ textAlign: 'center', padding: '40px 0' }}>
-            <Text type="secondary">暂无任务历史记录</Text>
+            <Text type="secondary">{t('download.noHistory')}</Text>
           </div>
         )}
       </Card>
@@ -766,7 +771,7 @@ export default function Download() {
         title={
           <Space>
             <PlayCircleOutlined />
-            <span>启动下载任务</span>
+            <span>{t('download.startDownloadModal')}</span>
           </Space>
         }
         open={showStartModal}
@@ -776,13 +781,13 @@ export default function Download() {
         }}
         onOk={() => form.submit()}
         confirmLoading={startDownloadMutation.isPending}
-        okText="启动"
-        cancelText="取消"
+        okText={t('common.start')}
+        cancelText={t('common.cancel')}
         width={600}
       >
         <Alert
-          message="提示"
-          description="选择一个特定的目标进行下载，或留空以下载所有配置的目标"
+          message={t('download.startDownloadTip')}
+          description={t('download.startDownloadTipDesc')}
           type="info"
           showIcon
           style={{ marginBottom: 24 }}
@@ -790,12 +795,12 @@ export default function Download() {
         <Form form={form} onFinish={handleStart} layout="vertical">
           <Form.Item
             name="targetId"
-            label="选择下载目标"
-            tooltip="留空则下载所有配置的目标"
-            extra="从配置的目标列表中选择一个进行下载，或留空以下载所有目标"
+            label={t('download.selectTarget')}
+            tooltip={t('download.selectTargetTooltip')}
+            extra={t('download.selectTargetExtra')}
           >
             <Select 
-              placeholder="选择要下载的目标（留空则下载所有目标）" 
+              placeholder={t('download.selectTargetPlaceholder')} 
               allowClear
               size="large"
               showSearch
@@ -809,11 +814,11 @@ export default function Download() {
                 <Select.Option key={index} value={index.toString()}>
                   <Space>
                     <Tag color={target.type === 'illustration' ? 'blue' : 'purple'}>
-                      {target.type === 'illustration' ? '插画' : '小说'}
+                      {target.type === 'illustration' ? t('download.typeIllustration') : t('download.typeNovel')}
                     </Tag>
                     <Text strong>{target.tag}</Text>
                     {target.limit && (
-                      <Text type="secondary">(限制: {target.limit} 个)</Text>
+                      <Text type="secondary">({t('download.limit')}: {target.limit} {t('download.entries')})</Text>
                     )}
                   </Space>
                 </Select.Option>
@@ -822,8 +827,8 @@ export default function Download() {
           </Form.Item>
           {configData?.data?.targets && configData.data.targets.length === 0 && (
             <Alert
-              message="未找到配置的目标"
-              description="请先在配置页面添加下载目标"
+              message={t('download.noTargetsFound')}
+              description={t('download.noTargetsFoundDesc')}
               type="warning"
               showIcon
             />

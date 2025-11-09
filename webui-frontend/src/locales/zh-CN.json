@@ -140,6 +140,7 @@
     "from": "从",
     "to": "至",
     "seriesId": "系列 ID",
+    "novelId": "小说 ID",
     "targetsConfig": "下载目标配置",
     "targetsDescription": "配置要下载的内容。支持标签搜索、排行榜、系列下载等多种模式。可以添加多个目标，它们会按顺序执行。",
     "targetsList": "下载目标列表",

@@ -43,7 +43,7 @@ interface LogEntry {
 }
 
 export default function Logs() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(100);
@@ -205,7 +205,8 @@ export default function Logs() {
       if (diffHours < 24) return `${diffHours} ${t('logs.hoursAgo')}`;
       if (diffDays < 7) return `${diffDays} ${t('logs.daysAgo')}`;
       
-      return date.toLocaleString('zh-CN', {
+      const locale = i18n.language.startsWith('zh') ? 'zh-CN' : 'en-US';
+      return date.toLocaleString(locale, {
         year: 'numeric',
         month: '2-digit',
         day: '2-digit',
@@ -285,7 +286,8 @@ export default function Logs() {
       render: (timestamp: string | undefined) => {
         if (!timestamp) return <Text type="secondary">-</Text>;
         const formatted = formatTimestamp(timestamp);
-        const fullTime = timestamp ? new Date(timestamp).toLocaleString('zh-CN') : '';
+        const locale = i18n.language.startsWith('zh') ? 'zh-CN' : 'en-US';
+        const fullTime = timestamp ? new Date(timestamp).toLocaleString(locale) : '';
         return (
           <Tooltip title={fullTime}>
             <Text type="secondary" style={{ fontSize: '12px' }}>{formatted}</Text>

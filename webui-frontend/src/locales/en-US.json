@@ -140,6 +140,7 @@
     "from": "From",
     "to": "To",
     "seriesId": "Series ID",
+    "novelId": "Novel ID",
     "targetsConfig": "Download Targets Config",
     "targetsDescription": "Configure content to download. Supports tag search, rankings, series download and more. You can add multiple targets, they will execute in order.",
     "targetsList": "Download Targets List",

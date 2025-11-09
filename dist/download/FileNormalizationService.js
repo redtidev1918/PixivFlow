@@ -225,17 +225,63 @@ class FileNormalizationService {
     }
     async loadMetadataForFile(filePath, fileType) {
         try {
-            // Try to find metadata in data/metadata directory
-            const databasePath = this.storage.databasePath || './data/pixiv-downloader.db';
-            const dataDir = (0, node_path_1.dirname)((0, node_path_1.resolve)(databasePath));
-            const metadataDir = (0, node_path_1.join)(dataDir, 'metadata');
-            // Extract pixiv_id from filename
+            // First, try to find metadata file alongside the downloaded file
+            const fileDir = (0, node_path_1.dirname)(filePath);
             const fileName = (0, node_path_1.basename)(filePath, (0, node_path_1.extname)(filePath));
+            const metadataPathAlongside = (0, node_path_1.join)(fileDir, `${fileName}.json`);
+            if ((0, fs_1.existsSync)(metadataPathAlongside)) {
+                try {
+                    const content = await node_fs_1.promises.readFile(metadataPathAlongside, 'utf-8');
+                    const metadata = JSON.parse(content);
+                    // Validate that it has the required fields
+                    if (metadata.pixiv_id) {
+                        return metadata;
+                    }
+                }
+                catch (error) {
+                    // If parsing fails, continue to try other locations
+                    logger_1.logger.debug(`Failed to parse metadata file alongside: ${metadataPathAlongside}`, { error });
+                }
+            }
+            // Extract pixiv_id from filename
             const pixivIdMatch = fileName.match(/^(\d+)/);
             if (!pixivIdMatch) {
                 return null;
             }
             const pixivId = pixivIdMatch[1];
+            // Try to find metadata in base directory (root of downloads)
+            // Files might be in subdirectories but metadata might be in root
+            const baseDirectory = fileType === 'novel'
+                ? this.storage.novelDirectory ?? this.storage.downloadDirectory
+                : this.storage.illustrationDirectory ?? this.storage.downloadDirectory;
+            // Try to find metadata file in base directory by matching pixiv_id prefix
+            // Format: {pixiv_id}_*.json
+            try {
+                const baseDirEntries = await node_fs_1.promises.readdir(baseDirectory);
+                const metadataFileInBase = baseDirEntries.find(entry => {
+                    return entry.startsWith(`${pixivId}_`) && entry.endsWith('.json');
+                });
+                if (metadataFileInBase) {
+                    const metadataPathInBase = (0, node_path_1.join)(baseDirectory, metadataFileInBase);
+                    try {
+                        const content = await node_fs_1.promises.readFile(metadataPathInBase, 'utf-8');
+                        const metadata = JSON.parse(content);
+                        if (metadata.pixiv_id && String(metadata.pixiv_id) === pixivId) {
+                            return metadata;
+                        }
+                    }
+                    catch (error) {
+                        logger_1.logger.debug(`Failed to parse metadata file in base directory: ${metadataPathInBase}`, { error });
+                    }
+                }
+            }
+            catch (error) {
+                logger_1.logger.debug(`Failed to read base directory: ${baseDirectory}`, { error });
+            }
+            // Try to find metadata in data/metadata directory
+            const databasePath = this.storage.databasePath || './data/pixiv-downloader.db';
+            const dataDir = (0, node_path_1.dirname)((0, node_path_1.resolve)(databasePath));
+            const metadataDir = (0, node_path_1.join)(dataDir, 'metadata');
             // Try to find metadata file
             // Format: {pixiv_id}_{type}.json or {pixiv_id}_{type}_p{page}.json
             const pageMatch = fileName.match(/_(\d+)$/);

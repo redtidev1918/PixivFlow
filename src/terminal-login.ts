@@ -14,8 +14,17 @@ import {
   installGppt,
   loginWithGpptInteractive,
   loginWithGpptHeadless,
-  ProxyConfig,
+  ProxyConfig as PythonProxyConfig,
 } from './python-login-adapter';
+import {
+  checkPuppeteerAvailable,
+  loginWithPuppeteerInteractive,
+  loginWithPuppeteerHeadless,
+  ProxyConfig as PuppeteerProxyConfig,
+} from './puppeteer-login-adapter';
+
+// Use Puppeteer proxy config as the main type (they're compatible)
+export type ProxyConfig = PuppeteerProxyConfig;
 
 // Constants from gppt/consts.py
 const USER_AGENT = 'PixivIOSApp/7.13.3 (iOS 14.6; iPhone13,2)';
@@ -110,13 +119,17 @@ export class TerminalLogin {
   }
 
   /**
-   * Login to Pixiv and obtain OAuth token using Python gppt
+   * Login to Pixiv and obtain OAuth token
+   * 
+   * Tries Puppeteer first (Node.js native, no external dependencies),
+   * falls back to Python gppt if Puppeteer fails or is unavailable.
    */
   async login(options: {
     headless?: boolean;
     username?: string;
     password?: string;
     proxy?: ProxyConfig;
+    forcePython?: boolean; // Force use of Python gppt instead of Puppeteer
   } = {}): Promise<LoginInfo> {
     // Override instance options with method parameters
     if (options.headless !== undefined) {
@@ -132,14 +145,47 @@ export class TerminalLogin {
       this.proxy = options.proxy;
     }
 
-    // Check if Python gppt is available
+    // Try Puppeteer first (unless forcePython is set)
+    if (!options.forcePython) {
+      const puppeteerAvailable = await checkPuppeteerAvailable();
+      
+      if (puppeteerAvailable) {
+        console.log('[i]: Using Puppeteer (Node.js native) for login - no Python required!');
+        
+        try {
+          let result: LoginInfo | null = null;
+          
+          if (this.headless && this.username && this.password) {
+            result = await loginWithPuppeteerHeadless(this.username, this.password, this.proxy);
+          } else {
+            result = await loginWithPuppeteerInteractive(this.proxy);
+          }
+          
+          if (result) {
+            console.log('[+]: Login successful with Puppeteer!');
+            return result;
+          }
+        } catch (error) {
+          console.error('[!]: Puppeteer login failed:', error);
+          console.log('[i]: Falling back to Python gppt...');
+        }
+      } else {
+        console.log('[i]: Puppeteer not available, will try Python gppt...');
+      }
+    }
+    
+    // Fall back to Python gppt
+    console.log('[i]: Attempting login with Python gppt...');
     const isAvailable = await checkPythonGpptAvailable();
     
     if (!isAvailable) {
       console.error('[!]: Python gppt is not installed. Attempting to install...');
       const installed = await installGppt();
       if (!installed) {
-        throw new Error('Failed to install Python gppt. Please install manually: pip3 install gppt');
+        throw new Error(
+          'Failed to install Python gppt. Please install manually: pip3 install gppt\n' +
+          'Or ensure Puppeteer is available (should be installed by default).'
+        );
       }
     }
     
@@ -164,7 +210,7 @@ export class TerminalLogin {
     }
     
     if (pythonResult) {
-      console.log('[+]: Login successful!');
+      console.log('[+]: Login successful with Python gppt!');
       return pythonResult;
     } else {
       const errorMsg = this.headless && this.username && this.password

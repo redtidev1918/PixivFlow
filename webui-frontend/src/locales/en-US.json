@@ -84,11 +84,11 @@
     "loginButton": "Login",
     "loggingIn": "Logging in...",
     "processing": "Processing login",
-    "processingDesc": "Using gppt for Pixiv OAuth authentication, this may take some time. On first login, the app may automatically install the gppt library (may take a few minutes), please be patient.",
-    "processingInteractiveDesc": "Opening browser window, please complete login in the browser. On first login, the app may automatically install the gppt library (may take a few minutes), please be patient.",
+    "processingDesc": "Using gppt for Pixiv OAuth authentication (headless mode), this may take some time. On first use of headless mode, the app may automatically install the gppt library (may take a few minutes), please be patient.",
+    "processingInteractiveDesc": "Opening browser window, please complete login in the browser. Interactive mode uses Puppeteer and requires no additional dependencies.",
     "requirements": "Login Information",
-    "requirementsDesc": "Login uses Python gppt library to complete Pixiv OAuth authentication. On first login, if gppt is not installed, the app will automatically install it (may take a few minutes). The login process may take some time, please be patient.",
-    "browserWindowNote": "Note: Interactive mode will open a separate browser window where you need to manually complete the login. This is required by the gppt library and cannot be done within the page.",
+    "requirementsDesc": "Recommended to use Interactive Mode (Puppeteer) for login - more stable and requires no additional dependencies. Headless mode uses Python gppt library, which will be automatically installed on first use (may take a few minutes).",
+    "browserWindowNote": "Note: Interactive mode will open a separate browser window where you need to manually complete the login. This method is more stable and recommended.",
     "note": "After successful login, the refresh_token will be saved to the config file, and you won't need to login again."
   },
   "config": {

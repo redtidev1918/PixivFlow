@@ -1,10 +1,12 @@
 import { Router, Request, Response } from 'express';
 import { TerminalLogin } from '../../terminal-login';
-import { loadConfig, getConfigPath } from '../../config';
+import { loadConfig, getConfigPath, ConfigValidationError } from '../../config';
 import { updateConfigWithToken } from '../../utils/login-helper';
 import { logger } from '../../logger';
-import path from 'path';
 import { ErrorCode } from '../utils/error-codes';
+import { ConfigError } from '../../utils/errors';
+import { checkPythonGpptAvailable } from '../../python-login-adapter';
+import { checkPuppeteerAvailable } from '../../puppeteer-login-adapter';
 
 const router = Router();
 
@@ -24,8 +26,92 @@ router.get('/status', async (req: Request, res: Response) => {
       hasToken,
     });
   } catch (error) {
+    if (error instanceof ConfigError) {
+      const validationErrors =
+        error.cause instanceof ConfigValidationError
+          ? error.cause.errors
+          : [error.message];
+      const validationWarnings =
+        error.cause instanceof ConfigValidationError
+          ? error.cause.warnings
+          : [];
+      logger.warn('Configuration invalid when checking auth status', {
+        errors: validationErrors,
+        warnings: validationWarnings,
+      });
+      return res.json({
+        authenticated: false,
+        hasToken: false,
+        configReady: false,
+        errors: validationErrors,
+        warnings: validationWarnings,
+      });
+    }
     logger.error('Failed to get auth status', { error });
     res.status(500).json({ errorCode: ErrorCode.AUTH_STATUS_FAILED });
+  }
+});
+
+/**
+ * GET /api/auth/diagnose
+ * Diagnose login dependencies (Puppeteer, Python, gppt, etc.)
+ */
+router.get('/diagnose', async (req: Request, res: Response) => {
+  try {
+    logger.info('Running login diagnostics...');
+    
+    // Check Puppeteer (Node.js native - preferred method)
+    const puppeteerAvailable = await checkPuppeteerAvailable();
+    
+    // Check Python gppt (fallback method)
+    const pythonGpptAvailable = await checkPythonGpptAvailable();
+    
+    const diagnostics = {
+      puppeteer: {
+        available: puppeteerAvailable,
+        recommended: true,
+        description: 'Node.js native browser automation (no external dependencies)',
+      },
+      pythonGppt: {
+        available: pythonGpptAvailable,
+        recommended: false,
+        description: 'Python-based login (requires Python 3.9+ and gppt package)',
+      },
+      recommendation: puppeteerAvailable 
+        ? 'Puppeteer is available and will be used (no Python needed!)' 
+        : pythonGpptAvailable
+        ? 'Python gppt is available and will be used as fallback'
+        : 'No login method available. Puppeteer should be installed by default.',
+    };
+    
+    logger.info('Diagnostics result:', { diagnostics });
+    
+    res.json({
+      success: true,
+      diagnostics,
+      environment: {
+        platform: process.platform,
+        arch: process.arch,
+        nodeVersion: process.version,
+        isElectron: !!process.versions.electron,
+        electronVersion: process.versions.electron,
+        execPath: process.execPath,
+        cwd: process.cwd(),
+        env: {
+          PATH: process.env.PATH,
+          NODE_PATH: process.env.NODE_PATH,
+          HOME: process.env.HOME,
+          USER: process.env.USER,
+        },
+      },
+    });
+  } catch (error) {
+    logger.error('Diagnostics failed', { error });
+    res.status(500).json({
+      success: false,
+      errorCode: ErrorCode.AUTH_LOGIN_FAILED,
+      message: error instanceof Error ? error.message : String(error),
+    });
   }
 });
 
@@ -58,9 +144,15 @@ router.post('/login', async (req: Request, res: Response) => {
     let proxyConfig = proxy;
     if (!proxyConfig) {
       const configPath = getConfigPath();
-      const config = loadConfig(configPath);
-      if (config.network?.proxy?.enabled) {
-        proxyConfig = config.network.proxy;
+      try {
+        const config = loadConfig(configPath);
+        if (config.network?.proxy?.enabled) {
+          proxyConfig = config.network.proxy;
+        }
+      } catch (error) {
+        // Config might be invalid (e.g., missing refreshToken on first login)
+        // This is OK - we'll just proceed without proxy config
+        logger.debug('Could not load config for proxy settings, proceeding without proxy', { error });
       }
     }
 

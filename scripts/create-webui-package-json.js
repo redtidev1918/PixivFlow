@@ -7,7 +7,9 @@
 const fs = require('fs');
 const path = require('path');
 
-const webuiDistDir = path.join(__dirname, '..', 'dist', 'webui');
+const distDir = path.join(__dirname, '..', 'dist');
+const webuiDistDir = path.join(distDir, 'webui');
+const distPackageJson = path.join(distDir, 'package.json');
 const webuiPackageJson = path.join(webuiDistDir, 'package.json');
 
 if (!fs.existsSync(webuiDistDir)) {
@@ -15,13 +17,23 @@ if (!fs.existsSync(webuiDistDir)) {
   process.exit(1);
 }
 
-const packageJsonContent = {
+const webuiPackageJsonContent = {
   "type": "commonjs",
   "name": "pixivflow-webui-backend",
   "version": "1.0.0",
   "description": "PixivFlow WebUI Backend - CommonJS module"
 };
 
-fs.writeFileSync(webuiPackageJson, JSON.stringify(packageJsonContent, null, 2));
+fs.writeFileSync(webuiPackageJson, JSON.stringify(webuiPackageJsonContent, null, 2));
 console.log(`✓ 已创建 ${webuiPackageJson}`);
+
+// 为 dist 根目录创建 package.json，确保诸如 dist/logger.js 等文件在任何位置都被视为 CommonJS
+const distPackageJsonContent = {
+  "type": "commonjs",
+  "name": "pixivflow-backend-dist",
+  "private": true
+};
+
+fs.writeFileSync(distPackageJson, JSON.stringify(distPackageJsonContent, null, 2));
+console.log(`✓ 已创建 ${distPackageJson}`);
 

@@ -410,27 +410,32 @@ function startBackend() {
       process.env.NODE_PATH || '',
     ].filter(Boolean).join(path.delimiter);
     
-    console.log(`🚀 启动后端进程: node ${finalBackendPath}`);
+    const backendExecutable = process.execPath;
+    const backendEnv = {
+      ...process.env,
+      ELECTRON_RUN_AS_NODE: '1',
+      NODE_ENV: 'production',
+      NODE_PATH: nodePath, // 设置 NODE_PATH 以加载后端依赖
+      STATIC_PATH: staticPath,
+      PORT: BACKEND_PORT.toString(),
+      HOST: 'localhost',
+      PIXIV_DOWNLOADER_CONFIG: appData.configPath, // 设置配置文件路径
+    };
+
+    console.log(`🚀 启动后端进程: ${backendExecutable} ${finalBackendPath}`);
     console.log(`📦 NODE_PATH: ${nodePath}`);
     console.log(`📁 STATIC_PATH: ${staticPath}`);
     console.log(`📁 配置文件路径: ${appData.configPath}`);
     console.log(`📁 应用数据目录: ${appData.appDataDir}`);
+    console.log(`📁 ELECTRON_RUN_AS_NODE: ${backendEnv.ELECTRON_RUN_AS_NODE}`);
     console.log(`📁 STATIC_PATH 存在: ${fs.existsSync(staticPath)}`);
     if (fs.existsSync(staticPath)) {
       console.log(`📁 STATIC_PATH 内容: ${fs.readdirSync(staticPath).join(', ')}`);
     }
-    backendProcess = spawn('node', [finalBackendPath], {
+    backendProcess = spawn(backendExecutable, [finalBackendPath], {
       stdio: ['ignore', 'pipe', 'pipe'], // 使用 pipe 以便捕获输出
       cwd: appData.appDataDir, // 设置工作目录为应用数据目录
-      env: {
-        ...process.env,
-        NODE_ENV: 'production',
-        NODE_PATH: nodePath, // 设置 NODE_PATH 以加载后端依赖
-        STATIC_PATH: staticPath,
-        PORT: BACKEND_PORT.toString(),
-        HOST: 'localhost',
-        PIXIV_DOWNLOADER_CONFIG: appData.configPath, // 设置配置文件路径
-      },
+      env: backendEnv,
     });
 
     // 监听后端进程输出，检测启动完成

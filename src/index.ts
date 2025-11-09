@@ -86,6 +86,11 @@ function showHelp(): void {
   console.log(`
 Usage: pixivflow [command] [options]
 
+╔════════════════════════════════════════════════════════════════╗
+║              PixivFlow - 完全独立的后端 CLI 工具                ║
+║              所有功能都可以在无前端环境下完美运行               ║
+╚════════════════════════════════════════════════════════════════╝
+
 Commands:
   login, l                    Login interactively (using Python gppt)
   login-interactive, li       Login interactively (explicit)
@@ -119,7 +124,10 @@ Examples:
   pixivflow normalize --dry-run      # Preview changes without applying them
   pixivflow normalize --type novel   # Only normalize novel files
 
-Note: Login requires Python 3.9+ and gppt package (pip install gppt or pip3 install gppt)
+Note: 
+  - Login requires Python 3.9+ and gppt package (pip install gppt or pip3 install gppt)
+  - This is a standalone CLI tool that works independently of any frontend
+  - All core features (download, login, scheduler) work perfectly without WebUI
 `);
 }
 
@@ -373,7 +381,18 @@ async function handleRefresh(args: {
     const loginInfo = await TerminalLogin.refresh(refreshToken);
     outputLoginResult(loginInfo, json);
   } catch (error) {
-    console.error('[!]: Token refresh failed:', error instanceof Error ? error.message : String(error));
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    
+    if (!json) {
+      console.error('[!]: Token refresh failed:', errorMessage);
+      if (errorStack && process.env.DEBUG) {
+        console.error('[!]: Stack trace:', errorStack);
+      }
+      logger.error('Token refresh failed', { error: errorMessage, stack: errorStack });
+    } else {
+      console.error(JSON.stringify({ error: errorMessage, success: false }, null, 2));
+    }
     process.exit(1);
   }
 }
@@ -435,9 +454,18 @@ async function handleDownload(args?: {
     const downloadManager = new DownloadManager(config, pixivClient, database, fileService);
 
     await downloadManager.initialise();
-    logger.info('Running Pixiv download job');
+    
+    logger.info('='.repeat(60));
+    logger.info('Starting Pixiv download job');
+    logger.info('='.repeat(60));
+    
+    const startTime = Date.now();
     await downloadManager.runAllTargets();
-    logger.info('Pixiv download job finished');
+    const duration = Math.round((Date.now() - startTime) / 1000);
+    
+    logger.info('='.repeat(60));
+    logger.info(`Pixiv download job finished (took ${duration}s)`);
+    logger.info('='.repeat(60));
 
     database.close();
     process.exit(0);
@@ -626,9 +654,18 @@ async function handleScheduler(): Promise<void> {
         logger.info(`Waiting ${config.initialDelay}ms before starting download...`);
         await new Promise(resolve => setTimeout(resolve, config.initialDelay!));
       }
-      logger.info('Running Pixiv download job');
+      
+      logger.info('='.repeat(60));
+      logger.info('Starting scheduled Pixiv download job');
+      logger.info('='.repeat(60));
+      
+      const startTime = Date.now();
       await downloadManager.runAllTargets();
-      logger.info('Pixiv download job finished');
+      const duration = Math.round((Date.now() - startTime) / 1000);
+      
+      logger.info('='.repeat(60));
+      logger.info(`Scheduled download job finished (took ${duration}s)`);
+      logger.info('='.repeat(60));
     };
 
     const scheduler = new Scheduler(config.scheduler!);
@@ -903,9 +940,18 @@ async function bootstrap() {
         logger.info(`Waiting ${config.initialDelay}ms before starting download...`);
         await new Promise(resolve => setTimeout(resolve, config.initialDelay!));
       }
-      logger.info('Running Pixiv download job');
+      
+      logger.info('='.repeat(60));
+      logger.info('Starting Pixiv download job');
+      logger.info('='.repeat(60));
+      
+      const startTime = Date.now();
       await downloadManager.runAllTargets();
-      logger.info('Pixiv download job finished');
+      const duration = Math.round((Date.now() - startTime) / 1000);
+      
+      logger.info('='.repeat(60));
+      logger.info(`Pixiv download job finished (took ${duration}s)`);
+      logger.info('='.repeat(60));
     };
 
     const runOnce = !!(args.options.once || process.argv.includes('--once'));

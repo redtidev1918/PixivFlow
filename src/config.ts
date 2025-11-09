@@ -155,11 +155,15 @@ export type OrganizationMode =
   | 'flat' // Flat structure: all files in one directory
   | 'byAuthor' // Organize by author: {baseDir}/{author_name}/{filename}
   | 'byTag' // Organize by tag: {baseDir}/{tag}/{filename}
-  | 'byDate' // Organize by date: {baseDir}/{YYYY-MM}/{filename}
-  | 'byDay' // Organize by day: {baseDir}/{YYYY-MM-DD}/{filename}
+  | 'byDate' // Organize by creation date: {baseDir}/{YYYY-MM}/{filename}
+  | 'byDay' // Organize by creation day: {baseDir}/{YYYY-MM-DD}/{filename}
+  | 'byDownloadDate' // Organize by download date: {baseDir}/{YYYY-MM}/{filename}
+  | 'byDownloadDay' // Organize by download day: {baseDir}/{YYYY-MM-DD}/{filename}
   | 'byAuthorAndTag' // Organize by author and tag: {baseDir}/{author_name}/{tag}/{filename}
-  | 'byDateAndAuthor' // Organize by date and author: {baseDir}/{YYYY-MM}/{author_name}/{filename}
-  | 'byDayAndAuthor'; // Organize by day and author: {baseDir}/{YYYY-MM-DD}/{author_name}/{filename}
+  | 'byDateAndAuthor' // Organize by creation date and author: {baseDir}/{YYYY-MM}/{author_name}/{filename}
+  | 'byDayAndAuthor' // Organize by creation day and author: {baseDir}/{YYYY-MM-DD}/{author_name}/{filename}
+  | 'byDownloadDateAndAuthor' // Organize by download date and author: {baseDir}/{YYYY-MM}/{author_name}/{filename}
+  | 'byDownloadDayAndAuthor'; // Organize by download day and author: {baseDir}/{YYYY-MM-DD}/{author_name}/{filename}
 
 export interface StorageConfig {
   /**

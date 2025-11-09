@@ -46,9 +46,9 @@
     "novelDirectory": "./downloads/novels",
     "_novelDirectory_note": "小说保存目录（相对于 downloadDirectory 或绝对路径），默认 {downloadDirectory}/novels",
     "illustrationOrganization": "flat",
-    "_illustrationOrganization_note": "插画目录组织方式: flat（扁平）| byAuthor（按作者）| byTag（按标签）| byDate（按日期）| byAuthorAndTag（按作者和标签）| byDateAndAuthor（按日期和作者），默认 flat",
+    "_illustrationOrganization_note": "插画目录组织方式: flat（扁平）| byAuthor（按作者）| byTag（按标签）| byDate（按作品创建日期-月份）| byDay（按作品创建日期-天）| byDownloadDate（按下载日期-月份，推荐）| byDownloadDay（按下载日期-天，推荐）| byAuthorAndTag（按作者和标签）| byDateAndAuthor（按作品创建日期和作者）| byDayAndAuthor（按作品创建日期和作者）| byDownloadDateAndAuthor（按下载日期和作者）| byDownloadDayAndAuthor（按下载日期和作者），默认 flat",
     "novelOrganization": "flat",
-    "_novelOrganization_note": "小说目录组织方式: flat（扁平）| byAuthor（按作者）| byTag（按标签）| byDate（按日期）| byAuthorAndTag（按作者和标签）| byDateAndAuthor（按日期和作者），默认 flat"
+    "_novelOrganization_note": "小说目录组织方式: flat（扁平）| byAuthor（按作者）| byTag（按标签）| byDate（按作品创建日期-月份）| byDay（按作品创建日期-天）| byDownloadDate（按下载日期-月份，推荐）| byDownloadDay（按下载日期-天，推荐）| byAuthorAndTag（按作者和标签）| byDateAndAuthor（按作品创建日期和作者）| byDayAndAuthor（按作品创建日期和作者）| byDownloadDateAndAuthor（按下载日期和作者）| byDownloadDayAndAuthor（按下载日期和作者），默认 flat"
   },
   
   "scheduler": {

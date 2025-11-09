@@ -1,7 +1,20 @@
 import axios from 'axios';
 
+// 支持环境变量配置 API 地址（用于移动端）
+// 在移动端，可以通过环境变量或配置文件设置后端服务器地址
+// 例如：VITE_API_BASE_URL=http://192.168.1.100:3000
+const getApiBaseURL = () => {
+  // 优先使用环境变量
+  if (import.meta.env.VITE_API_BASE_URL) {
+    return `${import.meta.env.VITE_API_BASE_URL}/api`;
+  }
+  // 在 Capacitor 环境中，可以使用相对路径或配置的服务器地址
+  // 默认使用相对路径（同源）
+  return '/api';
+};
+
 const apiClient = axios.create({
-  baseURL: '/api',
+  baseURL: getApiBaseURL(),
   timeout: 30000,
 });
 
@@ -16,8 +29,8 @@ export interface StatsOverview {
 export const api = {
   // Auth
   getAuthStatus: () => apiClient.get('/auth/status'),
-  login: (username: string, password: string) =>
-    apiClient.post('/auth/login', { username, password, headless: true }),
+  login: (username: string, password: string, headless: boolean = true, proxy?: any) =>
+    apiClient.post('/auth/login', { username, password, headless, proxy }),
   refreshToken: (refreshToken?: string) =>
     apiClient.post('/auth/refresh', { refreshToken }),
   logout: () => apiClient.post('/auth/logout'),

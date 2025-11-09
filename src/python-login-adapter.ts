@@ -13,7 +13,139 @@
  */
 
 import { spawn } from 'child_process';
+import { execSync } from 'child_process';
+import * as path from 'path';
+import * as fs from 'fs';
 import { LoginInfo } from './terminal-login';
+
+/**
+ * Find Python executable path
+ * Supports both regular Node.js and Electron environments
+ */
+async function findPythonExecutable(): Promise<string | null> {
+  // List of possible Python executable names
+  const pythonCommands = ['python3', 'python'];
+  
+  // In Electron, we might need to check system PATH
+  // Try to find Python in common locations
+  const commonPaths: string[] = [];
+  
+  if (process.platform === 'darwin') {
+    // macOS common Python paths
+    commonPaths.push(
+      '/usr/local/bin/python3',
+      '/opt/homebrew/bin/python3',
+      '/usr/bin/python3',
+      '/Library/Frameworks/Python.framework/Versions/3.*/bin/python3'
+    );
+  } else if (process.platform === 'win32') {
+    // Windows common Python paths
+    const appData = process.env.APPDATA || '';
+    const localAppData = process.env.LOCALAPPDATA || '';
+    commonPaths.push(
+      path.join(localAppData, 'Programs', 'Python', 'Python3*', 'python.exe'),
+      path.join(localAppData, 'Programs', 'Python', 'Python3*', 'python3.exe'),
+      'C:\\Python3*\\python.exe',
+      'C:\\Python3*\\python3.exe'
+    );
+  } else {
+    // Linux common Python paths
+    commonPaths.push(
+      '/usr/bin/python3',
+      '/usr/local/bin/python3',
+      '/opt/python3/bin/python3'
+    );
+  }
+  
+  // First, try commands from PATH
+  for (const cmd of pythonCommands) {
+    try {
+      const result = await runCommand(cmd, ['--version']);
+      if (result.success) {
+        // Verify it's actually Python 3
+        const version = result.stdout || '';
+        if (version.includes('Python 3')) {
+          return cmd;
+        }
+      }
+    } catch {
+      // Continue to next command
+    }
+  }
+  
+  // Then try common paths
+  for (const pythonPath of commonPaths) {
+    // Handle wildcards
+    if (pythonPath.includes('*')) {
+      // For wildcard paths, we'd need glob, but for now skip
+      continue;
+    }
+    
+    try {
+      if (fs.existsSync(pythonPath)) {
+        const result = await runCommand(pythonPath, ['--version']);
+        if (result.success) {
+          const version = result.stdout || '';
+          if (version.includes('Python 3')) {
+            return pythonPath;
+          }
+        }
+      }
+    } catch {
+      // Continue to next path
+    }
+  }
+  
+  // Last resort: try to find Python using 'which' or 'where'
+  try {
+    let whichCmd: string;
+    if (process.platform === 'win32') {
+      whichCmd = 'where';
+    } else {
+      whichCmd = 'which';
+    }
+    
+    for (const cmd of pythonCommands) {
+      try {
+        const result = execSync(`${whichCmd} ${cmd}`, { encoding: 'utf-8', stdio: 'pipe' });
+        const pythonPath = result.trim().split('\n')[0];
+        if (pythonPath && fs.existsSync(pythonPath)) {
+          return pythonPath;
+        }
+      } catch {
+        // Continue
+      }
+    }
+  } catch {
+    // Ignore errors
+  }
+  
+  return null;
+}
+
+/**
+ * Get Python executable path (cached)
+ */
+let cachedPythonPath: string | null = null;
+
+async function getPythonExecutable(): Promise<string> {
+  if (cachedPythonPath) {
+    return cachedPythonPath;
+  }
+  
+  const pythonPath = await findPythonExecutable();
+  if (!pythonPath) {
+    throw new Error(
+      'Python 3 not found. Please install Python 3.9 or later:\n' +
+      '  - macOS: brew install python3\n' +
+      '  - Windows: Download from https://www.python.org/downloads/\n' +
+      '  - Linux: sudo apt-get install python3 (Ubuntu/Debian) or sudo yum install python3 (RHEL/CentOS)'
+    );
+  }
+  
+  cachedPythonPath = pythonPath;
+  return pythonPath;
+}
 
 /**
  * Check if Python and pip-installed gppt module are available
@@ -21,7 +153,8 @@ import { LoginInfo } from './terminal-login';
 export async function checkPythonGpptAvailable(): Promise<boolean> {
   try {
     // Check Python
-    const pythonCheck = await runCommand('python3', ['--version']);
+    const pythonPath = await getPythonExecutable();
+    const pythonCheck = await runCommand(pythonPath, ['--version']);
     if (!pythonCheck.success) {
       return false;
     }
@@ -40,7 +173,8 @@ except Exception as e:
 `;
     const gpptCheck = await runPythonScript(importScript);
     return gpptCheck.success && gpptCheck.stdout.trim() === 'OK';
-  } catch {
+  } catch (error) {
+    // If Python is not found, return false
     return false;
   }
 }
@@ -53,7 +187,10 @@ export async function installGppt(): Promise<boolean> {
     console.log('[!]: Installing gppt package via pip...');
     console.log('[i]: This may take a moment...');
     
-    // Try pip3 first, then pip
+    // Get Python executable path
+    const pythonPath = await getPythonExecutable();
+    
+    // Try pip3 first, then pip, then python -m pip
     const pipCommands = ['pip3', 'pip'];
     let pipInstalled = false;
     
@@ -71,9 +208,24 @@ export async function installGppt(): Promise<boolean> {
       }
     }
     
+    // If pip commands failed, try python -m pip
+    if (!pipInstalled) {
+      try {
+        const result = await runCommand(pythonPath, ['-m', 'pip', 'install', 'gppt']);
+        if (result.success) {
+          console.log('[+]: gppt installed successfully using python -m pip');
+          pipInstalled = true;
+        } else {
+          console.error(`[!]: Failed to install gppt using ${pythonPath} -m pip:`, result.error);
+        }
+      } catch (error) {
+        console.error('[!]: Failed to install gppt using python -m pip:', error);
+      }
+    }
+    
     if (!pipInstalled) {
       console.error('[!]: Failed to install gppt. Please install manually:');
-      console.error('[!]: pip install gppt');
+      console.error(`[!]: ${pythonPath} -m pip install gppt`);
       console.error('[!]: or');
       console.error('[!]: pip3 install gppt');
       return false;
@@ -95,6 +247,31 @@ export async function installGppt(): Promise<boolean> {
 }
 
 /**
+ * Proxy configuration interface
+ */
+export interface ProxyConfig {
+  enabled: boolean;
+  host: string;
+  port: number;
+  protocol: 'http' | 'https' | 'socks4' | 'socks5';
+  username?: string;
+  password?: string;
+}
+
+/**
+ * Build proxy URL from proxy configuration
+ */
+function buildProxyUrl(proxy: ProxyConfig): string {
+  const { protocol, host, port, username, password } = proxy;
+  let proxyUrl = `${protocol}://`;
+  if (username && password) {
+    proxyUrl += `${encodeURIComponent(username)}:${encodeURIComponent(password)}@`;
+  }
+  proxyUrl += `${host}:${port}`;
+  return proxyUrl;
+}
+
+/**
  * Login using Python gppt (interactive terminal mode)
  * 
  * Note: Even though this is called "terminal login", gppt uses Selenium to automate
@@ -104,7 +281,7 @@ export async function installGppt(): Promise<boolean> {
  * 
  * Uses gppt's login-interactive command
  */
-export async function loginWithGpptInteractive(): Promise<LoginInfo | null> {
+export async function loginWithGpptInteractive(proxy?: ProxyConfig): Promise<LoginInfo | null> {
   try {
     console.log('[!]: Using Python gppt for login (interactive mode)...');
     console.log('[i]: A Chrome browser window will open shortly.');
@@ -112,20 +289,51 @@ export async function loginWithGpptInteractive(): Promise<LoginInfo | null> {
     console.log('[i]: This may take a few minutes - please be patient.');
     console.log('[i]: To avoid opening browser, use headless mode with --username and --password');
     
+    // Build proxy environment variables if proxy is configured
+    let proxyEnvVars = '';
+    if (proxy && proxy.enabled) {
+      const proxyUrl = buildProxyUrl(proxy);
+      // Set proxy environment variables for Python script
+      proxyEnvVars = `
+import os
+proxy_url = "${proxyUrl}"
+os.environ['HTTPS_PROXY'] = proxy_url
+os.environ['HTTP_PROXY'] = proxy_url
+os.environ['ALL_PROXY'] = proxy_url
+print(f"[DEBUG]: Proxy configured: {proxy_url}", file=sys.stderr)
+`;
+      console.log(`[i]: Using proxy: ${proxyUrl}`);
+    }
+    
     // Use a simple Python script to call gppt and output full JSON
     // Increase timeout for interactive mode since user needs to manually login
     // CRITICAL FIX: Explicitly set headless=False to ensure browser stays open
+    // Also increase the internal timeout from 20 seconds to 5 minutes (300 seconds)
     const script = `
 import json
 import sys
 import time
 from gppt import GetPixivToken
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+
+${proxyEnvVars}
 
 try:
     print("[i]: Initializing browser (non-headless mode)...", file=sys.stderr)
     # CRITICAL: Explicitly set headless=False to prevent browser from closing
     # This ensures the browser window stays open during the login process
     g = GetPixivToken(headless=False)
+    
+    # Monkey patch to increase timeout from 20 seconds to 5 minutes (300 seconds)
+    # This gives users more time to complete the login process
+    import types
+    from gppt.consts import REDIRECT_URI
+    original_wait_for_redirect = g._GetPixivToken__wait_for_redirect
+    def patched_wait_for_redirect(self):
+        WebDriverWait(self.driver, 300).until(EC.url_matches(f"^{REDIRECT_URI}"))
+    g._GetPixivToken__wait_for_redirect = types.MethodType(patched_wait_for_redirect, g)
+    print("[i]: Increased login timeout to 5 minutes (300 seconds)", file=sys.stderr)
     
     # Verify browser is actually running
     if hasattr(g, 'driver') and g.driver:
@@ -238,29 +446,47 @@ finally:
  */
 export async function loginWithGpptHeadless(
   username: string,
-  password: string
+  password: string,
+  proxy?: ProxyConfig
 ): Promise<LoginInfo | null> {
   try {
     console.log('[!]: Using Python gppt for login (headless mode - no browser window)...');
     
-    // Check for proxy configuration (check both uppercase and lowercase)
-    const allProxy = process.env.ALL_PROXY || process.env.all_proxy;
-    const httpsProxy = process.env.HTTPS_PROXY || process.env.https_proxy;
-    const httpProxy = process.env.HTTP_PROXY || process.env.http_proxy;
-    const hasProxy = allProxy || httpsProxy || httpProxy;
-    
-    if (hasProxy) {
-      console.log('[i]: Proxy configuration detected:');
-      if (allProxy) console.log(`[i]:   ALL_PROXY/all_proxy: ${allProxy}`);
-      if (httpsProxy) console.log(`[i]:   HTTPS_PROXY/https_proxy: ${httpsProxy}`);
-      if (httpProxy) console.log(`[i]:   HTTP_PROXY/http_proxy: ${httpProxy}`);
-      console.log('[i]: Python script will verify proxy detection...');
+    // Build proxy environment variables if proxy is configured
+    let proxyEnvVars = '';
+    let proxyUrl = '';
+    if (proxy && proxy.enabled) {
+      proxyUrl = buildProxyUrl(proxy);
+      // Set proxy environment variables for Python script
+      proxyEnvVars = `
+import os
+proxy_url = "${proxyUrl}"
+os.environ['HTTPS_PROXY'] = proxy_url
+os.environ['HTTP_PROXY'] = proxy_url
+os.environ['ALL_PROXY'] = proxy_url
+print(f"[DEBUG]: Proxy configured: {proxy_url}", file=sys.stderr)
+`;
+      console.log(`[i]: Using proxy: ${proxyUrl}`);
     } else {
-      console.log('[i]: No proxy detected. If login is slow or fails, try setting proxy:');
-      console.log('[i]:   export HTTPS_PROXY=http://your-proxy:port');
-      console.log('[i]:   or');
-      console.log('[i]:   export ALL_PROXY=http://your-proxy:port');
-      console.log('[i]:   (Note: Both uppercase and lowercase variable names are supported)');
+      // Check for proxy configuration in environment (check both uppercase and lowercase)
+      const allProxy = process.env.ALL_PROXY || process.env.all_proxy;
+      const httpsProxy = process.env.HTTPS_PROXY || process.env.https_proxy;
+      const httpProxy = process.env.HTTP_PROXY || process.env.http_proxy;
+      const hasProxy = allProxy || httpsProxy || httpProxy;
+      
+      if (hasProxy) {
+        console.log('[i]: Proxy configuration detected from environment:');
+        if (allProxy) console.log(`[i]:   ALL_PROXY/all_proxy: ${allProxy}`);
+        if (httpsProxy) console.log(`[i]:   HTTPS_PROXY/https_proxy: ${httpsProxy}`);
+        if (httpProxy) console.log(`[i]:   HTTP_PROXY/http_proxy: ${httpProxy}`);
+        console.log('[i]: Python script will verify proxy detection...');
+      } else {
+        console.log('[i]: No proxy detected. If login is slow or fails, try setting proxy:');
+        console.log('[i]:   export HTTPS_PROXY=http://your-proxy:port');
+        console.log('[i]:   or');
+        console.log('[i]:   export ALL_PROXY=http://your-proxy:port');
+        console.log('[i]:   (Note: Both uppercase and lowercase variable names are supported)');
+      }
     }
     
     // Validate inputs
@@ -280,7 +506,13 @@ export async function loginWithGpptHeadless(
 import json
 import sys
 import base64
+import types
 from gppt import GetPixivToken
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from gppt.consts import REDIRECT_URI
+
+${proxyEnvVars}
 
 try:
     # Decode base64-encoded username and password
@@ -324,6 +556,14 @@ try:
     
     print("[DEBUG]: Initializing GetPixivToken (this may take a moment to start Chrome)...", file=sys.stderr)
     g = GetPixivToken(headless=True, username=username, password=password)
+    
+    # Monkey patch to increase timeout from 20 seconds to 2 minutes (120 seconds) for headless mode
+    original_wait_for_redirect = g._GetPixivToken__wait_for_redirect
+    def patched_wait_for_redirect(self):
+        WebDriverWait(self.driver, 120).until(EC.url_matches(f"^{REDIRECT_URI}"))
+    g._GetPixivToken__wait_for_redirect = types.MethodType(patched_wait_for_redirect, g)
+    print("[DEBUG]: Increased login timeout to 2 minutes (120 seconds) for headless mode", file=sys.stderr)
+    
     print("[DEBUG]: GetPixivToken initialized, calling login()...", file=sys.stderr)
     print("[DEBUG]: This may take 20-30 seconds. Please wait...", file=sys.stderr)
     
@@ -520,11 +760,25 @@ async function runPythonScript(script: string, timeoutMs: number = 120000): Prom
   stderr?: string;
   error?: string;
 }> {
-  return new Promise((resolve) => {
+  return new Promise(async (resolve) => {
     // Add import sys at the beginning if not present
     const fullScript = script.includes('import sys') ? script : `import sys\n${script}`;
     
-    const python = spawn('python3', ['-c', fullScript], {
+    // Get Python executable path
+    let pythonPath: string;
+    try {
+      pythonPath = await getPythonExecutable();
+    } catch (error) {
+      resolve({
+        success: false,
+        stdout: '',
+        stderr: '',
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return;
+    }
+    
+    const python = spawn(pythonPath, ['-c', fullScript], {
       stdio: ['pipe', 'pipe', 'pipe'],
     });
 

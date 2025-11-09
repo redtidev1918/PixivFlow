@@ -666,6 +666,156 @@ export class Database {
   }
 
   /**
+   * Get download times for multiple file paths
+   * Returns a map of file path -> downloaded_at timestamp
+   */
+  public getDownloadTimesForPaths(
+    filePaths: string[],
+    type: 'illustration' | 'novel'
+  ): Map<string, string> {
+    if (filePaths.length === 0) {
+      return new Map();
+    }
+
+    // Create placeholders for IN clause
+    const placeholders = filePaths.map(() => '?').join(',');
+    const stmt = this.db.prepare(
+      `SELECT file_path, downloaded_at 
+       FROM downloads 
+       WHERE type = ? AND file_path IN (${placeholders})`
+    );
+
+    const rows = stmt.all(type, ...filePaths) as Array<{
+      file_path: string;
+      downloaded_at: string;
+    }>;
+
+    const result = new Map<string, string>();
+    for (const row of rows) {
+      result.set(row.file_path, row.downloaded_at);
+    }
+
+    return result;
+  }
+
+  /**
+   * Get recent downloads ordered by download time
+   * @param limit Maximum number of records to return
+   * @param type Optional filter by type ('illustration' | 'novel')
+   * @returns Array of download records with file paths and download times
+   */
+  public getRecentDownloads(
+    limit: number = 50,
+    type?: 'illustration' | 'novel'
+  ): Array<{
+    pixivId: string;
+    type: 'illustration' | 'novel';
+    tag: string;
+    title: string;
+    filePath: string;
+    author: string | null;
+    userId: string | null;
+    downloadedAt: string;
+  }> {
+    let query = `SELECT pixiv_id, type, tag, title, file_path, author, user_id, downloaded_at 
+                 FROM downloads`;
+    const params: any[] = [];
+
+    if (type) {
+      query += ' WHERE type = ?';
+      params.push(type);
+    }
+
+    query += ' ORDER BY downloaded_at DESC LIMIT ?';
+    params.push(limit);
+
+    const stmt = this.db.prepare(query);
+    const rows = stmt.all(...params) as Array<{
+      pixiv_id: string;
+      type: string;
+      tag: string;
+      title: string;
+      file_path: string;
+      author: string | null;
+      user_id: string | null;
+      downloaded_at: string;
+    }>;
+
+    return rows.map(row => ({
+      pixivId: row.pixiv_id,
+      type: row.type as 'illustration' | 'novel',
+      tag: row.tag,
+      title: row.title,
+      filePath: row.file_path,
+      author: row.author,
+      userId: row.user_id,
+      downloadedAt: row.downloaded_at,
+    }));
+  }
+
+  /**
+   * Get downloads by date range
+   * @param startDate Start date (ISO string or SQLite datetime format)
+   * @param endDate End date (ISO string or SQLite datetime format)
+   * @param type Optional filter by type ('illustration' | 'novel')
+   * @returns Array of download records
+   */
+  public getDownloadsByDateRange(
+    startDate: string,
+    endDate?: string,
+    type?: 'illustration' | 'novel'
+  ): Array<{
+    pixivId: string;
+    type: 'illustration' | 'novel';
+    tag: string;
+    title: string;
+    filePath: string;
+    author: string | null;
+    userId: string | null;
+    downloadedAt: string;
+  }> {
+    let query = `SELECT pixiv_id, type, tag, title, file_path, author, user_id, downloaded_at 
+                 FROM downloads 
+                 WHERE downloaded_at >= ?`;
+    const params: any[] = [startDate];
+
+    if (endDate) {
+      query += ' AND downloaded_at <= ?';
+      params.push(endDate);
+    }
+
+    if (type) {
+      query += ' AND type = ?';
+      params.push(type);
+    }
+
+    query += ' ORDER BY downloaded_at DESC';
+
+    const stmt = this.db.prepare(query);
+    const rows = stmt.all(...params) as Array<{
+      pixiv_id: string;
+      type: string;
+      tag: string;
+      title: string;
+      file_path: string;
+      author: string | null;
+      user_id: string | null;
+      downloaded_at: string;
+    }>;
+
+    return rows.map(row => ({
+      pixivId: row.pixiv_id,
+      type: row.type as 'illustration' | 'novel',
+      tag: row.tag,
+      title: row.title,
+      filePath: row.file_path,
+      author: row.author,
+      userId: row.user_id,
+      downloadedAt: row.downloaded_at,
+    }));
+  }
+
+  /**
    * Get overview statistics
    */
   public getOverviewStats(): {

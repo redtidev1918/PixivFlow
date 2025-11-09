@@ -1,63 +1,68 @@
 import { StandaloneConfig } from '../../config';
 
+export interface ValidationError {
+  code: string;
+  params?: Record<string, any>;
+}
+
 export interface ValidationResult {
   valid: boolean;
-  errors: string[];
+  errors: ValidationError[];
 }
 
 /**
  * Validate configuration
  */
 export function validateConfig(config: StandaloneConfig): ValidationResult {
-  const errors: string[] = [];
+  const errors: ValidationError[] = [];
 
   // Validate pixiv config
   if (!config.pixiv) {
-    errors.push('Pixiv configuration is required');
+    errors.push({ code: 'CONFIG_VALIDATION_PIXIV_REQUIRED' });
   } else {
     if (!config.pixiv.clientId) {
-      errors.push('Pixiv client ID is required');
+      errors.push({ code: 'CONFIG_VALIDATION_PIXIV_CLIENT_ID_REQUIRED' });
     }
     if (!config.pixiv.refreshToken) {
-      errors.push('Pixiv refresh token is required');
+      errors.push({ code: 'CONFIG_VALIDATION_PIXIV_REFRESH_TOKEN_REQUIRED' });
     }
   }
 
   // Validate targets
   if (!config.targets || config.targets.length === 0) {
-    errors.push('At least one download target is required');
+    errors.push({ code: 'CONFIG_VALIDATION_TARGETS_REQUIRED' });
   } else {
     config.targets.forEach((target, index) => {
       if (!target.type) {
-        errors.push(`Target ${index + 1}: type is required`);
+        errors.push({ code: 'CONFIG_VALIDATION_TARGET_TYPE_REQUIRED', params: { index: index + 1 } });
       }
       if (target.type !== 'illustration' && target.type !== 'novel') {
-        errors.push(`Target ${index + 1}: type must be 'illustration' or 'novel'`);
+        errors.push({ code: 'CONFIG_VALIDATION_TARGET_TYPE_INVALID', params: { index: index + 1 } });
       }
       if (target.limit !== undefined && target.limit < 1) {
-        errors.push(`Target ${index + 1}: limit must be greater than 0`);
+        errors.push({ code: 'CONFIG_VALIDATION_TARGET_LIMIT_INVALID', params: { index: index + 1 } });
       }
     });
   }
 
   // Validate storage config
   if (!config.storage) {
-    errors.push('Storage configuration is required');
+    errors.push({ code: 'CONFIG_VALIDATION_STORAGE_REQUIRED' });
   } else {
     if (!config.storage.downloadDirectory) {
-      errors.push('Download directory is required');
+      errors.push({ code: 'CONFIG_VALIDATION_DOWNLOAD_DIRECTORY_REQUIRED' });
     }
   }
 
   // Validate scheduler config (if enabled)
   if (config.scheduler?.enabled) {
     if (!config.scheduler.cron) {
-      errors.push('Cron expression is required when scheduler is enabled');
+      errors.push({ code: 'CONFIG_VALIDATION_CRON_REQUIRED' });
     } else {
       // Basic cron validation
       const cronParts = config.scheduler.cron.split(' ');
       if (cronParts.length !== 5) {
-        errors.push('Invalid cron expression format');
+        errors.push({ code: 'CONFIG_VALIDATION_CRON_INVALID' });
       }
     }
   }

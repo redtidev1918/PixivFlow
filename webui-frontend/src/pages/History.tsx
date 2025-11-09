@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Card, Table, Tag, Input, Select, Space, Typography, Alert, Button, DatePicker, Tooltip, Row, Col, Statistic, Dropdown, Menu } from 'antd';
 import { PictureOutlined, FileTextOutlined, FolderOpenOutlined, SortAscendingOutlined, SortDescendingOutlined, DownloadOutlined, SearchOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import { api } from '../services/api';
 import { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
@@ -11,6 +12,7 @@ const { Search } = Input;
 const { RangePicker } = DatePicker;
 
 export default function History() {
+  const { t, i18n } = useTranslation();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [typeFilter, setTypeFilter] = useState<string | undefined>();
@@ -43,7 +45,7 @@ export default function History() {
     if (!titleFilter) return data.data.items;
     
     const searchLower = titleFilter.toLowerCase();
-    return data.data.items.filter((item) =>
+    return data.data.items.filter((item: any) =>
       item.title.toLowerCase().includes(searchLower)
     );
   }, [data?.data?.items, titleFilter]);
@@ -52,10 +54,10 @@ export default function History() {
   const stats = useMemo(() => {
     const items = filteredItems;
     const total = items.length;
-    const illustrations = items.filter((item) => item.type === 'illustration').length;
-    const novels = items.filter((item) => item.type === 'novel').length;
-    const uniqueAuthors = new Set(items.filter((item) => item.author).map((item) => item.author)).size;
-    const uniqueTags = new Set(items.map((item) => item.tag)).size;
+    const illustrations = items.filter((item: any) => item.type === 'illustration').length;
+    const novels = items.filter((item: any) => item.type === 'novel').length;
+    const uniqueAuthors = new Set(items.filter((item: any) => item.author).map((item: any) => item.author)).size;
+    const uniqueTags = new Set(items.map((item: any) => item.tag)).size;
 
     return { total, illustrations, novels, uniqueAuthors, uniqueTags };
   }, [filteredItems]);
@@ -64,26 +66,27 @@ export default function History() {
   const exportToCSV = () => {
     if (!filteredItems.length) return;
     
-    const headers = ['Pixiv ID', '类型', '标题', '标签', '作者', '文件路径', '下载时间'];
-    const rows = filteredItems.map((item) => [
+    const headers = [t('history.pixivId'), t('history.type'), t('history.workTitle'), t('history.tag'), t('history.author'), t('history.filePath'), t('history.downloadedAt')];
+    const locale = i18n.language.startsWith('zh') ? 'zh-CN' : 'en-US';
+    const rows = filteredItems.map((item: any) => [
       item.pixivId,
-      item.type === 'illustration' ? '插画' : '小说',
+      item.type === 'illustration' ? t('history.typeIllustration') : t('history.typeNovel'),
       item.title,
       item.tag,
       item.author || '',
       item.filePath,
-      new Date(item.downloadedAt).toLocaleString(),
+      new Date(item.downloadedAt).toLocaleString(locale),
     ]);
 
     const csvContent = [
       headers.join(','),
-      ...rows.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')),
+      ...rows.map((row: any) => row.map((cell: any) => `"${String(cell).replace(/"/g, '""')}"`).join(',')),
     ].join('\n');
 
     const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `下载历史_${dayjs().format('YYYY-MM-DD_HH-mm-ss')}.csv`;
+    link.download = `${t('history.title')}_${dayjs().format('YYYY-MM-DD_HH-mm-ss')}.csv`;
     link.click();
   };
 
@@ -94,17 +97,17 @@ export default function History() {
     const blob = new Blob([jsonContent], { type: 'application/json;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `下载历史_${dayjs().format('YYYY-MM-DD_HH-mm-ss')}.json`;
+    link.download = `${t('history.title')}_${dayjs().format('YYYY-MM-DD_HH-mm-ss')}.json`;
     link.click();
   };
 
   const exportMenu = (
     <Menu>
       <Menu.Item key="csv" icon={<DownloadOutlined />} onClick={exportToCSV}>
-        导出为 CSV
+        {t('history.exportCSV')}
       </Menu.Item>
       <Menu.Item key="json" icon={<DownloadOutlined />} onClick={exportToJSON}>
-        导出为 JSON
+        {t('history.exportJSON')}
       </Menu.Item>
     </Menu>
   );
@@ -143,7 +146,7 @@ export default function History() {
     {
       title: (
         <span style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => handleSort('pixivId')}>
-          Pixiv ID {getSortIcon('pixivId')}
+          {t('history.pixivId')} {getSortIcon('pixivId')}
         </span>
       ),
       dataIndex: 'pixivId',
@@ -151,7 +154,7 @@ export default function History() {
       width: 120,
     },
     {
-      title: '类型',
+      title: t('history.type'),
       dataIndex: 'type',
       key: 'type',
       width: 100,
@@ -160,14 +163,14 @@ export default function History() {
           color={type === 'illustration' ? 'blue' : 'green'}
           icon={type === 'illustration' ? <PictureOutlined /> : <FileTextOutlined />}
         >
-          {type === 'illustration' ? '插画' : '小说'}
+          {type === 'illustration' ? t('history.typeIllustration') : t('history.typeNovel')}
         </Tag>
       ),
     },
     {
       title: (
         <span style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => handleSort('title')}>
-          标题 {getSortIcon('title')}
+          {t('history.workTitle')} {getSortIcon('title')}
         </span>
       ),
       dataIndex: 'title',
@@ -175,7 +178,7 @@ export default function History() {
       ellipsis: true,
     },
     {
-      title: '标签',
+      title: t('history.tag'),
       dataIndex: 'tag',
       key: 'tag',
       width: 150,
@@ -184,7 +187,7 @@ export default function History() {
     {
       title: (
         <span style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => handleSort('author')}>
-          作者 {getSortIcon('author')}
+          {t('history.author')} {getSortIcon('author')}
         </span>
       ),
       dataIndex: 'author',
@@ -193,7 +196,7 @@ export default function History() {
       render: (author: string | null) => author || '-',
     },
     {
-      title: '文件路径',
+      title: t('history.filePath'),
       dataIndex: 'filePath',
       key: 'filePath',
       width: 300,
@@ -208,7 +211,7 @@ export default function History() {
               icon={<FolderOpenOutlined />}
               onClick={() => handleOpenFile(filePath)}
             >
-              打开
+              {t('history.open')}
             </Button>
           </Space>
         </Tooltip>
@@ -217,13 +220,16 @@ export default function History() {
     {
       title: (
         <span style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => handleSort('downloadedAt')}>
-          下载时间 {getSortIcon('downloadedAt')}
+          {t('history.downloadedAt')} {getSortIcon('downloadedAt')}
         </span>
       ),
       dataIndex: 'downloadedAt',
       key: 'downloadedAt',
       width: 180,
-      render: (time: string) => new Date(time).toLocaleString(),
+      render: (time: string) => {
+        const locale = i18n.language.startsWith('zh') ? 'zh-CN' : 'en-US';
+        return new Date(time).toLocaleString(locale);
+      },
     },
   ];
 
@@ -231,12 +237,12 @@ export default function History() {
     <div>
       <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
         <Col>
-          <Title level={2} style={{ margin: 0 }}>下载历史</Title>
+          <Title level={2} style={{ margin: 0 }}>{t('history.title')}</Title>
         </Col>
         <Col>
           <Dropdown overlay={exportMenu} trigger={['click']}>
             <Button type="primary" icon={<DownloadOutlined />}>
-              导出数据
+              {t('history.exportData')}
             </Button>
           </Dropdown>
         </Col>
@@ -247,7 +253,7 @@ export default function History() {
         <Col xs={24} sm={12} md={6}>
           <Card>
             <Statistic
-              title="总记录数"
+              title={t('history.totalRecords')}
               value={stats.total}
               valueStyle={{ color: '#1890ff' }}
             />
@@ -256,7 +262,7 @@ export default function History() {
         <Col xs={24} sm={12} md={6}>
           <Card>
             <Statistic
-              title="插画"
+              title={t('history.illustrations')}
               value={stats.illustrations}
               prefix={<PictureOutlined />}
               valueStyle={{ color: '#52c41a' }}
@@ -266,7 +272,7 @@ export default function History() {
         <Col xs={24} sm={12} md={6}>
           <Card>
             <Statistic
-              title="小说"
+              title={t('history.novels')}
               value={stats.novels}
               prefix={<FileTextOutlined />}
               valueStyle={{ color: '#faad14' }}
@@ -276,7 +282,7 @@ export default function History() {
         <Col xs={24} sm={12} md={6}>
           <Card>
             <Statistic
-              title="作者数"
+              title={t('history.authors')}
               value={stats.uniqueAuthors}
               valueStyle={{ color: '#722ed1' }}
             />
@@ -288,7 +294,7 @@ export default function History() {
         <Space direction="vertical" style={{ width: '100%' }} size="middle">
           <Space wrap>
             <Select
-              placeholder="筛选类型"
+              placeholder={t('history.filterType')}
               allowClear
               style={{ width: 150 }}
               value={typeFilter}
@@ -297,11 +303,11 @@ export default function History() {
                 setPage(1);
               }}
             >
-              <Select.Option value="illustration">插画</Select.Option>
-              <Select.Option value="novel">小说</Select.Option>
+              <Select.Option value="illustration">{t('history.typeIllustration')}</Select.Option>
+              <Select.Option value="novel">{t('history.typeNovel')}</Select.Option>
             </Select>
             <Search
-              placeholder="搜索标题"
+              placeholder={t('history.searchTitle')}
               allowClear
               prefix={<SearchOutlined />}
               style={{ width: 200 }}
@@ -309,7 +315,7 @@ export default function History() {
               onChange={(e) => setTitleFilter(e.target.value)}
             />
             <Search
-              placeholder="搜索标签"
+              placeholder={t('history.searchTag')}
               allowClear
               style={{ width: 200 }}
               value={tagFilter}
@@ -320,7 +326,7 @@ export default function History() {
               }}
             />
             <Search
-              placeholder="搜索作者"
+              placeholder={t('history.searchAuthor')}
               allowClear
               style={{ width: 200 }}
               value={authorFilter}
@@ -331,7 +337,7 @@ export default function History() {
               }}
             />
             <RangePicker
-              placeholder={['开始日期', '结束日期']}
+              placeholder={[t('history.startDate'), t('history.endDate')]}
               value={dateRange}
               onChange={(dates) => {
                 setDateRange(dates as [Dayjs | null, Dayjs | null] | null);
@@ -351,11 +357,11 @@ export default function History() {
                 setPage(1);
               }}
             >
-              重置筛选
+              {t('history.resetFilters')}
             </Button>
           </Space>
           <Space>
-            <span>排序方式：</span>
+            <span>{t('history.sortBy')}</span>
             <Select
               value={sortBy}
               onChange={(value) => {
@@ -364,10 +370,10 @@ export default function History() {
               }}
               style={{ width: 150 }}
             >
-              <Select.Option value="downloadedAt">下载时间</Select.Option>
-              <Select.Option value="title">标题</Select.Option>
-              <Select.Option value="author">作者</Select.Option>
-              <Select.Option value="pixivId">Pixiv ID</Select.Option>
+              <Select.Option value="downloadedAt">{t('history.sortDownloadTime')}</Select.Option>
+              <Select.Option value="title">{t('history.sortTitle')}</Select.Option>
+              <Select.Option value="author">{t('history.sortAuthor')}</Select.Option>
+              <Select.Option value="pixivId">{t('history.sortPixivId')}</Select.Option>
             </Select>
             <Select
               value={sortOrder}
@@ -377,8 +383,8 @@ export default function History() {
               }}
               style={{ width: 100 }}
             >
-              <Select.Option value="desc">降序</Select.Option>
-              <Select.Option value="asc">升序</Select.Option>
+              <Select.Option value="desc">{t('history.sortOrderDesc')}</Select.Option>
+              <Select.Option value="asc">{t('history.sortOrderAsc')}</Select.Option>
             </Select>
           </Space>
         </Space>
@@ -387,8 +393,8 @@ export default function History() {
       <Card>
         {error && (
           <Alert
-            message="加载失败"
-            description={error instanceof Error ? error.message : '无法加载下载历史'}
+            message={t('history.loadFailed')}
+            description={error instanceof Error ? error.message : t('history.loadFailedDesc')}
             type="error"
             style={{ marginBottom: 16 }}
           />
@@ -404,7 +410,7 @@ export default function History() {
             total: titleFilter ? filteredItems.length : (data?.data?.total || 0),
             showSizeChanger: true,
             showTotal: (total, range) =>
-              `显示 ${range[0]}-${range[1]} 条，共 ${total} 条记录${titleFilter ? ` (已筛选)` : ''}`,
+              t('history.displaying', { start: range[0], end: range[1], total }) + (titleFilter ? t('history.filtered') : ''),
             pageSizeOptions: ['20', '50', '100', '200'],
             onChange: (newPage, newPageSize) => {
               setPage(newPage);

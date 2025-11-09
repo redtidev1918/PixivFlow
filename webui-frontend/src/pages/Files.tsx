@@ -36,7 +36,15 @@ import {
   FileOutlined,
   ToolOutlined,
 } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import { api } from '../services/api';
+import { translateErrorCode, extractErrorInfo } from '../utils/errorCodeTranslator';
+
+// Helper to get locale for string comparison
+const getLocaleForSort = (i18nLanguage: string): string => {
+  if (i18nLanguage.startsWith('zh')) return 'zh-CN';
+  return 'en-US';
+};
 
 const { Title } = Typography;
 const { Option } = Select;
@@ -61,6 +69,7 @@ const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'];
 const textExtensions = ['.txt', '.md', '.text'];
 
 export default function Files() {
+  const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
   const [currentPath, setCurrentPath] = useState<string>('');
   const [fileType, setFileType] = useState<'illustration' | 'novel'>('illustration');
@@ -90,11 +99,12 @@ export default function Files() {
     mutationFn: (file: FileItem) =>
       api.deleteFile(file.name, { path: file.path, type: fileType }),
     onSuccess: () => {
-      message.success('文件删除成功');
+      message.success(t('files.fileDeleted'));
       queryClient.invalidateQueries({ queryKey: ['files'] });
     },
     onError: (error: any) => {
-      message.error(error.response?.data?.error || '删除文件失败');
+      const { errorCode, message: errorMessage } = extractErrorInfo(error);
+      message.error(translateErrorCode(errorCode, t, undefined, errorMessage || t('files.deleteFailed')));
     },
   });
 
@@ -104,14 +114,15 @@ export default function Files() {
       const result = response.data.result;
       setNormalizeResult(result);
       if (!normalizeOptions.dryRun) {
-        message.success('文件规范化完成');
+        message.success(t('files.normalizeCompleted'));
         queryClient.invalidateQueries({ queryKey: ['files'] });
       } else {
-        message.success('预览完成，请查看结果');
+        message.success(t('files.previewCompleted'));
       }
     },
     onError: (error: any) => {
-      message.error(error.response?.data?.error || error.response?.data?.message || '文件规范化失败');
+      const { errorCode, message: errorMessage } = extractErrorInfo(error);
+      message.error(translateErrorCode(errorCode, t, undefined, errorMessage || t('files.normalizeFailed')));
     },
   });
 
@@ -146,17 +157,17 @@ export default function Files() {
           const text = await response.text();
           setPreviewContent(text);
         } else {
-          message.error('无法加载文件内容');
+          message.error(t('files.loadContentFailed'));
           setPreviewVisible(false);
         }
       } catch (error) {
-        message.error('加载文件内容失败');
+        message.error(t('files.loadContentFailed'));
         setPreviewVisible(false);
       } finally {
         setLoadingPreview(false);
       }
     } else {
-      message.info('该文件类型不支持预览');
+      message.info(t('files.previewNotSupported'));
     }
   };
 
@@ -184,7 +195,7 @@ export default function Files() {
           onClick={() => handleNavigate('')}
           style={{ padding: 0 }}
         >
-          根目录
+          {t('files.root')}
         </Button>
       ),
     },
@@ -227,7 +238,7 @@ export default function Files() {
           style={{ cursor: 'pointer', userSelect: 'none' }}
           onClick={() => handleSort('name')}
         >
-          名称 {getSortIcon('name')}
+          {t('files.name')} {getSortIcon('name')}
         </span>
       ),
       dataIndex: 'name',
@@ -273,7 +284,7 @@ export default function Files() {
           style={{ cursor: 'pointer', userSelect: 'none' }}
           onClick={() => handleSort('type')}
         >
-          类型 {getSortIcon('type')}
+          {t('files.type')} {getSortIcon('type')}
         </span>
       ),
       dataIndex: 'type',
@@ -281,16 +292,16 @@ export default function Files() {
       width: 120,
       render: (type: string, record: FileItem) => {
         if (type === 'directory') {
-          return <Tag color="blue" icon={<FolderOutlined />}>目录</Tag>;
+          return <Tag color="blue" icon={<FolderOutlined />}>{t('files.typeDirectory')}</Tag>;
         }
         const ext = record.extension?.toLowerCase() || '';
         if (imageExtensions.includes(ext)) {
-          return <Tag color="green" icon={<PictureOutlined />}>图片</Tag>;
+          return <Tag color="green" icon={<PictureOutlined />}>{t('files.typeImage')}</Tag>;
         }
         if (textExtensions.includes(ext)) {
-          return <Tag color="orange" icon={<FileTextOutlined />}>文本</Tag>;
+          return <Tag color="orange" icon={<FileTextOutlined />}>{t('files.typeText')}</Tag>;
         }
-        return <Tag icon={<FileOutlined />}>文件</Tag>;
+        return <Tag icon={<FileOutlined />}>{t('files.typeFile')}</Tag>;
       },
     },
     {
@@ -299,7 +310,7 @@ export default function Files() {
           style={{ cursor: 'pointer', userSelect: 'none' }}
           onClick={() => handleSort('size')}
         >
-          大小 {getSortIcon('size')}
+          {t('files.size')} {getSortIcon('size')}
         </span>
       ),
       dataIndex: 'size',
@@ -314,16 +325,20 @@ export default function Files() {
           style={{ cursor: 'pointer', userSelect: 'none' }}
           onClick={() => handleSort('time')}
         >
-          修改时间 {getSortIcon('time')}
+          {t('files.modified')} {getSortIcon('time')}
         </span>
       ),
       dataIndex: 'modified',
       key: 'modified',
       width: 180,
-      render: (time: string) => (time ? new Date(time).toLocaleString() : '-'),
+      render: (time: string) => {
+        if (!time) return '-';
+        const locale = i18n.language.startsWith('zh') ? 'zh-CN' : 'en-US';
+        return new Date(time).toLocaleString(locale);
+      },
     },
     {
-      title: '操作',
+      title: t('files.actions'),
       key: 'action',
       width: 150,
       fixed: 'right' as const,
@@ -338,18 +353,18 @@ export default function Files() {
                 onClick={() => handlePreview(record)}
                 size="small"
               >
-                预览
+                {t('files.preview')}
               </Button>
             )}
           {record.type === 'file' && (
             <Popconfirm
-              title="确定要删除这个文件吗？"
+              title={t('files.confirmDelete')}
               onConfirm={() => handleDelete(record)}
-              okText="确定"
-              cancelText="取消"
+              okText={t('common.ok')}
+              cancelText={t('common.cancel')}
             >
               <Button type="link" danger icon={<DeleteOutlined />} size="small">
-                删除
+                {t('files.delete')}
               </Button>
             </Popconfirm>
           )}
@@ -385,9 +400,10 @@ export default function Files() {
       // Within the same type, sort by the selected field
       let comparison = 0;
       
+      const locale = getLocaleForSort(i18n.language);
       switch (sortBy) {
         case 'name':
-          comparison = a.name.localeCompare(b.name, 'zh-CN', { numeric: true, sensitivity: 'base' });
+          comparison = a.name.localeCompare(b.name, locale, { numeric: true, sensitivity: 'base' });
           break;
         case 'time':
           const timeA = a.modified ? new Date(a.modified).getTime() : 0;
@@ -402,17 +418,17 @@ export default function Files() {
           break;
         case 'type':
           // Already grouped by type, so just sort by name within each group
-          comparison = a.name.localeCompare(b.name, 'zh-CN', { numeric: true, sensitivity: 'base' });
+          comparison = a.name.localeCompare(b.name, locale, { numeric: true, sensitivity: 'base' });
           break;
         default:
-          comparison = a.name.localeCompare(b.name, 'zh-CN', { numeric: true, sensitivity: 'base' });
+          comparison = a.name.localeCompare(b.name, locale, { numeric: true, sensitivity: 'base' });
       }
 
       return sortOrder === 'asc' ? comparison : -comparison;
     });
 
     return items;
-  }, [data?.data?.directories, data?.data?.files, searchText, sortBy, sortOrder]);
+  }, [data?.data?.directories, data?.data?.files, searchText, sortBy, sortOrder, i18n.language]);
 
   // Calculate statistics
   const stats = useMemo(() => {
@@ -439,7 +455,7 @@ export default function Files() {
       <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
         <Col>
           <Title level={2} style={{ margin: 0 }}>
-            文件浏览
+            {t('files.title')}
           </Title>
         </Col>
         <Col>
@@ -454,10 +470,10 @@ export default function Files() {
               style={{ width: 150 }}
             >
               <Option value="illustration">
-                <PictureOutlined /> 插画
+                <PictureOutlined /> {t('dashboard.illustrations')}
               </Option>
               <Option value="novel">
-                <FileTextOutlined /> 小说
+                <FileTextOutlined /> {t('dashboard.novels')}
               </Option>
             </Select>
             <Button
@@ -468,7 +484,7 @@ export default function Files() {
                 setNormalizeResult(null);
               }}
             >
-              规范化文件
+              {t('files.normalizeFiles')}
             </Button>
           </Space>
         </Col>
@@ -479,7 +495,7 @@ export default function Files() {
         <Col xs={24} sm={12} md={6}>
           <Card>
             <Statistic
-              title="目录"
+              title={t('files.directories')}
               value={stats.directories}
               prefix={<FolderOutlined />}
               valueStyle={{ color: '#1890ff' }}
@@ -489,7 +505,7 @@ export default function Files() {
         <Col xs={24} sm={12} md={6}>
           <Card>
             <Statistic
-              title="文件"
+              title={t('files.files')}
               value={stats.files}
               prefix={<FileOutlined />}
               valueStyle={{ color: '#52c41a' }}
@@ -499,7 +515,7 @@ export default function Files() {
         <Col xs={24} sm={12} md={6}>
           <Card>
             <Statistic
-              title="图片"
+              title={t('files.images')}
               value={stats.images}
               prefix={<PictureOutlined />}
               valueStyle={{ color: '#faad14' }}
@@ -509,7 +525,7 @@ export default function Files() {
         <Col xs={24} sm={12} md={6}>
           <Card>
             <Statistic
-              title="总大小"
+              title={t('files.totalSize')}
               value={formatFileSize(stats.totalSize)}
               valueStyle={{ color: '#722ed1' }}
             />
@@ -522,7 +538,7 @@ export default function Files() {
           <Row gutter={16} align="middle">
             <Col flex="auto">
               <Search
-                placeholder="搜索文件名..."
+                placeholder={t('files.searchPlaceholder')}
                 allowClear
                 prefix={<SearchOutlined />}
                 value={searchText}
@@ -537,16 +553,16 @@ export default function Files() {
                   onChange={(value) => setSortBy(value)}
                   style={{ width: 130 }}
                 >
-                  <Option value="name">按名称</Option>
-                  <Option value="time">按时间</Option>
-                  <Option value="size">按大小</Option>
-                  <Option value="type">按类型</Option>
+                  <Option value="name">{t('files.sortByName')}</Option>
+                  <Option value="time">{t('files.sortByTime')}</Option>
+                  <Option value="size">{t('files.sortBySize')}</Option>
+                  <Option value="type">{t('files.sortByType')}</Option>
                 </Select>
                 <Button
                   icon={sortOrder === 'asc' ? <SortAscendingOutlined /> : <SortDescendingOutlined />}
                   onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
                 >
-                  {sortOrder === 'asc' ? '升序' : '降序'}
+                  {sortOrder === 'asc' ? t('files.ascending') : t('files.descending')}
                 </Button>
               </Space>
             </Col>
@@ -563,7 +579,7 @@ export default function Files() {
                 handleNavigate(parts.join('/'));
               }}
             >
-              返回上级
+              {t('files.goBack')}
             </Button>
           )}
 
@@ -574,11 +590,11 @@ export default function Files() {
               rowKey="path"
               loading={isLoading}
               scroll={{ x: 900 }}
-              pagination={{
+                pagination={{
                 pageSize: 50,
                 showSizeChanger: true,
                 showTotal: (total, range) =>
-                  `显示 ${range[0]}-${range[1]} 项，共 ${total} 项${searchText ? ` (已筛选)` : ''}`,
+                  t('files.displaying', { start: range[0], end: range[1], total }) + (searchText ? t('files.filtered') : ''),
                 pageSizeOptions: ['20', '50', '100', '200'],
               }}
             />
@@ -619,7 +635,7 @@ export default function Files() {
                     lineHeight: '1.6',
                   }}
                 >
-                  {previewContent || (loadingPreview ? '加载中...' : '')}
+                  {previewContent || (loadingPreview ? t('files.loadingContent') : '')}
                 </div>
               </Spin>
             ) : null}
@@ -634,7 +650,7 @@ export default function Files() {
           setNormalizeModalVisible(false);
           setNormalizeResult(null);
         }}
-        title="规范化文件"
+        title={t('files.normalizeTitle')}
         width={700}
         footer={[
           <Button
@@ -644,7 +660,7 @@ export default function Files() {
               setNormalizeResult(null);
             }}
           >
-            取消
+            {t('common.cancel')}
           </Button>,
           <Button
             key="preview"
@@ -653,7 +669,7 @@ export default function Files() {
             }}
             loading={normalizeFilesMutation.isPending}
           >
-            预览（不执行）
+            {t('files.previewButton')}
           </Button>,
           <Button
             key="execute"
@@ -664,20 +680,20 @@ export default function Files() {
             loading={normalizeFilesMutation.isPending}
             danger={!normalizeOptions.dryRun}
           >
-            执行规范化
+            {t('files.executeNormalize')}
           </Button>,
         ]}
       >
         <Space direction="vertical" style={{ width: '100%' }} size="large">
           <Alert
-            message="文件规范化功能"
-            description="此功能将根据当前配置重新组织文件结构，规范化文件名，并更新数据库记录。建议先使用预览模式查看将要执行的操作。"
+            message={t('files.normalizeTitle')}
+            description={t('files.normalizeDescription')}
             type="info"
             showIcon
           />
 
           <div>
-            <Typography.Text strong>规范化选项：</Typography.Text>
+            <Typography.Text strong>{t('files.normalizeOptions')}</Typography.Text>
             <Space direction="vertical" style={{ marginTop: 8, width: '100%' }}>
               <Checkbox
                 checked={normalizeOptions.normalizeNames}
@@ -685,7 +701,7 @@ export default function Files() {
                   setNormalizeOptions({ ...normalizeOptions, normalizeNames: e.target.checked })
                 }
               >
-                规范化文件名（清理特殊字符，统一格式）
+                {t('files.normalizeNames')}
               </Checkbox>
               <Checkbox
                 checked={normalizeOptions.reorganize}
@@ -693,7 +709,7 @@ export default function Files() {
                   setNormalizeOptions({ ...normalizeOptions, reorganize: e.target.checked })
                 }
               >
-                重新组织文件结构（根据当前配置的组织模式）
+                {t('files.reorganize')}
               </Checkbox>
               <Checkbox
                 checked={normalizeOptions.updateDatabase}
@@ -701,13 +717,13 @@ export default function Files() {
                   setNormalizeOptions({ ...normalizeOptions, updateDatabase: e.target.checked })
                 }
               >
-                更新数据库记录（更新文件路径）
+                {t('files.updateDatabase')}
               </Checkbox>
             </Space>
           </div>
 
           <div>
-            <Typography.Text strong>文件类型：</Typography.Text>
+            <Typography.Text strong>{t('files.fileType')}</Typography.Text>
             <Select
               value={normalizeOptions.type}
               onChange={(value) =>
@@ -715,9 +731,9 @@ export default function Files() {
               }
               style={{ width: '100%', marginTop: 8 }}
             >
-              <Option value="all">全部（插画和小说）</Option>
-              <Option value="illustration">仅插画</Option>
-              <Option value="novel">仅小说</Option>
+              <Option value="all">{t('files.allTypes')}</Option>
+              <Option value="illustration">{t('files.illustrationOnly')}</Option>
+              <Option value="novel">{t('files.novelOnly')}</Option>
             </Select>
           </div>
 
@@ -725,45 +741,45 @@ export default function Files() {
             <div style={{ textAlign: 'center', padding: '20px' }}>
               <Spin size="large" />
               <div style={{ marginTop: 16 }}>
-                <Typography.Text>正在处理文件，请稍候...</Typography.Text>
+                <Typography.Text>{t('files.processing')}</Typography.Text>
               </div>
             </div>
           )}
 
           {normalizeResult && (
             <div>
-              <Typography.Text strong>规范化结果：</Typography.Text>
+              <Typography.Text strong>{t('files.normalizeResult')}</Typography.Text>
               <Descriptions
                 bordered
                 column={1}
                 size="small"
                 style={{ marginTop: 8 }}
               >
-                <Descriptions.Item label="总文件数">
+                <Descriptions.Item label={t('files.totalFiles')}>
                   {normalizeResult.totalFiles}
                 </Descriptions.Item>
-                <Descriptions.Item label="已处理">
+                <Descriptions.Item label={t('files.processedFiles')}>
                   {normalizeResult.processedFiles}
                 </Descriptions.Item>
-                <Descriptions.Item label="已移动">
+                <Descriptions.Item label={t('files.movedFiles')}>
                   <Typography.Text type="success">
                     {normalizeResult.movedFiles}
                   </Typography.Text>
                 </Descriptions.Item>
-                <Descriptions.Item label="已重命名">
+                <Descriptions.Item label={t('files.renamedFiles')}>
                   <Typography.Text type="success">
                     {normalizeResult.renamedFiles}
                   </Typography.Text>
                 </Descriptions.Item>
-                <Descriptions.Item label="数据库已更新">
+                <Descriptions.Item label={t('files.updatedDatabase')}>
                   <Typography.Text type="success">
                     {normalizeResult.updatedDatabase}
                   </Typography.Text>
                 </Descriptions.Item>
-                <Descriptions.Item label="已跳过">
+                <Descriptions.Item label={t('files.skippedFiles')}>
                   {normalizeResult.skippedFiles}
                 </Descriptions.Item>
-                <Descriptions.Item label="错误数">
+                <Descriptions.Item label={t('files.errors')}>
                   {normalizeResult.errors.length > 0 ? (
                     <Typography.Text type="danger">
                       {normalizeResult.errors.length}
@@ -776,7 +792,7 @@ export default function Files() {
 
               {normalizeResult.errors.length > 0 && (
                 <Alert
-                  message="处理错误"
+                  message={t('files.processingErrors')}
                   description={
                     <div style={{ maxHeight: '200px', overflow: 'auto' }}>
                       {normalizeResult.errors.map((error: any, index: number) => (
@@ -798,8 +814,8 @@ export default function Files() {
 
               {normalizeOptions.dryRun && (
                 <Alert
-                  message="预览模式"
-                  description="这是预览结果，文件尚未实际修改。要执行规范化，请点击执行规范化按钮。"
+                  message={t('files.previewMode')}
+                  description={t('files.previewModeDesc')}
                   type="warning"
                   style={{ marginTop: 16 }}
                 />

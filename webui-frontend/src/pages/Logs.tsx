@@ -27,7 +27,9 @@ import {
   VerticalAlignBottomOutlined,
   FileTextOutlined,
 } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import { api } from '../services/api';
+import { translateErrorCode, extractErrorInfo } from '../utils/errorCodeTranslator';
 import io, { Socket } from 'socket.io-client';
 
 const { Title, Text } = Typography;
@@ -42,6 +44,7 @@ interface LogEntry {
 }
 
 export default function Logs() {
+  const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(100);
@@ -70,11 +73,12 @@ export default function Logs() {
   const clearLogsMutation = useMutation({
     mutationFn: () => api.clearLogs(),
     onSuccess: () => {
-      message.success('日志已清空');
+      message.success(t('logs.logsCleared'));
       queryClient.invalidateQueries({ queryKey: ['logs'] });
     },
     onError: (error: any) => {
-      message.error(error.response?.data?.error || '清空日志失败');
+      const { errorCode, message: errorMessage } = extractErrorInfo(error);
+      message.error(translateErrorCode(errorCode, t, undefined, errorMessage || t('logs.clearFailed')));
     },
   });
 
@@ -198,12 +202,13 @@ export default function Logs() {
       const diffHours = Math.floor(diffMs / 3600000);
       const diffDays = Math.floor(diffMs / 86400000);
 
-      if (diffMins < 1) return '刚刚';
-      if (diffMins < 60) return `${diffMins} 分钟前`;
-      if (diffHours < 24) return `${diffHours} 小时前`;
-      if (diffDays < 7) return `${diffDays} 天前`;
+      if (diffMins < 1) return t('logs.justNow');
+      if (diffMins < 60) return `${diffMins} ${t('logs.minutesAgo')}`;
+      if (diffHours < 24) return `${diffHours} ${t('logs.hoursAgo')}`;
+      if (diffDays < 7) return `${diffDays} ${t('logs.daysAgo')}`;
       
-      return date.toLocaleString('zh-CN', {
+      const locale = i18n.language.startsWith('zh') ? 'zh-CN' : 'en-US';
+      return date.toLocaleString(locale, {
         year: 'numeric',
         month: '2-digit',
         day: '2-digit',
@@ -219,9 +224,9 @@ export default function Logs() {
   // Copy log line to clipboard
   const copyLogLine = (line: string) => {
     navigator.clipboard.writeText(line).then(() => {
-      message.success('已复制到剪贴板');
+      message.success(t('logs.copied'));
     }).catch(() => {
-      message.error('复制失败');
+      message.error(t('logs.copyFailed'));
     });
   };
 
@@ -240,7 +245,7 @@ export default function Logs() {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-    message.success('日志已导出');
+    message.success(t('logs.logsExported'));
   };
 
   // Scroll to bottom
@@ -248,7 +253,7 @@ export default function Logs() {
     const tableBody = tableRef.current?.querySelector('.ant-table-body');
     if (tableBody) {
       tableBody.scrollTop = tableBody.scrollHeight;
-      message.success('已滚动到底部');
+      message.success(t('logs.scrolledToBottom'));
     }
   };
 
@@ -265,7 +270,7 @@ export default function Logs() {
 
   const columns = [
     {
-      title: '级别',
+      title: t('logs.level'),
       dataIndex: 'level',
       key: 'level',
       width: 90,
@@ -276,14 +281,15 @@ export default function Logs() {
       },
     },
     {
-      title: '时间',
+      title: t('logs.time'),
       dataIndex: 'timestamp',
       key: 'timestamp',
       width: 180,
       render: (timestamp: string | undefined) => {
         if (!timestamp) return <Text type="secondary">-</Text>;
         const formatted = formatTimestamp(timestamp);
-        const fullTime = timestamp ? new Date(timestamp).toLocaleString('zh-CN') : '';
+        const locale = i18n.language.startsWith('zh') ? 'zh-CN' : 'en-US';
+        const fullTime = timestamp ? new Date(timestamp).toLocaleString(locale) : '';
         return (
           <Tooltip title={fullTime}>
             <Text type="secondary" style={{ fontSize: '12px' }}>{formatted}</Text>
@@ -292,7 +298,7 @@ export default function Logs() {
       },
     },
     {
-      title: '内容',
+      title: t('logs.content'),
       dataIndex: 'line',
       key: 'line',
       ellipsis: { showTitle: false },
@@ -309,7 +315,7 @@ export default function Logs() {
             }}>
               {searchText ? highlightText(formatted, searchText) : formatted}
             </code>
-            <Tooltip title="复制整行">
+            <Tooltip title={t('logs.copyLine')}>
               <Button
                 type="text"
                 size="small"
@@ -329,7 +335,7 @@ export default function Logs() {
       <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
         <Col>
           <Title level={2} style={{ margin: 0 }}>
-            日志查看
+            {t('logs.title')}
           </Title>
         </Col>
         <Col>
@@ -337,15 +343,15 @@ export default function Logs() {
             <Switch
               checked={autoRefresh}
               onChange={setAutoRefresh}
-              checkedChildren="自动刷新"
-              unCheckedChildren="手动刷新"
+              checkedChildren={t('logs.autoRefresh')}
+              unCheckedChildren={t('logs.manualRefresh')}
             />
             {autoRefresh && (
               <Switch
                 checked={autoScroll}
                 onChange={setAutoScroll}
-                checkedChildren="自动滚动"
-                unCheckedChildren="手动滚动"
+                checkedChildren={t('logs.autoScroll')}
+                unCheckedChildren={t('logs.manualScroll')}
                 size="small"
               />
             )}
@@ -354,9 +360,9 @@ export default function Logs() {
               onClick={() => refetch()}
               loading={isLoading}
             >
-              刷新
+              {t('logs.refresh')}
             </Button>
-            <Tooltip title="滚动到底部">
+            <Tooltip title={t('logs.scrollToBottom')}>
               <Button
                 icon={<VerticalAlignBottomOutlined />}
                 onClick={scrollToBottom}
@@ -367,20 +373,20 @@ export default function Logs() {
               onClick={exportLogs}
               disabled={!logEntries.length}
             >
-              导出
+              {t('logs.export')}
             </Button>
             <Popconfirm
-              title="确定要清空所有日志吗？"
+              title={t('logs.confirmClear')}
               onConfirm={() => clearLogsMutation.mutate()}
-              okText="确定"
-              cancelText="取消"
+              okText={t('common.ok')}
+              cancelText={t('common.cancel')}
             >
               <Button
                 danger
                 icon={<ClearOutlined />}
                 loading={clearLogsMutation.isPending}
               >
-                清空日志
+                {t('logs.clearLogs')}
               </Button>
             </Popconfirm>
           </Space>
@@ -392,7 +398,7 @@ export default function Logs() {
         <Col span={6}>
           <Card>
             <Statistic
-              title="总日志数"
+              title={t('logs.totalLogs')}
               value={stats.total}
               prefix={<FileTextOutlined />}
               valueStyle={{ fontSize: '20px' }}
@@ -402,7 +408,7 @@ export default function Logs() {
         <Col span={6}>
           <Card>
             <Statistic
-              title="错误/致命"
+              title={t('logs.errors')}
               value={stats.error}
               prefix={<Badge status="error" />}
               valueStyle={{ color: '#cf1322', fontSize: '20px' }}
@@ -412,7 +418,7 @@ export default function Logs() {
         <Col span={6}>
           <Card>
             <Statistic
-              title="警告"
+              title={t('logs.warnings')}
               value={stats.warn}
               prefix={<Badge status="warning" />}
               valueStyle={{ color: '#fa8c16', fontSize: '20px' }}
@@ -422,7 +428,7 @@ export default function Logs() {
         <Col span={6}>
           <Card>
             <Statistic
-              title="信息"
+              title={t('logs.info')}
               value={stats.info}
               prefix={<Badge status="processing" />}
               valueStyle={{ color: '#1890ff', fontSize: '20px' }}
@@ -436,7 +442,7 @@ export default function Logs() {
           <Row gutter={16}>
             <Col span={8}>
               <Search
-                placeholder="搜索日志内容（支持高亮）"
+                placeholder={t('logs.searchPlaceholder')}
                 allowClear
                 enterButton={<SearchOutlined />}
                 value={searchText}
@@ -452,7 +458,7 @@ export default function Logs() {
             </Col>
             <Col span={6}>
               <Select
-                placeholder="筛选日志级别"
+                placeholder={t('logs.filterLevel')}
                 allowClear
                 style={{ width: '100%' }}
                 value={levelFilter}
@@ -477,11 +483,11 @@ export default function Logs() {
                 }}
                 style={{ width: '100%' }}
               >
-                <Option value={50}>50 条/页</Option>
-                <Option value={100}>100 条/页</Option>
-                <Option value={200}>200 条/页</Option>
-                <Option value={500}>500 条/页</Option>
-                <Option value={1000}>1000 条/页</Option>
+                <Option value={50}>50 {t('logs.pageSize')}</Option>
+                <Option value={100}>100 {t('logs.pageSize')}</Option>
+                <Option value={200}>200 {t('logs.pageSize')}</Option>
+                <Option value={500}>500 {t('logs.pageSize')}</Option>
+                <Option value={1000}>1000 {t('logs.pageSize')}</Option>
               </Select>
             </Col>
           </Row>
@@ -500,7 +506,7 @@ export default function Logs() {
                 total: data?.data?.total || 0,
                 showSizeChanger: false,
                 showTotal: (total, range) => 
-                  `显示 ${range[0]}-${range[1]} 条，共 ${total} 条日志`,
+                  t('logs.displaying', { start: range[0], end: range[1], total }),
                 onChange: (newPage) => {
                   setPage(newPage);
                   setAutoScroll(false);

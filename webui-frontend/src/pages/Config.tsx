@@ -35,7 +35,9 @@ import {
   CopyOutlined,
   ThunderboltOutlined,
 } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import { api } from '../services/api';
+import { translateErrorCode, extractErrorInfo } from '../utils/errorCodeTranslator';
 
 const { Title, Text, Paragraph } = Typography;
 const { Option } = Select;
@@ -60,11 +62,14 @@ interface TargetConfig {
   [key: string]: any;
 }
 
-// 配置模板
-const configTemplates = {
-  tagSearch: {
-    name: '标签搜索',
-    description: '按标签搜索并下载插画',
+export default function Config() {
+  const { t } = useTranslation();
+  
+  // 配置模板
+  const configTemplates = {
+    tagSearch: {
+      name: t('config.templateTagSearch'),
+      description: t('config.templateTagSearchDesc'),
     config: {
       type: 'illustration',
       mode: 'search',
@@ -74,9 +79,9 @@ const configTemplates = {
       sort: 'date_desc',
     },
   },
-  ranking: {
-    name: '排行榜下载',
-    description: '下载排行榜作品',
+    ranking: {
+      name: t('config.templateRanking'),
+      description: t('config.templateRankingDesc'),
     config: {
       type: 'illustration',
       mode: 'ranking',
@@ -84,9 +89,9 @@ const configTemplates = {
       limit: 30,
     },
   },
-  multiTag: {
-    name: '多标签搜索',
-    description: '同时包含多个标签的作品',
+    multiTag: {
+      name: t('config.templateMultiTag'),
+      description: t('config.templateMultiTagDesc'),
     config: {
       type: 'illustration',
       mode: 'search',
@@ -95,9 +100,9 @@ const configTemplates = {
       searchTarget: 'partial_match_for_tags',
     },
   },
-  highQuality: {
-    name: '高质量筛选',
-    description: '按收藏数筛选高质量作品',
+    highQuality: {
+      name: t('config.templateHighQuality'),
+      description: t('config.templateHighQualityDesc'),
     config: {
       type: 'illustration',
       mode: 'search',
@@ -107,19 +112,18 @@ const configTemplates = {
       sort: 'popular_desc',
     },
   },
-  novel: {
-    name: '小说下载',
-    description: '下载小说作品',
+    novel: {
+      name: t('config.templateNovel'),
+      description: t('config.templateNovelDesc'),
     config: {
       type: 'novel',
       mode: 'search',
       tag: '',
       limit: 10,
     },
-  },
-};
+    },
+  };
 
-export default function Config() {
   const queryClient = useQueryClient();
   const [form] = Form.useForm();
   const [targetForm] = Form.useForm();
@@ -145,16 +149,26 @@ export default function Config() {
   const updateConfigMutation = useMutation({
     mutationFn: (values: any) => api.updateConfig(values),
     onSuccess: () => {
-      message.success('配置保存成功');
+      message.success(t('config.saveSuccess'));
       queryClient.invalidateQueries({ queryKey: ['config'] });
     },
     onError: (error: any) => {
-      const errorMsg = error.response?.data?.error || '保存配置失败';
-      const details = error.response?.data?.details;
-      if (details && Array.isArray(details)) {
-        message.error(`${errorMsg}: ${details.join(', ')}`);
+      const { errorCode, message: errorMessage, details } = extractErrorInfo(error);
+      if (errorCode) {
+        // Handle validation errors
+        if (errorCode === 'CONFIG_INVALID' && details && Array.isArray(details)) {
+          const errorMessages = details.map((err: any) => {
+            if (typeof err === 'object' && err.code) {
+              return translateErrorCode(err.code, t, err.params);
+            }
+            return String(err);
+          });
+          message.error(`${translateErrorCode(errorCode, t)}: ${errorMessages.join(', ')}`);
+        } else {
+          message.error(translateErrorCode(errorCode, t, undefined, errorMessage || t('config.saveFailed')));
+        }
       } else {
-        message.error(errorMsg);
+        message.error(errorMessage || t('config.saveFailed'));
       }
     },
   });
@@ -163,9 +177,9 @@ export default function Config() {
     mutationFn: (values: any) => api.validateConfig(values),
     onSuccess: (data) => {
       if (data.data.valid) {
-        message.success('配置验证通过');
+        message.success(t('config.validationPassed'));
       } else {
-        message.error(`配置验证失败: ${data.data.errors?.join(', ')}`);
+        message.error(`${t('config.validationFailed')}: ${data.data.errors?.join(', ')}`);
       }
     },
   });
@@ -200,7 +214,7 @@ export default function Config() {
     const targets = form.getFieldValue('targets') || [];
     targets.splice(index, 1);
     form.setFieldsValue({ targets });
-    message.success('下载目标已删除');
+    message.success(t('config.targetDeleted'));
   };
 
   const handleSaveTarget = () => {
@@ -215,20 +229,20 @@ export default function Config() {
       setTargetModalVisible(false);
       setTargetStep(0);
       targetForm.resetFields();
-      message.success('下载目标已保存');
+      message.success(t('config.targetSaved'));
     });
   };
 
   const handleApplyTemplate = (template: typeof configTemplates[keyof typeof configTemplates]) => {
     targetForm.setFieldsValue(template.config);
     setTargetStep(1);
-    message.success(`已应用模板：${template.name}`);
+    message.success(`${t('config.templateApplied')}: ${template.name}`);
   };
 
   const handleExportConfig = () => {
     // Export the actual server config, not form values (which may be unsaved)
     if (!configData?.data) {
-      message.warning('配置数据未加载，请稍后再试');
+      message.warning(t('config.configNotLoaded'));
       return;
     }
     
@@ -242,7 +256,7 @@ export default function Config() {
     a.download = `config-${new Date().toISOString().split('T')[0]}.json`;
     a.click();
     URL.revokeObjectURL(url);
-    message.success('配置已导出');
+    message.success(t('config.configExported'));
   };
 
   const handleImportConfig = () => {
@@ -263,7 +277,7 @@ export default function Config() {
             try {
               const validationResult = await api.validateConfig(configToImport);
               if (!validationResult.data.valid) {
-                message.error(`配置验证失败: ${validationResult.data.errors?.join(', ')}`);
+                message.error(`${t('config.validationFailed')}: ${validationResult.data.errors?.join(', ')}`);
                 return;
               }
             } catch (error) {
@@ -277,12 +291,12 @@ export default function Config() {
             // Auto-save after import
             try {
               await updateConfigMutation.mutateAsync(configToImport);
-              message.success('配置已导入并保存');
+              message.success(t('config.configImported'));
             } catch (error: any) {
-              message.warning('配置已导入到表单，但保存失败。请检查配置后手动保存。');
+              message.warning(t('config.configImportedToForm'));
             }
           } catch (error) {
-            message.error('配置文件格式错误，请确保是有效的 JSON 文件');
+            message.error(t('config.configFormatError'));
           }
         };
         reader.readAsText(file);
@@ -295,7 +309,7 @@ export default function Config() {
     const values = form.getFieldsValue();
     const jsonStr = JSON.stringify(values, null, 2);
     navigator.clipboard.writeText(jsonStr);
-    message.success('配置已复制到剪贴板');
+    message.success(t('config.configCopied'));
   };
 
   const getConfigPreview = () => {
@@ -306,54 +320,54 @@ export default function Config() {
 
   const targetColumns = [
     {
-      title: '类型',
+      title: t('config.targetType'),
       dataIndex: 'type',
       key: 'type',
       width: 100,
       render: (type: string) => (
         <Tag color={type === 'illustration' ? 'blue' : 'green'}>
-          {type === 'illustration' ? '插画' : '小说'}
+          {type === 'illustration' ? t('config.typeIllustration') : t('config.typeNovel')}
         </Tag>
       ),
     },
     {
-      title: '模式',
+      title: t('config.targetMode'),
       dataIndex: 'mode',
       key: 'mode',
       width: 100,
       render: (mode: string) => {
         if (!mode) return '-';
-        return <Tag color={mode === 'ranking' ? 'purple' : 'cyan'}>{mode === 'ranking' ? '排行榜' : '搜索'}</Tag>;
+        return <Tag color={mode === 'ranking' ? 'purple' : 'cyan'}>{mode === 'ranking' ? t('config.modeRanking') : t('config.modeSearch')}</Tag>;
       },
     },
     {
-      title: '标签/配置',
+      title: t('config.targetConfig'),
       key: 'config',
       render: (_: any, record: TargetConfig) => {
         if (record.mode === 'ranking') {
           const rankingLabels: Record<string, string> = {
-            day: '日榜',
-            week: '周榜',
-            month: '月榜',
-            day_male: '男性日榜',
-            day_female: '女性日榜',
-            day_ai: 'AI日榜',
-            week_original: '原创周榜',
-            week_rookie: '新人周榜',
+            day: t('config.rankingDay'),
+            week: t('config.rankingWeek'),
+            month: t('config.rankingMonth'),
+            day_male: t('config.rankingDayMale'),
+            day_female: t('config.rankingDayFemale'),
+            day_ai: t('config.rankingDayAI'),
+            week_original: t('config.rankingWeekOriginal'),
+            week_rookie: t('config.rankingWeekRookie'),
           };
           return (
             <Space direction="vertical" size="small" style={{ fontSize: 12 }}>
               <Text strong>{rankingLabels[record.rankingMode || 'day'] || record.rankingMode}</Text>
-              {record.filterTag && <Text type="secondary">筛选: {record.filterTag}</Text>}
-              {record.rankingDate && <Text type="secondary">日期: {record.rankingDate}</Text>}
+              {record.filterTag && <Text type="secondary">{t('config.filterTag')}: {record.filterTag}</Text>}
+              {record.rankingDate && <Text type="secondary">{t('config.rankingDate')}: {record.rankingDate}</Text>}
             </Space>
           );
         }
         if (record.seriesId) {
-          return <Text>系列 ID: {record.seriesId}</Text>;
+          return <Text>{t('config.seriesId')}: {record.seriesId}</Text>;
         }
         if (record.novelId) {
-          return <Text>小说 ID: {record.novelId}</Text>;
+          return <Text>{t('config.novelId')}: {record.novelId}</Text>;
         }
         return (
           <Space direction="vertical" size="small" style={{ fontSize: 12 }}>
@@ -361,19 +375,19 @@ export default function Config() {
             {record.searchTarget && (
               <Text type="secondary">
                 {record.searchTarget === 'partial_match_for_tags'
-                  ? '部分匹配'
+                  ? t('config.searchTargetPartial')
                   : record.searchTarget === 'exact_match_for_tags'
-                  ? '精确匹配'
-                  : '标题和说明'}
+                  ? t('config.searchTargetExact')
+                  : t('config.searchTargetTitle')}
               </Text>
             )}
             {record.sort && (
               <Text type="secondary">
                 {record.sort === 'date_desc'
-                  ? '按日期降序'
+                  ? t('config.sortDateDesc')
                   : record.sort === 'date_asc'
-                  ? '按日期升序'
-                  : '按人气降序'}
+                  ? t('config.sortDateAsc')
+                  : t('config.sortPopularDesc')}
               </Text>
             )}
           </Space>
@@ -381,24 +395,24 @@ export default function Config() {
       },
     },
     {
-      title: '限制/筛选',
+      title: t('config.targetFilters'),
       key: 'filters',
       width: 150,
       render: (_: any, record: TargetConfig) => (
         <Space direction="vertical" size="small" style={{ fontSize: 12 }}>
-          {record.limit && <Text>数量: {record.limit}</Text>}
-          {record.minBookmarks && <Text type="secondary">收藏数 ≥ {record.minBookmarks}</Text>}
+          {record.limit && <Text>{t('config.limit')}: {record.limit}</Text>}
+          {record.minBookmarks && <Text type="secondary">{t('config.minBookmarks')} ≥ {record.minBookmarks}</Text>}
           {(record.startDate || record.endDate) && (
             <Text type="secondary">
-              {record.startDate && `从 ${record.startDate}`}
-              {record.endDate && ` 至 ${record.endDate}`}
+              {record.startDate && `${t('config.from')} ${record.startDate}`}
+              {record.endDate && ` ${t('config.to')} ${record.endDate}`}
             </Text>
           )}
         </Space>
       ),
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       key: 'action',
       width: 150,
       render: (_: any, record: TargetConfig, index: number) => (
@@ -409,13 +423,13 @@ export default function Config() {
             onClick={() => handleEditTarget(record, index)}
             size="small"
           >
-            编辑
+            {t('common.edit')}
           </Button>
           <Popconfirm
-            title="确定要删除这个下载目标吗？"
+            title={t('config.deleteTargetConfirm')}
             onConfirm={() => handleDeleteTarget(index)}
-            okText="确定"
-            cancelText="取消"
+            okText={t('common.ok')}
+            cancelText={t('common.cancel')}
           >
             <Button
               type="link"
@@ -423,7 +437,7 @@ export default function Config() {
               icon={<DeleteOutlined />}
               size="small"
             >
-              删除
+              {t('common.delete')}
             </Button>
           </Popconfirm>
         </Space>
@@ -432,40 +446,40 @@ export default function Config() {
   ];
 
   if (isLoading) {
-    return <div>加载中...</div>;
+    return <div>{t('common.loading')}</div>;
   }
 
-  const currentConfigPath = configData?.data?._meta?.configPathRelative || configData?.data?._meta?.configPath || '未知';
+  const currentConfigPath = configData?.data?._meta?.configPathRelative || configData?.data?._meta?.configPath || t('config.unknown');
 
   return (
     <div>
       <Space style={{ marginBottom: 16, width: '100%', justifyContent: 'space-between' }}>
         <div>
           <Title level={2} style={{ margin: 0 }}>
-            配置管理
+            {t('config.title')}
           </Title>
           <Text type="secondary" style={{ fontSize: 12 }}>
-            当前配置文件: {currentConfigPath}
+            {t('config.currentConfigFile')}: {currentConfigPath}
           </Text>
         </div>
         <Space>
           <Button icon={<ReloadOutlined />} onClick={() => queryClient.invalidateQueries({ queryKey: ['config'] })}>
-            刷新
+            {t('common.refresh')}
           </Button>
           <Button icon={<FileTextOutlined />} onClick={() => setPreviewVisible(true)}>
-            预览配置
+            {t('config.previewConfig')}
           </Button>
           <Button icon={<DownloadOutlined />} onClick={handleExportConfig}>
-            导出配置
+            {t('config.exportConfig')}
           </Button>
           <Button icon={<UploadOutlined />} onClick={handleImportConfig}>
-            导入配置
+            {t('config.importConfig')}
           </Button>
           <Button icon={<CopyOutlined />} onClick={handleCopyConfig}>
-            复制配置
+            {t('config.copyConfig')}
           </Button>
           <Button icon={<CheckCircleOutlined />} onClick={handleValidate} loading={validateConfigMutation.isPending}>
-            验证配置
+            {t('config.validateConfig')}
           </Button>
           <Button
             type="primary"
@@ -473,7 +487,7 @@ export default function Config() {
             onClick={handleSave}
             loading={updateConfigMutation.isPending}
           >
-            保存配置
+            {t('config.saveConfig')}
           </Button>
         </Space>
       </Space>
@@ -481,13 +495,13 @@ export default function Config() {
       <Form form={form} layout="vertical">
         <Tabs activeKey={activeTab} onChange={setActiveTab}>
           {/* 基础配置 */}
-          <Tabs.TabPane tab="基础配置" key="basic">
+          <Tabs.TabPane tab={t('config.tabBasic')} key="basic">
             <Card>
               <Form.Item
                 label={
                   <Space>
-                    日志级别
-                    <Tooltip title="控制日志输出的详细程度，debug 最详细，error 只显示错误">
+                    {t('config.logLevel')}
+                    <Tooltip title={t('config.logLevelTooltip')}>
                       <QuestionCircleOutlined style={{ color: '#999' }} />
                     </Tooltip>
                   </Space>
@@ -495,34 +509,34 @@ export default function Config() {
                 name="logLevel"
               >
                 <Select>
-                  <Option value="debug">Debug - 调试信息（最详细）</Option>
-                  <Option value="info">Info - 一般信息</Option>
-                  <Option value="warn">Warn - 警告信息</Option>
-                  <Option value="error">Error - 错误信息（最简洁）</Option>
+                  <Option value="debug">{t('config.logLevelDebug')}</Option>
+                  <Option value="info">{t('config.logLevelInfo')}</Option>
+                  <Option value="warn">{t('config.logLevelWarn')}</Option>
+                  <Option value="error">{t('config.logLevelError')}</Option>
                 </Select>
               </Form.Item>
 
               <Form.Item
                 label={
                   <Space>
-                    初始延迟 (毫秒)
-                    <Tooltip title="下载开始前的延迟时间，用于避免请求过快">
+                    {t('config.initialDelay')}
+                    <Tooltip title={t('config.initialDelayTooltip')}>
                       <QuestionCircleOutlined style={{ color: '#999' }} />
                     </Tooltip>
                   </Space>
                 }
                 name="initialDelay"
               >
-                <InputNumber min={0} style={{ width: '100%' }} placeholder="建议值：1000-3000" />
+                <InputNumber min={0} style={{ width: '100%' }} placeholder={t('config.initialDelayPlaceholder')} />
               </Form.Item>
             </Card>
           </Tabs.TabPane>
 
           {/* Pixiv 凭证 */}
-          <Tabs.TabPane tab="Pixiv 凭证" key="pixiv">
+          <Tabs.TabPane tab={t('config.tabPixiv')} key="pixiv">
             <Card>
               <Text type="secondary">
-                敏感信息已隐藏。如需修改，请使用命令行工具或直接编辑配置文件。
+                {t('config.pixivCredentialsHidden')}
               </Text>
               <Divider />
               <Form.Item label="Client ID" name={['pixiv', 'clientId']}>
@@ -538,23 +552,23 @@ export default function Config() {
           </Tabs.TabPane>
 
           {/* 网络配置 */}
-          <Tabs.TabPane tab="网络配置" key="network">
+          <Tabs.TabPane tab={t('config.tabNetwork')} key="network">
             <Card>
-              <Form.Item label="请求超时 (毫秒)" name={['network', 'timeoutMs']}>
+              <Form.Item label={t('config.networkTimeout')} name={['network', 'timeoutMs']}>
                 <InputNumber min={1000} style={{ width: '100%' }} />
               </Form.Item>
 
-              <Form.Item label="重试次数" name={['network', 'retries']}>
+              <Form.Item label={t('config.networkRetries')} name={['network', 'retries']}>
                 <InputNumber min={0} max={10} style={{ width: '100%' }} />
               </Form.Item>
 
-              <Form.Item label="重试延迟 (毫秒)" name={['network', 'retryDelay']}>
+              <Form.Item label={t('config.networkRetryDelay')} name={['network', 'retryDelay']}>
                 <InputNumber min={0} style={{ width: '100%' }} />
               </Form.Item>
 
-              <Divider>代理设置</Divider>
+              <Divider>{t('config.proxySettings')}</Divider>
 
-              <Form.Item label="启用代理" name={['network', 'proxy', 'enabled']} valuePropName="checked">
+              <Form.Item label={t('config.proxyEnabled')} name={['network', 'proxy', 'enabled']} valuePropName="checked">
                 <Switch />
               </Form.Item>
 
@@ -567,13 +581,13 @@ export default function Config() {
                 {({ getFieldValue }) =>
                   getFieldValue(['network', 'proxy', 'enabled']) ? (
                     <>
-                      <Form.Item label="代理主机" name={['network', 'proxy', 'host']}>
+                      <Form.Item label={t('config.proxyHost')} name={['network', 'proxy', 'host']}>
                         <Input />
                       </Form.Item>
-                      <Form.Item label="代理端口" name={['network', 'proxy', 'port']}>
+                      <Form.Item label={t('config.proxyPort')} name={['network', 'proxy', 'port']}>
                         <InputNumber min={1} max={65535} style={{ width: '100%' }} />
                       </Form.Item>
-                      <Form.Item label="代理协议" name={['network', 'proxy', 'protocol']}>
+                      <Form.Item label={t('config.proxyProtocol')} name={['network', 'proxy', 'protocol']}>
                         <Select>
                           <Option value="http">HTTP</Option>
                           <Option value="https">HTTPS</Option>
@@ -581,10 +595,10 @@ export default function Config() {
                           <Option value="socks5">SOCKS5</Option>
                         </Select>
                       </Form.Item>
-                      <Form.Item label="用户名" name={['network', 'proxy', 'username']}>
+                      <Form.Item label={t('config.proxyUsername')} name={['network', 'proxy', 'username']}>
                         <Input />
                       </Form.Item>
-                      <Form.Item label="密码" name={['network', 'proxy', 'password']}>
+                      <Form.Item label={t('config.proxyPassword')} name={['network', 'proxy', 'password']}>
                         <Input.Password />
                       </Form.Item>
                     </>
@@ -595,114 +609,114 @@ export default function Config() {
           </Tabs.TabPane>
 
           {/* 存储配置 */}
-          <Tabs.TabPane tab="存储配置" key="storage">
+          <Tabs.TabPane tab={t('config.tabStorage')} key="storage">
             <Card>
-              <Form.Item label="数据库路径" name={['storage', 'databasePath']}>
+              <Form.Item label={t('config.storageDatabasePath')} name={['storage', 'databasePath']}>
                 <Input />
               </Form.Item>
 
-              <Form.Item label="下载目录" name={['storage', 'downloadDirectory']}>
+              <Form.Item label={t('config.storageDownloadDirectory')} name={['storage', 'downloadDirectory']}>
                 <Input />
               </Form.Item>
 
-              <Form.Item label="插画目录" name={['storage', 'illustrationDirectory']}>
+              <Form.Item label={t('config.storageIllustrationDirectory')} name={['storage', 'illustrationDirectory']}>
                 <Input />
               </Form.Item>
 
-              <Form.Item label="小说目录" name={['storage', 'novelDirectory']}>
+              <Form.Item label={t('config.storageNovelDirectory')} name={['storage', 'novelDirectory']}>
                 <Input />
               </Form.Item>
 
-              <Form.Item label="插画组织方式" name={['storage', 'illustrationOrganization']}>
+              <Form.Item label={t('config.storageIllustrationOrganization')} name={['storage', 'illustrationOrganization']}>
                 <Select>
-                  <Option value="flat">扁平结构</Option>
-                  <Option value="byAuthor">按作者</Option>
-                  <Option value="byTag">按标签</Option>
-                  <Option value="byDate">按日期</Option>
-                  <Option value="byAuthorAndTag">按作者和标签</Option>
-                  <Option value="byDateAndAuthor">按日期和作者</Option>
+                  <Option value="flat">{t('config.organizationFlat')}</Option>
+                  <Option value="byAuthor">{t('config.organizationByAuthor')}</Option>
+                  <Option value="byTag">{t('config.organizationByTag')}</Option>
+                  <Option value="byDate">{t('config.organizationByDate')}</Option>
+                  <Option value="byAuthorAndTag">{t('config.organizationByAuthorAndTag')}</Option>
+                  <Option value="byDateAndAuthor">{t('config.organizationByDateAndAuthor')}</Option>
                 </Select>
               </Form.Item>
 
-              <Form.Item label="小说组织方式" name={['storage', 'novelOrganization']}>
+              <Form.Item label={t('config.storageNovelOrganization')} name={['storage', 'novelOrganization']}>
                 <Select>
-                  <Option value="flat">扁平结构</Option>
-                  <Option value="byAuthor">按作者</Option>
-                  <Option value="byTag">按标签</Option>
-                  <Option value="byDate">按日期</Option>
-                  <Option value="byAuthorAndTag">按作者和标签</Option>
-                  <Option value="byDateAndAuthor">按日期和作者</Option>
+                  <Option value="flat">{t('config.organizationFlat')}</Option>
+                  <Option value="byAuthor">{t('config.organizationByAuthor')}</Option>
+                  <Option value="byTag">{t('config.organizationByTag')}</Option>
+                  <Option value="byDate">{t('config.organizationByDate')}</Option>
+                  <Option value="byAuthorAndTag">{t('config.organizationByAuthorAndTag')}</Option>
+                  <Option value="byDateAndAuthor">{t('config.organizationByDateAndAuthor')}</Option>
                 </Select>
               </Form.Item>
             </Card>
           </Tabs.TabPane>
 
           {/* 调度器配置 */}
-          <Tabs.TabPane tab="调度器配置" key="scheduler">
+          <Tabs.TabPane tab={t('config.tabScheduler')} key="scheduler">
             <Card>
-              <Form.Item label="启用调度器" name={['scheduler', 'enabled']} valuePropName="checked">
+              <Form.Item label={t('config.schedulerEnabled')} name={['scheduler', 'enabled']} valuePropName="checked">
                 <Switch />
               </Form.Item>
 
-              <Form.Item label="Cron 表达式" name={['scheduler', 'cron']}>
-                <Input placeholder="例如: 0 3 * * * (每天凌晨3点)" />
+              <Form.Item label={t('config.schedulerCron')} name={['scheduler', 'cron']}>
+                <Input placeholder={t('config.schedulerCronPlaceholder')} />
               </Form.Item>
 
-              <Form.Item label="时区" name={['scheduler', 'timezone']}>
-                <Input placeholder="例如: Asia/Shanghai" />
+              <Form.Item label={t('config.schedulerTimezone')} name={['scheduler', 'timezone']}>
+                <Input placeholder={t('config.schedulerTimezonePlaceholder')} />
               </Form.Item>
 
-              <Form.Item label="最大执行次数" name={['scheduler', 'maxExecutions']}>
-                <InputNumber min={1} style={{ width: '100%' }} placeholder="留空表示无限制" />
+              <Form.Item label={t('config.schedulerMaxExecutions')} name={['scheduler', 'maxExecutions']}>
+                <InputNumber min={1} style={{ width: '100%' }} placeholder={t('config.schedulerMaxExecutionsPlaceholder')} />
               </Form.Item>
 
-              <Form.Item label="最小执行间隔 (毫秒)" name={['scheduler', 'minInterval']}>
+              <Form.Item label={t('config.schedulerMinInterval')} name={['scheduler', 'minInterval']}>
                 <InputNumber min={0} style={{ width: '100%' }} />
               </Form.Item>
 
-              <Form.Item label="超时时间 (毫秒)" name={['scheduler', 'timeout']}>
-                <InputNumber min={1000} style={{ width: '100%' }} placeholder="留空表示无超时" />
+              <Form.Item label={t('config.schedulerTimeout')} name={['scheduler', 'timeout']}>
+                <InputNumber min={1000} style={{ width: '100%' }} placeholder={t('config.schedulerTimeoutPlaceholder')} />
               </Form.Item>
             </Card>
           </Tabs.TabPane>
 
           {/* 下载配置 */}
-          <Tabs.TabPane tab="下载配置" key="download">
+          <Tabs.TabPane tab={t('config.tabDownload')} key="download">
             <Card>
-              <Form.Item label="并发数" name={['download', 'concurrency']}>
+              <Form.Item label={t('config.downloadConcurrency')} name={['download', 'concurrency']}>
                 <InputNumber min={1} max={10} style={{ width: '100%' }} />
               </Form.Item>
 
-              <Form.Item label="最大重试次数" name={['download', 'maxRetries']}>
+              <Form.Item label={t('config.downloadMaxRetries')} name={['download', 'maxRetries']}>
                 <InputNumber min={0} max={10} style={{ width: '100%' }} />
               </Form.Item>
 
-              <Form.Item label="重试延迟 (毫秒)" name={['download', 'retryDelay']}>
+              <Form.Item label={t('config.downloadRetryDelay')} name={['download', 'retryDelay']}>
                 <InputNumber min={0} style={{ width: '100%' }} />
               </Form.Item>
 
-              <Form.Item label="超时时间 (毫秒)" name={['download', 'timeout']}>
+              <Form.Item label={t('config.downloadTimeout')} name={['download', 'timeout']}>
                 <InputNumber min={1000} style={{ width: '100%' }} />
               </Form.Item>
             </Card>
           </Tabs.TabPane>
 
           {/* 下载目标 */}
-          <Tabs.TabPane tab="下载目标" key="targets">
+          <Tabs.TabPane tab={t('config.tabTargets')} key="targets">
             <Space direction="vertical" style={{ width: '100%' }} size="large">
               <Alert
-                message="下载目标配置"
-                description="配置要下载的内容。支持标签搜索、排行榜、系列下载等多种模式。可以添加多个目标，它们会按顺序执行。"
+                message={t('config.targetsTitle')}
+                description={t('config.targetsDescription')}
                 type="info"
                 showIcon
                 style={{ marginBottom: 16 }}
               />
               <Card
-                title="下载目标列表"
+                title={t('config.targetsList')}
                 extra={
                   <Space>
                     <Button icon={<ThunderboltOutlined />} onClick={handleAddTarget}>
-                      添加目标
+                      {t('config.addTarget')}
                     </Button>
                   </Space>
                 }
@@ -712,7 +726,7 @@ export default function Config() {
                   dataSource={targets}
                   rowKey={(_, index) => String(index)}
                   pagination={false}
-                  locale={{ emptyText: '暂无下载目标，请点击"添加目标"按钮添加' }}
+                  locale={{ emptyText: t('config.targetsEmpty') }}
                 />
               </Card>
             </Space>
@@ -724,9 +738,9 @@ export default function Config() {
       <Modal
         title={
           <Space>
-            {editingTarget ? '编辑下载目标' : '添加下载目标'}
+            {editingTarget ? t('config.editTarget') : t('config.addTarget')}
             {!editingTarget && (
-              <Tooltip title="使用模板可以快速创建常用配置">
+              <Tooltip title={t('config.templateTooltip')}>
                 <QuestionCircleOutlined style={{ color: '#999' }} />
               </Tooltip>
             )}
@@ -740,18 +754,18 @@ export default function Config() {
           targetForm.resetFields();
         }}
         width={800}
-        okText="保存"
-        cancelText="取消"
+        okText={t('common.save')}
+        cancelText={t('common.cancel')}
       >
         <Steps current={targetStep} style={{ marginBottom: 24 }}>
-          <Step title="选择模板" description="快速开始" />
-          <Step title="配置参数" description="详细设置" />
+          <Step title={t('config.stepSelectTemplate')} description={t('config.stepSelectTemplateDesc')} />
+          <Step title={t('config.stepConfigure')} description={t('config.stepConfigureDesc')} />
         </Steps>
 
         {targetStep === 0 && !editingTarget && (
           <div>
             <Paragraph type="secondary" style={{ marginBottom: 16 }}>
-              选择一个配置模板快速开始，或直接进入下一步手动配置
+              {t('config.templateSelectDescription')}
             </Paragraph>
             <Space direction="vertical" style={{ width: '100%' }} size="middle">
               {Object.entries(configTemplates).map(([key, template]) => (
@@ -769,7 +783,7 @@ export default function Config() {
                       <Text type="secondary">{template.description}</Text>
                     </div>
                     <Button type="primary" icon={<ThunderboltOutlined />}>
-                      使用模板
+                      {t('config.useTemplate')}
                     </Button>
                   </Space>
                 </Card>
@@ -780,7 +794,7 @@ export default function Config() {
                 onClick={() => setTargetStep(1)}
                 style={{ marginTop: 8 }}
               >
-                跳过模板，手动配置
+                {t('config.skipTemplate')}
               </Button>
             </Space>
           </div>
@@ -789,30 +803,30 @@ export default function Config() {
         {targetStep === 1 && (
           <Form form={targetForm} layout="vertical">
             <Collapse defaultActiveKey={['basic']} ghost>
-              <Panel header="基础设置" key="basic">
+              <Panel header={t('config.targetBasicSettings')} key="basic">
                 <Form.Item
                   label={
                     <Space>
-                      类型
-                      <Tooltip title="选择要下载的内容类型">
+                      {t('config.targetType')}
+                      <Tooltip title={t('config.targetTypeTooltip')}>
                         <QuestionCircleOutlined style={{ color: '#999' }} />
                       </Tooltip>
                     </Space>
                   }
                   name="type"
-                  rules={[{ required: true, message: '请选择类型' }]}
+                  rules={[{ required: true, message: t('config.targetTypeRequired') }]}
                 >
                   <Select>
-                    <Option value="illustration">插画（图片）</Option>
-                    <Option value="novel">小说</Option>
+                    <Option value="illustration">{t('config.typeIllustration')}</Option>
+                    <Option value="novel">{t('config.typeNovel')}</Option>
                   </Select>
                 </Form.Item>
 
                 <Form.Item
                   label={
                     <Space>
-                      模式
-                      <Tooltip title="搜索模式：按标签搜索作品；排行榜模式：下载排行榜作品">
+                      {t('config.targetMode')}
+                      <Tooltip title={t('config.targetModeTooltip')}>
                         <QuestionCircleOutlined style={{ color: '#999' }} />
                       </Tooltip>
                     </Space>
@@ -821,28 +835,28 @@ export default function Config() {
                   initialValue="search"
                 >
                   <Select>
-                    <Option value="search">搜索模式</Option>
-                    <Option value="ranking">排行榜模式</Option>
+                    <Option value="search">{t('config.modeSearch')}</Option>
+                    <Option value="ranking">{t('config.modeRanking')}</Option>
                   </Select>
                 </Form.Item>
 
                 <Form.Item
                   label={
                     <Space>
-                      下载数量限制
-                      <Tooltip title="每次运行最多下载的作品数量，建议值：10-50">
+                      {t('config.targetLimit')}
+                      <Tooltip title={t('config.targetLimitTooltip')}>
                         <QuestionCircleOutlined style={{ color: '#999' }} />
                       </Tooltip>
                     </Space>
                   }
                   name="limit"
-                  rules={[{ type: 'number', min: 1, max: 1000, message: '限制数量应在 1-1000 之间' }]}
+                  rules={[{ type: 'number', min: 1, max: 1000, message: t('config.targetLimitRange') }]}
                 >
-                  <InputNumber min={1} max={1000} style={{ width: '100%' }} placeholder="例如：20" />
+                  <InputNumber min={1} max={1000} style={{ width: '100%' }} placeholder={t('config.targetLimitPlaceholder')} />
                 </Form.Item>
               </Panel>
 
-              <Panel header="搜索/排行榜设置" key="mode">
+              <Panel header={t('config.targetModeSettings')} key="mode">
                 <Form.Item
                   noStyle
                   shouldUpdate={(prevValues, currentValues) => prevValues.mode !== currentValues.mode}
@@ -855,8 +869,8 @@ export default function Config() {
                           <Form.Item
                             label={
                               <Space>
-                                标签
-                                <Tooltip title="搜索标签，支持多个标签用空格分隔（AND关系）。例如：'原神' 或 '明日方舟 アークナイツ'">
+                                {t('config.targetTag')}
+                                <Tooltip title={t('config.targetTagTooltip')}>
                                   <QuestionCircleOutlined style={{ color: '#999' }} />
                                 </Tooltip>
                               </Space>
@@ -866,20 +880,20 @@ export default function Config() {
                               {
                                 validator: (_, value) => {
                                   if (!value || value.trim() === '') {
-                                    return Promise.reject(new Error('搜索模式下标签不能为空'));
+                                    return Promise.reject(new Error(t('config.targetTagRequired')));
                                   }
                                   return Promise.resolve();
                                 },
                               },
                             ]}
                           >
-                            <Input placeholder="例如：原神 或 明日方舟 アークナイツ（多标签用空格分隔）" />
+                            <Input placeholder={t('config.targetTagPlaceholder')} />
                           </Form.Item>
                           <Form.Item
                             label={
                               <Space>
-                                搜索目标
-                                <Tooltip title="部分匹配：标签部分匹配即可；精确匹配：标签必须完全匹配；标题和说明：在标题和说明中搜索">
+                                {t('config.searchTarget')}
+                                <Tooltip title={t('config.searchTargetTooltip')}>
                                   <QuestionCircleOutlined style={{ color: '#999' }} />
                                 </Tooltip>
                               </Space>
@@ -888,16 +902,16 @@ export default function Config() {
                             initialValue="partial_match_for_tags"
                           >
                             <Select>
-                              <Option value="partial_match_for_tags">部分匹配标签（推荐）</Option>
-                              <Option value="exact_match_for_tags">精确匹配标签</Option>
-                              <Option value="title_and_caption">标题和说明</Option>
+                              <Option value="partial_match_for_tags">{t('config.searchTargetPartial')} ({t('common.recommended')})</Option>
+                              <Option value="exact_match_for_tags">{t('config.searchTargetExact')}</Option>
+                              <Option value="title_and_caption">{t('config.searchTargetTitle')}</Option>
                             </Select>
                           </Form.Item>
                           <Form.Item
                             label={
                               <Space>
-                                排序方式
-                                <Tooltip title="日期降序：最新作品优先；日期升序：最旧作品优先；人气降序：收藏数最多优先">
+                                {t('config.sort')}
+                                <Tooltip title={t('config.sortTooltip')}>
                                   <QuestionCircleOutlined style={{ color: '#999' }} />
                                 </Tooltip>
                               </Space>
@@ -906,9 +920,9 @@ export default function Config() {
                             initialValue="date_desc"
                           >
                             <Select>
-                              <Option value="date_desc">日期降序（最新优先）</Option>
-                              <Option value="date_asc">日期升序（最旧优先）</Option>
-                              <Option value="popular_desc">人气降序（收藏最多优先）</Option>
+                              <Option value="date_desc">{t('config.sortDateDesc')}</Option>
+                              <Option value="date_asc">{t('config.sortDateAsc')}</Option>
+                              <Option value="popular_desc">{t('config.sortPopularDesc')}</Option>
                             </Select>
                           </Form.Item>
                         </>
@@ -919,8 +933,8 @@ export default function Config() {
                           <Form.Item
                             label={
                               <Space>
-                                排行榜模式
-                                <Tooltip title="选择要下载的排行榜类型">
+                                {t('config.rankingMode')}
+                                <Tooltip title={t('config.rankingModeTooltip')}>
                                   <QuestionCircleOutlined style={{ color: '#999' }} />
                                 </Tooltip>
                               </Space>
@@ -929,41 +943,41 @@ export default function Config() {
                             initialValue="day"
                           >
                             <Select>
-                              <Option value="day">日榜</Option>
-                              <Option value="week">周榜</Option>
-                              <Option value="month">月榜</Option>
-                              <Option value="day_male">男性向日榜</Option>
-                              <Option value="day_female">女性向日榜</Option>
-                              <Option value="day_ai">AI作品日榜</Option>
-                              <Option value="week_original">原创周榜</Option>
-                              <Option value="week_rookie">新人周榜</Option>
+                              <Option value="day">{t('config.rankingDay')}</Option>
+                              <Option value="week">{t('config.rankingWeek')}</Option>
+                              <Option value="month">{t('config.rankingMonth')}</Option>
+                              <Option value="day_male">{t('config.rankingDayMale')}</Option>
+                              <Option value="day_female">{t('config.rankingDayFemale')}</Option>
+                              <Option value="day_ai">{t('config.rankingDayAI')}</Option>
+                              <Option value="week_original">{t('config.rankingWeekOriginal')}</Option>
+                              <Option value="week_rookie">{t('config.rankingWeekRookie')}</Option>
                             </Select>
                           </Form.Item>
                           <Form.Item
                             label={
                               <Space>
-                                排行榜日期
-                                <Tooltip title="指定排行榜日期，格式：YYYY-MM-DD 或使用 YESTERDAY 表示昨天">
+                                {t('config.rankingDate')}
+                                <Tooltip title={t('config.rankingDateTooltip')}>
                                   <QuestionCircleOutlined style={{ color: '#999' }} />
                                 </Tooltip>
                               </Space>
                             }
                             name="rankingDate"
                           >
-                            <Input placeholder="例如：2024-01-15 或 YESTERDAY（留空表示今天）" />
+                            <Input placeholder={t('config.rankingDatePlaceholder')} />
                           </Form.Item>
                           <Form.Item
                             label={
                               <Space>
-                                筛选标签
-                                <Tooltip title="可选：从排行榜结果中筛选包含此标签的作品">
+                                {t('config.filterTag')}
+                                <Tooltip title={t('config.filterTagTooltip')}>
                                   <QuestionCircleOutlined style={{ color: '#999' }} />
                                 </Tooltip>
                               </Space>
                             }
                             name="filterTag"
                           >
-                            <Input placeholder="可选：例如 原神（留空表示不过滤）" />
+                            <Input placeholder={t('config.filterTagPlaceholder')} />
                           </Form.Item>
                         </>
                       );
@@ -972,47 +986,47 @@ export default function Config() {
                 </Form.Item>
               </Panel>
 
-              <Panel header="高级筛选（可选）" key="advanced">
+              <Panel header={t('config.targetAdvancedFilters')} key="advanced">
                 <Form.Item
                   label={
                     <Space>
-                      最小收藏数
-                      <Tooltip title="只下载收藏数大于等于此值的作品，用于筛选高质量作品">
+                      {t('config.minBookmarks')}
+                      <Tooltip title={t('config.minBookmarksTooltip')}>
                         <QuestionCircleOutlined style={{ color: '#999' }} />
                       </Tooltip>
                     </Space>
                   }
                   name="minBookmarks"
                 >
-                  <InputNumber min={0} style={{ width: '100%' }} placeholder="例如：1000（留空表示不限制）" />
+                  <InputNumber min={0} style={{ width: '100%' }} placeholder={t('config.minBookmarksPlaceholder')} />
                 </Form.Item>
 
                 <Form.Item
                   label={
                     <Space>
-                      开始日期
-                      <Tooltip title="只下载此日期之后发布的作品，格式：YYYY-MM-DD">
+                      {t('config.startDate')}
+                      <Tooltip title={t('config.startDateTooltip')}>
                         <QuestionCircleOutlined style={{ color: '#999' }} />
                       </Tooltip>
                     </Space>
                   }
                   name="startDate"
                 >
-                  <Input placeholder="例如：2024-01-01（留空表示不限制）" />
+                  <Input placeholder={t('config.startDatePlaceholder')} />
                 </Form.Item>
 
                 <Form.Item
                   label={
                     <Space>
-                      结束日期
-                      <Tooltip title="只下载此日期之前发布的作品，格式：YYYY-MM-DD">
+                      {t('config.endDate')}
+                      <Tooltip title={t('config.endDateTooltip')}>
                         <QuestionCircleOutlined style={{ color: '#999' }} />
                       </Tooltip>
                     </Space>
                   }
                   name="endDate"
                 >
-                  <Input placeholder="例如：2024-12-31（留空表示不限制）" />
+                  <Input placeholder={t('config.endDatePlaceholder')} />
                 </Form.Item>
               </Panel>
             </Collapse>
@@ -1022,18 +1036,18 @@ export default function Config() {
 
       {/* 配置预览模态框 */}
       <Modal
-        title="配置预览"
+        title={t('config.previewConfig')}
         open={previewVisible}
         onCancel={() => setPreviewVisible(false)}
         footer={[
           <Button key="copy" icon={<CopyOutlined />} onClick={() => {
             navigator.clipboard.writeText(getConfigPreview());
-            message.success('配置已复制到剪贴板');
+            message.success(t('config.configCopied'));
           }}>
-            复制
+            {t('common.copy')}
           </Button>,
           <Button key="close" onClick={() => setPreviewVisible(false)}>
-            关闭
+            {t('common.close')}
           </Button>,
         ]}
         width={800}

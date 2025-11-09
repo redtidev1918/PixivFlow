@@ -3,6 +3,7 @@ import { readFileSync, existsSync } from 'fs';
 import { logger } from '../../logger';
 import { loadConfig, getConfigPath } from '../../config';
 import path from 'path';
+import { ErrorCode } from '../utils/error-codes';
 
 const router = Router();
 
@@ -60,7 +61,7 @@ router.get('/', async (req: Request, res: Response) => {
     });
   } catch (error) {
     logger.error('Failed to get logs', { error });
-    res.status(500).json({ error: 'Failed to get logs' });
+    res.status(500).json({ errorCode: ErrorCode.LOGS_GET_FAILED });
   }
 });
 
@@ -81,11 +82,11 @@ router.delete('/', async (req: Request, res: Response) => {
 
     res.json({
       success: true,
-      message: 'Logs cleared successfully',
+      errorCode: ErrorCode.LOGS_CLEAR_SUCCESS,
     });
   } catch (error) {
     logger.error('Failed to clear logs', { error });
-    res.status(500).json({ error: 'Failed to clear logs' });
+    res.status(500).json({ errorCode: ErrorCode.LOGS_CLEAR_FAILED });
   }
 });
 

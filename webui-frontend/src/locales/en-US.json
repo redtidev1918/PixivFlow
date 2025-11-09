@@ -55,7 +55,9 @@
     "history": "Download History",
     "logs": "Logs",
     "files": "File Browser",
-    "language": "Language"
+    "language": "Language",
+    "languageZh": "中文",
+    "languageEn": "English"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -333,7 +335,11 @@
     "error401": "Authentication failed: Please check if refresh token is valid, try logging in again",
     "error403": "Access denied: May be Pixiv API limit, wait and retry",
     "errorTimeout": "Request timeout: Check network connection or increase timeout",
-    "errorRetries": "Multiple retries failed: Check network connection and proxy settings, wait and retry"
+    "errorRetries": "Multiple retries failed: Check network connection and proxy settings, wait and retry",
+    "totalEntries": "Total {{total}} entries",
+    "taskResumedWithTag": "Resumed download task: {{tag}} ({{type}})",
+    "limit": "Limit",
+    "entries": "entries"
   },
   "history": {
     "title": "Download History",

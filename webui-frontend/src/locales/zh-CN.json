@@ -55,7 +55,9 @@
     "history": "下载历史",
     "logs": "日志查看",
     "files": "文件浏览",
-    "language": "语言"
+    "language": "语言",
+    "languageZh": "中文",
+    "languageEn": "English"
   },
   "dashboard": {
     "title": "仪表盘",
@@ -333,7 +335,11 @@
     "error401": "认证失败：请检查 refresh token 是否有效，尝试重新登录",
     "error403": "访问被拒绝：可能是 Pixiv API 限制，等待后重试",
     "errorTimeout": "请求超时：检查网络连接或增加超时时间",
-    "errorRetries": "多次重试失败：检查网络连接和代理设置，等待后重试"
+    "errorRetries": "多次重试失败：检查网络连接和代理设置，等待后重试",
+    "totalEntries": "共 {{total}} 条",
+    "taskResumedWithTag": "已继续下载任务: {{tag}} ({{type}})",
+    "limit": "限制",
+    "entries": "条"
   },
   "history": {
     "title": "下载历史",

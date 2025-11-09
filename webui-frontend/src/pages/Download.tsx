@@ -34,6 +34,7 @@ import {
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { api } from '../services/api';
+import { translateErrorCode, extractErrorInfo } from '../utils/errorCodeTranslator';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -91,7 +92,8 @@ export default function Download() {
       queryClient.invalidateQueries({ queryKey: ['download', 'status'] });
     },
     onError: (error: any) => {
-      message.error(error.response?.data?.error || t('download.startFailed'));
+      const { errorCode, message: errorMessage } = extractErrorInfo(error);
+      message.error(translateErrorCode(errorCode, t, undefined, errorMessage || t('download.startFailed')));
     },
   });
 
@@ -102,7 +104,8 @@ export default function Download() {
       queryClient.invalidateQueries({ queryKey: ['download', 'status'] });
     },
     onError: (error: any) => {
-      message.error(error.response?.data?.error || t('download.stopFailed'));
+      const { errorCode, message: errorMessage } = extractErrorInfo(error);
+      message.error(translateErrorCode(errorCode, t, undefined, errorMessage || t('download.stopFailed')));
     },
   });
 
@@ -113,7 +116,8 @@ export default function Download() {
       queryClient.invalidateQueries({ queryKey: ['download', 'status'] });
     },
     onError: (error: any) => {
-      message.error(error.response?.data?.error || t('download.startFailed'));
+      const { errorCode, message: errorMessage } = extractErrorInfo(error);
+      message.error(translateErrorCode(errorCode, t, undefined, errorMessage || t('download.startFailed')));
     },
   });
 
@@ -126,7 +130,8 @@ export default function Download() {
       refetchIncompleteTasks();
     },
     onError: (error: any) => {
-      message.error(error.response?.data?.error || t('download.resumeFailed'));
+      const { errorCode, message: errorMessage, params } = extractErrorInfo(error);
+      message.error(translateErrorCode(errorCode, t, params, errorMessage || t('download.resumeFailed')));
     },
   });
 
@@ -137,7 +142,8 @@ export default function Download() {
       refetchIncompleteTasks();
     },
     onError: (error: any) => {
-      message.error(error.response?.data?.error || t('download.deleteFailed'));
+      const { errorCode, message: errorMessage, params } = extractErrorInfo(error);
+      message.error(translateErrorCode(errorCode, t, params, errorMessage || t('download.deleteFailed')));
     },
   });
 
@@ -153,8 +159,12 @@ export default function Download() {
       refetchIncompleteTasks();
     },
     onError: (error: any) => {
-      const errorMessage = error.response?.data?.message || error.response?.data?.error || error.message || t('download.deleteAllFailed');
-      message.error(errorMessage);
+      const { errorCode, message: errorMessage, params } = extractErrorInfo(error);
+      if (errorCode) {
+        message.error(translateErrorCode(errorCode, t, params, errorMessage || t('download.deleteAllFailed')));
+      } else {
+        message.error(errorMessage || t('download.deleteAllFailed'));
+      }
       console.error('Delete all incomplete tasks error:', error);
     },
   });

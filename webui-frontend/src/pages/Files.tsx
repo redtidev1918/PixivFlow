@@ -38,6 +38,7 @@ import {
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { api } from '../services/api';
+import { translateErrorCode, extractErrorInfo } from '../utils/errorCodeTranslator';
 
 // Helper to get locale for string comparison
 const getLocaleForSort = (i18nLanguage: string): string => {
@@ -102,7 +103,8 @@ export default function Files() {
       queryClient.invalidateQueries({ queryKey: ['files'] });
     },
     onError: (error: any) => {
-      message.error(error.response?.data?.error || t('files.deleteFailed'));
+      const { errorCode, message: errorMessage } = extractErrorInfo(error);
+      message.error(translateErrorCode(errorCode, t, undefined, errorMessage || t('files.deleteFailed')));
     },
   });
 
@@ -119,7 +121,8 @@ export default function Files() {
       }
     },
     onError: (error: any) => {
-      message.error(error.response?.data?.error || error.response?.data?.message || t('files.normalizeFailed'));
+      const { errorCode, message: errorMessage } = extractErrorInfo(error);
+      message.error(translateErrorCode(errorCode, t, undefined, errorMessage || t('files.normalizeFailed')));
     },
   });
 

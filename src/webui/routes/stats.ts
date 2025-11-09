@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { Database } from '../../storage/Database';
 import { loadConfig, getConfigPath } from '../../config';
 import { logger } from '../../logger';
+import { ErrorCode } from '../utils/error-codes';
 
 const router = Router();
 
@@ -33,7 +34,7 @@ router.get('/overview', async (req: Request, res: Response) => {
     }
     const errorMessage = error instanceof Error ? error.message : String(error);
     logger.error('Failed to get overview stats', { error: { message: errorMessage } });
-    res.status(500).json({ error: 'Failed to get overview stats' });
+    res.status(500).json({ errorCode: ErrorCode.STATS_OVERVIEW_FAILED });
   }
 });
 
@@ -72,7 +73,7 @@ router.get('/downloads', async (req: Request, res: Response) => {
     }
     const errorMessage = error instanceof Error ? error.message : String(error);
     logger.error('Failed to get download stats', { error: { message: errorMessage } });
-    res.status(500).json({ error: 'Failed to get download stats' });
+    res.status(500).json({ errorCode: ErrorCode.STATS_DOWNLOADS_FAILED });
   }
 });
 
@@ -105,7 +106,7 @@ router.get('/tags', async (req: Request, res: Response) => {
     }
     const errorMessage = error instanceof Error ? error.message : String(error);
     logger.error('Failed to get tag stats', { error: { message: errorMessage } });
-    res.status(500).json({ error: 'Failed to get tag stats' });
+    res.status(500).json({ errorCode: ErrorCode.STATS_TAGS_FAILED });
   }
 });
 
@@ -138,7 +139,7 @@ router.get('/authors', async (req: Request, res: Response) => {
     }
     const errorMessage = error instanceof Error ? error.message : String(error);
     logger.error('Failed to get author stats', { error: { message: errorMessage } });
-    res.status(500).json({ error: 'Failed to get author stats' });
+    res.status(500).json({ errorCode: ErrorCode.STATS_AUTHORS_FAILED });
   }
 });
 

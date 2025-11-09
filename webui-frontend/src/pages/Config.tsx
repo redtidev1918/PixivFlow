@@ -37,6 +37,7 @@ import {
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { api } from '../services/api';
+import { translateErrorCode, extractErrorInfo } from '../utils/errorCodeTranslator';
 
 const { Title, Text, Paragraph } = Typography;
 const { Option } = Select;
@@ -152,12 +153,22 @@ export default function Config() {
       queryClient.invalidateQueries({ queryKey: ['config'] });
     },
     onError: (error: any) => {
-      const errorMsg = error.response?.data?.error || t('config.saveFailed');
-      const details = error.response?.data?.details;
-      if (details && Array.isArray(details)) {
-        message.error(`${errorMsg}: ${details.join(', ')}`);
+      const { errorCode, message: errorMessage, details } = extractErrorInfo(error);
+      if (errorCode) {
+        // Handle validation errors
+        if (errorCode === 'CONFIG_INVALID' && details && Array.isArray(details)) {
+          const errorMessages = details.map((err: any) => {
+            if (typeof err === 'object' && err.code) {
+              return translateErrorCode(err.code, t, err.params);
+            }
+            return String(err);
+          });
+          message.error(`${translateErrorCode(errorCode, t)}: ${errorMessages.join(', ')}`);
+        } else {
+          message.error(translateErrorCode(errorCode, t, undefined, errorMessage || t('config.saveFailed')));
+        }
       } else {
-        message.error(errorMsg);
+        message.error(errorMessage || t('config.saveFailed'));
       }
     },
   });

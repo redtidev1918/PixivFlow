@@ -3,6 +3,7 @@ import cors from 'cors';
 import { createServer } from 'http';
 import { Server as SocketServer } from 'socket.io';
 import path from 'path';
+import fs from 'fs';
 import { logger } from '../logger';
 import { Database } from '../storage/Database';
 import { loadConfig, getConfigPath } from '../config';
@@ -68,11 +69,66 @@ export class WebUIServer {
 
     // Serve static files (frontend build)
     if (options.staticPath) {
-      this.app.use(express.static(options.staticPath));
-      // SPA fallback
-      this.app.get('*', (req: Request, res: Response) => {
-        if (!req.path.startsWith('/api')) {
-          res.sendFile(path.join(options.staticPath!, 'index.html'));
+      const staticPath = path.resolve(options.staticPath);
+      const indexPath = path.join(staticPath, 'index.html');
+      
+      // Verify static path and index.html exist
+      if (!fs.existsSync(staticPath)) {
+        logger.warn('Static path does not exist', { path: staticPath });
+      } else if (!fs.existsSync(indexPath)) {
+        logger.warn('index.html not found in static path', { path: staticPath, indexPath });
+      } else {
+        logger.info('Serving static files', { path: staticPath });
+      }
+
+      // Serve static files (CSS, JS, images, etc.)
+      this.app.use(express.static(staticPath, {
+        index: false, // We'll handle index.html explicitly
+        maxAge: '1d', // Cache static assets for 1 day
+      }));
+
+      // Explicitly handle root path first
+      this.app.get('/', (req: Request, res: Response, next: NextFunction) => {
+        if (fs.existsSync(indexPath)) {
+          res.sendFile(indexPath, (err) => {
+            if (err) {
+              logger.error('Failed to send index.html for root path', { 
+                error: err.message, 
+                path: indexPath 
+              });
+              next(err);
+            }
+          });
+        } else {
+          logger.warn('index.html not found, cannot serve frontend', { path: indexPath });
+          next();
+        }
+      });
+
+      // SPA fallback - handle all non-API routes (for client-side routing)
+      this.app.get('*', (req: Request, res: Response, next: NextFunction) => {
+        // Skip API routes
+        if (req.path.startsWith('/api')) {
+          return next();
+        }
+        // Skip if already handled (shouldn't happen, but safety check)
+        if (req.path === '/') {
+          return next();
+        }
+        // Send index.html for all other routes (SPA routing)
+        if (fs.existsSync(indexPath)) {
+          res.sendFile(indexPath, (err) => {
+            if (err) {
+              logger.error('Failed to send index.html for SPA route', { 
+                error: err.message, 
+                path: indexPath,
+                requestedPath: req.path
+              });
+              next(err);
+            }
+          });
+        } else {
+          next();
         }
       });
     } else {

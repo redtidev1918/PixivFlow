@@ -27,5 +27,7 @@ export default defineConfig({
     outDir: 'dist',
     sourcemap: true,
   },
+  // 支持 Capacitor
+  base: './',
 });
 

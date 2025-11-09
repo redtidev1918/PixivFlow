@@ -147,7 +147,7 @@
 
 - ✅ **完全独立**：无需浏览器，纯命令行工具
 - ✅ **WebUI 支持**：提供现代化的 Web 管理界面，支持图形化操作
-- ✅ **跨平台支持**：Windows (推荐 WSL) / macOS / Linux 全平台支持
+- ✅ **跨平台支持**：Windows / macOS / Linux 桌面应用（Electron），支持 Web 浏览器访问
 - ✅ **轻量级**：资源占用低，适合服务器长期运行
 - ✅ **开源免费**：GPL-3.0 许可证，可自由定制和分发
 - ✅ **类型安全**：TypeScript 编写，类型提示完善
@@ -320,10 +320,30 @@ STATIC_PATH=webui-frontend/dist npm run webui
 
 然后访问 http://localhost:3000 即可使用 WebUI（后端服务器）。
 
+**桌面应用（Electron）：**
+```bash
+# 1. 构建前端
+cd webui-frontend
+npm run build
+
+# 2. 开发模式运行
+npm run electron:dev
+
+# 3. 构建桌面应用
+npm run electron:build        # 构建所有平台
+npm run electron:build:win    # 仅 Windows
+npm run electron:build:mac    # 仅 macOS
+npm run electron:build:linux  # 仅 Linux
+```
+
+构建完成后，安装包会在 `webui-frontend/release/` 目录下。
+
 > **注意**：
 > - 开发模式使用 Vite 开发服务器（端口 5173），生产模式使用 Express 服务器（端口 3000）
 > - Docker 部署使用生产模式，前端静态文件已内置在镜像中，访问端口为 3000
-> - 详细 Docker 部署说明请查看 [Docker 使用指南](docs/docker/DOCKER.md) 和 [WebUI 设置指南](docs/webui/WEBUI_SETUP.md)
+> - Electron 桌面应用会自动启动后端服务器，无需手动启动
+> - **平台支持**：当前仅支持 Windows / macOS / Linux 桌面应用，不支持移动端（iOS/Android）
+> - 详细说明请查看 [WebUI 设置指南](docs/webui/WEBUI_SETUP.md) 和 [Electron 桌面应用指南](docs/webui/ELECTRON_GUIDE.md)
 
 **WebUI API 端点**：
 - 根路径 `GET /` - 返回 API 信息（当未配置静态文件时）
@@ -663,6 +683,7 @@ pixivflow migrate-config --dry-run # 预览迁移更改
 |------|------|--------|
 | [🌐 WEBUI_README](docs/webui/WEBUI_README.md) | **WebUI 使用指南** - Web 管理界面 | ⭐⭐⭐⭐ |
 | [🚀 WEBUI_SETUP](docs/webui/WEBUI_SETUP.md) | **WebUI 设置指南** - WebUI 部署配置 | ⭐⭐⭐ |
+| [🖥️ ELECTRON_GUIDE](docs/webui/ELECTRON_GUIDE.md) | **Electron 桌面应用指南** - 桌面应用打包和使用 | ⭐⭐⭐⭐ |
 | [🐳 DOCKER](docs/docker/DOCKER.md) | **Docker 使用指南** - Docker 部署和使用 | ⭐⭐⭐⭐ |
 | [🔧 DOCKER_NETWORK_SOLUTION](docs/docker/DOCKER_NETWORK_SOLUTION.md) | **Docker 网络问题** - 代理连接问题解决 | ⭐⭐⭐ |
 | [🔧 DOCKER_RANDOM_DOWNLOAD_FIX](docs/docker/DOCKER_RANDOM_DOWNLOAD_FIX.md) | **Docker 随机下载** - 随机下载问题解决 | ⭐⭐⭐ |

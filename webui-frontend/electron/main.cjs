@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell, ipcMain } = require('electron');
+const { app, BrowserWindow, shell, ipcMain, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
@@ -10,6 +10,75 @@ const BACKEND_PORT = 3000;
 let isAppClosing = false;
 const activeTimers = new Set(); // 跟踪所有活动的定时器
 let appData = null; // 应用数据目录信息（生产模式下）
+
+// 全局错误处理 - 防止应用闪退
+// 必须在应用初始化之前设置，以便捕获所有错误
+process.on('uncaughtException', (error) => {
+  console.error('❌ 未捕获的异常:', error);
+  console.error('错误堆栈:', error.stack);
+  
+  // 将错误写入日志文件
+  try {
+    // 使用 try-catch 确保即使 app 未初始化也能记录错误
+    let userDataPath;
+    try {
+      userDataPath = app.getPath('userData');
+    } catch (e) {
+      // 如果 app 未初始化，使用临时目录
+      userDataPath = require('os').tmpdir();
+    }
+    
+    const logDir = path.join(userDataPath, 'logs');
+    if (!fs.existsSync(logDir)) {
+      fs.mkdirSync(logDir, { recursive: true });
+    }
+    const logFile = path.join(logDir, `crash-${Date.now()}.log`);
+    fs.writeFileSync(logFile, `未捕获的异常: ${error.message}\n\n堆栈:\n${error.stack}\n`, 'utf8');
+    console.error(`错误日志已保存到: ${logFile}`);
+  } catch (logError) {
+    console.error('无法写入错误日志:', logError);
+    // 至少输出到控制台
+    console.error('原始错误:', error);
+  }
+  
+  // 显示错误对话框（仅在生产模式下且窗口已创建）
+  try {
+    if (!isDev && mainWindow && !mainWindow.isDestroyed()) {
+      dialog.showErrorBox('应用错误', `发生未预期的错误:\n\n${error.message}\n\n错误日志已保存到应用数据目录的 logs 文件夹。`);
+    }
+  } catch (e) {
+    // 忽略对话框错误
+  }
+  
+  // 不要立即退出，尝试继续运行
+  // 只有在严重错误时才退出
+  if (error.message && (error.message.includes('ENOENT') || error.message.includes('Cannot find module'))) {
+    console.error('文件或模块不存在错误，尝试继续运行...');
+  }
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ 未处理的 Promise 拒绝:', reason);
+  if (reason instanceof Error) {
+    console.error('错误堆栈:', reason.stack);
+  }
+  
+  // 将错误写入日志文件
+  try {
+    const userDataPath = app.getPath('userData');
+    const logDir = path.join(userDataPath, 'logs');
+    if (!fs.existsSync(logDir)) {
+      fs.mkdirSync(logDir, { recursive: true });
+    }
+    const logFile = path.join(logDir, `rejection-${Date.now()}.log`);
+    const errorMessage = reason instanceof Error ? reason.message : String(reason);
+    const errorStack = reason instanceof Error ? reason.stack : '';
+    fs.writeFileSync(logFile, `未处理的 Promise 拒绝: ${errorMessage}\n\n堆栈:\n${errorStack}\n`, 'utf8');
+    console.error(`错误日志已保存到: ${logFile}`);
+  } catch (logError) {
+    console.error('无法写入错误日志:', logError);
+  }
+});
 
 // 处理 stdout/stderr 的 EPIPE 错误
 process.stdout.on('error', (err) => {
@@ -749,6 +818,77 @@ function createWindow() {
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
     return { action: 'deny' };
+  });
+
+  // 窗口崩溃处理
+  mainWindow.webContents.on('render-process-gone', (event, details) => {
+    console.error('❌ 渲染进程崩溃:', details);
+    console.error('崩溃原因:', details.reason);
+    console.error('退出码:', details.exitCode);
+    
+    // 将崩溃信息写入日志
+    try {
+      const userDataPath = app.getPath('userData');
+      const logDir = path.join(userDataPath, 'logs');
+      if (!fs.existsSync(logDir)) {
+        fs.mkdirSync(logDir, { recursive: true });
+      }
+      const logFile = path.join(logDir, `renderer-crash-${Date.now()}.log`);
+      fs.writeFileSync(logFile, `渲染进程崩溃\n原因: ${details.reason}\n退出码: ${details.exitCode}\n`, 'utf8');
+      console.error(`崩溃日志已保存到: ${logFile}`);
+    } catch (logError) {
+      console.error('无法写入崩溃日志:', logError);
+    }
+    
+    // 显示错误对话框
+    if (!isDev) {
+      dialog.showErrorBox('窗口崩溃', `渲染进程崩溃:\n\n原因: ${details.reason}\n\n应用将尝试重新加载窗口。`);
+    }
+    
+    // 尝试重新加载窗口
+    if (details.reason === 'crashed') {
+      safeSetTimeout(() => {
+        if (mainWindow && !isAppClosing) {
+          console.log('🔄 尝试重新加载窗口...');
+          mainWindow.reload();
+        }
+      }, 1000);
+    } else if (details.reason === 'killed') {
+      // 如果进程被杀死，可能需要重新创建窗口
+      safeSetTimeout(() => {
+        if (!isAppClosing) {
+          console.log('🔄 重新创建窗口...');
+          if (mainWindow) {
+            mainWindow.destroy();
+          }
+          createWindow();
+        }
+      }, 1000);
+    }
+  });
+
+  // 未捕获的异常处理（渲染进程）
+  mainWindow.webContents.on('unresponsive', () => {
+    console.warn('⚠️  窗口无响应');
+    if (!isDev) {
+      const response = dialog.showMessageBoxSync(mainWindow, {
+        type: 'warning',
+        title: '窗口无响应',
+        message: '窗口似乎无响应。是否等待或重新加载？',
+        buttons: ['等待', '重新加载', '关闭'],
+        defaultId: 0,
+      });
+      
+      if (response === 1) {
+        mainWindow.reload();
+      } else if (response === 2) {
+        mainWindow.close();
+      }
+    }
+  });
+
+  mainWindow.webContents.on('responsive', () => {
+    console.log('✅ 窗口已恢复响应');
   });
 
   mainWindow.on('closed', () => {

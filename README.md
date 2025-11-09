@@ -518,9 +518,6 @@ PixivFlow 提供了丰富的脚本工具，让你无需记忆复杂的 npm 命�
 
 # 方式3：使用 npm 命令
 npm run login
-
-# 无头登录（通过参数提供用户名密码）
-./scripts/pixiv.sh login -u your_username -p your_password
 ```
 
 ### ⚙️ 配置管理
@@ -630,7 +627,6 @@ pixivflow --help
 
 # 常用命令：
 pixivflow login                    # 交互式登录（终端输入用户名密码）
-pixivflow login -u user -p pass    # Headless 登录（无浏览器窗口）
 pixivflow download                 # 执行一次下载
 pixivflow random                   # 随机下载一个作品
 pixivflow random --novel           # 随机下载一篇小说

@@ -433,7 +433,6 @@ npm run login
 |------|------|
 | `pixivflow login` | 登录 Pixiv 账号（推荐 ⭐） |
 | `pixivflow login --help` | 查看登录帮助 |
-| `pixivflow login -u username -p password` | Headless 模式登录 |
 
 ### 配置管理
 

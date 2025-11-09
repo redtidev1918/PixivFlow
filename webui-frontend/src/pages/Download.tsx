@@ -54,7 +54,7 @@ export default function Download() {
   });
 
   // Get task logs for active task
-  const activeTaskId = statusData?.data?.activeTask?.taskId;
+  const activeTaskId = statusData?.data?.data?.activeTask?.taskId;
   const { data: taskLogsData } = useQuery({
     queryKey: ['download', 'logs', activeTaskId],
     queryFn: () => api.getTaskLogs(activeTaskId!),
@@ -64,10 +64,10 @@ export default function Download() {
 
   // Auto-scroll logs to bottom when new logs arrive
   useEffect(() => {
-    if (logsEndRef.current && taskLogsData?.data?.logs) {
+    if (logsEndRef.current && taskLogsData?.data?.data?.logs) {
       logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [taskLogsData?.data?.logs]);
+  }, [taskLogsData?.data?.data?.logs]);
 
   // Get config to show available targets and paths
   // Add refetchInterval to auto-refresh config (e.g., when paths are updated)
@@ -151,7 +151,7 @@ export default function Download() {
   const deleteAllIncompleteTasksMutation = useMutation({
     mutationFn: () => api.deleteAllIncompleteTasks(),
     onSuccess: (response) => {
-      const deletedCount = response.data?.deletedCount || 0;
+      const deletedCount = response.data?.data?.deletedCount || 0;
       if (deletedCount === 0) {
         message.info(t('download.noIncompleteTasks'));
       } else {
@@ -175,8 +175,8 @@ export default function Download() {
   };
 
   const handleStop = () => {
-    if (statusData?.data?.activeTask?.taskId) {
-      stopDownloadMutation.mutate(statusData.data.activeTask.taskId);
+    if (statusData?.data?.data?.activeTask?.taskId) {
+      stopDownloadMutation.mutate(statusData.data.data.activeTask.taskId);
     }
   };
 
@@ -220,7 +220,7 @@ export default function Download() {
 
   // Task statistics
   const taskStats = useMemo(() => {
-    const allTasks = statusData?.data?.allTasks || [];
+    const allTasks = statusData?.data?.data?.allTasks || [];
     const completed = allTasks.filter((t: any) => t.status === 'completed').length;
     const failed = allTasks.filter((t: any) => t.status === 'failed').length;
     const stopped = allTasks.filter((t: any) => t.status === 'stopped').length;
@@ -340,7 +340,7 @@ export default function Download() {
             size="large"
             icon={<PlayCircleOutlined />}
             onClick={() => setShowStartModal(true)}
-            disabled={statusData?.data?.hasActiveTask}
+            disabled={statusData?.data?.data?.hasActiveTask}
             loading={startDownloadMutation.isPending}
           >
             {t('download.startDownload')}
@@ -349,7 +349,7 @@ export default function Download() {
             size="large"
             icon={<ReloadOutlined />}
             onClick={handleRunAll}
-            disabled={statusData?.data?.hasActiveTask}
+            disabled={statusData?.data?.data?.hasActiveTask}
             loading={runAllMutation.isPending}
           >
             {t('download.downloadAll')}
@@ -359,13 +359,13 @@ export default function Download() {
             size="large"
             icon={<StopOutlined />}
             onClick={handleStop}
-            disabled={!statusData?.data?.hasActiveTask}
+            disabled={!statusData?.data?.data?.hasActiveTask}
             loading={stopDownloadMutation.isPending}
           >
             {t('download.stopCurrent')}
           </Button>
         </Space>
-        {statusData?.data?.hasActiveTask && (
+        {statusData?.data?.data?.hasActiveTask && (
           <Alert
             message={t('download.hasActiveTask')}
             description={t('download.hasActiveTaskDesc')}
@@ -374,7 +374,7 @@ export default function Download() {
             style={{ marginTop: 16 }}
           />
         )}
-        {configData?.data?.storage && (
+        {configData?.data?.data?.storage && (
           <Alert
             message={
               <Space>
@@ -392,16 +392,16 @@ export default function Download() {
               <Space direction="vertical" size="small" style={{ width: '100%' }}>
                 <Text>
                   <Text strong>{t('download.illustrationPath')}</Text>
-                  {configData.data.storage.illustrationDirectory || 
-                   (configData.data.storage.downloadDirectory 
-                     ? `${configData.data.storage.downloadDirectory}/illustrations` 
+                  {configData.data.data.storage.illustrationDirectory || 
+                   (configData.data.data.storage.downloadDirectory 
+                     ? `${configData.data.data.storage.downloadDirectory}/illustrations` 
                      : './downloads/illustrations')}
                 </Text>
                 <Text>
                   <Text strong>{t('download.novelPath')}</Text>
-                  {configData.data.storage.novelDirectory || 
-                   (configData.data.storage.downloadDirectory 
-                     ? `${configData.data.storage.downloadDirectory}/novels` 
+                  {configData.data.data.storage.novelDirectory || 
+                   (configData.data.data.storage.downloadDirectory 
+                     ? `${configData.data.data.storage.downloadDirectory}/novels` 
                      : './downloads/novels')}
                 </Text>
                 <Text type="secondary" style={{ fontSize: '12px' }}>
@@ -417,7 +417,7 @@ export default function Download() {
       </Card>
 
       {/* Current Active Task */}
-      {statusData?.data?.activeTask && (
+      {statusData?.data?.data?.activeTask && (
         <Card 
           title={
             <Space>
@@ -439,40 +439,40 @@ export default function Download() {
         >
           <Descriptions column={2} bordered>
             <Descriptions.Item label={t('download.taskId')} span={1}>
-              <Text code>{statusData.data.activeTask.taskId}</Text>
+              <Text code>{statusData.data.data.activeTask.taskId}</Text>
             </Descriptions.Item>
             <Descriptions.Item label={t('download.status')} span={1}>
-              {getStatusTag(statusData.data.activeTask.status)}
+              {getStatusTag(statusData.data.data.activeTask.status)}
             </Descriptions.Item>
             <Descriptions.Item label={t('download.startTime')} span={1}>
-              {formatDate(statusData.data.activeTask.startTime)}
+              {formatDate(statusData.data.data.activeTask.startTime)}
             </Descriptions.Item>
             <Descriptions.Item label={t('download.duration')} span={1}>
-              <Text strong>{calculateDuration(statusData.data.activeTask.startTime, statusData.data.activeTask.endTime)}</Text>
+              <Text strong>{calculateDuration(new Date(statusData.data.data.activeTask.startTime), statusData.data.data.activeTask.endTime ? new Date(statusData.data.data.activeTask.endTime) : undefined)}</Text>
             </Descriptions.Item>
-            {statusData.data.activeTask.progress && (
+            {statusData.data.data.activeTask?.progress && (
               <Descriptions.Item label={t('download.progress')} span={2}>
                 <Progress
-                  percent={Math.round((statusData.data.activeTask.progress.current / statusData.data.activeTask.progress.total) * 100)}
-                  status={statusData.data.activeTask.status === 'running' ? 'active' : 'success'}
-                  format={() => `${statusData.data.activeTask.progress?.current || 0} / ${statusData.data.activeTask.progress?.total || 0}`}
+                  percent={Math.round((statusData.data.data.activeTask.progress.current / statusData.data.data.activeTask.progress.total) * 100)}
+                  status={statusData.data.data.activeTask.status === 'running' ? 'active' : 'success'}
+                  format={() => `${statusData.data.data.activeTask?.progress?.current || 0} / ${statusData.data.data.activeTask?.progress?.total || 0}`}
                 />
-                {statusData.data.activeTask.progress.message && (
+                {statusData.data.data.activeTask.progress.message && (
                   <Text type="secondary" style={{ display: 'block', marginTop: 8 }}>
-                    {statusData.data.activeTask.progress.message}
+                    {statusData.data.data.activeTask.progress.message}
                   </Text>
                 )}
               </Descriptions.Item>
             )}
-            {statusData.data.activeTask.endTime && (
+            {statusData.data.data.activeTask.endTime && (
               <Descriptions.Item label={t('download.endTime')} span={2}>
-                {formatDate(statusData.data.activeTask.endTime)}
+                {formatDate(statusData.data.data.activeTask.endTime)}
               </Descriptions.Item>
             )}
-            {statusData.data.activeTask.error && (
+            {statusData.data.data.activeTask.error && (
               <Descriptions.Item label={t('download.errorInfo')} span={2}>
                 <Alert
-                  message={statusData.data.activeTask.error}
+                  message={statusData.data.data.activeTask.error}
                   type="error"
                   showIcon
                 />
@@ -481,7 +481,7 @@ export default function Download() {
           </Descriptions>
           
           {/* Task Logs */}
-          {taskLogsData?.data?.logs && taskLogsData.data.logs.length > 0 && (
+          {taskLogsData?.data?.data?.logs && taskLogsData.data.data.logs.length > 0 && (
             <div style={{ marginTop: 16 }}>
               <Collapse
                 items={[
@@ -490,7 +490,7 @@ export default function Download() {
                     label: (
                       <Space>
                         <InfoCircleOutlined />
-                        <span>{t('download.realtimeLogs')} ({taskLogsData.data.logs.length} {t('download.entries')})</span>
+                        <span>{t('download.realtimeLogs')} ({taskLogsData.data.data.logs.length} {t('download.entries')})</span>
                       </Space>
                     ),
                     children: (
@@ -506,7 +506,7 @@ export default function Download() {
                           lineHeight: '1.6',
                         }}
                       >
-                        {taskLogsData.data.logs.map((log: any, index: number) => {
+                        {taskLogsData.data.data.logs.map((log: any, index: number) => {
                           const timestamp = formatDate(log.timestamp, {
                             hour: '2-digit',
                             minute: '2-digit',
@@ -547,7 +547,7 @@ export default function Download() {
                     ),
                   },
                 ]}
-                defaultActiveKey={statusData.data.activeTask.status === 'running' ? ['logs'] : []}
+                defaultActiveKey={statusData.data.data.activeTask.status === 'running' ? ['logs'] : []}
               />
             </div>
           )}
@@ -555,7 +555,7 @@ export default function Download() {
       )}
 
       {/* Incomplete Tasks */}
-      {incompleteTasksData?.data?.tasks && incompleteTasksData.data.tasks.length > 0 && (
+      {incompleteTasksData?.data?.data?.tasks && incompleteTasksData.data.data.tasks.length > 0 && (
         <Card 
           title={
             <Space>
@@ -580,7 +580,7 @@ export default function Download() {
                 onClick={() => {
                   Modal.confirm({
                     title: t('download.confirmDeleteAll'),
-                    content: t('download.confirmDeleteAllDesc', { count: incompleteTasksData.data.tasks.length }),
+                    content: t('download.confirmDeleteAllDesc', { count: incompleteTasksData.data.data.tasks.length }),
                     okText: t('common.delete'),
                     okType: 'danger',
                     cancelText: t('common.cancel'),
@@ -598,7 +598,7 @@ export default function Download() {
           }
         >
           <Alert
-            message={t('download.incompleteTasksFound', { count: incompleteTasksData.data.tasks.length })}
+            message={t('download.incompleteTasksFound', { count: incompleteTasksData.data.data.tasks.length })}
             description={t('download.incompleteTasksDesc')}
             type="warning"
             showIcon
@@ -702,7 +702,7 @@ export default function Download() {
                           type: record.type,
                         });
                       }}
-                      disabled={statusData?.data?.hasActiveTask || resumeDownloadMutation.isPending}
+                      disabled={statusData?.data?.data?.hasActiveTask || resumeDownloadMutation.isPending}
                       loading={resumeDownloadMutation.isPending}
                     >
                       {t('download.resumeDownload')}
@@ -735,7 +735,7 @@ export default function Download() {
                 ),
               },
             ]}
-            dataSource={incompleteTasksData.data.tasks}
+            dataSource={incompleteTasksData.data.data.tasks}
             rowKey="id"
             pagination={{ pageSize: 10, showSizeChanger: true, showTotal: (total) => t('download.totalEntries', { total }) }}
             size="small"
@@ -760,10 +760,10 @@ export default function Download() {
               <Text type="secondary">{t('download.loadingHistory')}</Text>
             </div>
           </div>
-        ) : statusData?.data?.allTasks && statusData.data.allTasks.length > 0 ? (
+        ) : statusData?.data?.data?.allTasks && statusData.data.data.allTasks.length > 0 ? (
           <Table
             columns={taskColumns}
-            dataSource={statusData.data.allTasks}
+            dataSource={statusData.data.data.allTasks}
             rowKey="taskId"
             pagination={{ 
               pageSize: 10, 
@@ -825,7 +825,7 @@ export default function Download() {
                 return text.toLowerCase().includes(input.toLowerCase());
               }}
             >
-              {configData?.data?.targets?.map((target: any, index: number) => (
+              {configData?.data?.data?.targets?.map((target: any, index: number) => (
                 <Select.Option key={index} value={index.toString()}>
                   <Space>
                     <Tag color={target.type === 'illustration' ? 'blue' : 'purple'}>
@@ -840,7 +840,7 @@ export default function Download() {
               ))}
             </Select>
           </Form.Item>
-          {configData?.data?.targets && configData.data.targets.length === 0 && (
+          {configData?.data?.data?.targets && configData.data.data.targets.length === 0 && (
             <Alert
               message={t('download.noTargetsFound')}
               description={t('download.noTargetsFoundDesc')}

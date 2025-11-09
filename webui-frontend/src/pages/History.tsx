@@ -42,14 +42,14 @@ export default function History() {
 
   // Filter items by title (client-side filtering)
   const filteredItems = useMemo(() => {
-    if (!data?.data?.items) return [];
-    if (!titleFilter) return data.data.items;
+    if (!data?.data?.data?.items) return [];
+    if (!titleFilter) return data.data.data.items;
     
     const searchLower = titleFilter.toLowerCase();
-    return data.data.items.filter((item: any) =>
+    return data.data.data.items.filter((item: any) =>
       item.title.toLowerCase().includes(searchLower)
     );
-  }, [data?.data?.items, titleFilter]);
+  }, [data?.data?.data?.items, titleFilter]);
 
   // Calculate statistics from current data
   const stats = useMemo(() => {
@@ -395,7 +395,7 @@ export default function History() {
           pagination={{
             current: page,
             pageSize: pageSize,
-            total: titleFilter ? filteredItems.length : (data?.data?.total || 0),
+            total: titleFilter ? filteredItems.length : (data?.data?.data?.total || 0),
             showSizeChanger: true,
             showTotal: (total, range) =>
               t('history.displaying', { start: range[0], end: range[1], total }) + (titleFilter ? t('history.filtered') : ''),

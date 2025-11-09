@@ -23,7 +23,7 @@ export default function Dashboard() {
           <Card>
             <Statistic
               title={t('dashboard.totalDownloads')}
-              value={data?.data?.totalDownloads || 0}
+              value={data?.data?.data?.totalDownloads || 0}
               prefix={<DownloadOutlined />}
             />
           </Card>
@@ -32,7 +32,7 @@ export default function Dashboard() {
           <Card>
             <Statistic
               title={t('dashboard.illustrations')}
-              value={data?.data?.illustrations || 0}
+              value={data?.data?.data?.illustrations || 0}
               prefix={<PictureOutlined />}
             />
           </Card>
@@ -41,7 +41,7 @@ export default function Dashboard() {
           <Card>
             <Statistic
               title={t('dashboard.novels')}
-              value={data?.data?.novels || 0}
+              value={data?.data?.data?.novels || 0}
               prefix={<FileTextOutlined />}
             />
           </Card>
@@ -50,7 +50,7 @@ export default function Dashboard() {
       <Row gutter={16} style={{ marginTop: 16 }}>
         <Col span={24}>
           <Card title={t('dashboard.recentDownloads')}>
-            <p>{t('dashboard.recentDownloadsDesc', { count: data?.data?.recentDownloads || 0 })}</p>
+            <p>{t('dashboard.recentDownloadsDesc', { count: data?.data?.data?.recentDownloads || 0 })}</p>
           </Card>
         </Col>
       </Row>

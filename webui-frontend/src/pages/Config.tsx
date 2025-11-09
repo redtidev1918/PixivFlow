@@ -225,7 +225,7 @@ export default function Config() {
   const handleApplyTemplate = (template: typeof configTemplates[keyof typeof configTemplates]) => {
     targetForm.setFieldsValue(template.config);
     setTargetStep(1);
-    message.success(`${t('config.templateApplied')}：${template.name}`);
+    message.success(`${t('config.templateApplied')}: ${template.name}`);
   };
 
   const handleExportConfig = () => {
@@ -356,7 +356,7 @@ export default function Config() {
           return <Text>{t('config.seriesId')}: {record.seriesId}</Text>;
         }
         if (record.novelId) {
-          return <Text>{t('config.typeNovel')} ID: {record.novelId}</Text>;
+          return <Text>{t('config.novelId')}: {record.novelId}</Text>;
         }
         return (
           <Space direction="vertical" size="small" style={{ fontSize: 12 }}>

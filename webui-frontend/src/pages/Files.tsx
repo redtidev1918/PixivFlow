@@ -39,6 +39,12 @@ import {
 import { useTranslation } from 'react-i18next';
 import { api } from '../services/api';
 
+// Helper to get locale for string comparison
+const getLocaleForSort = (i18nLanguage: string): string => {
+  if (i18nLanguage.startsWith('zh')) return 'zh-CN';
+  return 'en-US';
+};
+
 const { Title } = Typography;
 const { Option } = Select;
 const { Search } = Input;
@@ -62,7 +68,7 @@ const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'];
 const textExtensions = ['.txt', '.md', '.text'];
 
 export default function Files() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
   const [currentPath, setCurrentPath] = useState<string>('');
   const [fileType, setFileType] = useState<'illustration' | 'novel'>('illustration');
@@ -387,9 +393,10 @@ export default function Files() {
       // Within the same type, sort by the selected field
       let comparison = 0;
       
+      const locale = getLocaleForSort(i18n.language);
       switch (sortBy) {
         case 'name':
-          comparison = a.name.localeCompare(b.name, 'zh-CN', { numeric: true, sensitivity: 'base' });
+          comparison = a.name.localeCompare(b.name, locale, { numeric: true, sensitivity: 'base' });
           break;
         case 'time':
           const timeA = a.modified ? new Date(a.modified).getTime() : 0;
@@ -404,17 +411,17 @@ export default function Files() {
           break;
         case 'type':
           // Already grouped by type, so just sort by name within each group
-          comparison = a.name.localeCompare(b.name, 'zh-CN', { numeric: true, sensitivity: 'base' });
+          comparison = a.name.localeCompare(b.name, locale, { numeric: true, sensitivity: 'base' });
           break;
         default:
-          comparison = a.name.localeCompare(b.name, 'zh-CN', { numeric: true, sensitivity: 'base' });
+          comparison = a.name.localeCompare(b.name, locale, { numeric: true, sensitivity: 'base' });
       }
 
       return sortOrder === 'asc' ? comparison : -comparison;
     });
 
     return items;
-  }, [data?.data?.directories, data?.data?.files, searchText, sortBy, sortOrder]);
+  }, [data?.data?.directories, data?.data?.files, searchText, sortBy, sortOrder, i18n.language]);
 
   // Calculate statistics
   const stats = useMemo(() => {

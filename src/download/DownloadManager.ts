@@ -390,9 +390,10 @@ export class DownloadManager {
     target: TargetConfig,
     itemType: 'illustration' | 'novel',
     downloadFn: (item: T, tag: string) => Promise<void>
-  ): Promise<{ downloaded: number; skipped: number }> {
+  ): Promise<{ downloaded: number; skipped: number; alreadyDownloaded: number }> {
     let downloaded = 0;
     let skippedCount = 0;
+    let alreadyDownloadedCount = 0;
     const tagForLog = target.filterTag || target.tag || 'unknown';
     const targetLimit = target.limit || (itemType === 'illustration' ? 10 : 10);
 
@@ -414,6 +415,7 @@ export class DownloadManager {
       );
       
       if (available.length === 0) {
+        alreadyDownloadedCount = filteredItems.length;
         logger.info('All search results have already been downloaded');
       } else {
         // Try random items until we find one that works or exhaust all options
@@ -469,7 +471,7 @@ export class DownloadManager {
         
         if (downloadedIds.has(String(item.id))) {
           logger.debug(`${itemType === 'illustration' ? 'Illustration' : 'Novel'} ${item.id} already downloaded, skipping`);
-          skippedCount++;
+          alreadyDownloadedCount++;
           continue;
         }
 
@@ -496,7 +498,7 @@ export class DownloadManager {
     // Update progress: completed
     this.updateProgress(downloaded, targetLimit, `完成下载: ${downloaded} 个 ${itemType === 'illustration' ? '插画' : '小说'}`);
 
-    return { downloaded, skipped: skippedCount };
+    return { downloaded, skipped: skippedCount, alreadyDownloaded: alreadyDownloadedCount };
   }
 
   private async handleIllustrationTarget(target: TargetConfig) {
@@ -564,7 +566,7 @@ export class DownloadManager {
         }
       }
       
-      const { downloaded, skipped: skippedCount } = await this.downloadItems(
+      const { downloaded, skipped: skippedCount, alreadyDownloaded: alreadyDownloadedCount } = await this.downloadItems(
         illusts,
         target,
         'illustration',
@@ -575,16 +577,24 @@ export class DownloadManager {
       const tagForLog = target.filterTag || target.tag || 'unknown';
 
       // Check if download actually succeeded
+      // Only fail if there were actual errors, not if all items were already downloaded
       if (downloaded === 0 && targetLimit > 0) {
-        let errorMessage: string;
-        if (skippedCount > 0) {
-          errorMessage = `Failed to download any illustrations. Requested ${targetLimit}, but all ${skippedCount} attempt(s) failed or were skipped (likely already downloaded or inaccessible).`;
+        if (alreadyDownloadedCount > 0 && skippedCount === 0) {
+          // All items were already downloaded - this is success, not failure
+          logger.info(`All ${alreadyDownloadedCount} illustration(s) for tag ${tagForLog} were already downloaded`);
+          this.database.logExecution(tagForLog, 'illustration', 'success', `All ${alreadyDownloadedCount} items were already downloaded`);
         } else {
-          errorMessage = `Failed to download any illustrations. Requested ${targetLimit}, but no matching illustrations were found or all were already downloaded.`;
+          // There were actual failures or skips
+          let errorMessage: string;
+          if (skippedCount > 0) {
+            errorMessage = `Failed to download any illustrations. Requested ${targetLimit}, but all ${skippedCount} attempt(s) failed or were skipped (likely inaccessible).`;
+          } else {
+            errorMessage = `Failed to download any illustrations. Requested ${targetLimit}, but no matching illustrations were found.`;
+          }
+          this.database.logExecution(tagForLog, 'illustration', 'failed', errorMessage);
+          logger.error(`Illustration ${mode === 'ranking' ? 'ranking' : 'tag'} ${tagForLog} failed: ${errorMessage}`);
+          throw new Error(errorMessage);
         }
-        this.database.logExecution(tagForLog, 'illustration', 'failed', errorMessage);
-        logger.error(`Illustration ${mode === 'ranking' ? 'ranking' : 'tag'} ${tagForLog} failed: ${errorMessage}`);
-        throw new Error(errorMessage);
       }
 
       // Warn if downloaded significantly less than requested
@@ -592,6 +602,9 @@ export class DownloadManager {
         logger.warn(`Only downloaded ${downloaded} out of ${targetLimit} requested illustration(s). ${skippedCount} illustration(s) were skipped due to errors.`);
       }
 
+      if (alreadyDownloadedCount > 0) {
+        logger.info(`Skipped ${alreadyDownloadedCount} illustration(s) (already downloaded)`);
+      }
       if (skippedCount > 0) {
         logger.info(`Skipped ${skippedCount} illustration(s) (deleted, private, or inaccessible)`);
       }
@@ -780,7 +793,7 @@ export class DownloadManager {
       }
       
       const targetLimit = target.limit || 10;
-      const { downloaded, skipped: skippedCount } = await this.downloadItems(
+      const { downloaded, skipped: skippedCount, alreadyDownloaded: alreadyDownloadedCount } = await this.downloadItems(
         novels,
         target,
         'novel',
@@ -790,11 +803,19 @@ export class DownloadManager {
       const tagForLog = target.filterTag || target.tag || 'unknown';
 
       // Check if download actually succeeded
+      // Only fail if there were actual errors, not if all items were already downloaded
       if (downloaded === 0 && targetLimit > 0) {
-        const errorMessage = `Failed to download any novels. Requested ${targetLimit}, but all ${skippedCount} attempt(s) failed or were skipped.`;
-        this.database.logExecution(tagForLog, 'novel', 'failed', errorMessage);
-        logger.error(`Novel ${mode === 'ranking' ? 'ranking' : 'tag'} ${tagForLog} failed: ${errorMessage}`);
-        throw new Error(errorMessage);
+        if (alreadyDownloadedCount > 0 && skippedCount === 0) {
+          // All items were already downloaded - this is success, not failure
+          logger.info(`All ${alreadyDownloadedCount} novel(s) for tag ${tagForLog} were already downloaded`);
+          this.database.logExecution(tagForLog, 'novel', 'success', `All ${alreadyDownloadedCount} items were already downloaded`);
+        } else {
+          // There were actual failures or skips (language filter, 404, etc.)
+          const errorMessage = `Failed to download any novels. Requested ${targetLimit}, but all ${skippedCount} attempt(s) failed or were skipped.`;
+          this.database.logExecution(tagForLog, 'novel', 'failed', errorMessage);
+          logger.error(`Novel ${mode === 'ranking' ? 'ranking' : 'tag'} ${tagForLog} failed: ${errorMessage}`);
+          throw new Error(errorMessage);
+        }
       }
 
       // Warn if downloaded significantly less than requested
@@ -802,6 +823,9 @@ export class DownloadManager {
         logger.warn(`Only downloaded ${downloaded} out of ${targetLimit} requested novel(s). ${skippedCount} novel(s) were skipped due to 404 errors or other issues.`);
       }
 
+      if (alreadyDownloadedCount > 0) {
+        logger.info(`Skipped ${alreadyDownloadedCount} novel(s) (already downloaded)`);
+      }
       if (skippedCount > 0) {
         logger.info(`Skipped ${skippedCount} novel(s) (deleted, private, or inaccessible)`);
       }
@@ -1182,7 +1206,12 @@ export class DownloadManager {
           bookmark_count: detail.bookmark_count,
           view_count: detail.view_count,
         };
-        await this.fileService.saveMetadata(filePath, pixivMetadata);
+        try {
+          await this.fileService.saveMetadata(filePath, pixivMetadata);
+        } catch (error) {
+          // Log warning but don't fail the download if metadata save fails
+          logger.warn(`Failed to save metadata for illustration ${detail.id} page ${index + 1}: ${error instanceof Error ? error.message : String(error)}`);
+        }
 
         return { filePath, index: index + 1 };
       },
@@ -1332,7 +1361,12 @@ export class DownloadManager {
         },
       } : {}),
     };
-    await this.fileService.saveMetadata(filePath, pixivMetadata);
+    try {
+      await this.fileService.saveMetadata(filePath, pixivMetadata);
+    } catch (error) {
+      // Log warning but don't fail the download if metadata save fails
+      logger.warn(`Failed to save metadata for novel ${detail.id}: ${error instanceof Error ? error.message : String(error)}`);
+    }
 
     this.database.insertDownload({
       pixivId: String(detail.id),

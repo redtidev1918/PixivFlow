@@ -1,7 +1,7 @@
 import { ensureDir } from '../utils/fs';
 import { StorageConfig, OrganizationMode } from '../config';
 import { promises as fs } from 'node:fs';
-import { join, dirname, basename } from 'node:path';
+import { join, dirname, basename, resolve } from 'node:path';
 
 export interface FileMetadata {
   author?: string;
@@ -188,17 +188,67 @@ export class FileService {
   }
 
   /**
-   * Save metadata JSON file alongside the downloaded file
+   * Save metadata JSON file to hidden metadata directory (data/metadata)
+   * instead of alongside the downloaded file to keep download directory clean
    * @param filePath Path to the downloaded file
    * @param metadata Metadata to save
+   * @returns Path to the saved metadata file
+   * @throws Error if metadata cannot be saved
    */
   public async saveMetadata(filePath: string, metadata: PixivMetadata): Promise<string> {
-    const fileName = basename(filePath);
-    const { baseName } = this.splitExtension(fileName);
-    const metadataPath = join(dirname(filePath), `${baseName}.json`);
-    const jsonContent = JSON.stringify(metadata, null, 2);
-    await fs.writeFile(metadataPath, jsonContent, 'utf-8');
-    return metadataPath;
+    try {
+      // Validate input
+      if (!metadata || !metadata.pixiv_id || !metadata.type) {
+        throw new Error('Invalid metadata: pixiv_id and type are required');
+      }
+
+      // Get metadata directory path based on database path
+      // If databasePath is ./data/pixiv-downloader.db, metadata will be in ./data/metadata
+      const databasePath = this.storage.databasePath || './data/pixiv-downloader.db';
+      const dataDir = dirname(resolve(databasePath));
+      const metadataDir = join(dataDir, 'metadata');
+      
+      // Ensure metadata directory exists
+      try {
+        await ensureDir(metadataDir);
+      } catch (error) {
+        throw new Error(`Failed to create metadata directory at ${metadataDir}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+      
+      // Use pixiv_id and type to create unique filename
+      // Format: {pixiv_id}_{type}.json (e.g., 123456_novel.json)
+      // For multi-page illustrations, include page number: {pixiv_id}_{type}_p{page}.json
+      const pixivId = String(metadata.pixiv_id).replace(/[^a-zA-Z0-9_-]/g, '_');
+      const type = metadata.type;
+      const pageSuffix = metadata.page_number !== undefined 
+        ? `_p${metadata.page_number}` 
+        : '';
+      const metadataFileName = `${pixivId}_${type}${pageSuffix}.json`;
+      const metadataPath = join(metadataDir, metadataFileName);
+      
+      // Serialize metadata to JSON
+      let jsonContent: string;
+      try {
+        jsonContent = JSON.stringify(metadata, null, 2);
+      } catch (error) {
+        throw new Error(`Failed to serialize metadata to JSON: ${error instanceof Error ? error.message : String(error)}`);
+      }
+      
+      // Write metadata file
+      try {
+        await fs.writeFile(metadataPath, jsonContent, 'utf-8');
+      } catch (error) {
+        throw new Error(`Failed to write metadata file to ${metadataPath}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+      
+      return metadataPath;
+    } catch (error) {
+      // Re-throw with context if it's already an Error with message
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error(`Unexpected error saving metadata: ${String(error)}`);
+    }
   }
 }
 

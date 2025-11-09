@@ -1,5 +1,5 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { Layout, Menu, theme } from 'antd';
+import { Layout, Menu, theme, Select } from 'antd';
 import {
   DashboardOutlined,
   SettingOutlined,
@@ -9,43 +9,12 @@ import {
   FolderOutlined,
 } from '@ant-design/icons';
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 const { Header, Sider, Content } = Layout;
 
-const menuItems = [
-  {
-    key: '/dashboard',
-    icon: <DashboardOutlined />,
-    label: '仪表盘',
-  },
-  {
-    key: '/config',
-    icon: <SettingOutlined />,
-    label: '配置管理',
-  },
-  {
-    key: '/download',
-    icon: <DownloadOutlined />,
-    label: '下载任务',
-  },
-  {
-    key: '/history',
-    icon: <HistoryOutlined />,
-    label: '下载历史',
-  },
-  {
-    key: '/logs',
-    icon: <FileTextOutlined />,
-    label: '日志查看',
-  },
-  {
-    key: '/files',
-    icon: <FolderOutlined />,
-    label: '文件浏览',
-  },
-];
-
 export default function AppLayout() {
+  const { t, i18n } = useTranslation();
   const [collapsed, setCollapsed] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
@@ -53,8 +22,45 @@ export default function AppLayout() {
     token: { colorBgContainer },
   } = theme.useToken();
 
+  const menuItems = [
+    {
+      key: '/dashboard',
+      icon: <DashboardOutlined />,
+      label: t('layout.dashboard'),
+    },
+    {
+      key: '/config',
+      icon: <SettingOutlined />,
+      label: t('layout.config'),
+    },
+    {
+      key: '/download',
+      icon: <DownloadOutlined />,
+      label: t('layout.download'),
+    },
+    {
+      key: '/history',
+      icon: <HistoryOutlined />,
+      label: t('layout.history'),
+    },
+    {
+      key: '/logs',
+      icon: <FileTextOutlined />,
+      label: t('layout.logs'),
+    },
+    {
+      key: '/files',
+      icon: <FolderOutlined />,
+      label: t('layout.files'),
+    },
+  ];
+
   const handleMenuClick = ({ key }: { key: string }) => {
     navigate(key);
+  };
+
+  const handleLanguageChange = (value: string) => {
+    i18n.changeLanguage(value);
   };
 
   return (
@@ -90,8 +96,17 @@ export default function AppLayout() {
       </Sider>
       <Layout>
         <Header style={{ padding: 0, background: colorBgContainer }}>
-          <div style={{ padding: '0 24px', lineHeight: '64px' }}>
-            <h1 style={{ margin: 0, fontSize: '20px' }}>PixivFlow WebUI</h1>
+          <div style={{ padding: '0 24px', lineHeight: '64px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h1 style={{ margin: 0, fontSize: '20px' }}>{t('layout.title')}</h1>
+            <Select
+              value={i18n.language}
+              onChange={handleLanguageChange}
+              style={{ width: 120 }}
+              options={[
+                { label: t('layout.languageZh'), value: 'zh-CN' },
+                { label: t('layout.languageEn'), value: 'en-US' },
+              ]}
+            />
           </div>
         </Header>
         <Content

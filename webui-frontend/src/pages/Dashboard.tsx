@@ -1,9 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
 import { Card, Row, Col, Statistic, Spin } from 'antd';
 import { DownloadOutlined, PictureOutlined, FileTextOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import { api } from '../services/api';
 
 export default function Dashboard() {
+  const { t } = useTranslation();
   const { data, isLoading } = useQuery({
     queryKey: ['stats', 'overview'],
     queryFn: () => api.getStatsOverview(),
@@ -15,12 +17,12 @@ export default function Dashboard() {
 
   return (
     <div>
-      <h2>仪表盘</h2>
+      <h2>{t('dashboard.title')}</h2>
       <Row gutter={16} style={{ marginTop: 24 }}>
         <Col span={8}>
           <Card>
             <Statistic
-              title="总下载数"
+              title={t('dashboard.totalDownloads')}
               value={data?.data?.totalDownloads || 0}
               prefix={<DownloadOutlined />}
             />
@@ -29,7 +31,7 @@ export default function Dashboard() {
         <Col span={8}>
           <Card>
             <Statistic
-              title="插画"
+              title={t('dashboard.illustrations')}
               value={data?.data?.illustrations || 0}
               prefix={<PictureOutlined />}
             />
@@ -38,7 +40,7 @@ export default function Dashboard() {
         <Col span={8}>
           <Card>
             <Statistic
-              title="小说"
+              title={t('dashboard.novels')}
               value={data?.data?.novels || 0}
               prefix={<FileTextOutlined />}
             />
@@ -47,8 +49,8 @@ export default function Dashboard() {
       </Row>
       <Row gutter={16} style={{ marginTop: 16 }}>
         <Col span={24}>
-          <Card title="最近下载">
-            <p>最近 7 天下载: {data?.data?.recentDownloads || 0} 个作品</p>
+          <Card title={t('dashboard.recentDownloads')}>
+            <p>{t('dashboard.recentDownloadsDesc', { count: data?.data?.recentDownloads || 0 })}</p>
           </Card>
         </Col>
       </Row>

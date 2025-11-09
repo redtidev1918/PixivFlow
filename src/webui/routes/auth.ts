@@ -4,6 +4,7 @@ import { loadConfig, getConfigPath } from '../../config';
 import { updateConfigWithToken } from '../../utils/login-helper';
 import { logger } from '../../logger';
 import path from 'path';
+import { ErrorCode } from '../utils/error-codes';
 
 const router = Router();
 
@@ -24,7 +25,7 @@ router.get('/status', async (req: Request, res: Response) => {
     });
   } catch (error) {
     logger.error('Failed to get auth status', { error });
-    res.status(500).json({ error: 'Failed to get auth status' });
+    res.status(500).json({ errorCode: ErrorCode.AUTH_STATUS_FAILED });
   }
 });
 
@@ -38,7 +39,7 @@ router.post('/login', async (req: Request, res: Response) => {
 
     if (!username || !password) {
       return res.status(400).json({
-        error: 'Username and password are required',
+        errorCode: ErrorCode.AUTH_USERNAME_PASSWORD_REQUIRED,
       });
     }
 
@@ -64,6 +65,7 @@ router.post('/login', async (req: Request, res: Response) => {
 
     res.json({
       success: true,
+      errorCode: ErrorCode.AUTH_LOGIN_SUCCESS,
       accessToken: loginInfo.access_token,
       refreshToken: loginInfo.refresh_token,
       expiresIn: loginInfo.expires_in,
@@ -72,7 +74,7 @@ router.post('/login', async (req: Request, res: Response) => {
   } catch (error) {
     logger.error('Login failed', { error });
     res.status(401).json({
-      error: 'Login failed',
+      errorCode: ErrorCode.AUTH_LOGIN_FAILED,
       message: error instanceof Error ? error.message : String(error),
     });
   }
@@ -94,13 +96,14 @@ router.post('/refresh', async (req: Request, res: Response) => {
 
       if (!token) {
         return res.status(400).json({
-          error: 'Refresh token is required',
+          errorCode: ErrorCode.AUTH_REFRESH_TOKEN_REQUIRED,
         });
       }
 
       const loginInfo = await TerminalLogin.refresh(token);
       res.json({
         success: true,
+        errorCode: ErrorCode.AUTH_REFRESH_SUCCESS,
         accessToken: loginInfo.access_token,
         refreshToken: loginInfo.refresh_token,
         expiresIn: loginInfo.expires_in,
@@ -109,6 +112,7 @@ router.post('/refresh', async (req: Request, res: Response) => {
       const loginInfo = await TerminalLogin.refresh(refreshToken);
       res.json({
         success: true,
+        errorCode: ErrorCode.AUTH_REFRESH_SUCCESS,
         accessToken: loginInfo.access_token,
         refreshToken: loginInfo.refresh_token,
         expiresIn: loginInfo.expires_in,
@@ -117,7 +121,7 @@ router.post('/refresh', async (req: Request, res: Response) => {
   } catch (error) {
     logger.error('Token refresh failed', { error });
     res.status(401).json({
-      error: 'Token refresh failed',
+      errorCode: ErrorCode.AUTH_REFRESH_FAILED,
       message: error instanceof Error ? error.message : String(error),
     });
   }
@@ -131,10 +135,10 @@ router.post('/logout', async (req: Request, res: Response) => {
   try {
     // In a real implementation, you might want to invalidate the token
     // For now, we just return success
-    res.json({ success: true, message: 'Logged out successfully' });
+    res.json({ success: true, errorCode: ErrorCode.AUTH_LOGOUT_SUCCESS });
   } catch (error) {
     logger.error('Logout failed', { error });
-    res.status(500).json({ error: 'Logout failed' });
+    res.status(500).json({ errorCode: ErrorCode.AUTH_LOGOUT_FAILED });
   }
 });
 

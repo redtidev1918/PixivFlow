@@ -17,7 +17,7 @@
 
 ## 🎯 脚本总览
 
-项目包含 **13个** Shell 脚本（不含共享库），分为 4 大类：
+项目包含 **14个** Shell 脚本（不含共享库），分为 4 大类：
 
 ### 核心脚本（⭐ 最常用）
 
@@ -25,8 +25,9 @@
 |------|------|--------|
 | `quick-start.sh` | 快速启动脚本（一键完成所有设置） | ⭐⭐⭐⭐⭐ |
 | `login.sh` | 登录脚本 | ⭐⭐⭐⭐⭐ |
-| `pixiv.sh` | 主控制脚本 | ⭐⭐⭐⭐⭐ |
+| `pixiv.sh` | 主控制脚本（支持自动修复） | ⭐⭐⭐⭐⭐ |
 | `easy-setup.sh` | 配置向导 | ⭐⭐⭐⭐⭐ |
+| `update-and-fix.sh` | 一键更新和修复脚本 | ⭐⭐⭐⭐⭐ |
 | `pixiv-cli.sh` | 完整 CLI 工具 | ⭐⭐⭐⭐ |
 
 ### 配置管理
@@ -288,15 +289,51 @@ npm run login -- --help
 ./scripts/pixiv.sh login --help
 ```
 
-##### 环境检查
+##### 环境检查和自动修复
 
 ```bash
+# 基础环境检查
+./scripts/pixiv.sh check
+
+# 自动修复环境问题（推荐 ⭐）
+./scripts/pixiv.sh check --fix
+
 # 健康检查
 ./scripts/pixiv.sh health
 
 # 显示帮助
 ./scripts/pixiv.sh help
 ```
+
+**💡 新功能**：`check` 命令现在支持 `--fix` 参数，可以自动修复常见问题：
+- ✅ 自动安装缺失的依赖
+- ✅ 自动创建配置文件
+- ✅ 自动编译过时的代码
+
+##### 一键更新和修复
+
+```bash
+# 一键更新代码、依赖并修复错误（推荐 ⭐）
+./scripts/pixiv.sh update
+
+# 或使用别名
+./scripts/pixiv.sh fix
+
+# 跳过 Git 更新（适用于非 Git 安装）
+./scripts/pixiv.sh update --no-git
+
+# 跳过备份
+./scripts/pixiv.sh update --no-backup
+```
+
+**💡 新功能**：`update` 命令会自动完成：
+1. ✅ 备份重要文件（配置、数据库等）
+2. ✅ 从 Git 更新代码（如适用）
+3. ✅ 更新 npm 依赖
+4. ✅ 重新编译项目
+5. ✅ 修复常见错误（路径、权限、依赖等）
+6. ✅ 验证配置
+7. ✅ 运行健康检查
 
 ---
 
@@ -334,6 +371,94 @@ npm run login -- --help
 # 重新配置（更换账号或修改设置）
 ./scripts/easy-setup.sh
 ```
+
+---
+
+### update-and-fix.sh - 一键更新和修复脚本 ⭐ 新功能
+
+**自动更新代码、依赖，修复常见错误**，确保系统正常运行。
+
+#### 基本用法
+
+```bash
+# 使用主控脚本（推荐 ⭐）
+./scripts/pixiv.sh update
+
+# 或直接运行脚本
+./scripts/update-and-fix.sh
+```
+
+#### 核心功能
+
+更新和修复脚本会自动完成：
+
+1. ✅ **备份重要文件** - 自动备份配置、数据库等
+2. ✅ **更新代码** - 从 Git 拉取最新代码（如适用）
+3. ✅ **更新依赖** - 更新 npm 依赖包
+4. ✅ **重新编译** - 重新编译 TypeScript 代码
+5. ✅ **修复错误** - 自动修复常见问题：
+   - 配置文件路径问题
+   - 数据库权限问题
+   - 目录权限问题
+   - node_modules 链接问题
+   - 日志文件过大问题
+6. ✅ **验证配置** - 验证配置文件格式和内容
+7. ✅ **健康检查** - 运行完整的健康检查
+
+#### 使用选项
+
+| 选项 | 说明 | 示例 |
+|------|------|------|
+| `--no-git` | 跳过 Git 更新（适用于非 Git 安装） | `./scripts/update-and-fix.sh --no-git` |
+| `--no-backup` | 跳过备份 | `./scripts/update-and-fix.sh --no-backup` |
+| `--help` 或 `-h` | 显示帮助信息 | `./scripts/update-and-fix.sh --help` |
+
+#### 使用示例
+
+##### 完整更新和修复（推荐 ⭐）
+
+```bash
+# 执行完整的更新和修复流程
+./scripts/pixiv.sh update
+```
+
+##### 非 Git 安装更新
+
+```bash
+# 跳过 Git 更新，只更新依赖和修复错误
+./scripts/pixiv.sh update --no-git
+```
+
+##### 快速修复（不更新代码）
+
+```bash
+# 只修复错误，不更新代码和依赖
+./scripts/update-and-fix.sh --no-git --no-backup
+```
+
+#### 自动修复的问题
+
+脚本会自动检测并修复以下问题：
+
+- ✅ **配置文件路径** - 自动迁移绝对路径为相对路径
+- ✅ **数据库权限** - 修复数据库文件权限
+- ✅ **目录权限** - 修复 data、logs、downloads 等目录权限
+- ✅ **依赖链接** - 修复 node_modules 中的链接问题
+- ✅ **日志文件** - 清理过大的日志文件（>100MB）
+
+#### 使用场景
+
+- 🔄 **定期更新** - 每周或每月运行一次，保持系统最新
+- 🐛 **问题修复** - 遇到问题时运行，自动修复常见错误
+- 🚀 **部署后** - 部署新版本后运行，确保环境正确
+- 🔧 **维护** - 作为定期维护的一部分
+
+#### 注意事项
+
+- ⚠️ 更新前会自动备份重要文件到 `backups/` 目录
+- ⚠️ 如果检测到未提交的 Git 更改，会询问是否继续
+- ⚠️ 所有修复操作都是安全的，不会丢失数据
+- ⚠️ 建议在更新前先运行 `./scripts/pixiv.sh check` 检查环境
 
 ---
 
@@ -846,19 +971,25 @@ npm run login
 
 ---
 
-### 场景 5：问题排查
+### 场景 5：问题排查和修复
 
 ```bash
-# 1. 健康检查
+# 1. 环境检查（支持自动修复 ⭐）
+./scripts/pixiv.sh check --fix
+
+# 2. 一键更新和修复（推荐 ⭐）
+./scripts/pixiv.sh update
+
+# 3. 健康检查
 ./scripts/health-check.sh
 
-# 2. 验证配置
+# 4. 验证配置
 ./scripts/config-manager.sh validate
 
-# 3. 查看日志
+# 5. 查看日志
 ./scripts/pixiv.sh logs | tail -n 50
 
-# 4. 重新配置
+# 6. 重新配置（如需要）
 ./scripts/easy-setup.sh
 ```
 
@@ -879,9 +1010,12 @@ nohup ./scripts/auto-monitor.sh &
 
 ---
 
-### 场景 7：定期维护
+### 场景 7：定期维护和更新
 
 ```bash
+# 一键更新和修复（推荐 ⭐）
+./scripts/pixiv.sh update
+
 # 每周维护
 ./scripts/auto-maintain.sh
 

@@ -541,10 +541,14 @@ PixivFlow provides rich script tools so you don't need to remember complex npm c
 | `run` | Start scheduled task (runs continuously in background) |
 | `stop` | Stop running scheduled task |
 | `status` | View current running status |
+| `check` | Environment check (supports `--fix` for auto-fix) ⭐ New |
+| `update` | One-click update and fix (update code, dependencies, fix errors) ⭐ New |
 | `health` | Health check (check config, network, etc.) |
 | `logs` | View run logs |
 
-**💡 Tip**: All commands directly call built-in CLI, no need to go through npm scripts, faster response.
+**💡 Tip**: 
+- All commands directly call built-in CLI, no need to go through npm scripts, faster response.
+- **New Features**: `check --fix` and `update` commands support automatic fixing of common issues.
 
 ### 🔐 Login Management
 
@@ -573,7 +577,37 @@ npm run login
 ./scripts/config-manager.sh restore   # Restore config
 ./scripts/config-manager.sh validate  # Validate config
 ./scripts/config-manager.sh edit      # Edit config
+
+# Configuration path migration (auto-fix absolute paths, for project migration)
+pixivflow migrate-config              # Execute migration
+pixivflow migrate-config --dry-run     # Preview changes
+pixivflow migrate-config --json        # JSON format output
+# Or use npm command
+npm run start migrate-config          # Execute migration
+npm run start migrate-config --dry-run # Preview changes
 ```
+
+### 🔧 Environment Check and Auto-Fix ⭐ New Feature
+
+```bash
+# Basic environment check
+./scripts/pixiv.sh check
+
+# Auto-fix environment issues (recommended ⭐)
+./scripts/pixiv.sh check --fix
+
+# One-click update and fix (update code, dependencies, fix errors)
+./scripts/pixiv.sh update
+
+# Or use alias
+./scripts/pixiv.sh fix
+```
+
+**New Feature Description**:
+- ✅ `check --fix`: Automatically install missing dependencies, create config, compile code
+- ✅ `update`: One-click update code, dependencies, and fix common errors
+- ✅ Smart detection: Automatically detect if build artifacts are outdated
+- ✅ Unified error handling: Provide clear error messages and fix suggestions
 
 ### 📊 Monitoring and Maintenance
 
@@ -1056,16 +1090,22 @@ npm run setup
 **Solutions**:
 
 ```bash
-# 1. Check configuration
+# 1. Environment check and auto-fix (recommended ⭐)
+./scripts/pixiv.sh check --fix
+
+# 2. One-click update and fix
+./scripts/pixiv.sh update
+
+# 3. Check configuration
 ./scripts/config-manager.sh validate
 
-# 2. View running status
+# 4. View running status
 ./scripts/pixiv.sh status
 
-# 3. Check logs
+# 5. Check logs
 ./scripts/pixiv.sh logs
 
-# 4. Ensure program keeps running
+# 6. Ensure program keeps running
 # Use PM2 to manage process
 pm2 start "npm run scheduler" --name pixivflow
 pm2 save
@@ -1359,6 +1399,8 @@ Having issues? Here are multiple ways to get help:
 | 🐛 **Bug Report** | [GitHub Issues](https://github.com/zoidberg-xgd/pixivflow/issues) | Report issues and bugs |
 | 💡 **Feature Suggestion** | [GitHub Discussions](https://github.com/zoidberg-xgd/pixivflow/discussions) | Propose new feature ideas |
 | 📖 **Usage Questions** | [View Documentation](docs/getting-started/START_HERE.md) | Read complete documentation |
+| 🔧 **Auto-Fix Issues** | `./scripts/pixiv.sh check --fix` | Auto-fix environment issues ⭐ New |
+| 🔄 **Update & Fix** | `./scripts/pixiv.sh update` | One-click update and fix ⭐ New |
 | ✅ **Environment Check** | `./scripts/pixiv.sh health` | Run health check |
 | 💬 **Community Discussion** | [Discussions](https://github.com/zoidberg-xgd/pixivflow/discussions) | Discuss with other users |
 | 📚 **Complete Tutorial** | [TUTORIAL.md](docs/getting-started/TUTORIAL.md) | Detailed usage tutorial |

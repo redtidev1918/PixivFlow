@@ -20,15 +20,23 @@ PixivFlow 支持自动检测和修复配置文件中的路径问题，使项目�
 
 ```bash
 # 预览将要进行的更改（不实际修改文件）
+pixivflow migrate-config --dry-run
+# 或使用 npm 命令
 npm run start migrate-config --dry-run
 
 # 或者指定配置文件
+pixivflow migrate-config --config config/standalone.config.json --dry-run
+# 或使用 npm 命令
 npm run start migrate-config --config config/standalone.config.json --dry-run
 
 # 执行迁移
+pixivflow migrate-config
+# 或使用 npm 命令
 npm run start migrate-config
 
 # 使用 JSON 输出格式
+pixivflow migrate-config --json
+# 或使用 npm 命令
 npm run start migrate-config --json
 ```
 
@@ -43,6 +51,8 @@ npm run start migrate-config --json
 
 ```bash
 # 在新环境中运行
+pixivflow migrate-config
+# 或使用 npm 命令
 npm run start migrate-config
 ```
 
@@ -114,6 +124,8 @@ npm run start migrate-config
 ### 示例 2：手动迁移
 
 ```bash
+$ pixivflow migrate-config --dry-run
+# 或使用 npm 命令
 $ npm run start migrate-config --dry-run
 
 [i]: Migrating configuration paths in: config/standalone.config.json
@@ -192,7 +204,7 @@ tail -f data/pixiv-downloader.log | grep "Auto-fixed"
 
 ## 相关命令
 
-- `npm run start migrate-config` - 手动迁移配置路径
-- `npm run start migrate-config --dry-run` - 预览迁移更改
-- `npm run start migrate-config --json` - JSON 格式输出
+- `pixivflow migrate-config` - 手动迁移配置路径（或使用 `npm run start migrate-config`）
+- `pixivflow migrate-config --dry-run` - 预览迁移更改（或使用 `npm run start migrate-config --dry-run`）
+- `pixivflow migrate-config --json` - JSON 格式输出（或使用 `npm run start migrate-config --json`）
 

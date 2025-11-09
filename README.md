@@ -163,34 +163,37 @@
 - Node.js 18+ 和 npm 9+
 - 一个 Pixiv 账号
 
-**Windows 用户注意**：
-- ⚠️ **推荐使用 WSL**：本项目使用 bash 脚本，在 Windows 上推荐使用 WSL (Windows Subsystem for Linux)
-  - 安装 WSL：在 PowerShell 中运行 `wsl --install`
-  - 或使用 Git Bash：如果已安装 Git for Windows，可以使用 Git Bash 运行脚本
-  - 原生 Windows 支持有限：虽然 Node.js 部分可以在 Windows 上运行，但自动化脚本需要 bash 环境
-
-**登录功能**：
+**登录功能**（首次登录需要）：
 - Python 3.9+ 和 `gppt` 包（`pip install gppt`）
-  - Python 用于登录获取 refresh token
+  - 用于登录获取 refresh token
   - 如果已有 refresh token 且未过期，则不需要重新登录
 
-### 🎬 快速开始（推荐）
+**Windows 用户**：
+- ⚠️ **推荐使用 WSL**：本项目使用 bash 脚本，在 Windows 上推荐使用 WSL
+  - 安装：在 PowerShell 中运行 `wsl --install`
+  - 或使用 Git Bash：如果已安装 Git for Windows，可以使用 Git Bash 运行脚本
 
-**最简单的方式 - 一键完成所有设置**：
+> 📖 **详细说明**：查看 [快速开始指南](docs/getting-started/QUICKSTART.md) 或 [新手完整指南](docs/getting-started/START_HERE.md)
+
+### 🎬 快速开始（3 步完成）
 
 ```bash
 # 1. 安装依赖
 npm install
 
-# 2. 运行快速启动脚本（自动完成登录、配置、测试）
-./scripts/quick-start.sh
+# 2. 登录账号
+npm run login
+
+# 3. 开始下载
+npm run download
 ```
 
-就这么简单！快速启动脚本会自动引导您完成：
-- ✅ 环境检查和依赖安装
-- ✅ Pixiv 账号登录
-- ✅ 下载配置设置
-- ✅ 测试下载验证
+**或使用一键脚本**：
+
+```bash
+# 自动完成所有设置（登录、配置、测试）
+./scripts/quick-start.sh
+```
 
 ---
 
@@ -282,168 +285,12 @@ npm install -g git+https://github.com/zoidberg-xgd/pixivflow.git
 
 ---
 
-### 🎯 手动配置方式
+### 📖 详细步骤
 
-如果您想手动控制每个步骤：
-
-#### 1️⃣ 安装依赖
-
-```bash
-npm install
-```
-
-#### 2️⃣ 登录 Pixiv 账号
-
-```bash
-# 最简单的方式：在终端输入用户名和密码（推荐）
-npm run login
-
-# 或使用配置向导（纯终端登录，交互式配置）
-./scripts/easy-setup.sh
-# 或
-npm run setup
-```
-
-**登录说明**：
-- ✅ **交互式登录模式**（默认）：打开浏览器窗口，在浏览器中手动登录
-  - 使用 Python gppt 库，内部通过 Selenium 打开浏览器窗口
-  - 适合：需要手动处理验证码或安全验证的情况
-- ✅ **Headless 登录模式**：后台运行浏览器，自动输入用户名和密码
-  - 使用 Python gppt 库，内部通过 Selenium 在后台运行浏览器
-  - 需要提供 `-u` 和 `-p` 参数（用户名和密码）
-  - 适合：服务器环境或自动化场景
-- ✅ 自动更新配置：登录成功后自动更新配置文件中的 refresh token
-- ✅ 配置向导：使用 `npm run setup` 可进行交互式配置
-
-**关于 Python 依赖**：
-- 🔐 **用于登录**：Python 和 gppt 用于登录获取 refresh token
-  - 两种登录模式都使用 Python gppt 库
-  - gppt 内部使用 Selenium 自动化浏览器（交互模式打开窗口，无头模式后台运行）
-- ✅ **已登录后**：如果已有 refresh token 且未过期，则不需要重新登录
-- 🔄 **Token 过期时**：如果 refresh token 过期，需要重新登录
-- 💡 **替代方案**：可以在已安装 Python 的机器上完成登录，然后将 refresh token 复制到配置文件
-- 🚀 **自动安装**：可以使用部署脚本自动安装 Python 依赖：
-  ```bash
-  # 安装 Python 和 gppt
-  bash scripts/install-python-deps.sh
-  
-  # 或在部署时自动安装（部署脚本会自动检查并安装）
-  bash scripts/auto-deploy.sh
-  ```
-
-**登录模式说明**：
-- **默认模式**（`npm run login`）：打开浏览器窗口，在浏览器中手动完成登录
-- **Headless 模式**（`npm run login -- -u username -p password`）：不打开浏览器，使用命令行提供的用户名和密码自动登录
-
----
-
-### 🪟 Windows 用户特别说明
-
-**推荐使用 WSL**：
-
-本项目使用 bash 脚本进行自动化部署和配置，在 Windows 上**强烈推荐使用 WSL (Windows Subsystem for Linux)** 以获得最佳体验。
-
-#### 为什么推荐 WSL？
-
-1. **脚本兼容性**：所有自动化脚本（`*.sh`）都是 bash 脚本，在 WSL 中可以直接运行
-2. **环境一致性**：WSL 提供与 Linux 相同的环境，避免跨平台兼容性问题
-3. **更好的性能**：WSL 2 提供接近原生 Linux 的性能
-4. **完整的工具链**：可以轻松安装和使用 Linux 工具和依赖
-
-#### 安装 WSL
-
-在 PowerShell（管理员权限）中运行：
-
-```powershell
-# 安装 WSL（默认安装 Ubuntu）
-wsl --install
-
-# 或指定发行版
-wsl --install -d Ubuntu
-```
-
-安装完成后，重启电脑，然后打开 WSL 终端。
-
-#### 在 WSL 中使用项目
-
-```bash
-# 1. 在 WSL 中安装 Node.js（如果还没有）
-curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-sudo apt-get install -y nodejs
-
-# 2. 克隆项目
-git clone https://github.com/zoidberg-xgd/pixivflow.git
-cd pixivflow
-
-# 3. 安装依赖
-npm install
-
-# 4. 运行脚本（现在可以正常使用所有 bash 脚本）
-./scripts/quick-start.sh
-```
-
-#### 使用 Git Bash（备选方案）
-
-如果不想安装 WSL，也可以使用 Git Bash（随 Git for Windows 安装）：
-
-```bash
-# 在 Git Bash 中运行
-cd /c/path/to/pixivflow
-npm install
-./scripts/quick-start.sh
-```
-
-**注意**：Git Bash 对某些高级 bash 功能的支持可能不如 WSL 完整。
-
-#### 原生 Windows 使用（不推荐）
-
-虽然 Node.js 部分可以在原生 Windows 上运行，但：
-
-- ❌ 无法直接运行 `.sh` 脚本
-- ❌ 需要手动执行每个步骤
-- ❌ 某些自动化功能不可用
-- ⚠️ 需要手动配置环境变量和路径
-
-如果必须在原生 Windows 上使用，建议：
-1. 只使用 `npm run` 命令（如 `npm run login`、`npm run download`）
-2. 手动编辑配置文件
-3. 跳过自动化脚本
-
----
-
-#### 3️⃣ 配置下载选项（可选）
-
-如果使用 `npm run login` 登录，可以稍后配置下载选项：
-
-```bash
-# 运行配置向导
-./scripts/easy-setup.sh
-# 或
-npm run setup
-```
-
-配置向导会自动完成所有设置，包括：
-- ⚙️ 配置下载选项（标签、数量、筛选条件等）
-- ⏰ 定时任务设置
-
-#### 4️⃣ 开始下载
-
-```bash
-# 测试下载（推荐首次使用）
-./scripts/pixiv.sh test
-
-# 执行一次下载
-./scripts/pixiv.sh once
-
-# 启动定时任务
-./scripts/pixiv.sh run
-```
-
-就这么简单！🎉
-
-> **💡 提示**：首次使用建议先运行 `test` 测试下载 1-2 个作品，确认配置正确后再正式使用。
-> 
-> ✅ **已验证**：测试脚本已通过验证，可以正常下载作品。详细测试结果请查看 [TEST_GUIDE.md](docs/guides/TEST_GUIDE.md)。
+如需详细的手动配置步骤，请查看：
+- [⚡ 快速开始指南](docs/getting-started/QUICKSTART.md) - 3 分钟快速上手
+- [📖 新手完整指南](docs/getting-started/START_HERE.md) - 从零开始的详细教程
+- [🔐 登录指南](docs/guides/LOGIN_GUIDE.md) - 登录流程详解
 
 ---
 
@@ -656,9 +503,12 @@ npm run login
 ./scripts/config-manager.sh edit      # 编辑配置
 
 # 配置路径迁移（自动修复绝对路径，适用于项目迁移）
+pixivflow migrate-config              # 执行迁移
+pixivflow migrate-config --dry-run     # 预览更改
+pixivflow migrate-config --json        # JSON 格式输出
+# 或使用 npm 命令
 npm run start migrate-config          # 执行迁移
 npm run start migrate-config --dry-run # 预览更改
-npm run start migrate-config --json   # JSON 格式输出
 ```
 
 ### 📊 监控和维护
@@ -715,26 +565,31 @@ npm run start migrate-config --json   # JSON 格式输出
 - [Docker 网络问题解决方案](docs/docker/DOCKER_NETWORK_SOLUTION.md) - 解决代理连接问题
 - [Docker 随机下载问题解决方案](docs/docker/DOCKER_RANDOM_DOWNLOAD_FIX.md) - 解决随机下载相关问题
 
-### 🎨 高级 CLI 工具
+### 🎨 内置 CLI 命令
+
+如果已全局安装或使用 `npm run build` 构建后，可以直接使用 `pixivflow` 命令：
 
 ```bash
-# 使用完整 CLI 工具（直接调用内置功能）
-./scripts/pixiv-cli.sh <command>
+# 查看所有可用命令
+pixivflow --help
 
-# 可用命令：
-./scripts/pixiv-cli.sh login [options]    # 登录
-./scripts/pixiv-cli.sh refresh <token>     # 刷新令牌
-./scripts/pixiv-cli.sh download            # 执行下载
-./scripts/pixiv-cli.sh random              # 随机下载
-./scripts/pixiv-cli.sh scheduler           # 启动定时任务
-./scripts/pixiv-cli.sh stats               # 查看统计
-./scripts/pixiv-cli.sh export              # 导出数据
+# 常用命令：
+pixivflow login                    # 交互式登录（终端输入用户名密码）
+pixivflow login -u user -p pass    # Headless 登录（无浏览器窗口）
+pixivflow download                 # 执行一次下载
+pixivflow random                   # 随机下载一个作品
+pixivflow random --novel           # 随机下载一篇小说
+pixivflow scheduler                # 启动定时任务
+pixivflow normalize                # 整理和重组已下载的文件
+pixivflow normalize --dry-run      # 预览整理操作（不实际执行）
+pixivflow migrate-config           # 迁移配置路径（绝对路径转相对路径）
+pixivflow migrate-config --dry-run # 预览迁移更改
 ```
 
 **💡 提示**：
-- 所有脚本都支持 `--help` 查看详细用法
-- 脚本直接调用内置 CLI（`dist/index.js`），无需通过 npm，性能更好
-- 推荐使用 `./scripts/pixiv.sh` 作为主要入口
+- 所有命令都支持 `--help` 查看详细用法
+- 使用 `pixivflow` 命令比通过 npm scripts 更快（直接调用编译后的代码）
+- 推荐使用 `./scripts/pixiv.sh` 作为主要入口（封装了常用操作）
 
 详细说明：[脚本使用指南](docs/scripts/SCRIPTS_GUIDE.md)
 
@@ -742,34 +597,40 @@ npm run start migrate-config --json   # JSON 格式输出
 
 ## 📚 文档导航
 
-### 🌟 新手必读
+### 🌟 新手必读（按顺序阅读）
 
-| 文档 | 说明 |
-|------|------|
-| [📚 TUTORIAL](docs/getting-started/TUTORIAL.md) | **完整教程**：从登录到下载到定时任务，详细教学 |
-| [📖 START_HERE](docs/getting-started/START_HERE.md) | 新手完整指南，从零开始 |
-| [⚡ QUICKSTART](docs/getting-started/QUICKSTART.md) | 3 分钟快速上手 |
-| [🔐 LOGIN_GUIDE](docs/guides/LOGIN_GUIDE.md) | 登录流程详解 |
-| [🧪 TEST_GUIDE](docs/guides/TEST_GUIDE.md) | 测试和故障排除 |
+| 文档 | 说明 | 推荐度 |
+|------|------|--------|
+| [⚡ QUICKSTART](docs/getting-started/QUICKSTART.md) | **3 分钟快速上手** - 最快开始使用 | ⭐⭐⭐⭐⭐ |
+| [📖 START_HERE](docs/getting-started/START_HERE.md) | **新手完整指南** - 从零开始的详细教程 | ⭐⭐⭐⭐⭐ |
+| [📚 TUTORIAL](docs/getting-started/TUTORIAL.md) | **完整教程** - 深入了解所有功能 | ⭐⭐⭐⭐ |
+| [🔐 LOGIN_GUIDE](docs/guides/LOGIN_GUIDE.md) | **登录流程详解** - 登录问题解决方案 | ⭐⭐⭐⭐ |
+| [🧪 TEST_GUIDE](docs/guides/TEST_GUIDE.md) | **测试和故障排除** - 验证安装和配置 | ⭐⭐⭐⭐ |
 
-### 📘 进阶文档
+### 📘 功能指南
 
-| 文档 | 说明 |
-|------|------|
-| [⚙️ STANDALONE-SETUP-GUIDE](docs/guides/STANDALONE-SETUP-GUIDE.md) | 完整配置选项说明 |
-| [🛠️ SCRIPTS_GUIDE](docs/scripts/SCRIPTS_GUIDE.md) | 所有脚本详细说明 |
-| [📋 CONFIG_GUIDE](docs/guides/CONFIG_GUIDE.md) | 配置文件使用指南 |
-| [📊 RANKING_DOWNLOAD_GUIDE](docs/guides/RANKING_DOWNLOAD_GUIDE.md) | 排行榜下载指南 |
-| [🌐 WEBUI_README](docs/webui/WEBUI_README.md) | WebUI 使用指南 |
-| [🚀 WEBUI_SETUP](docs/webui/WEBUI_SETUP.md) | WebUI 设置指南 |
+| 文档 | 说明 | 推荐度 |
+|------|------|--------|
+| [📋 CONFIG_GUIDE](docs/guides/CONFIG_GUIDE.md) | **配置文件使用指南** - 所有配置选项详解 | ⭐⭐⭐⭐⭐ |
+| [⚙️ STANDALONE-SETUP-GUIDE](docs/guides/STANDALONE-SETUP-GUIDE.md) | **完整配置选项说明** - 高级配置参考 | ⭐⭐⭐⭐ |
+| [📊 RANKING_DOWNLOAD_GUIDE](docs/guides/RANKING_DOWNLOAD_GUIDE.md) | **排行榜下载指南** - 下载排行榜作品 | ⭐⭐⭐⭐ |
+| [🔄 CONFIG-PATH-MIGRATION](docs/guides/CONFIG-PATH-MIGRATION.md) | **配置路径迁移** - 项目迁移指南 | ⭐⭐⭐ |
 
-### 🐳 Docker 文档
+### 🛠️ 工具和脚本
 
-| 文档 | 说明 |
-|------|------|
-| [🐳 DOCKER](docs/docker/DOCKER.md) | Docker 使用指南 |
-| [🔧 DOCKER_NETWORK_SOLUTION](docs/docker/DOCKER_NETWORK_SOLUTION.md) | Docker 网络问题解决方案 |
-| [🔧 DOCKER_RANDOM_DOWNLOAD_FIX](docs/docker/DOCKER_RANDOM_DOWNLOAD_FIX.md) | Docker 随机下载问题解决方案 |
+| 文档 | 说明 | 推荐度 |
+|------|------|--------|
+| [🛠️ SCRIPTS_GUIDE](docs/scripts/SCRIPTS_GUIDE.md) | **脚本使用指南** - 所有脚本详细说明 | ⭐⭐⭐⭐⭐ |
+
+### 🌐 WebUI 和 Docker
+
+| 文档 | 说明 | 推荐度 |
+|------|------|--------|
+| [🌐 WEBUI_README](docs/webui/WEBUI_README.md) | **WebUI 使用指南** - Web 管理界面 | ⭐⭐⭐⭐ |
+| [🚀 WEBUI_SETUP](docs/webui/WEBUI_SETUP.md) | **WebUI 设置指南** - WebUI 部署配置 | ⭐⭐⭐ |
+| [🐳 DOCKER](docs/docker/DOCKER.md) | **Docker 使用指南** - Docker 部署和使用 | ⭐⭐⭐⭐ |
+| [🔧 DOCKER_NETWORK_SOLUTION](docs/docker/DOCKER_NETWORK_SOLUTION.md) | **Docker 网络问题** - 代理连接问题解决 | ⭐⭐⭐ |
+| [🔧 DOCKER_RANDOM_DOWNLOAD_FIX](docs/docker/DOCKER_RANDOM_DOWNLOAD_FIX.md) | **Docker 随机下载** - 随机下载问题解决 | ⭐⭐⭐ |
 
 ### 📄 项目文档
 

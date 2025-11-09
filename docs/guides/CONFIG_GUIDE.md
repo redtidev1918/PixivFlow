@@ -855,6 +855,48 @@ pixivflow download --config config/config2.json
 
 **A:** 程序会自动检查数据库，已下载的作品不会重复下载。数据库路径由 `storage.databasePath` 配置（默认 `./data/pixiv-downloader.db`）。
 
+## 📁 文件整理功能
+
+PixivFlow 提供了文件整理功能，可以重新组织已下载的文件，使其符合当前的目录组织配置。
+
+### 使用 normalize 命令
+
+```bash
+# 整理所有文件（插画和小说）
+pixivflow normalize
+
+# 预览整理操作（不实际执行）
+pixivflow normalize --dry-run
+
+# 只整理插画文件
+pixivflow normalize --type illustration
+
+# 只整理小说文件
+pixivflow normalize --type novel
+```
+
+### 功能说明
+
+`normalize` 命令会：
+- ✅ **重新组织文件**：根据当前配置的 `illustrationOrganization` 和 `novelOrganization` 重新组织文件
+- ✅ **规范化文件名**：清理文件名中的特殊字符，确保文件名符合系统要求
+- ✅ **更新数据库**：更新数据库中的文件路径记录
+- ✅ **保持元数据**：保留作品的 JSON 元数据文件
+
+### 使用场景
+
+1. **更改组织模式后**：如果修改了配置文件中的组织模式，可以使用此命令重新组织已下载的文件
+2. **迁移项目后**：项目迁移到新环境后，可以使用此命令整理文件结构
+3. **修复文件结构**：如果文件结构混乱，可以使用此命令统一整理
+
+### 注意事项
+
+- ⚠️ **建议先预览**：使用 `--dry-run` 参数预览将要进行的操作
+- ⚠️ **备份数据**：整理前建议备份下载目录和数据库
+- ⚠️ **确保配置正确**：确保配置文件中的组织模式设置正确
+
+---
+
 ## 🔄 配置路径迁移
 
 PixivFlow 支持自动检测和修复配置文件中的路径问题，使项目可以在不同环境之间轻松迁移。
@@ -873,12 +915,18 @@ PixivFlow 支持自动检测和修复配置文件中的路径问题，使项目�
 
 ```bash
 # 预览将要进行的更改（不实际修改文件）
+pixivflow migrate-config --dry-run
+# 或使用 npm 命令
 npm run start migrate-config --dry-run
 
 # 执行迁移
+pixivflow migrate-config
+# 或使用 npm 命令
 npm run start migrate-config
 
 # 使用 JSON 输出格式
+pixivflow migrate-config --json
+# 或使用 npm 命令
 npm run start migrate-config --json
 ```
 

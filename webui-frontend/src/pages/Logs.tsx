@@ -29,6 +29,7 @@ import {
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { api } from '../services/api';
+import { translateErrorCode, extractErrorInfo } from '../utils/errorCodeTranslator';
 import io, { Socket } from 'socket.io-client';
 
 const { Title, Text } = Typography;
@@ -76,7 +77,8 @@ export default function Logs() {
       queryClient.invalidateQueries({ queryKey: ['logs'] });
     },
     onError: (error: any) => {
-      message.error(error.response?.data?.error || t('logs.clearFailed'));
+      const { errorCode, message: errorMessage } = extractErrorInfo(error);
+      message.error(translateErrorCode(errorCode, t, undefined, errorMessage || t('logs.clearFailed')));
     },
   });
 

@@ -4,6 +4,7 @@ import { relative } from 'path';
 import { loadConfig, getConfigPath, StandaloneConfig } from '../../config';
 import { logger } from '../../logger';
 import { validateConfig } from '../utils/config-validator';
+import { ErrorCode } from '../utils/error-codes';
 
 const router = Router();
 
@@ -36,7 +37,7 @@ router.get('/', async (req: Request, res: Response) => {
     });
   } catch (error) {
     logger.error('Failed to get config', { error });
-    res.status(500).json({ error: 'Failed to get config' });
+    res.status(500).json({ errorCode: ErrorCode.CONFIG_GET_FAILED });
   }
 });
 
@@ -66,7 +67,7 @@ router.put('/', async (req: Request, res: Response) => {
     const validationResult = validateConfig(updatedConfig);
     if (!validationResult.valid) {
       return res.status(400).json({
-        error: 'Invalid configuration',
+        errorCode: ErrorCode.CONFIG_INVALID,
         details: validationResult.errors,
       });
     }
@@ -78,12 +79,12 @@ router.put('/', async (req: Request, res: Response) => {
 
     res.json({
       success: true,
-      message: 'Configuration updated successfully',
+      errorCode: ErrorCode.CONFIG_UPDATE_SUCCESS,
     });
   } catch (error) {
     logger.error('Failed to update config', { error });
     res.status(500).json({
-      error: 'Failed to update config',
+      errorCode: ErrorCode.CONFIG_UPDATE_FAILED,
       message: error instanceof Error ? error.message : String(error),
     });
   }
@@ -104,7 +105,7 @@ router.post('/validate', async (req: Request, res: Response) => {
     });
   } catch (error) {
     logger.error('Failed to validate config', { error });
-    res.status(500).json({ error: 'Failed to validate config' });
+    res.status(500).json({ errorCode: ErrorCode.CONFIG_VALIDATE_FAILED });
   }
 });
 
@@ -124,11 +125,11 @@ router.get('/backup', async (req: Request, res: Response) => {
     res.json({
       success: true,
       backupPath,
-      message: 'Configuration backed up successfully',
+      errorCode: ErrorCode.CONFIG_BACKUP_SUCCESS,
     });
   } catch (error) {
     logger.error('Failed to backup config', { error });
-    res.status(500).json({ error: 'Failed to backup config' });
+    res.status(500).json({ errorCode: ErrorCode.CONFIG_BACKUP_FAILED });
   }
 });
 
@@ -142,7 +143,7 @@ router.post('/restore', async (req: Request, res: Response) => {
 
     if (!backupPath || !existsSync(backupPath)) {
       return res.status(400).json({
-        error: 'Invalid backup path',
+        errorCode: ErrorCode.CONFIG_BACKUP_PATH_INVALID,
       });
     }
 
@@ -153,11 +154,11 @@ router.post('/restore', async (req: Request, res: Response) => {
 
     res.json({
       success: true,
-      message: 'Configuration restored successfully',
+      errorCode: ErrorCode.CONFIG_RESTORE_SUCCESS,
     });
   } catch (error) {
     logger.error('Failed to restore config', { error });
-    res.status(500).json({ error: 'Failed to restore config' });
+    res.status(500).json({ errorCode: ErrorCode.CONFIG_RESTORE_FAILED });
   }
 });
 

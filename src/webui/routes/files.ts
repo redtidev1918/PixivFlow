@@ -6,6 +6,7 @@ import { logger } from '../../logger';
 import { Database } from '../../storage/Database';
 import { FileService } from '../../download/FileService';
 import { FileNormalizationService } from '../../download/FileNormalizationService';
+import { ErrorCode } from '../utils/error-codes';
 
 const router = Router();
 
@@ -28,7 +29,7 @@ router.get('/list', async (req: Request, res: Response) => {
 
     // Security: Ensure path is within base directory
     if (!fullPath.startsWith(baseDir)) {
-      return res.status(400).json({ error: 'Invalid path' });
+      return res.status(400).json({ errorCode: ErrorCode.FILE_PATH_INVALID });
     }
 
     if (!existsSync(fullPath)) {
@@ -97,7 +98,7 @@ router.get('/list', async (req: Request, res: Response) => {
     });
   } catch (error) {
     logger.error('Failed to list files', { error });
-    res.status(500).json({ error: 'Failed to list files' });
+    res.status(500).json({ errorCode: ErrorCode.FILE_LIST_FAILED });
   }
 });
 
@@ -111,7 +112,7 @@ router.get('/preview', async (req: Request, res: Response) => {
     const { path: filePath, type = 'illustration' } = req.query;
     
     if (!filePath) {
-      return res.status(400).json({ error: 'File path is required' });
+      return res.status(400).json({ errorCode: ErrorCode.FILE_PATH_REQUIRED });
     }
 
     const configPath = getConfigPath();
@@ -150,17 +151,17 @@ router.get('/preview', async (req: Request, res: Response) => {
         baseDir: resolvedBaseDir, 
         fullPath: resolvedFullPath 
       });
-      return res.status(400).json({ error: 'Invalid path' });
+      return res.status(400).json({ errorCode: ErrorCode.FILE_PATH_INVALID });
     }
 
     if (!existsSync(resolvedFullPath)) {
       logger.error('File not found', { path: resolvedFullPath, baseDir: resolvedBaseDir });
-      return res.status(404).json({ error: 'File not found' });
+      return res.status(404).json({ errorCode: ErrorCode.FILE_NOT_FOUND });
     }
 
     const stats = statSync(resolvedFullPath);
     if (stats.isDirectory()) {
-      return res.status(400).json({ error: 'Path is a directory, not a file' });
+      return res.status(400).json({ errorCode: ErrorCode.FILE_IS_DIRECTORY });
     }
 
     // Set appropriate headers
@@ -206,7 +207,7 @@ router.get('/preview', async (req: Request, res: Response) => {
           if (err) {
             logger.error('Failed to send image file', { error: err, path: resolvedFullPath });
             if (!res.headersSent) {
-              res.status(500).json({ error: 'Failed to read file' });
+              res.status(500).json({ errorCode: ErrorCode.FILE_READ_FAILED });
             }
           }
         });
@@ -220,7 +221,7 @@ router.get('/preview', async (req: Request, res: Response) => {
             if (err) {
               logger.error('Failed to send file', { error: err, path: resolvedFullPath });
               if (!res.headersSent) {
-                res.status(500).json({ error: 'Failed to read file' });
+                res.status(500).json({ errorCode: ErrorCode.FILE_READ_FAILED });
               }
             }
           });
@@ -234,13 +235,13 @@ router.get('/preview', async (req: Request, res: Response) => {
         isImage
       });
       if (!res.headersSent) {
-        res.status(500).json({ error: 'Failed to get file preview' });
+        res.status(500).json({ errorCode: ErrorCode.FILE_PREVIEW_FAILED });
       }
     }
   } catch (error) {
     logger.error('Failed to get file preview', { error });
     if (!res.headersSent) {
-      res.status(500).json({ error: 'Failed to get file preview' });
+      res.status(500).json({ errorCode: ErrorCode.FILE_PREVIEW_FAILED });
     }
   }
 });
@@ -265,22 +266,22 @@ router.delete('/:id', async (req: Request, res: Response) => {
 
     // Security: Ensure path is within base directory
     if (!fullPath.startsWith(baseDir)) {
-      return res.status(400).json({ error: 'Invalid path' });
+      return res.status(400).json({ errorCode: ErrorCode.FILE_PATH_INVALID });
     }
 
     if (!existsSync(fullPath)) {
-      return res.status(404).json({ error: 'File not found' });
+      return res.status(404).json({ errorCode: ErrorCode.FILE_NOT_FOUND });
     }
 
     unlinkSync(fullPath);
 
     res.json({
       success: true,
-      message: 'File deleted successfully',
+      errorCode: ErrorCode.FILE_DELETE_SUCCESS,
     });
   } catch (error) {
     logger.error('Failed to delete file', { error });
-    res.status(500).json({ error: 'Failed to delete file' });
+    res.status(500).json({ errorCode: ErrorCode.FILE_DELETE_FAILED });
   }
 });
 
@@ -340,7 +341,7 @@ router.post('/normalize', async (req: Request, res: Response) => {
     }
     const errorMessage = error instanceof Error ? error.message : String(error);
     logger.error('Failed to normalize files', { error: { message: errorMessage } });
-    res.status(500).json({ error: 'Failed to normalize files', message: errorMessage });
+    res.status(500).json({ errorCode: ErrorCode.FILE_NORMALIZE_FAILED, message: errorMessage });
   }
 });
 

@@ -4,6 +4,7 @@ import { downloadTaskManager } from '../services/DownloadTaskManager';
 import { Database } from '../../storage/Database';
 import { loadConfig, getConfigPath } from '../../config';
 import { relative, join } from 'path';
+import { ErrorCode } from '../utils/error-codes';
 
 const router = Router();
 
@@ -60,7 +61,7 @@ router.post('/start', async (req: Request, res: Response) => {
     // Check if there's already an active task
     if (downloadTaskManager.hasActiveTask()) {
       return res.status(409).json({
-        error: 'Another download task is already running',
+        errorCode: ErrorCode.DOWNLOAD_TASK_ALREADY_RUNNING,
       });
     }
 
@@ -74,12 +75,12 @@ router.post('/start', async (req: Request, res: Response) => {
     res.json({
       success: true,
       taskId,
-      message: 'Download task started',
+      errorCode: ErrorCode.DOWNLOAD_START_SUCCESS,
     });
   } catch (error) {
     logger.error('Failed to start download', { error });
     res.status(500).json({
-      error: 'Failed to start download',
+      errorCode: ErrorCode.DOWNLOAD_START_FAILED,
       message: error instanceof Error ? error.message : String(error),
     });
   }
@@ -95,7 +96,7 @@ router.post('/stop', async (req: Request, res: Response) => {
 
     if (!taskId) {
       return res.status(400).json({
-        error: 'Task ID is required',
+        errorCode: ErrorCode.DOWNLOAD_TASK_ID_REQUIRED,
       });
     }
 
@@ -103,12 +104,12 @@ router.post('/stop', async (req: Request, res: Response) => {
 
     res.json({
       success: true,
-      message: 'Download task stopped',
+      errorCode: ErrorCode.DOWNLOAD_STOP_SUCCESS,
     });
   } catch (error) {
     logger.error('Failed to stop download', { error });
     res.status(500).json({
-      error: 'Failed to stop download',
+      errorCode: ErrorCode.DOWNLOAD_STOP_FAILED,
       message: error instanceof Error ? error.message : String(error),
     });
   }
@@ -142,7 +143,7 @@ router.get('/status', async (req: Request, res: Response) => {
       const status = downloadTaskManager.getTaskStatus(taskId as string);
       if (!status) {
         return res.status(404).json({
-          error: 'Task not found',
+          errorCode: ErrorCode.DOWNLOAD_TASK_NOT_FOUND,
         });
       }
       return res.json(serializeTaskStatus(status));
@@ -159,7 +160,7 @@ router.get('/status', async (req: Request, res: Response) => {
     });
   } catch (error) {
     logger.error('Failed to get download status', { error });
-    res.status(500).json({ error: 'Failed to get download status' });
+    res.status(500).json({ errorCode: ErrorCode.DOWNLOAD_STATUS_FAILED });
   }
 });
 
@@ -173,7 +174,7 @@ router.get('/logs', async (req: Request, res: Response) => {
 
     if (!taskId) {
       return res.status(400).json({
-        error: 'Task ID is required',
+        errorCode: ErrorCode.DOWNLOAD_TASK_ID_REQUIRED,
       });
     }
 
@@ -194,7 +195,7 @@ router.get('/logs', async (req: Request, res: Response) => {
   } catch (error) {
     logger.error('Failed to get task logs', { error });
     res.status(500).json({
-      error: 'Failed to get task logs',
+      errorCode: ErrorCode.DOWNLOAD_LOGS_FAILED,
       message: error instanceof Error ? error.message : String(error),
     });
   }
@@ -260,7 +261,7 @@ router.get('/history', async (req: Request, res: Response) => {
     const errorDetails = error instanceof Error ? { message: errorMessage, stack: error.stack } : { message: errorMessage };
     logger.error('Failed to get download history', { error: errorDetails });
     res.status(500).json({ 
-      error: 'Failed to get download history',
+      errorCode: ErrorCode.DOWNLOAD_HISTORY_FAILED,
       message: errorMessage 
     });
   }
@@ -274,7 +275,7 @@ router.post('/run-all', async (req: Request, res: Response) => {
   try {
     if (downloadTaskManager.hasActiveTask()) {
       return res.status(409).json({
-        error: 'Another download task is already running',
+        errorCode: ErrorCode.DOWNLOAD_TASK_ALREADY_RUNNING,
       });
     }
 
@@ -288,12 +289,12 @@ router.post('/run-all', async (req: Request, res: Response) => {
     res.json({
       success: true,
       taskId,
-      message: 'Download all targets started',
+      errorCode: ErrorCode.DOWNLOAD_RUN_ALL_START_SUCCESS,
     });
   } catch (error) {
     logger.error('Failed to start download all', { error });
     res.status(500).json({
-      error: 'Failed to start download all',
+      errorCode: ErrorCode.DOWNLOAD_RUN_ALL_START_FAILED,
       message: error instanceof Error ? error.message : String(error),
     });
   }
@@ -346,7 +347,7 @@ router.get('/incomplete', async (req: Request, res: Response) => {
     }
     logger.error('Failed to get incomplete tasks', { error });
     res.status(500).json({
-      error: 'Failed to get incomplete tasks',
+      errorCode: ErrorCode.DOWNLOAD_INCOMPLETE_GET_FAILED,
       message: error instanceof Error ? error.message : String(error),
     });
   }
@@ -406,8 +407,8 @@ router.delete('/incomplete', async (req: Request, res: Response) => {
         reason: result.message 
       });
       return res.status(500).json({
-        error: result.message || 'Failed to delete all incomplete tasks',
-        message: result.message || 'Failed to delete all incomplete tasks',
+        errorCode: ErrorCode.DOWNLOAD_INCOMPLETE_DELETE_ALL_FAILED,
+        message: result.message,
       });
     }
 
@@ -419,9 +420,7 @@ router.delete('/incomplete', async (req: Request, res: Response) => {
     res.json({
       success: true,
       deletedCount: result.deletedCount,
-      message: result.deletedCount === 0 
-        ? '没有未完成的任务需要删除' 
-        : `成功删除 ${result.deletedCount} 个未完成任务`,
+      errorCode: ErrorCode.DOWNLOAD_INCOMPLETE_DELETE_ALL_SUCCESS,
     });
   } catch (error) {
     // Ensure database is closed even on error
@@ -441,7 +440,7 @@ router.delete('/incomplete', async (req: Request, res: Response) => {
       errorStack: error instanceof Error ? error.stack : undefined,
     });
     res.status(500).json({
-      error: 'Failed to delete all incomplete tasks',
+      errorCode: ErrorCode.DOWNLOAD_INCOMPLETE_DELETE_ALL_FAILED,
       message: error instanceof Error ? error.message : String(error),
     });
   }
@@ -464,8 +463,8 @@ router.delete('/incomplete/:id', async (req: Request, res: Response) => {
         parsedId: id 
       });
       return res.status(400).json({
-        error: 'Invalid task ID',
-        message: `Task ID must be a valid positive integer, got: ${rawId}`,
+        errorCode: ErrorCode.DOWNLOAD_INCOMPLETE_TASK_ID_INVALID,
+        params: { rawId },
       });
     }
 
@@ -478,8 +477,7 @@ router.delete('/incomplete/:id', async (req: Request, res: Response) => {
     if (!config.storage?.databasePath) {
       logger.error('Database path not configured');
       return res.status(500).json({
-        error: 'Database not configured',
-        message: 'Database path is not set in configuration',
+        errorCode: ErrorCode.DOWNLOAD_DATABASE_NOT_CONFIGURED,
       });
     }
 
@@ -492,7 +490,7 @@ router.delete('/incomplete/:id', async (req: Request, res: Response) => {
         databasePath: config.storage.databasePath,
       });
       return res.status(500).json({
-        error: 'Database initialization failed',
+        errorCode: ErrorCode.DOWNLOAD_DATABASE_INIT_FAILED,
         message: dbError instanceof Error ? dbError.message : String(dbError),
       });
     }
@@ -518,15 +516,15 @@ router.delete('/incomplete/:id', async (req: Request, res: Response) => {
         reason: result.message 
       });
       return res.status(statusCode).json({
-        error: result.message || 'Task not found or cannot be deleted',
-        message: result.message || 'Task not found or cannot be deleted',
+        errorCode: ErrorCode.DOWNLOAD_INCOMPLETE_DELETE_FAILED,
+        message: result.message,
       });
     }
 
     logger.info('Successfully deleted incomplete task via API', { taskId: id });
     res.json({
       success: true,
-      message: 'Task deleted successfully',
+      errorCode: ErrorCode.DOWNLOAD_INCOMPLETE_DELETE_SUCCESS,
     });
   } catch (error) {
     // Ensure database is closed even on error
@@ -548,7 +546,7 @@ router.delete('/incomplete/:id', async (req: Request, res: Response) => {
       errorStack: error instanceof Error ? error.stack : undefined,
     });
     res.status(500).json({
-      error: 'Failed to delete incomplete task',
+      errorCode: ErrorCode.DOWNLOAD_INCOMPLETE_DELETE_FAILED,
       message: error instanceof Error ? error.message : String(error),
     });
   }
@@ -566,8 +564,7 @@ router.get('/incomplete/test', async (req: Request, res: Response) => {
     
     if (!config.storage?.databasePath) {
       return res.status(500).json({
-        error: 'Database not configured',
-        message: 'Database path is not set in configuration',
+        errorCode: ErrorCode.DOWNLOAD_DATABASE_NOT_CONFIGURED,
       });
     }
 
@@ -582,7 +579,7 @@ router.get('/incomplete/test', async (req: Request, res: Response) => {
 
     res.json({
       success: true,
-      message: 'Database connection successful',
+      errorCode: ErrorCode.DOWNLOAD_DATABASE_TEST_SUCCESS,
       taskCount: tasks.length,
       sampleTasks: tasks.slice(0, 3),
     });
@@ -596,7 +593,7 @@ router.get('/incomplete/test', async (req: Request, res: Response) => {
     }
     logger.error('Database test failed', { error });
     res.status(500).json({
-      error: 'Database test failed',
+      errorCode: ErrorCode.DOWNLOAD_DATABASE_TEST_FAILED,
       message: error instanceof Error ? error.message : String(error),
     });
   }
@@ -612,14 +609,14 @@ router.post('/resume', async (req: Request, res: Response) => {
 
     if (!tag || !type) {
       return res.status(400).json({
-        error: 'Tag and type are required',
+        errorCode: ErrorCode.DOWNLOAD_RESUME_TAG_TYPE_REQUIRED,
       });
     }
 
     // Check if there's already an active task
     if (downloadTaskManager.hasActiveTask()) {
       return res.status(409).json({
-        error: 'Another download task is already running',
+        errorCode: ErrorCode.DOWNLOAD_TASK_ALREADY_RUNNING,
       });
     }
 
@@ -633,7 +630,8 @@ router.post('/resume', async (req: Request, res: Response) => {
 
     if (!target) {
       return res.status(404).json({
-        error: `Target not found for tag "${tag}" and type "${type}"`,
+        errorCode: ErrorCode.DOWNLOAD_RESUME_TARGET_NOT_FOUND,
+        params: { tag, type },
       });
     }
 
@@ -648,14 +646,13 @@ router.post('/resume', async (req: Request, res: Response) => {
     res.json({
       success: true,
       taskId,
-      message: `Resuming download task for tag "${tag}" (${type})`,
-      tag,
-      type,
+      errorCode: ErrorCode.DOWNLOAD_RESUME_SUCCESS,
+      params: { tag, type },
     });
   } catch (error) {
     logger.error('Failed to resume download', { error });
     res.status(500).json({
-      error: 'Failed to resume download',
+      errorCode: ErrorCode.DOWNLOAD_RESUME_FAILED,
       message: error instanceof Error ? error.message : String(error),
     });
   }
@@ -669,7 +666,7 @@ router.post('/random', async (req: Request, res: Response) => {
   try {
     if (downloadTaskManager.hasActiveTask()) {
       return res.status(409).json({
-        error: 'Another download task is already running',
+        errorCode: ErrorCode.DOWNLOAD_TASK_ALREADY_RUNNING,
       });
     }
 
@@ -707,14 +704,15 @@ router.post('/random', async (req: Request, res: Response) => {
     res.json({
       success: true,
       taskId,
-      message: `Random ${targetType} download started`,
+      errorCode: ErrorCode.DOWNLOAD_RANDOM_START_SUCCESS,
+      params: { type: targetType },
       tag: randomTag,
       type: targetType,
     });
   } catch (error) {
     logger.error('Failed to start random download', { error });
     res.status(500).json({
-      error: 'Failed to start random download',
+      errorCode: ErrorCode.DOWNLOAD_RANDOM_START_FAILED,
       message: error instanceof Error ? error.message : String(error),
     });
   }

@@ -40,7 +40,7 @@ import { api } from '../services/api';
 import { translateErrorCode, extractErrorInfo } from '../utils/errorCodeTranslator';
 
 const { Title, Text, Paragraph } = Typography;
-const { Option } = Select;
+const { Option, OptGroup } = Select;
 const { Panel } = Collapse;
 const { Step } = Steps;
 
@@ -627,25 +627,57 @@ export default function Config() {
                 <Input />
               </Form.Item>
 
-              <Form.Item label={t('config.storageIllustrationOrganization')} name={['storage', 'illustrationOrganization']}>
+              <Form.Item 
+                label={t('config.storageIllustrationOrganization')} 
+                name={['storage', 'illustrationOrganization']}
+                tooltip={t('config.storageIllustrationOrganizationTooltip')}
+              >
                 <Select>
-                  <Option value="flat">{t('config.organizationFlat')}</Option>
-                  <Option value="byAuthor">{t('config.organizationByAuthor')}</Option>
-                  <Option value="byTag">{t('config.organizationByTag')}</Option>
-                  <Option value="byDate">{t('config.organizationByDate')}</Option>
-                  <Option value="byAuthorAndTag">{t('config.organizationByAuthorAndTag')}</Option>
-                  <Option value="byDateAndAuthor">{t('config.organizationByDateAndAuthor')}</Option>
+                  <OptGroup label={t('config.organizationGroupSimple')}>
+                    <Option value="flat">{t('config.organizationFlat')}</Option>
+                    <Option value="byAuthor">{t('config.organizationByAuthor')}</Option>
+                    <Option value="byTag">{t('config.organizationByTag')}</Option>
+                  </OptGroup>
+                  <OptGroup label={t('config.organizationGroupDate')}>
+                    <Option value="byDate">{t('config.organizationByDate')}</Option>
+                    <Option value="byDay">{t('config.organizationByDay')}</Option>
+                    <Option value="byDownloadDate">{t('config.organizationByDownloadDate')}</Option>
+                    <Option value="byDownloadDay">{t('config.organizationByDownloadDay')}</Option>
+                  </OptGroup>
+                  <OptGroup label={t('config.organizationGroupCombined')}>
+                    <Option value="byAuthorAndTag">{t('config.organizationByAuthorAndTag')}</Option>
+                    <Option value="byDateAndAuthor">{t('config.organizationByDateAndAuthor')}</Option>
+                    <Option value="byDayAndAuthor">{t('config.organizationByDayAndAuthor')}</Option>
+                    <Option value="byDownloadDateAndAuthor">{t('config.organizationByDownloadDateAndAuthor')}</Option>
+                    <Option value="byDownloadDayAndAuthor">{t('config.organizationByDownloadDayAndAuthor')}</Option>
+                  </OptGroup>
                 </Select>
               </Form.Item>
 
-              <Form.Item label={t('config.storageNovelOrganization')} name={['storage', 'novelOrganization']}>
+              <Form.Item 
+                label={t('config.storageNovelOrganization')} 
+                name={['storage', 'novelOrganization']}
+                tooltip={t('config.storageNovelOrganizationTooltip')}
+              >
                 <Select>
-                  <Option value="flat">{t('config.organizationFlat')}</Option>
-                  <Option value="byAuthor">{t('config.organizationByAuthor')}</Option>
-                  <Option value="byTag">{t('config.organizationByTag')}</Option>
-                  <Option value="byDate">{t('config.organizationByDate')}</Option>
-                  <Option value="byAuthorAndTag">{t('config.organizationByAuthorAndTag')}</Option>
-                  <Option value="byDateAndAuthor">{t('config.organizationByDateAndAuthor')}</Option>
+                  <OptGroup label={t('config.organizationGroupSimple')}>
+                    <Option value="flat">{t('config.organizationFlat')}</Option>
+                    <Option value="byAuthor">{t('config.organizationByAuthor')}</Option>
+                    <Option value="byTag">{t('config.organizationByTag')}</Option>
+                  </OptGroup>
+                  <OptGroup label={t('config.organizationGroupDate')}>
+                    <Option value="byDate">{t('config.organizationByDate')}</Option>
+                    <Option value="byDay">{t('config.organizationByDay')}</Option>
+                    <Option value="byDownloadDate">{t('config.organizationByDownloadDate')}</Option>
+                    <Option value="byDownloadDay">{t('config.organizationByDownloadDay')}</Option>
+                  </OptGroup>
+                  <OptGroup label={t('config.organizationGroupCombined')}>
+                    <Option value="byAuthorAndTag">{t('config.organizationByAuthorAndTag')}</Option>
+                    <Option value="byDateAndAuthor">{t('config.organizationByDateAndAuthor')}</Option>
+                    <Option value="byDayAndAuthor">{t('config.organizationByDayAndAuthor')}</Option>
+                    <Option value="byDownloadDateAndAuthor">{t('config.organizationByDownloadDateAndAuthor')}</Option>
+                    <Option value="byDownloadDayAndAuthor">{t('config.organizationByDownloadDayAndAuthor')}</Option>
+                  </OptGroup>
                 </Select>
               </Form.Item>
             </Card>

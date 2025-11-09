@@ -1,8 +1,45 @@
-# 查找已下载文件指南
+# 查找已下载文件指南（命令行方法）
 
-本指南介绍如何查找刚刚下载的文件，以及如何区分不同时间下载的文件。
+本指南介绍如何**不依赖前端**，通过命令行查找刚刚下载的文件。
 
-## 方法一：使用 API 查询最近下载的文件
+> **注意**：所有方法都不需要打开 WebUI 前端界面，可以直接在终端中使用。
+
+## 最简单的方法：按下载日期组织文件
+
+**推荐方式**：通过配置文件的组织模式，让系统自动按下载日期组织文件，这样今天下载的文件会自动放在今天的文件夹中，昨天下载的放在昨天的文件夹中。
+
+### 配置方法
+
+在配置文件中设置 `illustrationOrganization` 或 `novelOrganization` 为以下模式之一：
+
+- `byDownloadDay` - 按下载日期（年月日）组织：`下载目录/2024-01-15/文件名`
+- `byDownloadDate` - 按下载月份组织：`下载目录/2024-01/文件名`
+- `byDownloadDayAndAuthor` - 按下载日期和作者组织：`下载目录/2024-01-15/作者名/文件名`
+- `byDownloadDateAndAuthor` - 按下载月份和作者组织：`下载目录/2024-01/作者名/文件名`
+
+### 配置示例
+
+```json
+{
+  "storage": {
+    "downloadDirectory": "./downloads",
+    "illustrationOrganization": "byDownloadDay",
+    "novelOrganization": "byDownloadDay"
+  }
+}
+```
+
+配置后，新下载的文件会自动按下载日期组织：
+- 今天（2024-01-15）下载的文件 → `downloads/2024-01-15/文件名`
+- 昨天（2024-01-14）下载的文件 → `downloads/2024-01-14/文件名`
+
+这样你就可以直接通过文件夹结构找到不同日期下载的文件，无需查询数据库或使用 API。
+
+> **提示**：`byDownloadDay` 使用下载日期（当前日期），而 `byDay` 使用作品的创建日期。如果你想要按下载日期组织，请使用 `byDownloadDay` 而不是 `byDay`。
+
+## 方法一：使用 API 查询（推荐）
+
+需要确保 WebUI 服务正在运行（默认端口 3000）。
 
 ### 1. 查询最近下载的文件（默认最近50个）
 
@@ -16,8 +53,8 @@ curl http://localhost:3000/api/files/recent?type=illustration
 # 只查询小说
 curl http://localhost:3000/api/files/recent?type=novel
 
-# 指定返回数量
-curl http://localhost:3000/api/files/recent?limit=100
+# 指定返回数量（例如最近10个）
+curl "http://localhost:3000/api/files/recent?limit=10"
 ```
 
 ### 2. 查询今天下载的文件

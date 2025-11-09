@@ -111,12 +111,16 @@ export class FileService {
     const parts: string[] = [];
 
     // Extract date information once for reuse
-    const getDateParts = () => {
-      const date = metadata?.date
-        ? typeof metadata.date === 'string'
-          ? new Date(metadata.date)
-          : metadata.date
-        : new Date();
+    // For byDownloadDate/byDownloadDay modes, use current date (download date)
+    // For byDate/byDay modes, use creation date from metadata
+    const getDateParts = (useDownloadDate: boolean) => {
+      const date = useDownloadDate
+        ? new Date() // Use current date (download date)
+        : (metadata?.date
+            ? typeof metadata.date === 'string'
+              ? new Date(metadata.date)
+              : metadata.date
+            : new Date()); // Fallback to current date if no metadata date
       return {
         year: date.getFullYear(),
         month: String(date.getMonth() + 1).padStart(2, '0'),
@@ -124,9 +128,9 @@ export class FileService {
       };
     };
 
-    // Handle date-based organization modes
+    // Handle date-based organization modes (using creation date)
     if (mode === 'byDate' || mode === 'byDateAndAuthor') {
-      const { year, month } = getDateParts();
+      const { year, month } = getDateParts(false);
       parts.push(`${year}-${month}`);
       // Add type subdirectory only if baseDirectory doesn't already end with a type directory
       if (fileType && !alreadyHasTypeDir) {
@@ -135,7 +139,26 @@ export class FileService {
     }
 
     if (mode === 'byDay' || mode === 'byDayAndAuthor') {
-      const { year, month, day } = getDateParts();
+      const { year, month, day } = getDateParts(false);
+      parts.push(`${year}-${month}-${day}`);
+      // Add type subdirectory only if baseDirectory doesn't already end with a type directory
+      if (fileType && !alreadyHasTypeDir) {
+        parts.push(fileType === 'novel' ? 'novels' : 'illustrations');
+      }
+    }
+
+    // Handle download date-based organization modes (using download date = current date)
+    if (mode === 'byDownloadDate' || mode === 'byDownloadDateAndAuthor') {
+      const { year, month } = getDateParts(true);
+      parts.push(`${year}-${month}`);
+      // Add type subdirectory only if baseDirectory doesn't already end with a type directory
+      if (fileType && !alreadyHasTypeDir) {
+        parts.push(fileType === 'novel' ? 'novels' : 'illustrations');
+      }
+    }
+
+    if (mode === 'byDownloadDay' || mode === 'byDownloadDayAndAuthor') {
+      const { year, month, day } = getDateParts(true);
       parts.push(`${year}-${month}-${day}`);
       // Add type subdirectory only if baseDirectory doesn't already end with a type directory
       if (fileType && !alreadyHasTypeDir) {
@@ -144,7 +167,7 @@ export class FileService {
     }
 
     // Handle author-based organization
-    if (mode === 'byAuthor' || mode === 'byAuthorAndTag' || mode === 'byDateAndAuthor' || mode === 'byDayAndAuthor') {
+    if (mode === 'byAuthor' || mode === 'byAuthorAndTag' || mode === 'byDateAndAuthor' || mode === 'byDayAndAuthor' || mode === 'byDownloadDateAndAuthor' || mode === 'byDownloadDayAndAuthor') {
       const author = metadata?.author ? this.sanitizeDirectoryName(metadata.author) : 'unknown';
       parts.push(author);
     }

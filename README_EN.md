@@ -240,6 +240,14 @@ pixivflow download
 
 # Start scheduled task
 pixivflow scheduler
+
+# Normalize and reorganize downloaded files
+pixivflow normalize
+pixivflow normalize --dry-run      # Preview changes without applying
+
+# Migrate configuration paths (convert absolute to relative)
+pixivflow migrate-config
+pixivflow migrate-config --dry-run # Preview migration changes
 ```
 
 #### Configuration After Global Installation
@@ -659,10 +667,11 @@ Detailed guide: [Script Usage Guide](docs/scripts/SCRIPTS_GUIDE.md)
 
 | Document | Description |
 |----------|-------------|
-| [⚙️ STANDALONE-SETUP-GUIDE](docs/guides/STANDALONE-SETUP-GUIDE.md) | Complete configuration options |
-| [🛠️ SCRIPTS_GUIDE](docs/scripts/SCRIPTS_GUIDE.md) | All scripts detailed guide |
 | [📋 CONFIG_GUIDE](docs/guides/CONFIG_GUIDE.md) | Configuration file usage guide |
+| [⚙️ STANDALONE-SETUP-GUIDE](docs/guides/STANDALONE-SETUP-GUIDE.md) | Complete configuration options |
 | [📊 RANKING_DOWNLOAD_GUIDE](docs/guides/RANKING_DOWNLOAD_GUIDE.md) | Ranking download guide |
+| [🔄 CONFIG-PATH-MIGRATION](docs/guides/CONFIG-PATH-MIGRATION.md) | Configuration path migration guide |
+| [🛠️ SCRIPTS_GUIDE](docs/scripts/SCRIPTS_GUIDE.md) | All scripts detailed guide |
 | [🌐 WEBUI_README](docs/webui/WEBUI_README.md) | WebUI usage guide |
 | [🚀 WEBUI_SETUP](docs/webui/WEBUI_SETUP.md) | WebUI setup guide |
 

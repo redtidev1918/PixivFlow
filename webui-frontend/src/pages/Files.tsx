@@ -328,7 +328,11 @@ export default function Files() {
       dataIndex: 'modified',
       key: 'modified',
       width: 180,
-      render: (time: string) => (time ? new Date(time).toLocaleString() : '-'),
+      render: (time: string) => {
+        if (!time) return '-';
+        const locale = i18n.language.startsWith('zh') ? 'zh-CN' : 'en-US';
+        return new Date(time).toLocaleString(locale);
+      },
     },
     {
       title: t('files.actions'),

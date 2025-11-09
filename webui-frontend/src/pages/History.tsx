@@ -12,7 +12,7 @@ const { Search } = Input;
 const { RangePicker } = DatePicker;
 
 export default function History() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [typeFilter, setTypeFilter] = useState<string | undefined>();
@@ -67,6 +67,7 @@ export default function History() {
     if (!filteredItems.length) return;
     
     const headers = [t('history.pixivId'), t('history.type'), t('history.workTitle'), t('history.tag'), t('history.author'), t('history.filePath'), t('history.downloadedAt')];
+    const locale = i18n.language.startsWith('zh') ? 'zh-CN' : 'en-US';
     const rows = filteredItems.map((item: any) => [
       item.pixivId,
       item.type === 'illustration' ? t('history.typeIllustration') : t('history.typeNovel'),
@@ -74,7 +75,7 @@ export default function History() {
       item.tag,
       item.author || '',
       item.filePath,
-      new Date(item.downloadedAt).toLocaleString(),
+      new Date(item.downloadedAt).toLocaleString(locale),
     ]);
 
     const csvContent = [
@@ -225,7 +226,10 @@ export default function History() {
       dataIndex: 'downloadedAt',
       key: 'downloadedAt',
       width: 180,
-      render: (time: string) => new Date(time).toLocaleString(),
+      render: (time: string) => {
+        const locale = i18n.language.startsWith('zh') ? 'zh-CN' : 'en-US';
+        return new Date(time).toLocaleString(locale);
+      },
     },
   ];
 

@@ -38,7 +38,7 @@ import { api } from '../services/api';
 const { Title, Text, Paragraph } = Typography;
 
 export default function Download() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
   const [form] = Form.useForm();
   const [showStartModal, setShowStartModal] = useState(false);
@@ -244,14 +244,21 @@ export default function Download() {
       dataIndex: 'startTime',
       key: 'startTime',
       width: 180,
-      render: (time: string) => new Date(time).toLocaleString(),
+      render: (time: string) => {
+        const locale = i18n.language.startsWith('zh') ? 'zh-CN' : 'en-US';
+        return new Date(time).toLocaleString(locale);
+      },
     },
     {
       title: t('download.endTime'),
       dataIndex: 'endTime',
       key: 'endTime',
       width: 180,
-      render: (time: string | undefined) => (time ? new Date(time).toLocaleString() : '-'),
+      render: (time: string | undefined) => {
+        if (!time) return '-';
+        const locale = i18n.language.startsWith('zh') ? 'zh-CN' : 'en-US';
+        return new Date(time).toLocaleString(locale);
+      },
     },
     {
       title: t('download.errorInfo'),
@@ -434,7 +441,10 @@ export default function Download() {
               {getStatusTag(statusData.data.activeTask.status)}
             </Descriptions.Item>
             <Descriptions.Item label={t('download.startTime')} span={1}>
-              {new Date(statusData.data.activeTask.startTime).toLocaleString()}
+              {(() => {
+                const locale = i18n.language.startsWith('zh') ? 'zh-CN' : 'en-US';
+                return new Date(statusData.data.activeTask.startTime).toLocaleString(locale);
+              })()}
             </Descriptions.Item>
             <Descriptions.Item label={t('download.duration')} span={1}>
               <Text strong>{calculateDuration(statusData.data.activeTask.startTime, statusData.data.activeTask.endTime)}</Text>
@@ -455,7 +465,10 @@ export default function Download() {
             )}
             {statusData.data.activeTask.endTime && (
               <Descriptions.Item label={t('download.endTime')} span={2}>
-                {new Date(statusData.data.activeTask.endTime).toLocaleString()}
+                {(() => {
+                  const locale = i18n.language.startsWith('zh') ? 'zh-CN' : 'en-US';
+                  return new Date(statusData.data.activeTask.endTime).toLocaleString(locale);
+                })()}
               </Descriptions.Item>
             )}
             {statusData.data.activeTask.error && (
@@ -496,7 +509,8 @@ export default function Download() {
                         }}
                       >
                         {taskLogsData.data.logs.map((log: any, index: number) => {
-                          const timestamp = new Date(log.timestamp).toLocaleTimeString();
+                          const locale = i18n.language.startsWith('zh') ? 'zh-CN' : 'en-US';
+                          const timestamp = new Date(log.timestamp).toLocaleTimeString(locale);
                           const levelColor: Record<string, string> = {
                             error: '#ff4d4f',
                             warn: '#faad14',
@@ -669,7 +683,10 @@ export default function Download() {
                 dataIndex: 'executedAt',
                 key: 'executedAt',
                 width: 180,
-                render: (time: string) => new Date(time).toLocaleString(),
+                render: (time: string) => {
+                  const locale = i18n.language.startsWith('zh') ? 'zh-CN' : 'en-US';
+                  return new Date(time).toLocaleString(locale);
+                },
               },
               {
                 title: t('download.actions'),

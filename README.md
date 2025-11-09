@@ -476,6 +476,8 @@ PixivFlow 提供了丰富的脚本工具，让你无需记忆复杂的 npm 命�
 | `run` | 启动定时任务（后台持续运行） |
 | `stop` | 停止运行的定时任务 |
 | `status` | 查看当前运行状态 |
+| `check` | 环境检查（支持 `--fix` 自动修复） ⭐ 新功能 |
+| `update` | 一键更新和修复（更新代码、依赖、修复错误） ⭐ 新功能 |
 | `health` | 健康检查（检查配置、网络等） |
 | `logs` | 查看运行日志 |
 
@@ -483,6 +485,7 @@ PixivFlow 提供了丰富的脚本工具，让你无需记忆复杂的 npm 命�
 - 所有命令都直接调用内置 CLI，无需通过 npm scripts，响应更快
 - 所有功能都可以在无前端环境下完美运行
 - 后端是项目的核心，前端只是可选的辅助工具
+- **新功能**：`check --fix` 和 `update` 命令支持自动修复常见问题
 
 ### 🔐 登录管理
 
@@ -520,6 +523,28 @@ pixivflow migrate-config --json        # JSON 格式输出
 npm run start migrate-config          # 执行迁移
 npm run start migrate-config --dry-run # 预览更改
 ```
+
+### 🔧 环境检查和自动修复 ⭐ 新功能
+
+```bash
+# 基础环境检查
+./scripts/pixiv.sh check
+
+# 自动修复环境问题（推荐 ⭐）
+./scripts/pixiv.sh check --fix
+
+# 一键更新和修复（更新代码、依赖、修复错误）
+./scripts/pixiv.sh update
+
+# 或使用别名
+./scripts/pixiv.sh fix
+```
+
+**新功能说明**：
+- ✅ `check --fix`：自动安装缺失依赖、创建配置、编译代码
+- ✅ `update`：一键更新代码、依赖，并修复常见错误
+- ✅ 智能检测：自动检测编译产物是否过时
+- ✅ 统一错误处理：提供清晰的错误提示和修复建议
 
 ### 📊 监控和维护
 

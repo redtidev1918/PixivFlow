@@ -154,12 +154,63 @@ check_npm() {
     return 0
 }
 
-# 检查项目依赖
+# 检查项目依赖（智能检查）
 check_dependencies() {
     if [[ ! -d "node_modules" ]]; then
         log_warn "依赖未安装"
         return 1
     fi
+    
+    # 检查关键依赖是否存在
+    local critical_deps=("node_modules/better-sqlite3" "node_modules/node-fetch" "node_modules/cheerio")
+    local missing=0
+    
+    for dep in "${critical_deps[@]}"; do
+        if [[ ! -e "$dep" ]]; then
+            ((missing++))
+        fi
+    done
+    
+    if [[ $missing -gt 0 ]]; then
+        log_warn "检测到 $missing 个关键依赖缺失"
+        return 1
+    fi
+    
+    return 0
+}
+
+# 智能安装依赖（带自动修复）
+install_dependencies_smart() {
+    local auto_fix="${1:-false}"
+    
+    if ! check_node || ! check_npm; then
+        log_error "Node.js 或 npm 未安装"
+        return 1
+    fi
+    
+    if ! check_dependencies; then
+        log_info "正在安装依赖..."
+        if npm install; then
+            log_success "依赖安装完成"
+            return 0
+        else
+            log_error "依赖安装失败"
+            
+            if [[ "$auto_fix" == "true" ]]; then
+                log_info "尝试自动修复..."
+                # 清理并重新安装
+                safe_remove "node_modules"
+                safe_remove "package-lock.json"
+                if npm install; then
+                    log_success "自动修复成功"
+                    return 0
+                fi
+            fi
+            
+            return 1
+        fi
+    fi
+    
     return 0
 }
 
@@ -178,7 +229,60 @@ check_build() {
         log_info "主程序未编译"
         return 1
     fi
+    
+    # 检查编译产物是否过时（比源文件旧）
+    if [[ -f "src/index.ts" ]]; then
+        local src_time
+        local dist_time
+        
+        case "$(get_os)" in
+            macos)
+                src_time=$(stat -f "%m" "src/index.ts" 2>/dev/null || echo "0")
+                dist_time=$(stat -f "%m" "$DIST_MAIN" 2>/dev/null || echo "0")
+                ;;
+            linux)
+                src_time=$(stat -c "%Y" "src/index.ts" 2>/dev/null || echo "0")
+                dist_time=$(stat -c "%Y" "$DIST_MAIN" 2>/dev/null || echo "0")
+                ;;
+            *)
+                return 0  # 无法比较，假设正常
+                ;;
+        esac
+        
+        if [[ $src_time -gt $dist_time ]]; then
+            log_info "编译产物已过时，需要重新编译"
+            return 1
+        fi
+    fi
+    
     return 0
+}
+
+# 智能编译（自动检测并编译）
+build_smart() {
+    if ! check_node || ! check_dependencies; then
+        log_error "环境不满足编译要求"
+        return 1
+    fi
+    
+    if check_build; then
+        log_success "编译产物已是最新"
+        return 0
+    fi
+    
+    log_info "正在编译..."
+    if npm run build 2>&1 | grep -qE "(error|Error|ERROR)" && [[ ${PIPESTATUS[0]} -ne 0 ]]; then
+        log_error "编译失败"
+        return 1
+    fi
+    
+    if [[ -f "$DIST_MAIN" ]]; then
+        log_success "编译成功"
+        return 0
+    else
+        log_error "编译失败：主程序文件不存在"
+        return 1
+    fi
 }
 
 # ============================================================================
@@ -423,6 +527,42 @@ set_error_trap() {
     trap 'trap_cleanup' EXIT
 }
 
+# 统一错误处理（带自动修复建议）
+handle_error() {
+    local error_code=$1
+    local error_message="$2"
+    local auto_fix="${3:-false}"
+    
+    log_error "$error_message"
+    
+    # 根据错误类型提供修复建议
+    case "$error_code" in
+        DEPENDENCIES_MISSING)
+            log_info "建议: 运行 'npm install' 或 './scripts/pixiv.sh setup'"
+            if [[ "$auto_fix" == "true" ]]; then
+                install_dependencies_smart true
+            fi
+            ;;
+        BUILD_MISSING)
+            log_info "建议: 运行 'npm run build' 或 './scripts/pixiv.sh build'"
+            if [[ "$auto_fix" == "true" ]]; then
+                build_smart
+            fi
+            ;;
+        CONFIG_MISSING)
+            log_info "建议: 运行 './scripts/pixiv.sh setup' 创建配置"
+            ;;
+        NETWORK_ERROR)
+            log_info "建议: 检查网络连接或配置代理"
+            ;;
+        PERMISSION_ERROR)
+            log_info "建议: 检查文件权限或使用 'chmod' 修复"
+            ;;
+    esac
+    
+    return $error_code
+}
+
 # ============================================================================
 # 版本比较
 # ============================================================================
@@ -488,6 +628,9 @@ if [[ "${BASH_SOURCE[0]}" != "${0}" ]]; then
     export -f check_dependencies
     export -f check_config
     export -f check_build
+    export -f install_dependencies_smart
+    export -f build_smart
+    export -f handle_error
     export -f log_info
     export -f log_success
     export -f log_warn

@@ -30,6 +30,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { api } from '../services/api';
 import { translateErrorCode, extractErrorInfo } from '../utils/errorCodeTranslator';
+import { formatDate } from '../utils/dateUtils';
 import io, { Socket } from 'socket.io-client';
 
 const { Title, Text } = Typography;
@@ -44,7 +45,7 @@ interface LogEntry {
 }
 
 export default function Logs() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(100);
@@ -207,15 +208,7 @@ export default function Logs() {
       if (diffHours < 24) return `${diffHours} ${t('logs.hoursAgo')}`;
       if (diffDays < 7) return `${diffDays} ${t('logs.daysAgo')}`;
       
-      const locale = i18n.language.startsWith('zh') ? 'zh-CN' : 'en-US';
-      return date.toLocaleString(locale, {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-      });
+      return formatDate(date);
     } catch {
       return timestamp;
     }
@@ -288,8 +281,7 @@ export default function Logs() {
       render: (timestamp: string | undefined) => {
         if (!timestamp) return <Text type="secondary">-</Text>;
         const formatted = formatTimestamp(timestamp);
-        const locale = i18n.language.startsWith('zh') ? 'zh-CN' : 'en-US';
-        const fullTime = timestamp ? new Date(timestamp).toLocaleString(locale) : '';
+        const fullTime = timestamp ? formatDate(timestamp) : '';
         return (
           <Tooltip title={fullTime}>
             <Text type="secondary" style={{ fontSize: '12px' }}>{formatted}</Text>

@@ -23,32 +23,65 @@ init_script
 
 ensure_node() {
     if ! check_node || ! check_npm; then
-        log_info "请安装 Node.js: https://nodejs.org/"
+        log_error "Node.js 或 npm 未安装"
+        log_info "请访问: https://nodejs.org/ 安装 Node.js"
         exit 1
     fi
 }
 
 ensure_deps() {
     if ! check_dependencies; then
-        log_error "依赖未安装，请运行: $0 setup"
-        exit 1
+        log_warn "依赖未安装或缺失"
+        
+        # 自动修复选项
+        if ask_yes_no "是否自动安装依赖？" "y"; then
+            if install_dependencies_smart true; then
+                log_success "依赖安装完成"
+                return 0
+            else
+                log_error "依赖安装失败，请手动运行: $0 setup"
+                exit 1
+            fi
+        else
+            log_error "依赖未安装，请运行: $0 setup"
+            exit 1
+        fi
     fi
 }
 
 ensure_config() {
     if ! check_config; then
-        log_error "配置不存在，请运行: $0 setup"
-        exit 1
+        log_warn "配置文件不存在"
+        
+        # 自动修复选项
+        if ask_yes_no "是否运行配置向导？" "y"; then
+            cmd_setup
+            if check_config; then
+                log_success "配置完成"
+                return 0
+            else
+                log_error "配置失败"
+                exit 1
+            fi
+        else
+            log_error "配置不存在，请运行: $0 setup"
+            exit 1
+        fi
     fi
 }
 
 ensure_build() {
-    if [[ ! -f "dist/index.js" ]]; then
-        log_info "首次运行，正在编译..."
-        npm run build || {
+    if ! check_build; then
+        log_info "编译产物缺失或过时，正在编译..."
+        
+        # 使用智能编译
+        if build_smart; then
+            log_success "编译完成"
+        else
             log_error "编译失败"
+            log_info "提示: 运行 '$0 build' 查看详细错误信息"
             exit 1
-        }
+        fi
     fi
 }
 
@@ -91,9 +124,11 @@ show_help() {
     logs        查看日志
 
 ⚙️ 环境管理:
-    check       环境和依赖检查
+    check       环境和依赖检查（支持 --fix 自动修复）
     build       编译 TypeScript（通常自动完成）
     clean       清理编译产物
+    update      一键更新和修复（更新代码、依赖、修复错误）
+    fix         一键更新和修复（update 的别名）
 
 🔧 高级工具:
     config      配置管理工具（查看/备份/恢复）
@@ -131,13 +166,21 @@ cmd_setup() {
     
     ensure_node
     
-    # 智能依赖检查
+    # 智能依赖检查和安装
     if ! check_dependencies; then
-        log_info "正在安装依赖..."
-        npm install || {
+        log_info "检测到依赖缺失，正在自动安装..."
+        if ! install_dependencies_smart true; then
             log_error "依赖安装失败"
             exit 1
-        }
+        fi
+    fi
+    
+    # 确保编译产物存在
+    if ! check_build; then
+        log_info "正在编译..."
+        if ! build_smart; then
+            log_warn "编译失败，但继续配置向导"
+        fi
     fi
     
     # 使用专用的配置向导
@@ -154,6 +197,9 @@ cmd_setup() {
         log_info "下一步："
         echo "  • 测试配置: $0 test"
         echo "  • 启动下载: $0 run"
+        echo "  • 查看状态: $0 status"
+    else
+        log_warn "配置可能未完成，请检查配置文件: $CONFIG_FILE"
     fi
 }
 
@@ -327,6 +373,14 @@ cmd_check() {
     print_header "环境检查"
     
     local issues=0
+    local auto_fix=false
+    
+    # 检查是否有自动修复参数
+    if [[ "${1:-}" == "--fix" ]] || [[ "${1:-}" == "-f" ]]; then
+        auto_fix=true
+        log_info "启用自动修复模式"
+        echo
+    fi
     
     log_info "检查后端独立运行环境..."
     echo
@@ -353,8 +407,14 @@ cmd_check() {
     if check_dependencies; then
         log_success "依赖已安装"
     else
-        log_warn "依赖未安装"
+        log_warn "依赖未安装或缺失"
         ((issues++))
+        if [[ "$auto_fix" == "true" ]]; then
+            if install_dependencies_smart true; then
+                log_success "依赖已自动修复"
+                ((issues--))
+            fi
+        fi
     fi
     
     # 配置
@@ -363,13 +423,26 @@ cmd_check() {
     else
         log_warn "配置文件不存在"
         ((issues++))
+        if [[ "$auto_fix" == "true" ]]; then
+            log_info "运行配置向导..."
+            cmd_setup
+            if check_config; then
+                log_success "配置已自动创建"
+                ((issues--))
+            fi
+        fi
     fi
     
     # 编译
     if check_build; then
         log_success "TypeScript 已编译"
     else
-        log_info "未编译（首次运行时自动编译）"
+        log_info "未编译或已过时"
+        if [[ "$auto_fix" == "true" ]]; then
+            if build_smart; then
+                log_success "编译已自动完成"
+            fi
+        fi
     fi
     
     # 网络
@@ -391,7 +464,10 @@ cmd_check() {
         log_success "环境正常！后端可以独立运行，无需前端支持"
     else
         log_warn "发现 $issues 个问题"
-        log_info "运行 '$0 setup' 初始化环境"
+        if [[ "$auto_fix" != "true" ]]; then
+            log_info "运行 '$0 check --fix' 自动修复问题"
+            log_info "或运行 '$0 setup' 初始化环境"
+        fi
         exit 1
     fi
 }
@@ -497,6 +573,15 @@ main() {
         check)      cmd_check "$@" ;;
         build)      cmd_build "$@" ;;
         clean)      cmd_clean "$@" ;;
+        update|fix) 
+            local tool="$SCRIPT_DIR/update-and-fix.sh"
+            if [[ -f "$tool" ]]; then
+                bash "$tool" "$@"
+            else
+                log_error "更新脚本未找到: $tool"
+                exit 1
+            fi
+            ;;
         
         # 高级工具（委托）
         config)     cmd_config "$@" ;;

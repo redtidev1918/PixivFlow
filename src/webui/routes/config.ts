@@ -1,10 +1,45 @@
 import { Router, Request, Response } from 'express';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { relative } from 'path';
-import { loadConfig, getConfigPath, StandaloneConfig } from '../../config';
+import { loadConfig, getConfigPath, StandaloneConfig, ConfigValidationError } from '../../config';
 import { logger } from '../../logger';
 import { validateConfig } from '../utils/config-validator';
 import { ErrorCode } from '../utils/error-codes';
+import { ConfigError } from '../../utils/errors';
+
+function readConfigRaw(configPath: string): Partial<StandaloneConfig> | null {
+  try {
+    if (!existsSync(configPath)) {
+      return null;
+    }
+    const raw = readFileSync(configPath, 'utf-8');
+    return JSON.parse(raw) as Partial<StandaloneConfig>;
+  } catch (error) {
+    logger.warn('Failed to read raw config file', {
+      error: error instanceof Error ? error.message : String(error),
+      configPath,
+    });
+    return null;
+  }
+}
+
+function maskSensitiveFields(config: Partial<StandaloneConfig> | null): Partial<StandaloneConfig> {
+  if (!config) {
+    return {};
+  }
+  const pixiv = config.pixiv
+    ? {
+        ...config.pixiv,
+        refreshToken: config.pixiv.refreshToken ? '***' : config.pixiv.refreshToken,
+        clientSecret: config.pixiv.clientSecret ? '***' : config.pixiv.clientSecret,
+      }
+    : undefined;
+
+  return {
+    ...config,
+    pixiv,
+  };
+}
 
 const router = Router();
 
@@ -18,14 +53,7 @@ router.get('/', async (req: Request, res: Response) => {
     const config = loadConfig(configPath);
 
     // Remove sensitive information before sending
-    const safeConfig = {
-      ...config,
-      pixiv: {
-        ...config.pixiv,
-        refreshToken: config.pixiv?.refreshToken ? '***' : undefined,
-        clientSecret: config.pixiv?.clientSecret ? '***' : undefined,
-      },
-    };
+    const safeConfig = maskSensitiveFields(config);
 
     // Include config path information
     res.json({
@@ -36,6 +64,36 @@ router.get('/', async (req: Request, res: Response) => {
       },
     });
   } catch (error) {
+    if (error instanceof ConfigError) {
+      const configPath = getConfigPath();
+      const rawConfig = readConfigRaw(configPath);
+      const safeConfig = maskSensitiveFields(rawConfig);
+      const validationErrors =
+        error.cause instanceof ConfigValidationError
+          ? error.cause.errors
+          : [error.message];
+      const validationWarnings =
+        error.cause instanceof ConfigValidationError
+          ? error.cause.warnings
+          : [];
+      logger.warn('Configuration invalid when fetching config', {
+        errors: validationErrors,
+        warnings: validationWarnings,
+      });
+
+      return res.json({
+        ...safeConfig,
+        _meta: {
+          configPath,
+          configPathRelative: relative(process.cwd(), configPath),
+        },
+        _validation: {
+          valid: false,
+          errors: validationErrors,
+          warnings: validationWarnings,
+        },
+      });
+    }
     logger.error('Failed to get config', { error });
     res.status(500).json({ errorCode: ErrorCode.CONFIG_GET_FAILED });
   }
@@ -48,19 +106,39 @@ router.get('/', async (req: Request, res: Response) => {
 router.put('/', async (req: Request, res: Response) => {
   try {
     const configPath = getConfigPath();
-    const currentConfig = loadConfig(configPath);
+    let currentConfig: Partial<StandaloneConfig> = {};
+    try {
+      currentConfig = loadConfig(configPath);
+    } catch (error) {
+      if (error instanceof ConfigError) {
+        logger.warn('Current configuration is invalid, attempting to use raw config for merge', {
+          errors:
+            error.cause instanceof ConfigValidationError ? error.cause.errors : [error instanceof Error ? error.message : String(error)],
+        });
+        currentConfig = readConfigRaw(configPath) ?? {};
+      } else {
+        throw error;
+      }
+    }
 
     // Merge with existing config (preserve sensitive data)
     const updatedConfig: StandaloneConfig = {
-      ...currentConfig,
+      ...(currentConfig as StandaloneConfig),
       ...req.body,
       pixiv: {
-        ...currentConfig.pixiv,
-        ...req.body.pixiv,
-        // Preserve sensitive fields
-        refreshToken: currentConfig.pixiv?.refreshToken,
-        clientSecret: currentConfig.pixiv?.clientSecret,
+        ...(currentConfig.pixiv ?? {}),
+        ...(req.body.pixiv ?? {}),
+        // Preserve sensitive fields unless explicitly provided
+        refreshToken:
+          req.body.pixiv?.refreshToken && req.body.pixiv.refreshToken !== '***'
+            ? req.body.pixiv.refreshToken
+            : currentConfig.pixiv?.refreshToken,
+        clientSecret:
+          req.body.pixiv?.clientSecret && req.body.pixiv.clientSecret !== '***'
+            ? req.body.pixiv.clientSecret
+            : currentConfig.pixiv?.clientSecret,
       },
+      targets: req.body.targets ?? currentConfig.targets ?? [],
     };
 
     // Validate configuration

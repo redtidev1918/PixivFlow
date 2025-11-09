@@ -52,7 +52,6 @@ extraResources:
       - "!**/README*"
       - "!**/CHANGELOG*"
       - "!**/LICENSE*"
-      - "!**/package.json"
       - "!**/tsconfig.json"
   # 前端构建后的静态文件（需要放在 extraResources 中，这样 Express 可以直接访问）
   - from: dist

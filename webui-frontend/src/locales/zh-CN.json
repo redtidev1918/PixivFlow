@@ -84,11 +84,11 @@
     "loginButton": "登录",
     "loggingIn": "登录中...",
     "processing": "正在处理登录",
-    "processingDesc": "正在使用 gppt 进行 Pixiv OAuth 认证，这可能需要一些时间。如果是首次登录，应用可能会自动安装 gppt 库（可能需要几分钟），请耐心等待。",
-    "processingInteractiveDesc": "正在打开浏览器窗口，请在浏览器中完成登录。如果是首次登录，应用可能会自动安装 gppt 库（可能需要几分钟），请耐心等待。",
+    "processingDesc": "正在使用 gppt 进行 Pixiv OAuth 认证（无头模式），这可能需要一些时间。如果是首次使用无头模式，应用可能会自动安装 gppt 库（可能需要几分钟），请耐心等待。",
+    "processingInteractiveDesc": "正在打开浏览器窗口，请在浏览器中完成登录。交互模式使用 Puppeteer，无需安装额外依赖。",
     "requirements": "登录说明",
-    "requirementsDesc": "登录使用 Python gppt 库完成 Pixiv OAuth 认证。首次登录时，如果 gppt 未安装，应用会自动安装（可能需要几分钟）。登录过程可能需要一些时间，请耐心等待。",
-    "browserWindowNote": "注意：交互模式会打开一个独立的浏览器窗口，您需要在浏览器中手动完成登录。这是 gppt 库的要求，无法在页面内完成。",
+    "requirementsDesc": "推荐使用交互模式（Puppeteer）登录，更稳定且无需额外依赖。无头模式使用 Python gppt 库，首次使用时会自动安装（可能需要几分钟）。",
+    "browserWindowNote": "注意：交互模式会打开一个独立的浏览器窗口，您需要在浏览器中手动完成登录。这种方式更稳定，推荐使用。",
     "note": "登录成功后，refresh_token 会保存到配置文件，之后无需再次登录。"
   },
   "config": {

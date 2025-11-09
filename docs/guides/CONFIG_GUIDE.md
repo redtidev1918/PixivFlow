@@ -855,6 +855,41 @@ pixivflow download --config config/config2.json
 
 **A:** 程序会自动检查数据库，已下载的作品不会重复下载。数据库路径由 `storage.databasePath` 配置（默认 `./data/pixiv-downloader.db`）。
 
+## 🔄 配置路径迁移
+
+PixivFlow 支持自动检测和修复配置文件中的路径问题，使项目可以在不同环境之间轻松迁移。
+
+### 自动路径修复
+
+项目在加载配置时会自动检测并修复以下问题：
+
+- **绝对路径转相对路径**：如果配置中的绝对路径位于项目根目录内，会自动转换为相对路径
+- **路径不存在修复**：如果配置的路径不存在，会尝试使用默认路径
+- **自动保存修复**：修复后的配置会自动保存回配置文件
+
+### 手动路径迁移
+
+使用 `migrate-config` 命令可以手动迁移配置路径：
+
+```bash
+# 预览将要进行的更改（不实际修改文件）
+npm run start migrate-config --dry-run
+
+# 执行迁移
+npm run start migrate-config
+
+# 使用 JSON 输出格式
+npm run start migrate-config --json
+```
+
+### 使用场景
+
+1. **项目迁移到新环境**：将项目从一个目录迁移到另一个目录时，路径会自动修复
+2. **配置文件包含绝对路径**：自动转换为相对路径，提高可移植性
+3. **路径不存在**：自动尝试使用默认路径
+
+详细说明请查看 [配置路径迁移指南](CONFIG-PATH-MIGRATION.md)。
+
 ## 📚 更多资源
 
 - `config/standalone.config.example.json` - 基础配置示例
@@ -862,3 +897,4 @@ pixivflow download --config config/config2.json
 - `config/standalone.config.ranking.json` - 排行榜下载配置示例
 - [STANDALONE-SETUP-GUIDE.md](STANDALONE-SETUP-GUIDE.md) - 详细设置指南
 - [RANKING_DOWNLOAD_GUIDE.md](RANKING_DOWNLOAD_GUIDE.md) - 排行榜下载指南
+- [CONFIG-PATH-MIGRATION.md](CONFIG-PATH-MIGRATION.md) - 配置路径迁移指南

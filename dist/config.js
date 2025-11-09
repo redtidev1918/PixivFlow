@@ -13,6 +13,7 @@ const node_path_1 = require("node:path");
 const node_cron_1 = __importDefault(require("node-cron"));
 const errors_1 = require("./utils/errors");
 const logger_1 = require("./logger");
+const config_path_migrator_1 = require("./utils/config-path-migrator");
 /**
  * Default configuration values
  */
@@ -275,6 +276,29 @@ function loadConfig(configPath) {
     parsed = applyEnvironmentOverrides(parsed);
     // Auto-detect Docker environment and adjust proxy configuration
     parsed = adjustProxyForEnvironment(parsed);
+    // Auto-fix paths in configuration (convert absolute to relative, fix missing paths)
+    const autoFixResult = config_path_migrator_1.ConfigPathMigrator.autoFixConfig(parsed, process.cwd());
+    if (autoFixResult.fixed && autoFixResult.changes.length > 0) {
+        logger_1.logger.info('Auto-fixed configuration paths', {
+            changes: autoFixResult.changes.map(c => ({
+                field: c.field,
+                oldPath: c.oldPath,
+                newPath: c.newPath,
+                reason: c.reason,
+            })),
+        });
+        // Save the fixed configuration back to file
+        try {
+            const fixedRaw = JSON.stringify(parsed, null, 2);
+            (0, node_fs_1.writeFileSync)(resolvedPath, fixedRaw, 'utf-8');
+            logger_1.logger.info('Configuration file updated with fixed paths', { path: resolvedPath });
+        }
+        catch (error) {
+            logger_1.logger.warn('Failed to save fixed configuration', {
+                error: error instanceof Error ? error.message : String(error),
+            });
+        }
+    }
     // Validate configuration
     validateConfig(parsed, resolvedPath);
     // Apply defaults

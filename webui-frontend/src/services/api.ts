@@ -87,5 +87,12 @@ export const api = {
     apiClient.get('/files/preview', { params: { path, type }, responseType: 'blob' }),
   deleteFile: (id: string, params?: { path?: string; type?: string }) =>
     apiClient.delete(`/files/${id}`, { params }),
+  normalizeFiles: (options?: {
+    dryRun?: boolean;
+    normalizeNames?: boolean;
+    reorganize?: boolean;
+    updateDatabase?: boolean;
+    type?: 'illustration' | 'novel' | 'all';
+  }) => apiClient.post('/files/normalize', options),
 };
 

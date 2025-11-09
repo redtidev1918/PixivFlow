@@ -1,9 +1,10 @@
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, writeFileSync } from 'node:fs';
 import { resolve, dirname, isAbsolute, join } from 'node:path';
 import cron from 'node-cron';
 
 import { ConfigError } from './utils/errors';
 import { logger } from './logger';
+import { ConfigPathMigrator } from './utils/config-path-migrator';
 
 export type TargetType = 'illustration' | 'novel';
 
@@ -595,6 +596,30 @@ export function loadConfig(configPath?: string): StandaloneConfig {
 
   // Auto-detect Docker environment and adjust proxy configuration
   parsed = adjustProxyForEnvironment(parsed);
+
+  // Auto-fix paths in configuration (convert absolute to relative, fix missing paths)
+  const autoFixResult = ConfigPathMigrator.autoFixConfig(parsed, process.cwd());
+  if (autoFixResult.fixed && autoFixResult.changes.length > 0) {
+    logger.info('Auto-fixed configuration paths', {
+      changes: autoFixResult.changes.map(c => ({
+        field: c.field,
+        oldPath: c.oldPath,
+        newPath: c.newPath,
+        reason: c.reason,
+      })),
+    });
+    
+    // Save the fixed configuration back to file
+    try {
+      const fixedRaw = JSON.stringify(parsed, null, 2);
+      writeFileSync(resolvedPath, fixedRaw, 'utf-8');
+      logger.info('Configuration file updated with fixed paths', { path: resolvedPath });
+    } catch (error) {
+      logger.warn('Failed to save fixed configuration', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
 
   // Validate configuration
   validateConfig(parsed, resolvedPath);

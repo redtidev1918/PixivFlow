@@ -1,4 +1,4 @@
-import { StorageConfig } from '../config';
+import { StorageConfig, OrganizationMode } from '../config';
 export interface FileMetadata {
     author?: string;
     tag?: string;
@@ -39,7 +39,7 @@ export declare class FileService {
     saveText(content: string, fileName: string, metadata?: FileMetadata): Promise<string>;
     sanitizeFileName(name: string): string;
     sanitizeDirectoryName(name: string): string;
-    private getOrganizedDirectory;
+    getOrganizedDirectory(baseDirectory: string, mode: OrganizationMode, metadata?: FileMetadata, fileType?: 'novel' | 'illustration'): string;
     private findUniquePath;
     private splitExtension;
     /**

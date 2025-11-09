@@ -22,7 +22,7 @@
     }
   },
   "storage": {
-    "databasePath": "/Users/yaoxiaohang/Documents/PixivBatchDownloader-master/data/pixiv-downloader.db",
+    "databasePath": "./data/pixiv-downloader.db",
     "downloadDirectory": "./downloads",
     "novelOrganization": "byDay",
     "illustrationOrganization": "byDay"

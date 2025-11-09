@@ -151,6 +151,16 @@ class Database {
             user_id: record.userId ?? null,
         });
     }
+    /**
+     * Update file path in database
+     */
+    updateFilePath(pixivId, type, oldPath, newPath) {
+        const stmt = this.db.prepare(`UPDATE downloads 
+       SET file_path = ? 
+       WHERE pixiv_id = ? AND type = ? AND file_path = ?`);
+        const result = stmt.run(newPath, pixivId, type, oldPath);
+        return result.changes;
+    }
     logExecution(tag, type, status, message) {
         const stmt = this.db.prepare(`INSERT INTO execution_log (tag, type, status, message)
        VALUES (@tag, @type, @status, @message)`);

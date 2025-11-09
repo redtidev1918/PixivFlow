@@ -10,6 +10,7 @@ import { Database } from './storage/Database';
 import { TerminalLogin, LoginInfo } from './terminal-login';
 import { updateConfigWithToken, ensureValidToken } from './utils/login-helper';
 import { createTokenMaintenanceService } from './utils/token-maintenance';
+import { ConfigPathMigrator } from './utils/config-path-migrator';
 import * as path from 'path';
 import * as readline from 'readline';
 
@@ -92,6 +93,7 @@ Commands:
   download                    Run download job once
   random, rd                  Login (if needed) and download a random image
   scheduler                   Start scheduler (default if enabled in config)
+  migrate-config, mc          Migrate configuration paths (convert absolute to relative)
   help, -h, --help            Show this help message
 
 Options:
@@ -648,6 +650,65 @@ async function handleScheduler(): Promise<void> {
 }
 
 /**
+ * Handle migrate-config command
+ */
+async function handleMigrateConfig(args: {
+  options: Record<string, string | boolean>;
+  positional: string[];
+}): Promise<void> {
+  try {
+    const configPathArg = (args.options.config as string) || undefined;
+    const configPath = getConfigPath(configPathArg);
+    const dryRun = !!(args.options['dry-run'] || args.options.dryRun);
+    const json = !!(args.options.json || args.options.j);
+
+    if (!json) {
+      console.log(`[i]: Migrating configuration paths in: ${configPath}`);
+      if (dryRun) {
+        console.log('[i]: Dry run mode - no changes will be made');
+      }
+    }
+
+    const migrator = new ConfigPathMigrator(process.cwd());
+    const result = migrator.migrateConfigFile(configPath, dryRun);
+
+    if (json) {
+      console.log(JSON.stringify(result, null, 2));
+    } else {
+      if (result.changes.length > 0) {
+        console.log(`\n[+]: Found ${result.changes.length} path(s) to migrate:`);
+        result.changes.forEach((change) => {
+          console.log(`  - ${change.field}:`);
+          console.log(`    Old: ${change.oldPath}`);
+          console.log(`    New: ${change.newPath}`);
+          console.log(`    Reason: ${change.reason}`);
+        });
+
+        if (dryRun) {
+          console.log('\n[i]: This was a dry run. Use without --dry-run to apply changes.');
+        } else if (result.updated) {
+          console.log('\n[+]: Configuration file has been updated!');
+        }
+      } else {
+        console.log('[i]: No paths need migration. Configuration is already portable.');
+      }
+
+      if (result.errors.length > 0) {
+        console.log(`\n[!]: ${result.errors.length} error(s) encountered:`);
+        result.errors.forEach((error) => {
+          console.log(`  - ${error.field}: ${error.error}`);
+        });
+      }
+    }
+
+    process.exit(result.errors.length > 0 ? 1 : 0);
+  } catch (error) {
+    console.error('[!]: Migration failed:', error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  }
+}
+
+/**
  * Main bootstrap function
  */
 async function bootstrap() {
@@ -698,6 +759,12 @@ async function bootstrap() {
   // Handle scheduler command
   if (command === 'scheduler') {
     await handleScheduler();
+    return;
+  }
+
+  // Handle migrate-config command
+  if (command === 'migrate-config' || command === 'mc') {
+    await handleMigrateConfig(args);
     return;
   }
 

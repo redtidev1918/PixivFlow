@@ -39,6 +39,10 @@ export declare class Database {
      */
     getDownloadedIds(pixivIds: string[], type: 'illustration' | 'novel'): Set<string>;
     insertDownload(record: DownloadRecordInput): void;
+    /**
+     * Update file path in database
+     */
+    updateFilePath(pixivId: string, type: 'illustration' | 'novel', oldPath: string, newPath: string): number;
     logExecution(tag: string, type: 'illustration' | 'novel', status: ExecutionStatus, message?: string): void;
     /**
      * Get incomplete tasks (failed or partial executions)

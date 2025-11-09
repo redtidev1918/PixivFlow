@@ -202,6 +202,25 @@ export class Database {
     });
   }
 
+  /**
+   * Update file path in database
+   */
+  public updateFilePath(
+    pixivId: string,
+    type: 'illustration' | 'novel',
+    oldPath: string,
+    newPath: string
+  ): number {
+    const stmt = this.db.prepare(
+      `UPDATE downloads 
+       SET file_path = ? 
+       WHERE pixiv_id = ? AND type = ? AND file_path = ?`
+    );
+
+    const result = stmt.run(newPath, pixivId, type, oldPath);
+    return result.changes;
+  }
+
   public logExecution(tag: string, type: 'illustration' | 'novel', status: ExecutionStatus, message?: string) {
     const stmt = this.db.prepare(
       `INSERT INTO execution_log (tag, type, status, message)

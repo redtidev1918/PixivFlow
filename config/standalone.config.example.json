@@ -1,10 +1,8 @@
 {
   "_comment": "PixivBatchDownloader 配置文件示例",
   "_note": "所有带下划线的字段（如 _comment）都是注释，不会影响程序运行",
-  
   "logLevel": "info",
   "_logLevel_comment": "日志级别: debug | info | warn | error",
-  
   "pixiv": {
     "_comment": "Pixiv API 凭证配置（必需）",
     "clientId": "MOBrBDS8blbauoSck0ZfDbtuzpyT",
@@ -14,7 +12,6 @@
     "_refreshToken_note": "请将 YOUR_REFRESH_TOKEN 替换为您的实际 refresh token。可以使用 npm run setup 来获取",
     "userAgent": "PixivAndroidApp/5.0.234 (Android 11; Pixel 6)"
   },
-  
   "network": {
     "_comment": "网络配置（可选，有默认值）",
     "timeoutMs": 30000,
@@ -34,7 +31,6 @@
       "password": ""
     }
   },
-  
   "storage": {
     "_comment": "存储配置（可选，有默认值）",
     "databasePath": "./data/pixiv-downloader.db",
@@ -50,7 +46,6 @@
     "novelOrganization": "flat",
     "_novelOrganization_note": "小说目录组织方式: flat（扁平）| byAuthor（按作者）| byTag（按标签）| byDate（按作品创建日期-月份）| byDay（按作品创建日期-天）| byDownloadDate（按下载日期-月份，推荐）| byDownloadDay（按下载日期-天，推荐）| byAuthorAndTag（按作者和标签）| byDateAndAuthor（按作品创建日期和作者）| byDayAndAuthor（按作品创建日期和作者）| byDownloadDateAndAuthor（按下载日期和作者）| byDownloadDayAndAuthor（按下载日期和作者），默认 flat"
   },
-  
   "scheduler": {
     "_comment": "调度器配置（可选，有默认值）",
     "enabled": false,
@@ -70,7 +65,6 @@
     "failureRetryDelay": null,
     "_failureRetryDelay_note": "失败后重试延迟（毫秒），null 表示无延迟"
   },
-  
   "download": {
     "_comment": "下载配置（可选，有默认值）",
     "concurrency": 3,
@@ -88,7 +82,6 @@
     "timeout": 60000,
     "_timeout_note": "下载超时时间（毫秒），默认 60000（60秒）"
   },
-  
   "targets": [
     {
       "_comment": "下载目标配置（必需，至少一个）",
@@ -116,7 +109,6 @@
       "_random_note": "是否随机选择，true 表示从搜索结果中随机选择"
     }
   ],
-  
   "initialDelay": 0,
   "_initialDelay_note": "启动延迟（毫秒），用于测试或延迟启动，默认 0"
 }

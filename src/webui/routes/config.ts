@@ -47,6 +47,44 @@ function maskSensitiveFields(config: Partial<StandaloneConfig> | null): Partial<
 const router = Router();
 
 /**
+ * Validate configuration filename to prevent directory traversal while allowing flexible naming
+ * Allows:
+ * - standalone.config.json
+ * - standalone.config.*.json (where * can be alphanumeric, dots, hyphens, underscores)
+ * - Any other *.json files (but must be safe)
+ */
+function isValidConfigFilename(filename: string): boolean {
+  // Must end with .json
+  if (!filename.endsWith('.json')) {
+    return false;
+  }
+  
+  // Must not be a hidden file (starting with .)
+  if (filename.startsWith('.')) {
+    return false;
+  }
+  
+  // Must not contain path separators or directory traversal
+  if (filename.includes('/') || filename.includes('\\') || filename.includes('..')) {
+    return false;
+  }
+  
+  // Must only contain safe characters: letters, numbers, dots, hyphens, underscores
+  // Remove .json extension for validation
+  const nameWithoutExt = filename.slice(0, -5);
+  if (!/^[a-zA-Z0-9._-]+$/.test(nameWithoutExt)) {
+    return false;
+  }
+  
+  // Must not be empty after removing extension
+  if (nameWithoutExt.length === 0) {
+    return false;
+  }
+  
+  return true;
+}
+
+/**
  * GET /api/config
  * Get current configuration
  * If there's an active config history, automatically apply it to ensure consistency
@@ -798,7 +836,12 @@ router.get('/files', async (req: Request, res: Response) => {
   try {
     const configManager = getConfigManager('config');
     const files = configManager.listConfigFiles();
-    const currentConfig = configManager.getCurrentConfigFile();
+    
+    // Log for debugging - helps identify if files are being filtered incorrectly
+    logger.debug('Listing config files', {
+      count: files.length,
+      filenames: files.map(f => f.filename),
+    });
     
     res.json({
       data: files.map(file => ({
@@ -807,11 +850,15 @@ router.get('/files', async (req: Request, res: Response) => {
         pathRelative: relative(process.cwd(), file.path),
         modifiedTime: file.modifiedTime.toISOString(),
         size: file.size,
-        isActive: file.path === currentConfig,
+        // Use isActive from listConfigFiles() which correctly compares resolved paths
+        isActive: file.isActive,
       })),
     });
   } catch (error) {
-    logger.error('Failed to list config files', { error });
+    logger.error('Failed to list config files', { 
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
     res.status(500).json({ errorCode: ErrorCode.CONFIG_GET_FAILED });
   }
 });
@@ -930,7 +977,7 @@ router.delete('/files/:filename', async (req: Request, res: Response) => {
     const path = join(configDir, filename);
     
     // Validate filename to prevent directory traversal
-    if (!filename.match(/^standalone\.config(\.\d+)?\.json$/)) {
+    if (!isValidConfigFilename(filename)) {
       return res.status(400).json({
         errorCode: ErrorCode.CONFIG_INVALID,
         message: 'Invalid configuration filename',
@@ -973,7 +1020,7 @@ router.get('/files/:filename/content', async (req: Request, res: Response) => {
     const path = join(configDir, filename);
     
     // Validate filename to prevent directory traversal
-    if (!filename.match(/^standalone\.config(\.\d+)?\.json$/)) {
+    if (!isValidConfigFilename(filename)) {
       return res.status(400).json({
         errorCode: ErrorCode.CONFIG_INVALID,
         message: 'Invalid configuration filename',
@@ -1119,7 +1166,7 @@ router.put('/files/:filename/content', async (req: Request, res: Response) => {
     const path = join(configDir, filename);
     
     // Validate filename to prevent directory traversal
-    if (!filename.match(/^standalone\.config(\.\d+)?\.json$/)) {
+    if (!isValidConfigFilename(filename)) {
       return res.status(400).json({
         errorCode: ErrorCode.CONFIG_INVALID,
         message: 'Invalid configuration filename',

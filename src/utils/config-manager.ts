@@ -11,7 +11,6 @@ import { ConfigParser, ConfigParseResult } from './config-parser';
 export class ConfigManager {
   private configDir: string;
   private currentConfigFile: string | null = null;
-  private readonly CONFIG_FILE_PATTERN = /^standalone\.config(\.\d+)?\.json$/;
   private readonly CURRENT_CONFIG_FILE = '.current-config';
 
   constructor(configDir: string = 'config') {
@@ -95,23 +94,40 @@ export class ConfigManager {
       const currentConfig = this.getCurrentConfigFile();
       const currentConfigPath = currentConfig ? resolve(currentConfig) : null;
       
-      const files = readdirSync(this.configDir)
-        .filter(file => {
-          // Match standalone.config.json or standalone.config.N.json
-          return this.CONFIG_FILE_PATTERN.test(file) && extname(file) === '.json';
-        })
+      // Read all files in config directory
+      const allFiles = readdirSync(this.configDir);
+      
+      // Filter to include only JSON files (exclude hidden files like .current-config)
+      const jsonFiles = allFiles.filter(file => {
+        const isJson = extname(file) === '.json';
+        const isNotHidden = !file.startsWith('.');
+        return isJson && isNotHidden;
+      });
+      
+      // Map to file info objects
+      const files = jsonFiles
         .map(file => {
-          const path = join(this.configDir, file);
-          const resolvedPath = resolve(path);
-          const stats = statSync(path);
-          return {
-            filename: file,
-            path,
-            modifiedTime: stats.mtime,
-            size: stats.size,
-            isActive: currentConfigPath === resolvedPath,
-          };
+          try {
+            const path = join(this.configDir, file);
+            const resolvedPath = resolve(path);
+            const stats = statSync(path);
+            return {
+              filename: file,
+              path,
+              modifiedTime: stats.mtime,
+              size: stats.size,
+              isActive: currentConfigPath === resolvedPath,
+            };
+          } catch (error) {
+            // Log but don't fail - skip files that can't be read
+            logger.warn('Failed to read config file stats', {
+              file,
+              error: error instanceof Error ? error.message : String(error),
+            });
+            return null;
+          }
         })
+        .filter((file): file is NonNullable<typeof file> => file !== null)
         .sort((a, b) => {
           // Sort by modification time (newest first), then by filename
           const timeDiff = b.modifiedTime.getTime() - a.modifiedTime.getTime();
@@ -119,10 +135,21 @@ export class ConfigManager {
           return a.filename.localeCompare(b.filename);
         });
 
+      // Log for debugging - helps identify if files are being filtered incorrectly
+      logger.debug('Listed config files', {
+        configDir: this.configDir,
+        totalFiles: allFiles.length,
+        jsonFiles: jsonFiles.length,
+        returnedFiles: files.length,
+        filenames: files.map(f => f.filename),
+        currentConfig: currentConfigPath,
+      });
+
       return files;
     } catch (error) {
       logger.error('Failed to list config files', {
         error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
         configDir: this.configDir,
       });
       return [];
@@ -131,7 +158,7 @@ export class ConfigManager {
 
   /**
    * Get the first available configuration file
-   * Priority: standalone.config.json > standalone.config.N.json (by number)
+   * Priority: standalone.config.json > other JSON files (sorted by modification time)
    */
   getFirstAvailableConfig(): string | null {
     const files = this.listConfigFiles();
@@ -139,13 +166,13 @@ export class ConfigManager {
       return null;
     }
 
-    // First, try to find standalone.config.json
+    // First, try to find standalone.config.json (default config)
     const defaultFile = files.find(f => f.filename === 'standalone.config.json');
     if (defaultFile) {
       return defaultFile.path;
     }
 
-    // Otherwise, return the first file (already sorted)
+    // Otherwise, return the first file (already sorted by modification time, newest first)
     return files[0].path;
   }
 

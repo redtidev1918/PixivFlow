@@ -421,56 +421,108 @@ export default function Config() {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = '.json';
-    input.onchange = (e: any) => {
-      const file = e.target.files[0];
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = async (event) => {
-          try {
-            const config = JSON.parse(event.target?.result as string);
-            // Remove _meta if present
-            const { _meta, ...configToImport } = config;
-            
-            // Validate before importing
-            try {
-              const validationResult = await api.validateConfig(configToImport);
-              if (!validationResult.data.data.valid) {
-                message.error(`${t('config.validationFailed')}: ${validationResult.data.data.errors?.join(', ')}`);
-                return;
-              }
-            } catch (error) {
-              // If validation fails, still allow import but warn user
-              console.warn('Config validation error:', error);
-            }
+    input.multiple = true; // Enable multiple file selection
+    input.onchange = async (e: any) => {
+      const files = Array.from(e.target.files || []) as File[];
+      if (files.length === 0) {
+        return;
+      }
+
+      let successCount = 0;
+      let failCount = 0;
+      const failedFiles: string[] = [];
+      let lastImportedPath: string | null = null;
+
+      // Process all files
+      for (const file of files) {
+        try {
+          const fileContent = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+              resolve(event.target?.result as string);
+            };
+            reader.onerror = reject;
+            reader.readAsText(file);
+          });
+
+          const config = JSON.parse(fileContent);
+          // Remove _meta if present
+          const { _meta, ...configToImport } = config;
           
+          // Validate before importing
+          try {
+            const validationResult = await api.validateConfig(configToImport);
+            if (!validationResult.data.data.valid) {
+              failedFiles.push(`${file.name}: ${t('config.validationFailed')}`);
+              failCount++;
+              continue;
+            }
+          } catch (error) {
+            // If validation fails, still allow import but warn user
+            console.warn('Config validation error:', error);
+          }
+        
           // Import configuration file with auto-numbering
           try {
+            // Use filename (without extension) as part of the import name
+            const baseName = file.name.replace(/\.json$/i, '').replace(/^standalone\.config\./i, '');
             const timestamp = new Date().toISOString().split('T')[0];
-            const importName = `imported-${timestamp}`;
+            const importName = baseName ? `${baseName}-${timestamp}` : `imported-${timestamp}`;
             const result = await api.importConfigFile(configToImport, importName);
             
-            // Switch to the newly imported config
-            await api.switchConfigFile(result.data.data.path);
-            
-            // Refresh config data and files list
-            await queryClient.invalidateQueries({ queryKey: ['config'] });
-            await queryClient.invalidateQueries({ queryKey: ['configFiles'] });
-            refetchConfigFiles();
-            
-            message.success(t('config.configImportedAndSaved'));
+            lastImportedPath = result.data.data.path;
+            successCount++;
           } catch (error: any) {
             const { message: errorMessage } = extractErrorInfo(error);
-            message.error(
-              `${t('config.configImportFailed')}: ${errorMessage || error?.message || t('config.unknownError')}`
-            );
-            console.error('Failed to import config file:', error);
+            failedFiles.push(`${file.name}: ${errorMessage || error?.message || t('config.unknownError')}`);
+            failCount++;
+            console.error(`Failed to import config file ${file.name}:`, error);
           }
         } catch (error) {
-          message.error(t('config.configFormatError'));
-          console.error('Failed to parse imported config:', error);
+          failedFiles.push(`${file.name}: ${t('config.configFormatError')}`);
+          failCount++;
+          console.error(`Failed to parse imported config ${file.name}:`, error);
         }
-        };
-        reader.readAsText(file);
+      }
+
+      // Switch to the last imported config if any succeeded
+      if (lastImportedPath) {
+        try {
+          await api.switchConfigFile(lastImportedPath);
+        } catch (error) {
+          console.warn('Failed to switch to imported config:', error);
+        }
+      }
+
+      // Refresh config data and files list
+      await queryClient.invalidateQueries({ queryKey: ['config'] });
+      await queryClient.invalidateQueries({ queryKey: ['configFiles'] });
+      refetchConfigFiles();
+
+      // Show summary message
+      if (successCount > 0 && failCount === 0) {
+        message.success(
+          files.length === 1 
+            ? t('config.configImportedAndSaved')
+            : t('config.configBatchImportedSuccess', { count: successCount })
+        );
+      } else if (successCount > 0 && failCount > 0) {
+        message.warning(
+          t('config.configBatchImportedPartial', { 
+            success: successCount, 
+            total: files.length,
+            failed: failCount 
+          })
+        );
+        if (failedFiles.length > 0) {
+          console.warn('Failed files:', failedFiles);
+        }
+      } else {
+        message.error(
+          files.length === 1
+            ? `${t('config.configImportFailed')}: ${failedFiles[0] || t('config.unknownError')}`
+            : t('config.configBatchImportedFailed', { count: failCount })
+        );
       }
     };
     input.click();

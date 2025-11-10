@@ -6,6 +6,43 @@
 
 PixivFlow 的设计理念是：通过配置文件定义下载任务，使用通用的 `download` 命令执行。如果某个任务无法通过配置文件实现，那说明通用功能需要增强，而不是添加特定脚本。
 
+## 📁 配置文件命名规范
+
+**重要**：所有配置文件必须使用 `.json` 扩展名才能被系统识别和显示在配置列表中。
+
+### 命名格式
+
+配置文件可以是任何以 `.json` 结尾的文件：
+- 文件名必须以 `.json` 结尾
+- 文件名可以是任意名称（建议使用有意义的名称）
+- 隐藏文件（以 `.` 开头）会被自动排除
+
+### 示例
+
+✅ **正确的命名**（所有 JSON 文件都会被识别）：
+- `standalone.config.json` - 默认配置文件（推荐）
+- `config.json` - 简单配置文件名
+- `my.json` - 自定义配置
+- `novel-chinese.json` - 中文小说配置
+- `ranking.json` - 排行榜配置
+- `imported-2025-11-10.json` - 导入的配置
+- `my-custom-config.json` - 自定义配置
+
+❌ **错误的命名**（不会被识别）：
+- `standalone.config` - 缺少 `.json` 扩展名
+- `config.txt` - 不是 JSON 格式
+- `.hidden.json` - 隐藏文件会被排除
+
+### 多配置文件管理
+
+在 WebUI 中，所有 `.json` 配置文件都会自动显示在配置列表中，供用户选择使用。你可以：
+
+1. 创建多个配置文件用于不同的下载场景
+2. 在 WebUI 中切换不同的配置文件
+3. 每个配置文件可以有不同的下载目标和设置
+
+---
+
 ## 🎯 如何实现特定下载任务
 
 ### 方法一：修改现有配置文件
@@ -36,6 +73,23 @@ PixivFlow 的设计理念是：通过配置文件定义下载任务，使用通�
 # 使用自定义配置文件
 pixivflow download --config config/my-custom-config.json
 ```
+
+### 方法四：创建多个配置文件（推荐）
+
+1. **创建新的配置文件**（使用 `.json` 扩展名）：
+   ```bash
+   cp config/standalone.config.json config/novel-chinese.json
+   ```
+
+2. **在 WebUI 中选择配置文件**：
+   - 打开 WebUI 的配置页面
+   - 从配置列表中选择要使用的配置文件
+   - 系统会自动保存你的选择
+
+3. **或者使用命令行指定**：
+   ```bash
+   pixivflow download --config config/novel-chinese.json
+   ```
 
 ## 📝 配置文件结构
 

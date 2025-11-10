@@ -32,23 +32,48 @@ function readConfigRaw(configPath: string): Partial<StandaloneConfig> | null {
 /**
  * GET /api/auth/status
  * Get authentication status
- * Even if config validation fails, we still check for refreshToken to determine auth status
+ * Validates token to ensure it's still valid, not just checking if it exists
  */
 router.get('/status', async (req: Request, res: Response) => {
   try {
     const configPath = getConfigPath();
     const config = loadConfig(configPath);
 
-    const hasToken = !!config.pixiv?.refreshToken;
-    const authenticated = hasToken;
+    const refreshToken = config.pixiv?.refreshToken;
+    const hasToken = !!refreshToken && !isPlaceholderToken(refreshToken);
+    
+    // Validate token if it exists
+    let authenticated = false;
+    let tokenValid = false;
+    let user = null;
+    
+    if (hasToken && refreshToken) {
+      try {
+        // Try to refresh the token to validate it
+        const loginInfo = await TerminalLogin.refresh(refreshToken);
+        tokenValid = true;
+        authenticated = true;
+        user = loginInfo.user;
+        logger.debug('Token validation successful', { hasUser: !!user });
+      } catch (error) {
+        // Token is invalid or expired
+        tokenValid = false;
+        authenticated = false;
+        logger.warn('Token validation failed', { 
+          error: error instanceof Error ? error.message : String(error) 
+        });
+      }
+    }
 
-    logger.debug('Auth status check', { authenticated, hasToken, configPath });
+    logger.debug('Auth status check', { authenticated, hasToken, tokenValid, configPath });
 
     res.json({
       data: {
         authenticated,
         hasToken,
+        tokenValid,
         isAuthenticated: authenticated, // Alias for compatibility
+        user,
       },
     });
   } catch (error) {
@@ -80,23 +105,48 @@ router.get('/status', async (req: Request, res: Response) => {
       }
       
       const hasToken = !isPlaceholderToken(configToken);
-      const authenticated = hasToken; // User is authenticated if they have a refreshToken
+      
+      // Validate token if it exists
+      let authenticated = false;
+      let tokenValid = false;
+      let user = null;
+      
+      if (hasToken && configToken) {
+        try {
+          // Try to refresh the token to validate it
+          const loginInfo = await TerminalLogin.refresh(configToken);
+          tokenValid = true;
+          authenticated = true;
+          user = loginInfo.user;
+          logger.debug('Token validation successful (from raw config)', { hasUser: !!user });
+        } catch (error) {
+          // Token is invalid or expired
+          tokenValid = false;
+          authenticated = false;
+          logger.warn('Token validation failed (from raw config)', { 
+            error: error instanceof Error ? error.message : String(error) 
+          });
+        }
+      }
       
       logger.warn('Configuration invalid when checking auth status', {
         errors: validationErrors,
         warnings: validationWarnings,
         hasToken,
         authenticated,
+        tokenValid,
       });
       
       return res.json({
         data: {
           authenticated,
           hasToken,
+          tokenValid,
           isAuthenticated: authenticated, // Alias for compatibility
           configReady: false, // Config is not fully ready (validation failed)
           errors: validationErrors,
           warnings: validationWarnings,
+          user,
         },
       });
     }

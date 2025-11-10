@@ -1,5 +1,5 @@
 import { readFileSync, existsSync, writeFileSync } from 'node:fs';
-import { resolve, dirname, isAbsolute, join, basename } from 'node:path';
+import { resolve, dirname, isAbsolute, join, basename, normalize } from 'node:path';
 import cron from 'node-cron';
 
 import { ConfigError } from './utils/errors';
@@ -496,19 +496,53 @@ function applyDefaults(config: Partial<StandaloneConfig>, basePath?: string): St
     ? storage.downloadDirectory!
     : resolve(pathBaseDir, storage.downloadDirectory!);
   
+  // Helper function to normalize relative paths
+  // If the relative path contains 'downloads/', extract the part after it
+  // This prevents paths like './downloads/illustrations' from becoming downloadDir/downloads/illustrations
+  const normalizeRelativePath = (relativePath: string, baseDir: string): string => {
+    // Remove leading './' or './downloads/' or 'downloads/'
+    let normalized = relativePath.replace(/^\.\//, '').replace(/^downloads\//, '');
+    // If it still starts with 'downloads/', remove it again (handles './downloads/downloads/...')
+    normalized = normalized.replace(/^downloads\//, '');
+    return normalized;
+  };
+  
+  // Helper function to detect and fix path duplication in absolute paths
+  // Checks if an absolute path contains "downloads/downloads" and fixes it
+  const fixAbsolutePathDuplication = (absolutePath: string, expectedBaseDir: string): string => {
+    const normalized = normalize(absolutePath);
+    // Check if path contains "downloads/downloads" pattern
+    if (normalized.includes('/downloads/downloads/')) {
+      // Replace "downloads/downloads" with "downloads"
+      const fixed = normalized.replace(/\/downloads\/downloads\//g, '/downloads/');
+      logger.warn('Detected path duplication in absolute path, fixing', {
+        original: absolutePath,
+        fixed: fixed,
+      });
+      return fixed;
+    }
+    return normalized;
+  };
+  
   if (!storage.illustrationDirectory) {
     storage.illustrationDirectory = resolve(downloadDir, 'illustrations');
   } else if (!isAbsolute(storage.illustrationDirectory)) {
-    storage.illustrationDirectory = resolve(downloadDir, storage.illustrationDirectory);
+    // Normalize relative path to prevent downloads/downloads/... duplication
+    const normalizedPath = normalizeRelativePath(storage.illustrationDirectory, downloadDir);
+    storage.illustrationDirectory = resolve(downloadDir, normalizedPath);
   } else {
-    storage.illustrationDirectory = resolve(storage.illustrationDirectory);
+    // Even for absolute paths, check and fix duplication
+    storage.illustrationDirectory = fixAbsolutePathDuplication(storage.illustrationDirectory, downloadDir);
   }
   if (!storage.novelDirectory) {
     storage.novelDirectory = resolve(downloadDir, 'novels');
   } else if (!isAbsolute(storage.novelDirectory)) {
-    storage.novelDirectory = resolve(downloadDir, storage.novelDirectory);
+    // Normalize relative path to prevent downloads/downloads/... duplication
+    const normalizedPath = normalizeRelativePath(storage.novelDirectory, downloadDir);
+    storage.novelDirectory = resolve(downloadDir, normalizedPath);
   } else {
-    storage.novelDirectory = resolve(storage.novelDirectory);
+    // Even for absolute paths, check and fix duplication
+    storage.novelDirectory = fixAbsolutePathDuplication(storage.novelDirectory, downloadDir);
   }
 
   // Resolve database path - use baseDir to ensure relative paths are resolved correctly

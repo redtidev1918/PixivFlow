@@ -61,13 +61,16 @@ let puppeteerBrowser = null; // Puppeteer 浏览器实例
 let currentLoginCodeVerifier = null; // 当前登录流程的 code verifier
 let loginUrlCheckInterval = null; // 登录窗口 URL 检查定时器
 let currentLoadTimeout = null; // 当前登录窗口加载的超时计时器
-const BACKEND_PORT = 3000;
+const BACKEND_PORT = 3000; // 默认端口，如果被占用会自动寻找可用端口
+let actualBackendPort = BACKEND_PORT; // 实际使用的端口（可能因端口占用而改变）
 let isAppClosing = false;
 const activeTimers = new Set(); // 跟踪所有活动的定时器
 let appData = null; // 应用数据目录信息（生产模式下）
 let backendRestartCount = 0; // 后端重启次数
 const MAX_BACKEND_RESTARTS = 5; // 最大重启次数
 let isBackendStarting = false; // 后端是否正在启动中
+let backendReadyState = false; // 后端就绪状态缓存
+let backendReadyNotificationPending = false; // 是否有待发送的就绪通知
 
 // Pixiv OAuth 常量
 const PIXIV_CLIENT_ID = 'MOBrBDS8blbauoSck0ZfDbtuzpyT';
@@ -275,8 +278,8 @@ function initializeAppData() {
       "storage": {
         "databasePath": path.join(dataDir, 'pixiv-downloader.db'),
         "downloadDirectory": downloadsDir,
-        "illustrationDirectory": path.join(downloadsDir, 'illustrations'),
-        "novelDirectory": path.join(downloadsDir, 'novels'),
+        // 不设置 illustrationDirectory 和 novelDirectory，让 applyDefaults 自动处理
+        // 这样可以避免路径重复问题（如 downloads/downloads/illustrations）
         "illustrationOrganization": "flat",
         "novelOrganization": "flat"
       },
@@ -520,7 +523,7 @@ async function cleanupPort(port) {
 // 检查后端是否已启动
 function checkBackendReady(callback) {
   const http = require('http');
-  const req = http.get(`http://localhost:${BACKEND_PORT}/api/health`, { timeout: 3000 }, (res) => {
+  const req = http.get(`http://localhost:${actualBackendPort}/api/health`, { timeout: 3000 }, (res) => {
     if (res.statusCode === 200) {
       callback(true);
     } else {
@@ -536,11 +539,67 @@ function checkBackendReady(callback) {
   });
 }
 
-// 通知窗口后端已就绪
+// 通知窗口后端已就绪（改进版：确保窗口准备好后才发送）
 function notifyBackendReady() {
-  if (mainWindow && !isAppClosing) {
-    safeLog('✅ 后端服务器已就绪，通知窗口');
-    mainWindow.webContents.send('backend-ready');
+  backendReadyState = true; // 标记后端已就绪
+  
+  if (!mainWindow || isAppClosing) {
+    safeLog('⚠️  窗口未准备好，缓存后端就绪状态');
+    backendReadyNotificationPending = true;
+    return;
+  }
+  
+  // 检查窗口是否已经加载完成
+  const webContents = mainWindow.webContents;
+  if (!webContents || webContents.isDestroyed()) {
+    safeLog('⚠️  窗口内容未准备好，缓存后端就绪状态');
+    backendReadyNotificationPending = true;
+    return;
+  }
+  
+  // 尝试发送消息，如果失败则重试
+  const sendReadyMessage = (attempt = 1) => {
+    if (!mainWindow || isAppClosing || webContents.isDestroyed()) {
+      return;
+    }
+    
+    try {
+      safeLog(`✅ 后端服务器已就绪，通知窗口 (尝试 ${attempt})`);
+      webContents.send('backend-ready');
+      backendReadyNotificationPending = false;
+      
+      // 额外发送一次，确保消息不丢失（延迟100ms）
+      safeSetTimeout(() => {
+        if (mainWindow && !isAppClosing && !webContents.isDestroyed()) {
+          try {
+            webContents.send('backend-ready');
+          } catch (e) {
+            // 忽略错误
+          }
+        }
+      }, 100);
+    } catch (error) {
+      safeError('❌ 发送后端就绪消息失败:', error);
+      if (attempt < 5) {
+        // 重试，最多5次
+        safeSetTimeout(() => sendReadyMessage(attempt + 1), 200);
+      } else {
+        backendReadyNotificationPending = true;
+      }
+    }
+  };
+  
+  sendReadyMessage();
+}
+
+// 检查并发送待处理的后端就绪通知
+function checkAndSendPendingReadyNotification() {
+  if (backendReadyState && backendReadyNotificationPending && mainWindow && !isAppClosing) {
+    const webContents = mainWindow.webContents;
+    if (webContents && !webContents.isDestroyed()) {
+      safeLog('📤 发送待处理的后端就绪通知');
+      notifyBackendReady();
+    }
   }
 }
 
@@ -897,9 +956,10 @@ async function startBackend() {
       }
       return;
     }
-
+    
     // 监听后端进程输出，检测启动完成
     let backendReady = false;
+    let checkAttempts = 0; // 提前定义，供 checkReady 使用
     const checkReady = () => {
       if (!backendReady) {
         checkBackendReady((ready) => {
@@ -907,15 +967,20 @@ async function startBackend() {
             backendReady = true;
             isBackendStarting = false; // 立即重置启动标志
             backendRestartCount = 0; // 重置重启计数
-            safeLog('✅ 后端服务器启动成功');
-            notifyBackendReady();
+            safeLog('✅ 后端服务器启动成功，HTTP 健康检查通过');
+            // 延迟一点再通知，确保后端完全就绪
+            safeSetTimeout(() => {
+              notifyBackendReady();
+            }, 200);
+          } else if (!ready && !backendReady && checkAttempts > 0 && checkAttempts % 10 === 0) {
+            // 后端还未就绪，每5秒记录一次状态
+            safeLog(`⏳ 等待后端就绪... (已等待 ${(checkAttempts * 0.5).toFixed(1)} 秒)`);
           }
         });
       }
     };
     
     // 定期检查后端是否就绪（最多60秒）
-    let checkAttempts = 0;
     const maxCheckAttempts = 120; // 60秒
     const readyCheckInterval = safeSetInterval(() => {
       if (backendReady || isAppClosing) {
@@ -924,14 +989,21 @@ async function startBackend() {
         return;
       }
       checkAttempts++;
+      if (checkAttempts % 10 === 0) { // 每5秒记录一次
+        safeLog(`🔍 检查后端就绪状态 (${checkAttempts}/${maxCheckAttempts})...`);
+      }
       checkReady();
       if (checkAttempts >= maxCheckAttempts) {
         clearInterval(readyCheckInterval);
         activeTimers.delete(readyCheckInterval);
         isBackendStarting = false; // 超时后也重置标志
         safeError('⚠️  后端服务器启动检查超时');
-        if (mainWindow) {
-          mainWindow.webContents.send('backend-error', '后端服务器启动超时，请检查日志');
+        if (mainWindow && !mainWindow.webContents.isDestroyed()) {
+          try {
+            mainWindow.webContents.send('backend-error', '后端服务器启动超时，请检查日志');
+          } catch (e) {
+            safeError('发送错误消息失败:', e);
+          }
         }
       }
     }, 500);
@@ -942,14 +1014,34 @@ async function startBackend() {
         const output = data.toString().trim();
         if (output) {
           console.log(`[Backend] ${output}`);
+          
+          // 检测实际使用的端口号（格式：PORT: 3001 或 started on http://localhost:3001）
+          const portMatch = output.match(/PORT:\s*(\d+)/i) || 
+                           output.match(/started on http:\/\/[^:]+:(\d+)/i) ||
+                           output.match(/listening on port\s*(\d+)/i) ||
+                           output.match(/on port\s*(\d+)/i);
+          if (portMatch && portMatch[1]) {
+            const detectedPort = parseInt(portMatch[1], 10);
+            if (detectedPort !== actualBackendPort) {
+              actualBackendPort = detectedPort;
+              safeLog(`🔍 检测到后端实际使用端口: ${actualBackendPort}`);
+            }
+          }
+          
           // 检测后端启动完成的关键字
           if (output.includes('Server started') || 
               output.includes('Server ready') ||
               output.includes('listening on') || 
               output.includes('WebUI server') ||
-              output.includes('PORT:')) {
+              output.includes('PORT:') ||
+              output.includes('started on port') ||
+              output.includes('listening on port')) {
+            safeLog('📢 检测到后端启动信号，准备检查就绪状态');
             // 延迟一点再检查，确保服务器完全启动
-            safeSetTimeout(() => checkReady(), 1000);
+            safeSetTimeout(() => {
+              safeLog('🔍 执行后端就绪检查...');
+              checkReady();
+            }, 1500);
           }
         }
       });
@@ -3469,7 +3561,7 @@ async function handleAuthCode(code, sourceUrl) {
                 if (currentUrl && currentUrl.includes('/login')) {
                   console.log('🔄 检测到仍在登录页面，尝试强制导航到 dashboard...');
                   // 使用 loadURL 作为最后的手段
-                  const dashboardUrl = `http://localhost:${BACKEND_PORT}/dashboard`;
+                  const dashboardUrl = `http://localhost:${actualBackendPort}/dashboard`;
                   mainWindow.webContents.loadURL(dashboardUrl).then(() => {
                     console.log('✅ 已通过 loadURL 导航到 dashboard');
                   }).catch(err => {
@@ -3958,7 +4050,7 @@ async function saveTokenToBackend(refreshToken, maxRetries = 3) {
       for (let i = 0; i < 20; i++) {
         await new Promise(resolve => safeSetTimeout(resolve, 500));
         try {
-          const response = await axios.get(`http://localhost:${BACKEND_PORT}/api/health`, {
+          const response = await axios.get(`http://localhost:${actualBackendPort}/api/health`, {
             timeout: 2000,
             validateStatus: () => true
           });
@@ -3982,7 +4074,7 @@ async function saveTokenToBackend(refreshToken, maxRetries = 3) {
       
       // 调用后端 API 保存 token
       const response = await axios.post(
-        `http://localhost:${BACKEND_PORT}/api/auth/login-with-token`,
+        `http://localhost:${actualBackendPort}/api/auth/login-with-token`,
         {
           refreshToken: refreshToken
         },
@@ -4630,7 +4722,7 @@ function createWindow() {
   <script>
     const isDev = ${isDev};
     const viteUrl = 'http://localhost:5173';
-    const backendUrl = 'http://localhost:${BACKEND_PORT}';
+    const backendUrl = 'http://localhost:' + ${actualBackendPort};
     let currentUrl = null;
     
     function updateStatus(text) {
@@ -4674,21 +4766,37 @@ function createWindow() {
       }
     }
     
+    let checkInterval = null;
+    let isConnecting = false;
+    
+    function stopConnecting() {
+      if (checkInterval) {
+        clearInterval(checkInterval);
+        checkInterval = null;
+      }
+      isConnecting = false;
+    }
+    
     function tryBackend() {
+      if (isConnecting) {
+        return; // 已经在连接中，避免重复连接
+      }
+      
+      isConnecting = true;
       updateStatus('正在连接后端服务器...');
       let attempts = 0;
-      const maxAttempts = 60; // 30秒
+      const maxAttempts = 120; // 60秒
       
-      const checkInterval = setInterval(() => {
+      checkInterval = setInterval(() => {
         attempts++;
         checkServer(backendUrl, (available) => {
           if (available) {
-            clearInterval(checkInterval);
+            stopConnecting();
             updateStatus('连接成功，正在加载...');
             currentUrl = backendUrl;
             window.location.href = backendUrl;
           } else if (attempts >= maxAttempts) {
-            clearInterval(checkInterval);
+            stopConnecting();
             showError('无法连接到后端服务器。请检查后端是否正常启动。');
           }
         });
@@ -4696,20 +4804,85 @@ function createWindow() {
     }
     
     function retryConnection() {
+      stopConnecting();
       document.getElementById('error').classList.remove('show');
       document.getElementById('retryBtn').classList.remove('show');
       tryConnect();
     }
     
-    // 监听 Electron IPC 消息
-    if (window.electron && window.electron.onBackendReady) {
-      window.electron.onBackendReady(() => {
-        updateStatus('后端已就绪，正在加载...');
-        if (!currentUrl) {
-          currentUrl = backendUrl;
-          window.location.href = backendUrl;
-        }
+    // 监听 Electron IPC 消息（改进版：更可靠的设置方式）
+    let ipcListenerSetup = false;
+    function setupIpcListener() {
+      if (ipcListenerSetup) {
+        return; // 避免重复设置
+      }
+      
+      if (window.electron && window.electron.onBackendReady && window.electron.onBackendError) {
+        ipcListenerSetup = true;
+        console.log('[Loading] IPC 监听器已设置');
+        
+        // 监听后端就绪事件
+        window.electron.onBackendReady(() => {
+          console.log('[Loading] 收到后端就绪消息');
+          stopConnecting(); // 停止轮询
+          updateStatus('后端已就绪，正在加载...');
+          // 立即检查后端是否真的可用
+          checkServer(backendUrl, (available) => {
+            if (available) {
+              currentUrl = backendUrl;
+              window.location.href = backendUrl;
+            } else {
+              // 如果后端还没完全准备好，等待一下再试
+              setTimeout(() => {
+                checkServer(backendUrl, (available) => {
+                  if (available) {
+                    currentUrl = backendUrl;
+                    window.location.href = backendUrl;
+                  } else {
+                    // 如果还是不可用，继续轮询
+                    console.log('[Loading] 后端消息已收到但服务未就绪，继续轮询...');
+                    isConnecting = false; // 重置状态，允许重新连接
+                    tryBackend();
+                  }
+                });
+              }, 500);
+            }
+          });
+        });
+        
+        // 监听后端错误事件
+        window.electron.onBackendError((error) => {
+          console.log('[Loading] 收到后端错误消息:', error);
+          stopConnecting(); // 停止轮询
+          showError(error || '后端服务器启动失败');
+        });
+      } else {
+        // 如果 electron 对象还没准备好，等待一下再试（最多尝试20次，2秒）
+        let retryCount = 0;
+        const maxRetries = 20;
+        const retryInterval = setInterval(() => {
+          retryCount++;
+          if (window.electron && window.electron.onBackendReady && window.electron.onBackendError) {
+            clearInterval(retryInterval);
+            setupIpcListener();
+          } else if (retryCount >= maxRetries) {
+            clearInterval(retryInterval);
+            console.warn('[Loading] IPC 监听器设置失败，将仅使用 HTTP 轮询');
+          }
+        }, 100);
+      }
+    }
+    
+    // 立即尝试设置监听器
+    setupIpcListener();
+    
+    // 等待 DOM 加载完成后再设置监听器（作为备用）
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => {
+        setTimeout(setupIpcListener, 50);
       });
+    } else {
+      setTimeout(setupIpcListener, 50);
     }
     
     // 开始连接
@@ -4808,6 +4981,28 @@ function createWindow() {
 
   mainWindow.on('closed', () => {
     mainWindow = null;
+  });
+  
+  // 监听窗口加载完成事件，检查是否有待发送的后端就绪通知
+  mainWindow.webContents.once('did-finish-load', () => {
+    safeLog('📄 窗口加载完成，检查后端状态');
+    // 延迟一点，确保 preload 脚本已执行
+    safeSetTimeout(() => {
+      checkAndSendPendingReadyNotification();
+      // 如果后端已就绪，立即发送消息
+      if (backendReadyState) {
+        notifyBackendReady();
+      }
+    }, 300);
+  });
+  
+  // 监听 DOM 准备完成（更早的事件）
+  mainWindow.webContents.once('dom-ready', () => {
+    safeLog('📄 DOM 准备完成');
+    // 延迟一点，确保 preload 脚本已执行
+    safeSetTimeout(() => {
+      checkAndSendPendingReadyNotification();
+    }, 200);
   });
 }
 

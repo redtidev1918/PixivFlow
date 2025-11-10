@@ -33,6 +33,10 @@ export class WebUIServer {
   private io: SocketServer;
   private port: number;
   private host: string;
+  
+  public getPort(): number {
+    return this.port;
+  }
 
   constructor(options: WebUIServerOptions = {}) {
     this.port = options.port || 3000;
@@ -203,27 +207,113 @@ export class WebUIServer {
     });
   }
 
-  public start(): Promise<void> {
-    return new Promise((resolve, reject) => {
+  /**
+   * Find an available port starting from the given port
+   */
+  private async findAvailablePort(startPort: number, maxAttempts: number = 10): Promise<number> {
+    const net = require('net');
+    
+    for (let i = 0; i < maxAttempts; i++) {
+      const port = startPort + i;
+      const isAvailable = await new Promise<boolean>((resolve) => {
+        const server = net.createServer();
+        
+        server.listen(port, this.host, () => {
+          server.once('close', () => {
+            resolve(true);
+          });
+          server.close();
+        });
+        
+        server.on('error', (err: NodeJS.ErrnoException) => {
+          if (err.code === 'EADDRINUSE') {
+            resolve(false);
+          } else {
+            resolve(false);
+          }
+        });
+        
+        // Timeout after 1 second
+        setTimeout(() => {
+          server.removeAllListeners();
+          server.close();
+          resolve(false);
+        }, 1000);
+      });
+      
+      if (isAvailable) {
+        return port;
+      }
+    }
+    
+    throw new Error(`Could not find an available port after ${maxAttempts} attempts starting from ${startPort}`);
+  }
+
+  public async start(): Promise<number> {
+    return new Promise(async (resolve, reject) => {
+      let actualPort = this.port;
+      
+      // Try to start on the requested port
       this.server.listen(this.port, this.host, () => {
-        const message = `WebUI server started on http://${this.host}:${this.port}`;
+        const message = `WebUI server started on http://${this.host}:${actualPort}`;
         logger.info(message);
         // 同时输出到 stdout，方便 Electron 检测
         console.log(`[WebUI] ${message}`);
         console.log(`[WebUI] Server ready`);
-        resolve();
+        console.log(`[WebUI] PORT: ${actualPort}`); // 输出实际端口，供 Electron 检测
+        resolve(actualPort);
       });
 
-      this.server.on('error', (err: NodeJS.ErrnoException) => {
+      this.server.on('error', async (err: NodeJS.ErrnoException) => {
         if (err.code === 'EADDRINUSE') {
-          const errorMsg = `Port ${this.port} is already in use`;
-          logger.error(errorMsg);
-          console.error(`[WebUI] ERROR: ${errorMsg}`);
+          logger.warn(`Port ${this.port} is already in use, trying to find an available port...`);
+          console.log(`[WebUI] Port ${this.port} is already in use, trying to find an available port...`);
+          
+          try {
+            // Try to find an available port
+            actualPort = await this.findAvailablePort(this.port, 10);
+            this.port = actualPort;
+            
+            // Close the failed server and try again
+            this.server.removeAllListeners();
+            this.server.close();
+            
+            // Create a new server instance with the available port
+            this.server = createServer(this.app);
+            this.io = new SocketServer(this.server, {
+              cors: {
+                origin: '*',
+                credentials: true,
+              },
+            });
+            setupLogStream(this.io);
+            
+            // Try to start on the new port
+            this.server.listen(actualPort, this.host, () => {
+              const message = `WebUI server started on http://${this.host}:${actualPort}`;
+              logger.info(message);
+              console.log(`[WebUI] ${message}`);
+              console.log(`[WebUI] Server ready`);
+              console.log(`[WebUI] PORT: ${actualPort}`); // 输出实际端口，供 Electron 检测
+              resolve(actualPort);
+            });
+            
+            this.server.on('error', (err2: NodeJS.ErrnoException) => {
+              logger.error('Server error after port change', { error: err2.message });
+              console.error(`[WebUI] ERROR: ${err2.message}`);
+              reject(err2);
+            });
+          } catch (findPortError) {
+            const errorMsg = `Could not find an available port starting from ${this.port}`;
+            logger.error(errorMsg, { error: findPortError });
+            console.error(`[WebUI] ERROR: ${errorMsg}`);
+            reject(findPortError);
+          }
         } else {
           logger.error('Server error', { error: err.message });
           console.error(`[WebUI] ERROR: ${err.message}`);
+          reject(err);
         }
-        reject(err);
       });
     });
   }
@@ -251,7 +341,7 @@ export class WebUIServer {
 /**
  * Start WebUI server
  */
-export async function startWebUI(options?: WebUIServerOptions): Promise<void> {
+export async function startWebUI(options?: WebUIServerOptions): Promise<number> {
   // Initialize database to ensure tables exist
   try {
     const configPath = getConfigPath();
@@ -281,7 +371,7 @@ export async function startWebUI(options?: WebUIServerOptions): Promise<void> {
   }
 
   const server = new WebUIServer(options);
-  await server.start();
+  const actualPort = await server.start();
 
   // Graceful shutdown
   const shutdown = async () => {
@@ -292,5 +382,7 @@ export async function startWebUI(options?: WebUIServerOptions): Promise<void> {
 
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
+  
+  return actualPort;
 }
 

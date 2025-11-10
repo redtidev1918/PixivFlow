@@ -91,6 +91,8 @@ startWebUI({
   host,
   enableCors: true,
   staticPath,
+}).then((actualPort) => {
+  console.log(`[WebUI] Server started successfully on port ${actualPort}`);
 }).catch((error) => {
   console.error('Failed to start WebUI server:', error);
   process.exit(1);

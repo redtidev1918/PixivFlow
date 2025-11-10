@@ -21,6 +21,11 @@ contextBridge.exposeInMainWorld('electron', {
   onBackendReady: (callback) => {
     ipcRenderer.on('backend-ready', callback);
   },
+  
+  // 后端错误事件
+  onBackendError: (callback) => {
+    ipcRenderer.on('backend-error', (event, error) => callback(error));
+  },
 
   // 登录相关
   openLoginWindow: () => ipcRenderer.invoke('open-login-window'),

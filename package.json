@@ -22,7 +22,6 @@
     "start": "npm run build && node dist/index.js",
     "login": "./scripts/login.sh",
     "login:headless": "npm run build && node dist/index.js login-headless",
-    "login:example": "npm run build && node dist/terminal-login-example.js",
     "refresh": "npm run build && node dist/index.js refresh",
     "download": "npm run build && node dist/index.js download",
     "scheduler": "npm run build && node dist/index.js scheduler",
@@ -72,6 +71,7 @@
     "franc-min": "^6.2.0",
     "https-proxy-agent": "^7.0.6",
     "node-cron": "^3.0.3",
+    "pixiv-token-getter": "^2.0.0",
     "socket.io": "^4.6.1",
     "socks-proxy-agent": "^8.0.5",
     "undici": "^6.19.8"

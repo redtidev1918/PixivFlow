@@ -93,6 +93,14 @@ export class Database {
             items_downloaded INTEGER DEFAULT 0,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
           )`,
+        `CREATE TABLE IF NOT EXISTS config_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            description TEXT,
+            config_json TEXT NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          )`,
       ];
 
       // Create indexes for better query performance
@@ -103,6 +111,7 @@ export class Database {
         `CREATE INDEX IF NOT EXISTS idx_execution_log_tag_type ON execution_log(tag, type)`,
         `CREATE INDEX IF NOT EXISTS idx_scheduler_executions_number ON scheduler_executions(execution_number)`,
         `CREATE INDEX IF NOT EXISTS idx_scheduler_executions_status ON scheduler_executions(status)`,
+        `CREATE INDEX IF NOT EXISTS idx_config_history_created_at ON config_history(created_at)`,
       ];
 
       const transaction = this.db.transaction((stmts: string[]) => {
@@ -112,6 +121,22 @@ export class Database {
       });
 
       transaction([...migrations, ...indexes]);
+
+      // Add is_active column to config_history if it doesn't exist
+      try {
+        // Check if column exists by querying pragma_table_info
+        const tableInfo = this.db.prepare(`PRAGMA table_info(config_history)`).all() as Array<{ name: string }>;
+        const hasIsActiveColumn = tableInfo.some(col => col.name === 'is_active');
+        
+        if (!hasIsActiveColumn) {
+          this.db.prepare(`ALTER TABLE config_history ADD COLUMN is_active INTEGER DEFAULT 0`).run();
+          this.db.prepare(`CREATE INDEX IF NOT EXISTS idx_config_history_is_active ON config_history(is_active)`).run();
+        }
+      } catch (error) {
+        // Column might already exist, ignore error
+        // In SQLite, if column exists, ALTER TABLE will fail, which is fine
+        logger.warn('Failed to add is_active column (may already exist)', { error });
+      }
     } catch (error) {
       throw new DatabaseError(
         'Failed to run database migrations',
@@ -137,6 +162,12 @@ export class Database {
     );
 
     stmt.run({ key, value: JSON.stringify(value) });
+  }
+
+  public deleteToken(key: string): boolean {
+    const stmt = this.db.prepare(`DELETE FROM tokens WHERE key = ?`);
+    const result = stmt.run(key);
+    return result.changes > 0;
   }
 
   public hasDownloaded(pixivId: string, type: 'illustration' | 'novel'): boolean {
@@ -919,6 +950,143 @@ export class Database {
     );
     const authors = stmt.all(limit) as Array<{ author: string; count: number }>;
     return authors.map(a => ({ name: a.author, count: a.count }));
+  }
+
+  /**
+   * Save configuration to history
+   */
+  public saveConfigHistory(name: string, config: any, description?: string): number {
+    const stmt = this.db.prepare(
+      `INSERT INTO config_history (name, description, config_json, updated_at)
+       VALUES (?, ?, ?, CURRENT_TIMESTAMP)`
+    );
+    const result = stmt.run(name, description || null, JSON.stringify(config));
+    return result.lastInsertRowid as number;
+  }
+
+  /**
+   * Get all configuration history entries
+   */
+  public getConfigHistory(): Array<{
+    id: number;
+    name: string;
+    description: string | null;
+    config_json: string;
+    created_at: string;
+    updated_at: string;
+    is_active: number;
+  }> {
+    const stmt = this.db.prepare(
+      `SELECT id, name, description, config_json, created_at, updated_at, COALESCE(is_active, 0) as is_active
+       FROM config_history
+       ORDER BY updated_at DESC`
+    );
+    return stmt.all() as Array<{
+      id: number;
+      name: string;
+      description: string | null;
+      config_json: string;
+      created_at: string;
+      updated_at: string;
+      is_active: number;
+    }>;
+  }
+
+  /**
+   * Get a specific configuration history entry by ID
+   */
+  public getConfigHistoryById(id: number): {
+    id: number;
+    name: string;
+    description: string | null;
+    config_json: string;
+    created_at: string;
+    updated_at: string;
+    is_active: number;
+  } | null {
+    const stmt = this.db.prepare(
+      `SELECT id, name, description, config_json, created_at, updated_at, COALESCE(is_active, 0) as is_active
+       FROM config_history
+       WHERE id = ?`
+    );
+    const result = stmt.get(id) as {
+      id: number;
+      name: string;
+      description: string | null;
+      config_json: string;
+      created_at: string;
+      updated_at: string;
+      is_active: number;
+    } | undefined;
+    return result || null;
+  }
+
+  /**
+   * Delete a configuration history entry by ID
+   */
+  public deleteConfigHistory(id: number): boolean {
+    const stmt = this.db.prepare(`DELETE FROM config_history WHERE id = ?`);
+    const result = stmt.run(id);
+    return result.changes > 0;
+  }
+
+  /**
+   * Update a configuration history entry
+   */
+  public updateConfigHistory(id: number, name: string, config: any, description?: string): boolean {
+    const stmt = this.db.prepare(
+      `UPDATE config_history
+       SET name = ?, description = ?, config_json = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`
+    );
+    const result = stmt.run(name, description || null, JSON.stringify(config), id);
+    return result.changes > 0;
+  }
+
+  /**
+   * Set active configuration history entry
+   * This will deactivate all other entries and activate the specified one
+   */
+  public setActiveConfigHistory(id: number): boolean {
+    const transaction = this.db.transaction(() => {
+      // Deactivate all entries
+      this.db.prepare(`UPDATE config_history SET is_active = 0`).run();
+      // Activate the specified entry
+      const stmt = this.db.prepare(`UPDATE config_history SET is_active = 1 WHERE id = ?`);
+      const result = stmt.run(id);
+      return result.changes > 0;
+    });
+    return transaction();
+  }
+
+  /**
+   * Get the active configuration history entry
+   */
+  public getActiveConfigHistory(): {
+    id: number;
+    name: string;
+    description: string | null;
+    config_json: string;
+    created_at: string;
+    updated_at: string;
+    is_active: number;
+  } | null {
+    const stmt = this.db.prepare(
+      `SELECT id, name, description, config_json, created_at, updated_at, COALESCE(is_active, 0) as is_active
+       FROM config_history
+       WHERE COALESCE(is_active, 0) = 1
+       LIMIT 1`
+    );
+    const result = stmt.get() as {
+      id: number;
+      name: string;
+      description: string | null;
+      config_json: string;
+      created_at: string;
+      updated_at: string;
+      is_active: number;
+    } | undefined;
+    return result || null;
   }
 
   public close() {

@@ -34,6 +34,8 @@ import {
   FileTextOutlined,
   CopyOutlined,
   ThunderboltOutlined,
+  HistoryOutlined,
+  PlayCircleOutlined,
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { api } from '../services/api';
@@ -136,6 +138,12 @@ export default function Config() {
   const { data: configData, isLoading } = useQuery({
     queryKey: ['config'],
     queryFn: () => api.getConfig(),
+  });
+
+  // Get configuration history
+  const { data: configHistoryData, refetch: refetchHistory } = useQuery({
+    queryKey: ['configHistory'],
+    queryFn: () => api.getConfigHistory(),
   });
 
   useEffect(() => {
@@ -297,18 +305,37 @@ export default function Config() {
               console.warn('Config validation error:', error);
             }
             
-            // Set form values
+            // Set form values first (for UI feedback)
             form.setFieldsValue(configToImport);
             
-            // Auto-save after import
+            // Persist configuration to file - this is required
             try {
               await updateConfigMutation.mutateAsync(configToImport);
-              message.success(t('config.configImported'));
+              
+              // Save to history after successful persistence
+              try {
+                const timestamp = new Date().toISOString().split('T')[0];
+                const historyName = `Imported Config ${timestamp}`;
+                await api.saveConfigHistory(historyName, configToImport, 'Imported from file');
+              } catch (error) {
+                // History save failure is not critical, just log it
+                console.warn('Failed to save imported config to history:', error);
+              }
+              
+              // Refresh config data to ensure UI is in sync
+              await queryClient.invalidateQueries({ queryKey: ['config'] });
+              
+              message.success(t('config.configImportedAndSaved'));
             } catch (error: any) {
-              message.warning(t('config.configImportedToForm'));
+              const { message: errorMessage } = extractErrorInfo(error);
+              message.error(
+                `${t('config.configImportFailed')}: ${errorMessage || error?.message || t('config.unknownError')}`
+              );
+              console.error('Failed to persist imported config:', error);
             }
           } catch (error) {
             message.error(t('config.configFormatError'));
+            console.error('Failed to parse imported config:', error);
           }
         };
         reader.readAsText(file);
@@ -742,6 +769,120 @@ export default function Config() {
               <Form.Item label={t('config.downloadTimeout')} name={['download', 'timeout']}>
                 <InputNumber min={1000} style={{ width: '100%' }} />
               </Form.Item>
+            </Card>
+          </Tabs.TabPane>
+
+          {/* 配置历史 */}
+          <Tabs.TabPane tab={<><HistoryOutlined /> {t('config.tabHistory')}</>} key="history">
+            <Card
+              title={t('config.configHistory')}
+              extra={
+                <Button icon={<ReloadOutlined />} onClick={() => refetchHistory()}>
+                  {t('common.refresh')}
+                </Button>
+              }
+            >
+              {configHistoryData?.data?.data && configHistoryData.data.data.length > 0 ? (
+                <Table
+                  columns={[
+                    {
+                      title: t('config.historyName'),
+                      dataIndex: 'name',
+                      key: 'name',
+                      render: (name: string, record: any) => (
+                        <Space>
+                          <Text strong={record.is_active === 1}>{name}</Text>
+                          {record.is_active === 1 && (
+                            <Tag color="green">{t('config.activeConfig')}</Tag>
+                          )}
+                        </Space>
+                      ),
+                    },
+                    {
+                      title: t('config.historyDescription'),
+                      dataIndex: 'description',
+                      key: 'description',
+                      render: (desc: string | null) => desc || <Text type="secondary">-</Text>,
+                    },
+                    {
+                      title: t('config.historyCreatedAt'),
+                      dataIndex: 'created_at',
+                      key: 'created_at',
+                      render: (date: string) => new Date(date).toLocaleString(),
+                    },
+                    {
+                      title: t('config.historyUpdatedAt'),
+                      dataIndex: 'updated_at',
+                      key: 'updated_at',
+                      render: (date: string) => new Date(date).toLocaleString(),
+                    },
+                    {
+                      title: t('common.actions'),
+                      key: 'action',
+                      width: 200,
+                      render: (_: any, record: any) => (
+                        <Space>
+                          <Button
+                            type="link"
+                            icon={<PlayCircleOutlined />}
+                            onClick={async () => {
+                              try {
+                                await api.applyConfigHistory(record.id);
+                                message.success(t('config.configApplied'));
+                                queryClient.invalidateQueries({ queryKey: ['config'] });
+                                refetchHistory();
+                                // Reload config data
+                                setTimeout(() => {
+                                  window.location.reload();
+                                }, 1000);
+                              } catch (error: any) {
+                                message.error(t('config.configApplyFailed'));
+                              }
+                            }}
+                            size="small"
+                          >
+                            {t('config.apply')}
+                          </Button>
+                          <Popconfirm
+                            title={t('config.deleteHistoryConfirm')}
+                            onConfirm={async () => {
+                              try {
+                                await api.deleteConfigHistory(record.id);
+                                message.success(t('config.historyDeleted'));
+                                refetchHistory();
+                              } catch (error: any) {
+                                message.error(t('config.historyDeleteFailed'));
+                              }
+                            }}
+                            okText={t('common.ok')}
+                            cancelText={t('common.cancel')}
+                          >
+                            <Button
+                              type="link"
+                              danger
+                              icon={<DeleteOutlined />}
+                              size="small"
+                            >
+                              {t('common.delete')}
+                            </Button>
+                          </Popconfirm>
+                        </Space>
+                      ),
+                    },
+                  ]}
+                  dataSource={configHistoryData.data.data}
+                  rowKey="id"
+                  pagination={{ pageSize: 10 }}
+                  locale={{ emptyText: t('config.historyEmpty') }}
+                />
+              ) : (
+                <Alert
+                  message={t('config.historyEmpty')}
+                  description={t('config.historyEmptyDesc')}
+                  type="info"
+                  showIcon
+                />
+              )}
             </Card>
           </Tabs.TabPane>
 

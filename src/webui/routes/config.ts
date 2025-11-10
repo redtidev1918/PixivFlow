@@ -6,6 +6,7 @@ import { logger } from '../../logger';
 import { validateConfig } from '../utils/config-validator';
 import { ErrorCode } from '../utils/error-codes';
 import { ConfigError } from '../../utils/errors';
+import { Database } from '../../storage/Database';
 
 function readConfigRaw(configPath: string): Partial<StandaloneConfig> | null {
   try {
@@ -46,11 +47,66 @@ const router = Router();
 /**
  * GET /api/config
  * Get current configuration
+ * If there's an active config history, automatically apply it to ensure consistency
  */
 router.get('/', async (req: Request, res: Response) => {
+  let database: Database | null = null;
   try {
     const configPath = getConfigPath();
-    const config = loadConfig(configPath);
+    let config = loadConfig(configPath);
+
+    // Check if there's an active config history and apply it if needed
+    if (config.storage?.databasePath) {
+      try {
+        database = new Database(config.storage.databasePath);
+        database.migrate();
+        
+        const activeConfig = database.getActiveConfigHistory();
+        if (activeConfig) {
+          const historyConfig = JSON.parse(activeConfig.config_json) as StandaloneConfig;
+          
+          // Merge with current config to preserve sensitive data
+          const mergedConfig: StandaloneConfig = {
+            ...historyConfig,
+            pixiv: {
+              ...historyConfig.pixiv,
+              // Preserve current sensitive fields
+              refreshToken: config.pixiv?.refreshToken || historyConfig.pixiv?.refreshToken,
+              clientSecret: config.pixiv?.clientSecret || historyConfig.pixiv?.clientSecret,
+              deviceToken: config.pixiv?.deviceToken || historyConfig.pixiv?.deviceToken,
+              clientId: config.pixiv?.clientId || historyConfig.pixiv?.clientId,
+              userAgent: config.pixiv?.userAgent || historyConfig.pixiv?.userAgent,
+            },
+          };
+
+          // Validate configuration
+          const validationResult = validateConfig(mergedConfig);
+          if (validationResult.valid) {
+            // Write to file to ensure consistency
+            writeFileSync(configPath, JSON.stringify(mergedConfig, null, 2), 'utf-8');
+            config = mergedConfig;
+            logger.debug('Active config history applied automatically', { id: activeConfig.id });
+          } else {
+            logger.warn('Active config history is invalid, skipping auto-apply', {
+              id: activeConfig.id,
+              errors: validationResult.errors,
+            });
+          }
+        }
+      } catch (error) {
+        // Don't fail the request if history check fails
+        logger.warn('Failed to check/apply active config history', { error });
+      } finally {
+        if (database) {
+          try {
+            database.close();
+          } catch (closeError) {
+            // Ignore close errors
+          }
+          database = null;
+        }
+      }
+    }
 
     // Remove sensitive information before sending
     const safeConfig = maskSensitiveFields(config);
@@ -168,6 +224,22 @@ router.put('/', async (req: Request, res: Response) => {
     // Write to file
     writeFileSync(configPath, JSON.stringify(updatedConfig, null, 2), 'utf-8');
 
+    // Auto-save to config history if database is available
+    try {
+      if (updatedConfig.storage?.databasePath) {
+        const database = new Database(updatedConfig.storage.databasePath);
+        database.migrate();
+        const timestamp = new Date().toISOString().split('T')[0];
+        const name = `Config ${timestamp}`;
+        database.saveConfigHistory(name, updatedConfig, 'Auto-saved configuration');
+        database.close();
+        logger.debug('Configuration auto-saved to history', { name });
+      }
+    } catch (error) {
+      // Don't fail the update if history save fails
+      logger.warn('Failed to save config to history', { error });
+    }
+
     logger.info('Configuration updated', { configPath });
 
     res.json({
@@ -252,6 +324,323 @@ router.post('/restore', async (req: Request, res: Response) => {
   } catch (error) {
     logger.error('Failed to restore config', { error });
     res.status(500).json({ errorCode: ErrorCode.CONFIG_RESTORE_FAILED });
+  }
+});
+
+/**
+ * GET /api/config/history
+ * Get all configuration history entries
+ */
+router.get('/history', async (req: Request, res: Response) => {
+  let database: Database | null = null;
+  try {
+    const configPath = getConfigPath();
+    const config = loadConfig(configPath);
+    
+    if (!config.storage?.databasePath) {
+      return res.json({ data: [] });
+    }
+
+    database = new Database(config.storage.databasePath);
+    database.migrate();
+    
+    const history = database.getConfigHistory();
+    
+    // Parse config_json for each entry
+    const parsedHistory = history.map(entry => ({
+      id: entry.id,
+      name: entry.name,
+      description: entry.description,
+      config: JSON.parse(entry.config_json),
+      created_at: entry.created_at,
+      updated_at: entry.updated_at,
+      is_active: entry.is_active,
+    }));
+
+    database.close();
+    database = null;
+
+    res.json({ data: parsedHistory });
+  } catch (error) {
+    if (database) {
+      try {
+        database.close();
+      } catch (closeError) {
+        // Ignore close errors
+      }
+    }
+    logger.error('Failed to get config history', { error });
+    res.status(500).json({ errorCode: ErrorCode.CONFIG_GET_FAILED });
+  }
+});
+
+/**
+ * POST /api/config/history
+ * Save configuration to history
+ */
+router.post('/history', async (req: Request, res: Response) => {
+  let database: Database | null = null;
+  try {
+    const { name, description, config } = req.body;
+
+    if (!name || !config) {
+      return res.status(400).json({
+        errorCode: ErrorCode.CONFIG_INVALID,
+        message: 'Name and config are required',
+      });
+    }
+
+    const configPath = getConfigPath();
+    const currentConfig = loadConfig(configPath);
+    
+    if (!currentConfig.storage?.databasePath) {
+      return res.status(400).json({
+        errorCode: ErrorCode.CONFIG_GET_FAILED,
+        message: 'Database path not configured',
+      });
+    }
+
+    database = new Database(currentConfig.storage.databasePath);
+    database.migrate();
+    
+    const id = database.saveConfigHistory(name, config, description);
+    
+    database.close();
+    database = null;
+
+    res.json({
+      success: true,
+      data: { id },
+    });
+  } catch (error) {
+    if (database) {
+      try {
+        database.close();
+      } catch (closeError) {
+        // Ignore close errors
+      }
+    }
+    logger.error('Failed to save config history', { error });
+    res.status(500).json({
+      errorCode: ErrorCode.CONFIG_UPDATE_FAILED,
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+/**
+ * GET /api/config/history/:id
+ * Get a specific configuration history entry
+ */
+router.get('/history/:id', async (req: Request, res: Response) => {
+  let database: Database | null = null;
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) {
+      return res.status(400).json({
+        errorCode: ErrorCode.CONFIG_INVALID,
+        message: 'Invalid history ID',
+      });
+    }
+
+    const configPath = getConfigPath();
+    const config = loadConfig(configPath);
+    
+    if (!config.storage?.databasePath) {
+      return res.status(400).json({
+        errorCode: ErrorCode.CONFIG_GET_FAILED,
+        message: 'Database path not configured',
+      });
+    }
+
+    database = new Database(config.storage.databasePath);
+    database.migrate();
+    
+    const entry = database.getConfigHistoryById(id);
+    
+    if (!entry) {
+      database.close();
+      return res.status(404).json({
+        errorCode: ErrorCode.CONFIG_GET_FAILED,
+        message: 'Configuration history not found',
+      });
+    }
+
+    database.close();
+    database = null;
+
+    res.json({
+      data: {
+        id: entry.id,
+        name: entry.name,
+        description: entry.description,
+        config: JSON.parse(entry.config_json),
+        created_at: entry.created_at,
+        updated_at: entry.updated_at,
+        is_active: entry.is_active,
+      },
+    });
+  } catch (error) {
+    if (database) {
+      try {
+        database.close();
+      } catch (closeError) {
+        // Ignore close errors
+      }
+    }
+    logger.error('Failed to get config history entry', { error });
+    res.status(500).json({ errorCode: ErrorCode.CONFIG_GET_FAILED });
+  }
+});
+
+/**
+ * DELETE /api/config/history/:id
+ * Delete a configuration history entry
+ */
+router.delete('/history/:id', async (req: Request, res: Response) => {
+  let database: Database | null = null;
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) {
+      return res.status(400).json({
+        errorCode: ErrorCode.CONFIG_INVALID,
+        message: 'Invalid history ID',
+      });
+    }
+
+    const configPath = getConfigPath();
+    const config = loadConfig(configPath);
+    
+    if (!config.storage?.databasePath) {
+      return res.status(400).json({
+        errorCode: ErrorCode.CONFIG_GET_FAILED,
+        message: 'Database path not configured',
+      });
+    }
+
+    database = new Database(config.storage.databasePath);
+    database.migrate();
+    
+    const deleted = database.deleteConfigHistory(id);
+    
+    database.close();
+    database = null;
+
+    if (!deleted) {
+      return res.status(404).json({
+        errorCode: ErrorCode.CONFIG_GET_FAILED,
+        message: 'Configuration history not found',
+      });
+    }
+
+    res.json({
+      success: true,
+    });
+  } catch (error) {
+    if (database) {
+      try {
+        database.close();
+      } catch (closeError) {
+        // Ignore close errors
+      }
+    }
+    logger.error('Failed to delete config history', { error });
+    res.status(500).json({ errorCode: ErrorCode.CONFIG_UPDATE_FAILED });
+  }
+});
+
+/**
+ * POST /api/config/history/:id/apply
+ * Apply a configuration history entry to current config
+ */
+router.post('/history/:id/apply', async (req: Request, res: Response) => {
+  let database: Database | null = null;
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) {
+      return res.status(400).json({
+        errorCode: ErrorCode.CONFIG_INVALID,
+        message: 'Invalid history ID',
+      });
+    }
+
+    const configPath = getConfigPath();
+    const currentConfig = loadConfig(configPath);
+    
+    if (!currentConfig.storage?.databasePath) {
+      return res.status(400).json({
+        errorCode: ErrorCode.CONFIG_GET_FAILED,
+        message: 'Database path not configured',
+      });
+    }
+
+    database = new Database(currentConfig.storage.databasePath);
+    database.migrate();
+    
+    const entry = database.getConfigHistoryById(id);
+    
+    if (!entry) {
+      database.close();
+      return res.status(404).json({
+        errorCode: ErrorCode.CONFIG_GET_FAILED,
+        message: 'Configuration history not found',
+      });
+    }
+
+    const historyConfig = JSON.parse(entry.config_json) as StandaloneConfig;
+    
+    // Merge with current config to preserve sensitive data
+    const mergedConfig: StandaloneConfig = {
+      ...historyConfig,
+      pixiv: {
+        ...historyConfig.pixiv,
+        // Preserve current sensitive fields
+        refreshToken: currentConfig.pixiv?.refreshToken || historyConfig.pixiv?.refreshToken,
+        clientSecret: currentConfig.pixiv?.clientSecret || historyConfig.pixiv?.clientSecret,
+        deviceToken: currentConfig.pixiv?.deviceToken || historyConfig.pixiv?.deviceToken,
+        clientId: currentConfig.pixiv?.clientId || historyConfig.pixiv?.clientId,
+        userAgent: currentConfig.pixiv?.userAgent || historyConfig.pixiv?.userAgent,
+      },
+    };
+
+    // Validate configuration
+    const validationResult = validateConfig(mergedConfig);
+    if (!validationResult.valid) {
+      database.close();
+      return res.status(400).json({
+        errorCode: ErrorCode.CONFIG_INVALID,
+        details: validationResult.errors,
+      });
+    }
+
+    // Write to file
+    writeFileSync(configPath, JSON.stringify(mergedConfig, null, 2), 'utf-8');
+
+    // Set this configuration as active
+    database.setActiveConfigHistory(id);
+
+    database.close();
+    database = null;
+
+    logger.info('Configuration applied from history', { id, configPath });
+
+    res.json({
+      success: true,
+      errorCode: ErrorCode.CONFIG_UPDATE_SUCCESS,
+    });
+  } catch (error) {
+    if (database) {
+      try {
+        database.close();
+      } catch (closeError) {
+        // Ignore close errors
+      }
+    }
+    logger.error('Failed to apply config history', { error });
+    res.status(500).json({
+      errorCode: ErrorCode.CONFIG_UPDATE_FAILED,
+      message: error instanceof Error ? error.message : String(error),
+    });
   }
 });
 

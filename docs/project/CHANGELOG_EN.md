@@ -10,6 +10,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- ✨ Added configuration history activation feature (2025-11-10)
+  - Added `is_active` field to `config_history` table to mark the currently active configuration
+  - When applying a configuration history, automatically sets it as active and others as inactive
+  - When getting configuration, automatically checks and applies the active configuration history to ensure consistency
+  - Frontend interface displays the currently active configuration with clear visual indicators
+  - User-selected configuration is persisted and automatically applied after system restart
 - ✨ Added pixiv-token-getter adapter support (2025-11-10)
   - New `pixiv-token-getter-adapter.ts` module supporting login via pixiv-token-getter library
   - Supports both interactive and headless login modes

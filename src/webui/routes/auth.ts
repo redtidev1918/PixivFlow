@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
+import { readFileSync, existsSync } from 'fs';
 import { TerminalLogin } from '../../terminal-login';
-import { loadConfig, getConfigPath, ConfigValidationError } from '../../config';
+import { loadConfig, getConfigPath, ConfigValidationError, StandaloneConfig } from '../../config';
 import { updateConfigWithToken } from '../../utils/login-helper';
 import { logger } from '../../logger';
 import { ErrorCode } from '../utils/error-codes';
@@ -9,8 +10,28 @@ import { ConfigError } from '../../utils/errors';
 const router = Router();
 
 /**
+ * Read config file without validation (for checking refreshToken even if validation fails)
+ */
+function readConfigRaw(configPath: string): Partial<StandaloneConfig> | null {
+  try {
+    if (!existsSync(configPath)) {
+      return null;
+    }
+    const raw = readFileSync(configPath, 'utf-8');
+    return JSON.parse(raw) as Partial<StandaloneConfig>;
+  } catch (error) {
+    logger.warn('Failed to read raw config file', {
+      error: error instanceof Error ? error.message : String(error),
+      configPath,
+    });
+    return null;
+  }
+}
+
+/**
  * GET /api/auth/status
  * Get authentication status
+ * Even if config validation fails, we still check for refreshToken to determine auth status
  */
 router.get('/status', async (req: Request, res: Response) => {
   try {
@@ -37,15 +58,26 @@ router.get('/status', async (req: Request, res: Response) => {
         error.cause instanceof ConfigValidationError
           ? error.cause.warnings
           : [];
+      
+      // Even if validation fails, check for refreshToken in raw config
+      // This allows users to be authenticated even if other config fields are missing
+      const configPath = getConfigPath();
+      const rawConfig = readConfigRaw(configPath);
+      const hasToken = !!rawConfig?.pixiv?.refreshToken;
+      const authenticated = hasToken; // User is authenticated if they have a refreshToken
+      
       logger.warn('Configuration invalid when checking auth status', {
         errors: validationErrors,
         warnings: validationWarnings,
+        hasToken,
+        authenticated,
       });
+      
       return res.json({
-        authenticated: false,
-        hasToken: false,
-        isAuthenticated: false,
-        configReady: false,
+        authenticated,
+        hasToken,
+        isAuthenticated: authenticated, // Alias for compatibility
+        configReady: false, // Config is not fully ready (validation failed)
         errors: validationErrors,
         warnings: validationWarnings,
       });

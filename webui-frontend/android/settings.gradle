@@ -1,9 +1,0 @@
-include ':app'
-include ':capacitor-cordova-android-plugins'
-project(':capacitor-cordova-android-plugins').projectDir = new File('./capacitor-cordova-android-plugins/')
-
-// Apply Capacitor settings if file exists
-def capacitorSettings = file('capacitor.settings.gradle')
-if (capacitorSettings.exists()) {
-    apply from: 'capacitor.settings.gradle'
-}

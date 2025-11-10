@@ -128,7 +128,7 @@ router.put('/', async (req: Request, res: Response) => {
       pixiv: {
         ...(currentConfig.pixiv ?? {}),
         ...(req.body.pixiv ?? {}),
-        // Preserve sensitive fields unless explicitly provided
+        // Preserve sensitive/required fields unless explicitly provided
         refreshToken:
           req.body.pixiv?.refreshToken && req.body.pixiv.refreshToken !== '***'
             ? req.body.pixiv.refreshToken
@@ -137,6 +137,21 @@ router.put('/', async (req: Request, res: Response) => {
           req.body.pixiv?.clientSecret && req.body.pixiv.clientSecret !== '***'
             ? req.body.pixiv.clientSecret
             : currentConfig.pixiv?.clientSecret,
+        // Preserve deviceToken if not provided in request
+        deviceToken:
+          req.body.pixiv?.deviceToken && req.body.pixiv.deviceToken.trim() !== ''
+            ? req.body.pixiv.deviceToken
+            : currentConfig.pixiv?.deviceToken,
+        // Preserve clientId if not provided in request
+        clientId:
+          req.body.pixiv?.clientId && req.body.pixiv.clientId.trim() !== ''
+            ? req.body.pixiv.clientId
+            : currentConfig.pixiv?.clientId,
+        // Preserve userAgent if not provided in request
+        userAgent:
+          req.body.pixiv?.userAgent && req.body.pixiv.userAgent.trim() !== ''
+            ? req.body.pixiv.userAgent
+            : currentConfig.pixiv?.userAgent,
       },
       targets: req.body.targets ?? currentConfig.targets ?? [],
     };

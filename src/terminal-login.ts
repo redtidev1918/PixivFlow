@@ -1,14 +1,16 @@
 /**
  * Terminal Login Module for PixivFlow
  * 
- * This module provides terminal-based authentication for Pixiv using Python gppt.
+ * This module provides terminal-based authentication for Pixiv.
  * It supports both interactive and headless login modes.
+ * 
+ * Login methods (in order of preference):
+ * 1. pixiv-token-getter - Specialized library (recommended)
+ * 2. Puppeteer - Node.js native, no external dependencies
+ * 3. Python gppt - Fallback option
  * 
  * Based on get-pixivpy-token (gppt) implementation:
  * https://github.com/eggplants/get-pixivpy-token
- * 
- * The module tries Puppeteer first (Node.js native, no external dependencies),
- * then falls back to Python gppt if Puppeteer fails or is unavailable.
  */
 
 import * as readline from 'readline';
@@ -28,6 +30,11 @@ import {
   loginWithPuppeteerHeadless,
   ProxyConfig as PuppeteerProxyConfig,
 } from './puppeteer-login-adapter';
+import {
+  checkPixivTokenGetterAvailable,
+  loginWithPixivTokenGetterInteractive,
+  loginWithPixivTokenGetterHeadless,
+} from './pixiv-token-getter-adapter';
 
 // Use Puppeteer proxy config as the main type (they're compatible)
 export type ProxyConfig = PuppeteerProxyConfig;
@@ -129,15 +136,19 @@ export class TerminalLogin {
   /**
    * Login to Pixiv and obtain OAuth token
    * 
-   * Tries Puppeteer first (Node.js native, no external dependencies),
-   * falls back to Python gppt if Puppeteer fails or is unavailable.
+   * Tries methods in this order:
+   * 1. pixiv-token-getter (specialized library, recommended)
+   * 2. Puppeteer (Node.js native, no external dependencies)
+   * 3. Python gppt (fallback)
    */
   async login(options: {
     headless?: boolean;
     username?: string;
     password?: string;
     proxy?: ProxyConfig;
-    forcePython?: boolean; // Force use of Python gppt instead of Puppeteer
+    forcePython?: boolean; // Force use of Python gppt instead of other methods
+    forcePuppeteer?: boolean; // Force use of Puppeteer instead of pixiv-token-getter
+    forceTokenGetter?: boolean; // Force use of pixiv-token-getter only, no fallback
   } = {}): Promise<LoginInfo> {
     // Override instance options with method parameters
     if (options.headless !== undefined) {
@@ -153,7 +164,59 @@ export class TerminalLogin {
       this.proxy = options.proxy;
     }
 
-    // Try Puppeteer first (unless forcePython is set)
+    // Try pixiv-token-getter first (unless forcePython or forcePuppeteer is set)
+    // If forceTokenGetter is set, only use pixiv-token-getter and throw error if it fails
+    if (!options.forcePython && !options.forcePuppeteer) {
+      const tokenGetterAvailable = await checkPixivTokenGetterAvailable();
+      
+      if (tokenGetterAvailable) {
+        console.log('[i]: Using pixiv-token-getter for login (recommended)...');
+        
+        try {
+          let result: LoginInfo | null = null;
+          
+          if (this.headless && this.username && this.password) {
+            result = await loginWithPixivTokenGetterHeadless(this.username, this.password, this.proxy);
+          } else {
+            result = await loginWithPixivTokenGetterInteractive(this.proxy);
+          }
+          
+          if (result) {
+            console.log('[+]: Login successful with pixiv-token-getter!');
+            return result;
+          }
+        } catch (error) {
+          console.error('[!]: pixiv-token-getter login failed:', error);
+          
+          // If forceTokenGetter is set, throw error instead of falling back
+          if (options.forceTokenGetter) {
+            throw new PixivLoginFailedError(
+              `pixiv-token-getter login failed: ${error instanceof Error ? error.message : String(error)}`
+            );
+          }
+          
+          console.log('[i]: Falling back to Puppeteer...');
+        }
+      } else {
+        // If forceTokenGetter is set and it's not available, throw error
+        if (options.forceTokenGetter) {
+          throw new PixivLoginFailedError(
+            'pixiv-token-getter is not available. Please ensure pixiv-token-getter package is installed.'
+          );
+        }
+        
+        console.log('[i]: pixiv-token-getter not available, will try Puppeteer...');
+      }
+    }
+    
+    // If forceTokenGetter is set, we should not reach here (should have returned or thrown)
+    if (options.forceTokenGetter) {
+      throw new PixivLoginFailedError(
+        'pixiv-token-getter login failed and forceTokenGetter is set. No fallback allowed.'
+      );
+    }
+
+    // Try Puppeteer next (unless forcePython is set)
     if (!options.forcePython) {
       const puppeteerAvailable = await checkPuppeteerAvailable();
       

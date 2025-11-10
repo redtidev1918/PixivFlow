@@ -3,6 +3,7 @@ import { readFileSync, existsSync } from 'fs';
 import { logger } from '../../logger';
 import { loadConfig, getConfigPath } from '../../config';
 import path from 'path';
+import { isAbsolute, dirname, join } from 'node:path';
 import { ErrorCode } from '../utils/error-codes';
 
 const router = Router();
@@ -17,8 +18,14 @@ router.get('/', async (req: Request, res: Response) => {
     const configPath = getConfigPath();
     const config = loadConfig(configPath);
 
-    // Default log path
-    const logPath = path.join(process.cwd(), 'data', 'pixiv-downloader.log');
+    // Get log path from config (use data directory from database path for Electron app)
+    let logPath: string;
+    if (config.storage?.databasePath && isAbsolute(config.storage.databasePath)) {
+      const dataDir = dirname(config.storage.databasePath);
+      logPath = join(dataDir, 'pixiv-downloader.log');
+    } else {
+      logPath = path.join(process.cwd(), 'data', 'pixiv-downloader.log');
+    }
 
     if (!existsSync(logPath)) {
       return res.json({
@@ -77,7 +84,14 @@ router.delete('/', async (req: Request, res: Response) => {
   try {
     const configPath = getConfigPath();
     const config = loadConfig(configPath);
-    const logPath = path.join(process.cwd(), 'data', 'pixiv-downloader.log');
+    // Get log path from config (use data directory from database path for Electron app)
+    let logPath: string;
+    if (config.storage?.databasePath && isAbsolute(config.storage.databasePath)) {
+      const dataDir = dirname(config.storage.databasePath);
+      logPath = join(dataDir, 'pixiv-downloader.log');
+    } else {
+      logPath = path.join(process.cwd(), 'data', 'pixiv-downloader.log');
+    }
 
     if (existsSync(logPath)) {
       // Truncate log file

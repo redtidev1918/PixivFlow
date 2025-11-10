@@ -127,24 +127,186 @@ export default function Login() {
   }, []);
 
   // Handle successful login
-  const handleLoginSuccess = useCallback(() => {
+  const handleLoginSuccess = useCallback(async () => {
     stopPolling();
     setLoginStep(2);
-    message.success('登录成功！正在跳转...');
+    
+    // Show progress messages
+    message.loading({ content: '✅ 登录成功，正在验证登录状态...', key: 'login-success', duration: 0 });
+    
     // Invalidate queries to refresh data
     queryClient.invalidateQueries({ queryKey: ['authStatus'] });
     queryClient.invalidateQueries({ queryKey: ['config'] });
-    setTimeout(() => {
-      navigate('/dashboard', { replace: true });
-    }, 1000);
-  }, [stopPolling, queryClient, navigate]);
+    
+    // Wait for backend config to refresh
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // Wait for auth status to update before navigating
+    // This ensures ProtectedRoute sees the updated authentication state
+    try {
+      // Force refetch and wait for it to complete
+      const result = await refetchAuthStatus();
+      console.log('[Login] Auth status after invalidate:', result);
+      
+      message.destroy('login-success');
+      
+      // Verify authentication before navigating
+      if (isAuthenticated(result)) {
+        console.log('[Login] Authentication confirmed, navigating to dashboard...');
+        message.success('✅ 登录成功！正在跳转到 Dashboard...');
+        
+        // Give a moment for the success message to show
+        await new Promise(resolve => setTimeout(resolve, 800));
+        
+        // Use window.location for more reliable navigation
+        // This bypasses React Router's navigation which might be blocked by ProtectedRoute
+        window.location.href = '/dashboard';
+      } else {
+        console.warn('[Login] Auth status not confirmed, but attempting navigation anyway...');
+        message.warning('状态验证失败，但将尝试跳转...');
+        
+        // Even if status check fails, try to navigate after a short delay
+        // The backend has saved the token, so ProtectedRoute should eventually allow access
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        window.location.href = '/dashboard';
+      }
+    } catch (error) {
+      console.error('[Login] Error checking auth status before navigation:', error);
+      message.destroy('login-success');
+      message.warning('状态检查出错，但将尝试跳转...');
+      
+      // On error, still try to navigate after a delay
+      // The token is saved, so it should work
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      window.location.href = '/dashboard';
+    }
+  }, [stopPolling, queryClient, refetchAuthStatus, isAuthenticated]);
 
   // Redirect to dashboard if already authenticated
   useEffect(() => {
     if (!authStatusLoading && isAuthenticated(authStatus)) {
       navigate('/dashboard', { replace: true });
     }
-  }, [authStatusLoading, authStatus, navigate]);
+  }, [authStatusLoading, authStatus, navigate, isAuthenticated]);
+
+  // Register IPC event listeners for Electron login
+  useEffect(() => {
+    // Check if we're in Electron
+    const isElectron = typeof window !== 'undefined' && (window as any).electron;
+    if (!isElectron || !(window as any).electron.onLoginSuccess) {
+      return;
+    }
+
+    console.log('[Login] Registering IPC event listeners for Electron login...');
+
+    // Handle login success from Electron
+    const handleElectronLoginSuccess = async (data: any) => {
+      console.log('[Login] Received login-success event from Electron:', data);
+      
+      try {
+        // Stop polling immediately when we receive login success
+        stopPolling();
+        
+        // Show token received message
+        if (data.refreshToken) {
+          console.log('[Login] RefreshToken received from Electron');
+          message.loading({ content: '✅ 已获取授权码，正在交换 Token...', key: 'login-progress', duration: 0 });
+          
+          // Wait a bit to show the message, then show token saved message
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          message.loading({ content: '✅ Token 交换成功，正在保存到后端配置...', key: 'login-progress', duration: 0 });
+          
+          // Wait for backend to save token (backend already saved it, but we need to wait for config refresh)
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          message.loading({ content: '✅ Token 已保存，正在验证登录状态...', key: 'login-progress', duration: 0 });
+        } else {
+          message.loading({ content: '✅ 登录成功，正在验证登录状态...', key: 'login-progress', duration: 0 });
+        }
+        
+        // Invalidate queries to refresh data
+        queryClient.invalidateQueries({ queryKey: ['authStatus'] });
+        queryClient.invalidateQueries({ queryKey: ['config'] });
+        
+        // Wait for backend config to refresh (give it more time)
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        
+        // Check auth status multiple times with retries
+        let authenticated = false;
+        
+        for (let attempt = 0; attempt < 5; attempt++) {
+          try {
+            const result = await refetchAuthStatus();
+            console.log(`[Login] Auth status check (attempt ${attempt + 1}/5):`, result);
+            
+            if (isAuthenticated(result)) {
+              authenticated = true;
+              console.log('[Login] Authentication confirmed');
+              break;
+            } else {
+              // Wait before retry
+              if (attempt < 4) {
+                await new Promise(resolve => setTimeout(resolve, 500));
+              }
+            }
+          } catch (error) {
+            console.error(`[Login] Auth status check error (attempt ${attempt + 1}/5):`, error);
+            if (attempt < 4) {
+              await new Promise(resolve => setTimeout(resolve, 500));
+            }
+          }
+        }
+        
+        // Destroy loading message
+        message.destroy('login-progress');
+        
+        if (authenticated || data.refreshToken) {
+          // If authenticated or we have refreshToken (which means backend saved it), proceed
+          console.log('[Login] Proceeding with login success (authenticated:', authenticated, ', hasToken:', !!data.refreshToken, ')');
+          setLoginStep(2);
+          message.success('✅ 登录成功！正在跳转到 Dashboard...');
+          
+          // Give a moment for the success message to show, then navigate
+          await new Promise(resolve => setTimeout(resolve, 800));
+          
+          // Force navigation using window.location (bypasses React Router caching)
+          window.location.href = '/dashboard';
+        } else {
+          console.error('[Login] Authentication not confirmed after multiple attempts');
+          message.warning('登录成功，但状态验证失败。请手动刷新页面或点击"检查登录状态"按钮。');
+          setLoginStep(1); // Stay on login step 1 to allow manual check
+        }
+      } catch (error: any) {
+        console.error('[Login] Error handling login-success event:', error);
+        message.destroy('login-progress');
+        message.error('处理登录成功事件时出错: ' + (error.message || '未知错误'));
+      }
+    };
+
+    // Handle login error from Electron
+    const handleElectronLoginError = (error: any) => {
+      console.error('[Login] Received login-error event from Electron:', error);
+      stopPolling();
+      setLoginStep(0);
+      message.error('登录失败: ' + (error.message || '未知错误'));
+    };
+
+    // Register event listeners and get cleanup functions
+    const cleanupLoginSuccess = (window as any).electron.onLoginSuccess(handleElectronLoginSuccess);
+    const cleanupLoginError = (window as any).electron.onLoginError(handleElectronLoginError);
+
+    // Cleanup: Remove event listeners on unmount
+    return () => {
+      console.log('[Login] Cleaning up IPC event listeners...');
+      if (cleanupLoginSuccess && typeof cleanupLoginSuccess === 'function') {
+        cleanupLoginSuccess();
+      }
+      if (cleanupLoginError && typeof cleanupLoginError === 'function') {
+        cleanupLoginError();
+      }
+    };
+  }, [queryClient, refetchAuthStatus, isAuthenticated, handleLoginSuccess, stopPolling]);
 
   // Poll authentication status during interactive login
   useEffect(() => {
@@ -242,56 +404,39 @@ export default function Login() {
     const isElectron = typeof window !== 'undefined' && (window as any).electron;
     
     if (isElectron && (window as any).electron.openLoginWindow) {
-      // Use Electron in-app login window
-      console.log('[Login] Using Electron in-app login window...');
-      
-      // Store event listener references for cleanup
-      let loginSuccessHandler: ((data: any) => void) | null = null;
-      let loginErrorHandler: ((error: any) => void) | null = null;
+      // Use Electron system browser login
+      console.log('[Login] Using Electron system browser login...');
       
       try {
-        // Set up event listeners
-        loginSuccessHandler = async (data: any) => {
-          console.log('[Login] Login success from Electron:', data);
-          
-          // Save token to backend
-          try {
-            await api.loginWithToken(data.refreshToken);
-            // Call the component-level handleLoginSuccess function
-            handleLoginSuccess();
-          } catch (error: any) {
-            console.error('[Login] Failed to save token to backend:', error);
-            message.error('登录成功，但保存 token 失败: ' + (error.message || '未知错误'));
-            setLoginStep(0);
-          }
-        };
+        // Show info message about the login process
+        message.info('正在打开系统浏览器进行登录...', 3);
         
-        loginErrorHandler = (error: any) => {
-          console.error('[Login] Login error from Electron:', error);
-          message.error('登录失败: ' + (error.message || '未知错误'));
-          setLoginStep(0);
-        };
-        
-        // Register event listeners
-        // Note: IPC event listeners are automatically cleaned up when the window is closed
-        if ((window as any).electron.onLoginSuccess && loginSuccessHandler) {
-          (window as any).electron.onLoginSuccess(loginSuccessHandler);
-        }
-        if ((window as any).electron.onLoginError && loginErrorHandler) {
-          (window as any).electron.onLoginError(loginErrorHandler);
+        // Mark interactive login as active (event listeners are handled in useEffect)
+        isInteractiveLoginActiveRef.current = true;
+        if (!pollingStartTimeRef.current) {
+          pollingStartTimeRef.current = Date.now();
         }
         
-        // Open login window
+        // Open login window (event listeners are already registered in useEffect)
         const result = await (window as any).electron.openLoginWindow();
         if (!result.success) {
+          if (result.cancelled) {
+            // User cancelled, don't show error
+            setLoginStep(0);
+            isInteractiveLoginActiveRef.current = false;
+            return;
+          }
           throw new Error(result.error || '无法打开登录窗口');
         }
         
-        message.info('登录窗口已打开，请在窗口中完成登录。登录成功后窗口将自动关闭。');
+        // The login-success or login-error event will be handled by the listeners
+        // registered in useEffect, which will call handleLoginSuccess or show error
+        console.log('[Login] Login window opened, waiting for login-success or login-error event...');
       } catch (error: any) {
         console.error('[Login] Failed to open Electron login window:', error);
         message.error('无法打开登录窗口: ' + (error.message || '未知错误'));
         setLoginStep(0);
+        isInteractiveLoginActiveRef.current = false;
       }
       return;
     }

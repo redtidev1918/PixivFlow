@@ -252,14 +252,20 @@ export class WebUIServer {
  * Start WebUI server
  */
 export async function startWebUI(options?: WebUIServerOptions): Promise<void> {
-  // Set up log file path
-  const logPath = path.join(process.cwd(), 'data', 'pixiv-downloader.log');
-  logger.setLogPath(logPath);
-
   // Initialize database to ensure tables exist
   try {
     const configPath = getConfigPath();
     const config = loadConfig(configPath);
+    
+    // Set up log file path (use data directory from database path for Electron app)
+    let logPath: string;
+    if (config.storage?.databasePath && path.isAbsolute(config.storage.databasePath)) {
+      const dataDir = path.dirname(config.storage.databasePath);
+      logPath = path.join(dataDir, 'pixiv-downloader.log');
+    } else {
+      logPath = path.join(process.cwd(), 'data', 'pixiv-downloader.log');
+    }
+    logger.setLogPath(logPath);
     if (config.storage?.databasePath) {
       const database = new Database(config.storage.databasePath);
       database.migrate();

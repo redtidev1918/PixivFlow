@@ -1,7 +1,7 @@
 import { Server as SocketServer, Socket } from 'socket.io';
 import { logger } from '../../logger';
 import { createReadStream, existsSync, watchFile, unwatchFile } from 'fs';
-import { join } from 'path';
+import { join, isAbsolute, dirname } from 'path';
 import { loadConfig, getConfigPath } from '../../config';
 import readline from 'readline';
 
@@ -11,7 +11,25 @@ interface LogStreamOptions {
 }
 
 export function setupLogStream(io: SocketServer, options: LogStreamOptions = {}): void {
-  const logPath = options.logPath || join(process.cwd(), 'data', 'pixiv-downloader.log');
+  // Get log path from config if not provided (use data directory from database path for Electron app)
+  let logPath: string;
+  if (options.logPath) {
+    logPath = options.logPath;
+  } else {
+    try {
+      const configPath = getConfigPath();
+      const config = loadConfig(configPath);
+      if (config.storage?.databasePath && isAbsolute(config.storage.databasePath)) {
+        const dataDir = dirname(config.storage.databasePath);
+        logPath = join(dataDir, 'pixiv-downloader.log');
+      } else {
+        logPath = join(process.cwd(), 'data', 'pixiv-downloader.log');
+      }
+    } catch (error) {
+      // Fallback to default if config loading fails
+      logPath = join(process.cwd(), 'data', 'pixiv-downloader.log');
+    }
+  }
   const maxLines = options.maxLines || 1000;
 
   io.on('connection', (socket: Socket) => {

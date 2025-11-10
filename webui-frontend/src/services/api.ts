@@ -425,6 +425,29 @@ export const api = {
   deleteConfigFile: (filename: string): Promise<AxiosResponse<ApiResponse<void>>> =>
     apiClient.delete(`/config/files/${filename}`),
 
+  /**
+   * Get the raw JSON content of a configuration file
+   * @param filename - Filename to read
+   */
+  getConfigFileContent: (filename: string): Promise<AxiosResponse<ApiResponse<{
+    filename: string;
+    path: string;
+    pathRelative: string;
+    content: string;
+  }>>> =>
+    apiClient.get(`/config/files/${filename}/content`),
+
+  /**
+   * Update the raw JSON content of a configuration file
+   * @param filename - Filename to update
+   * @param content - Raw JSON content as string
+   */
+  updateConfigFileContent: (
+    filename: string,
+    content: string
+  ): Promise<AxiosResponse<ApiResponse<void>>> =>
+    apiClient.put(`/config/files/${filename}/content`, { content }),
+
   // ========== Download Management ==========
 
   /**

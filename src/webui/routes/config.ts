@@ -901,5 +901,121 @@ router.delete('/files/:filename', async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * GET /api/config/files/:filename/content
+ * Get the raw JSON content of a configuration file
+ */
+router.get('/files/:filename/content', async (req: Request, res: Response) => {
+  try {
+    const { filename } = req.params;
+    const configManager = getConfigManager('config');
+    const configDir = configManager.getConfigDir();
+    const path = join(configDir, filename);
+    
+    // Validate filename to prevent directory traversal
+    if (!filename.match(/^standalone\.config(\.\d+)?\.json$/)) {
+      return res.status(400).json({
+        errorCode: ErrorCode.CONFIG_INVALID,
+        message: 'Invalid configuration filename',
+      });
+    }
+
+    if (!existsSync(path)) {
+      return res.status(404).json({
+        errorCode: ErrorCode.CONFIG_GET_FAILED,
+        message: 'Configuration file not found',
+      });
+    }
+
+    // Read raw file content
+    const content = readFileSync(path, 'utf-8');
+    
+    logger.info('Read configuration file content', { filename, path });
+
+    res.json({
+      success: true,
+      data: {
+        filename,
+        path,
+        pathRelative: relative(process.cwd(), path),
+        content,
+      },
+    });
+  } catch (error) {
+    logger.error('Failed to read config file content', { error });
+    res.status(500).json({
+      errorCode: ErrorCode.CONFIG_GET_FAILED,
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+/**
+ * PUT /api/config/files/:filename/content
+ * Update the raw JSON content of a configuration file
+ */
+router.put('/files/:filename/content', async (req: Request, res: Response) => {
+  try {
+    const { filename } = req.params;
+    const { content } = req.body;
+    
+    if (!content || typeof content !== 'string') {
+      return res.status(400).json({
+        errorCode: ErrorCode.CONFIG_INVALID,
+        message: 'Content is required and must be a string',
+      });
+    }
+
+    const configManager = getConfigManager('config');
+    const configDir = configManager.getConfigDir();
+    const path = join(configDir, filename);
+    
+    // Validate filename to prevent directory traversal
+    if (!filename.match(/^standalone\.config(\.\d+)?\.json$/)) {
+      return res.status(400).json({
+        errorCode: ErrorCode.CONFIG_INVALID,
+        message: 'Invalid configuration filename',
+      });
+    }
+
+    // Validate JSON syntax
+    let parsedConfig: any;
+    try {
+      parsedConfig = JSON.parse(content);
+    } catch (error) {
+      return res.status(400).json({
+        errorCode: ErrorCode.CONFIG_INVALID,
+        message: 'Invalid JSON format',
+        details: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    // Validate configuration structure
+    const validationResult = validateConfig(parsedConfig);
+    if (!validationResult.valid) {
+      return res.status(400).json({
+        errorCode: ErrorCode.CONFIG_INVALID,
+        details: validationResult.errors,
+      });
+    }
+
+    // Write to file
+    writeFileSync(path, content, 'utf-8');
+    
+    logger.info('Updated configuration file content', { filename, path });
+
+    res.json({
+      success: true,
+      errorCode: ErrorCode.CONFIG_UPDATE_SUCCESS,
+    });
+  } catch (error) {
+    logger.error('Failed to update config file content', { error });
+    res.status(500).json({
+      errorCode: ErrorCode.CONFIG_UPDATE_FAILED,
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
 export default router;
 

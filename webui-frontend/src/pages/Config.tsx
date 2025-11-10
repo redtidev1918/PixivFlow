@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Card,
@@ -21,6 +21,7 @@ import {
   Steps,
   Collapse,
   Alert,
+  Spin,
 } from 'antd';
 import {
   SaveOutlined,
@@ -129,11 +130,17 @@ export default function Config() {
   const queryClient = useQueryClient();
   const [form] = Form.useForm();
   const [targetForm] = Form.useForm();
-  const [activeTab, setActiveTab] = useState('basic');
+  const [activeTab, setActiveTab] = useState('files');
   const [targetModalVisible, setTargetModalVisible] = useState(false);
   const [editingTarget, setEditingTarget] = useState<TargetConfig | null>(null);
   const [targetStep, setTargetStep] = useState(0);
   const [previewVisible, setPreviewVisible] = useState(false);
+  const [jsonEditorVisible, setJsonEditorVisible] = useState(false);
+  const [editingConfigFile, setEditingConfigFile] = useState<string | null>(null);
+  const [jsonContent, setJsonContent] = useState<string>('');
+  const [jsonEditorLoading, setJsonEditorLoading] = useState(false);
+  const [lastReadContent, setLastReadContent] = useState<string>('');
+  const [hasExternalChanges, setHasExternalChanges] = useState(false);
 
   const { data: configData, isLoading } = useQuery({
     queryKey: ['config'],
@@ -164,6 +171,72 @@ export default function Config() {
       form.setFieldsValue(formData);
     }
   }, [configData, form]);
+
+  // 使用 ref 存储最新值，避免 useEffect 依赖导致频繁重新创建
+  const lastReadContentRef = useRef<string>('');
+  const jsonContentRef = useRef<string>('');
+
+  // 实时读取配置文件内容
+  useEffect(() => {
+    if (!jsonEditorVisible || !editingConfigFile) {
+      return;
+    }
+
+    let intervalId: NodeJS.Timeout;
+    let isPolling = true;
+
+    const pollFileContent = async () => {
+      if (!isPolling || !editingConfigFile) return;
+
+      try {
+        const response = await api.getConfigFileContent(editingConfigFile);
+        const newContent = response.data.data.content;
+        const currentLastRead = lastReadContentRef.current;
+        const currentEditorContent = jsonContentRef.current;
+        
+        // 如果内容与上次读取的不同，且与当前编辑器内容不同，说明文件被外部修改了
+        if (newContent !== currentLastRead && newContent !== currentEditorContent) {
+          setHasExternalChanges(true);
+          setLastReadContent(newContent);
+          lastReadContentRef.current = newContent;
+        } else if (newContent === currentEditorContent) {
+          // 如果新内容与编辑器内容相同，说明用户已经保存了，清除外部修改标记
+          setHasExternalChanges(false);
+          setLastReadContent(newContent);
+          lastReadContentRef.current = newContent;
+        } else {
+          // 更新最后读取的内容
+          setLastReadContent(newContent);
+          lastReadContentRef.current = newContent;
+        }
+      } catch (error) {
+        // 静默处理错误，避免频繁弹出错误提示
+        console.warn('Failed to poll config file content:', error);
+      }
+    };
+
+    // 立即执行一次
+    pollFileContent();
+    
+    // 每2秒轮询一次
+    intervalId = setInterval(pollFileContent, 2000);
+
+    return () => {
+      isPolling = false;
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+  }, [jsonEditorVisible, editingConfigFile]);
+
+  // 同步 ref 值
+  useEffect(() => {
+    lastReadContentRef.current = lastReadContent;
+  }, [lastReadContent]);
+
+  useEffect(() => {
+    jsonContentRef.current = jsonContent;
+  }, [jsonContent]);
 
   const updateConfigMutation = useMutation({
     mutationFn: (values: any) => api.updateConfig(values),
@@ -551,9 +624,43 @@ export default function Config() {
           <Title level={2} style={{ margin: 0, whiteSpace: 'normal', wordBreak: 'normal' }}>
             {t('config.title')}
           </Title>
-          <Text type="secondary" style={{ fontSize: 12 }}>
-            {t('config.currentConfigFile')}: {currentConfigPath}
-          </Text>
+          <Space direction="vertical" size="small" style={{ marginTop: 8 }}>
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              {t('config.currentConfigFile')}: {currentConfigPath}
+            </Text>
+            {configFilesData?.data?.data && configFilesData.data.data.length > 0 && (
+              <Select
+                value={configFilesData.data.data.find((f: any) => f.isActive)?.filename || undefined}
+                onChange={async (filename: string) => {
+                  const file = configFilesData.data.data.find((f: any) => f.filename === filename);
+                  if (file && !file.isActive) {
+                    try {
+                      await api.switchConfigFile(file.path);
+                      message.success(t('config.configSwitched'));
+                      await queryClient.invalidateQueries({ queryKey: ['config'] });
+                      await queryClient.invalidateQueries({ queryKey: ['configFiles'] });
+                      refetchConfigFiles();
+                      setTimeout(() => {
+                        window.location.reload();
+                      }, 1000);
+                    } catch (error: any) {
+                      message.error(t('config.configSwitchFailed'));
+                    }
+                  }
+                }}
+                style={{ width: 300, fontSize: 12 }}
+                placeholder={t('config.selectConfigFile')}
+                size="small"
+              >
+                {configFilesData.data.data.map((file: any) => (
+                  <Option key={file.filename} value={file.filename}>
+                    {file.isActive && <Tag color="green" style={{ marginRight: 8 }}>{t('config.activeConfig')}</Tag>}
+                    {file.filename}
+                  </Option>
+                ))}
+              </Select>
+            )}
+          </Space>
         </div>
         <Space wrap>
           <Button icon={<ReloadOutlined />} onClick={() => queryClient.invalidateQueries({ queryKey: ['config'] })}>
@@ -587,6 +694,157 @@ export default function Config() {
 
       <Form form={form} layout="vertical">
         <Tabs activeKey={activeTab} onChange={setActiveTab}>
+          {/* 配置文件管理 - 移到最前面 */}
+          <Tabs.TabPane tab={<><FileTextOutlined /> {t('config.tabConfigFiles')}</>} key="files">
+            <Card
+              title={t('config.configFiles')}
+              extra={
+                <Button icon={<ReloadOutlined />} onClick={() => refetchConfigFiles()}>
+                  {t('common.refresh')}
+                </Button>
+              }
+            >
+              {configFilesData?.data?.data && configFilesData.data.data.length > 0 ? (
+                <Table
+                  columns={[
+                    {
+                      title: t('config.fileName'),
+                      dataIndex: 'filename',
+                      key: 'filename',
+                      render: (filename: string, record: any) => (
+                        <Space>
+                          <Text strong={record.isActive}>{filename}</Text>
+                          {record.isActive && (
+                            <Tag color="green">{t('config.activeConfig')}</Tag>
+                          )}
+                        </Space>
+                      ),
+                    },
+                    {
+                      title: t('config.filePath'),
+                      dataIndex: 'pathRelative',
+                      key: 'pathRelative',
+                      render: (path: string) => <Text type="secondary" style={{ fontSize: 12 }}>{path}</Text>,
+                    },
+                    {
+                      title: t('config.fileModified'),
+                      dataIndex: 'modifiedTime',
+                      key: 'modifiedTime',
+                      render: (date: string) => new Date(date).toLocaleString(),
+                    },
+                    {
+                      title: t('config.fileSize'),
+                      dataIndex: 'size',
+                      key: 'size',
+                      render: (size: number) => `${(size / 1024).toFixed(2)} KB`,
+                    },
+                    {
+                      title: t('common.actions'),
+                      key: 'action',
+                      width: 250,
+                      render: (_: any, record: any) => (
+                        <Space>
+                          <Button
+                            type="link"
+                            icon={<EditOutlined />}
+                            onClick={async () => {
+                              try {
+                                setJsonEditorLoading(true);
+                                setEditingConfigFile(record.filename);
+                                const response = await api.getConfigFileContent(record.filename);
+                                const content = response.data.data.content;
+                                setJsonContent(content);
+                                setLastReadContent(content);
+                                lastReadContentRef.current = content;
+                                jsonContentRef.current = content;
+                                setHasExternalChanges(false);
+                                setJsonEditorVisible(true);
+                              } catch (error: any) {
+                                const { message: errorMessage } = extractErrorInfo(error);
+                                message.error(
+                                  `${t('config.configFileReadFailed')}: ${errorMessage || error?.message || t('config.unknownError')}`
+                                );
+                              } finally {
+                                setJsonEditorLoading(false);
+                              }
+                            }}
+                            size="small"
+                          >
+                            {t('config.editJson')}
+                          </Button>
+                          {!record.isActive && (
+                            <Button
+                              type="link"
+                              icon={<PlayCircleOutlined />}
+                              onClick={async () => {
+                                try {
+                                  await api.switchConfigFile(record.path);
+                                  message.success(t('config.configSwitched'));
+                                  await queryClient.invalidateQueries({ queryKey: ['config'] });
+                                  await queryClient.invalidateQueries({ queryKey: ['configFiles'] });
+                                  refetchConfigFiles();
+                                  // Reload config data
+                                  setTimeout(() => {
+                                    window.location.reload();
+                                  }, 1000);
+                                } catch (error: any) {
+                                  message.error(t('config.configSwitchFailed'));
+                                }
+                              }}
+                              size="small"
+                            >
+                              {t('config.switch')}
+                            </Button>
+                          )}
+                          <Popconfirm
+                            title={t('config.deleteConfigFileConfirm')}
+                            onConfirm={async () => {
+                              try {
+                                await api.deleteConfigFile(record.filename);
+                                message.success(t('config.configFileDeleted'));
+                                refetchConfigFiles();
+                                // If we deleted the active config, reload
+                                if (record.isActive) {
+                                  setTimeout(() => {
+                                    window.location.reload();
+                                  }, 1000);
+                                }
+                              } catch (error: any) {
+                                message.error(t('config.configFileDeleteFailed'));
+                              }
+                            }}
+                            okText={t('common.ok')}
+                            cancelText={t('common.cancel')}
+                          >
+                            <Button
+                              type="link"
+                              danger
+                              icon={<DeleteOutlined />}
+                              size="small"
+                            >
+                              {t('common.delete')}
+                            </Button>
+                          </Popconfirm>
+                        </Space>
+                      ),
+                    },
+                  ]}
+                  dataSource={configFilesData.data.data}
+                  rowKey="filename"
+                  pagination={{ pageSize: 10 }}
+                  locale={{ emptyText: t('config.configFilesEmpty') }}
+                />
+              ) : (
+                <Alert
+                  message={t('config.configFilesEmpty')}
+                  description={t('config.configFilesEmptyDesc')}
+                  type="info"
+                  showIcon
+                />
+              )}
+            </Card>
+          </Tabs.TabPane>
+
           {/* 基础配置 */}
           <Tabs.TabPane tab={t('config.tabBasic')} key="basic">
             <Card>
@@ -823,129 +1081,6 @@ export default function Config() {
               <Form.Item label={t('config.downloadTimeout')} name={['download', 'timeout']}>
                 <InputNumber min={1000} style={{ width: '100%' }} />
               </Form.Item>
-            </Card>
-          </Tabs.TabPane>
-
-          {/* 配置文件管理 */}
-          <Tabs.TabPane tab={t('config.tabConfigFiles')} key="files">
-            <Card
-              title={t('config.configFiles')}
-              extra={
-                <Button icon={<ReloadOutlined />} onClick={() => refetchConfigFiles()}>
-                  {t('common.refresh')}
-                </Button>
-              }
-            >
-              {configFilesData?.data?.data && configFilesData.data.data.length > 0 ? (
-                <Table
-                  columns={[
-                    {
-                      title: t('config.fileName'),
-                      dataIndex: 'filename',
-                      key: 'filename',
-                      render: (filename: string, record: any) => (
-                        <Space>
-                          <Text strong={record.isActive}>{filename}</Text>
-                          {record.isActive && (
-                            <Tag color="green">{t('config.activeConfig')}</Tag>
-                          )}
-                        </Space>
-                      ),
-                    },
-                    {
-                      title: t('config.filePath'),
-                      dataIndex: 'pathRelative',
-                      key: 'pathRelative',
-                      render: (path: string) => <Text type="secondary" style={{ fontSize: 12 }}>{path}</Text>,
-                    },
-                    {
-                      title: t('config.fileModified'),
-                      dataIndex: 'modifiedTime',
-                      key: 'modifiedTime',
-                      render: (date: string) => new Date(date).toLocaleString(),
-                    },
-                    {
-                      title: t('config.fileSize'),
-                      dataIndex: 'size',
-                      key: 'size',
-                      render: (size: number) => `${(size / 1024).toFixed(2)} KB`,
-                    },
-                    {
-                      title: t('common.actions'),
-                      key: 'action',
-                      width: 200,
-                      render: (_: any, record: any) => (
-                        <Space>
-                          {!record.isActive && (
-                            <Button
-                              type="link"
-                              icon={<PlayCircleOutlined />}
-                              onClick={async () => {
-                                try {
-                                  await api.switchConfigFile(record.path);
-                                  message.success(t('config.configSwitched'));
-                                  await queryClient.invalidateQueries({ queryKey: ['config'] });
-                                  await queryClient.invalidateQueries({ queryKey: ['configFiles'] });
-                                  refetchConfigFiles();
-                                  // Reload config data
-                                  setTimeout(() => {
-                                    window.location.reload();
-                                  }, 1000);
-                                } catch (error: any) {
-                                  message.error(t('config.configSwitchFailed'));
-                                }
-                              }}
-                              size="small"
-                            >
-                              {t('config.switch')}
-                            </Button>
-                          )}
-                          <Popconfirm
-                            title={t('config.deleteConfigFileConfirm')}
-                            onConfirm={async () => {
-                              try {
-                                await api.deleteConfigFile(record.filename);
-                                message.success(t('config.configFileDeleted'));
-                                refetchConfigFiles();
-                                // If we deleted the active config, reload
-                                if (record.isActive) {
-                                  setTimeout(() => {
-                                    window.location.reload();
-                                  }, 1000);
-                                }
-                              } catch (error: any) {
-                                message.error(t('config.configFileDeleteFailed'));
-                              }
-                            }}
-                            okText={t('common.ok')}
-                            cancelText={t('common.cancel')}
-                          >
-                            <Button
-                              type="link"
-                              danger
-                              icon={<DeleteOutlined />}
-                              size="small"
-                            >
-                              {t('common.delete')}
-                            </Button>
-                          </Popconfirm>
-                        </Space>
-                      ),
-                    },
-                  ]}
-                  dataSource={configFilesData.data.data}
-                  rowKey="filename"
-                  pagination={{ pageSize: 10 }}
-                  locale={{ emptyText: t('config.configFilesEmpty') }}
-                />
-              ) : (
-                <Alert
-                  message={t('config.configFilesEmpty')}
-                  description={t('config.configFilesEmptyDesc')}
-                  type="info"
-                  showIcon
-                />
-              )}
             </Card>
           </Tabs.TabPane>
 
@@ -1417,6 +1552,183 @@ export default function Config() {
         <pre style={{ maxHeight: '60vh', overflow: 'auto', background: '#f5f5f5', padding: 16, borderRadius: 4 }}>
           {getConfigPreview()}
         </pre>
+      </Modal>
+
+      {/* JSON 编辑器模态框 */}
+      <Modal
+        title={
+          <Space>
+            {t('config.editJson')}
+            {editingConfigFile && <Text type="secondary">({editingConfigFile})</Text>}
+          </Space>
+        }
+        open={jsonEditorVisible}
+        onCancel={() => {
+          setJsonEditorVisible(false);
+          setEditingConfigFile(null);
+          setJsonContent('');
+          setLastReadContent('');
+          setHasExternalChanges(false);
+        }}
+        width={900}
+        footer={[
+          <Button
+            key="format"
+            onClick={() => {
+              try {
+                const parsed = JSON.parse(jsonContent);
+                const formatted = JSON.stringify(parsed, null, 2);
+                setJsonContent(formatted);
+                message.success(t('config.jsonFormatted'));
+              } catch (error) {
+                message.error(t('config.jsonFormatError'));
+              }
+            }}
+          >
+            {t('config.formatJson')}
+          </Button>,
+          <Button
+            key="cancel"
+            onClick={() => {
+              setJsonEditorVisible(false);
+              setEditingConfigFile(null);
+              setJsonContent('');
+              setLastReadContent('');
+              setHasExternalChanges(false);
+            }}
+          >
+            {t('common.cancel')}
+          </Button>,
+          <Button
+            key="save"
+            type="primary"
+            icon={<SaveOutlined />}
+            loading={jsonEditorLoading}
+            onClick={async () => {
+              if (!editingConfigFile) return;
+              
+              try {
+                setJsonEditorLoading(true);
+                // Validate JSON first
+                try {
+                  JSON.parse(jsonContent);
+                } catch (error) {
+                  message.error(t('config.jsonFormatError'));
+                  return;
+                }
+                
+                await api.updateConfigFileContent(editingConfigFile, jsonContent);
+                message.success(t('config.configSaved'));
+                
+                // 更新最后读取的内容，清除外部修改标记
+                setLastReadContent(jsonContent);
+                lastReadContentRef.current = jsonContent;
+                jsonContentRef.current = jsonContent;
+                setHasExternalChanges(false);
+                
+                // Refresh config data
+                await queryClient.invalidateQueries({ queryKey: ['config'] });
+                await queryClient.invalidateQueries({ queryKey: ['configFiles'] });
+                refetchConfigFiles();
+                
+                // If this is the active config, reload the page
+                const currentFile = configFilesData?.data?.data?.find(
+                  (f: any) => f.filename === editingConfigFile && f.isActive
+                );
+                if (currentFile) {
+                  setTimeout(() => {
+                    window.location.reload();
+                  }, 1000);
+                } else {
+                  setJsonEditorVisible(false);
+                  setEditingConfigFile(null);
+                  setJsonContent('');
+                  setLastReadContent('');
+                  setHasExternalChanges(false);
+                }
+              } catch (error: any) {
+                const { errorCode, message: errorMessage, details } = extractErrorInfo(error);
+                if (errorCode === 'CONFIG_INVALID' && details && Array.isArray(details)) {
+                  const errorMessages = details.map((err: any) => {
+                    if (typeof err === 'object' && err.code) {
+                      return translateErrorCode(err.code, t, err.params);
+                    }
+                    return String(err);
+                  });
+                  message.error(`${translateErrorCode(errorCode, t)}: ${errorMessages.join(', ')}`);
+                } else {
+                  message.error(errorMessage || t('config.configSaveFailed'));
+                }
+              } finally {
+                setJsonEditorLoading(false);
+              }
+            }}
+          >
+            {t('config.saveConfig')}
+          </Button>,
+        ]}
+      >
+        <Spin spinning={jsonEditorLoading && !jsonContent}>
+          {hasExternalChanges && (
+            <Alert
+              message={t('config.jsonEditorExternalChanges')}
+              description={t('config.jsonEditorExternalChangesDesc')}
+              type="warning"
+              showIcon
+              style={{ marginBottom: 16 }}
+              action={
+                <Button
+                  size="small"
+                  onClick={async () => {
+                    if (!editingConfigFile) return;
+                    try {
+                      setJsonEditorLoading(true);
+                      const response = await api.getConfigFileContent(editingConfigFile);
+                      const newContent = response.data.data.content;
+                      setJsonContent(newContent);
+                      setLastReadContent(newContent);
+                      lastReadContentRef.current = newContent;
+                      jsonContentRef.current = newContent;
+                      setHasExternalChanges(false);
+                      message.success(t('config.jsonEditorRefreshed'));
+                    } catch (error: any) {
+                      const { message: errorMessage } = extractErrorInfo(error);
+                      message.error(
+                        `${t('config.configFileReadFailed')}: ${errorMessage || error?.message || t('config.unknownError')}`
+                      );
+                    } finally {
+                      setJsonEditorLoading(false);
+                    }
+                  }}
+                >
+                  {t('config.refresh')}
+                </Button>
+              }
+            />
+          )}
+          <Input.TextArea
+            value={jsonContent}
+            onChange={(e) => {
+              setJsonContent(e.target.value);
+              // 如果用户正在编辑，清除外部修改标记（因为内容已经不同了）
+              if (hasExternalChanges && e.target.value !== lastReadContent) {
+                setHasExternalChanges(false);
+              }
+            }}
+            rows={25}
+            style={{
+              fontFamily: 'Monaco, Menlo, "Ubuntu Mono", Consolas, "source-code-pro", monospace',
+              fontSize: 13,
+            }}
+            placeholder={t('config.jsonEditorPlaceholder')}
+          />
+        </Spin>
+        <Alert
+          message={t('config.jsonEditorWarning')}
+          type="warning"
+          showIcon
+          style={{ marginTop: 16 }}
+        />
       </Modal>
     </div>
   );

@@ -86,18 +86,21 @@ function isValidConfigFilename(filename: string): boolean {
 
 /**
  * Validate configuration, automatically checking unified storage for tokens
- * If config has placeholder token but unified storage has real token, use the real token for validation
+ * If config has placeholder token or missing token but unified storage has real token, use the real token for validation
  * This matches the behavior of loadConfig() which auto-fills tokens from unified storage
  */
 function validateConfigWithUnifiedStorage(config: StandaloneConfig): ReturnType<typeof validateConfig> {
-  // Check if token is placeholder and if unified storage has a token
+  // Check if token is missing or placeholder, and if unified storage has a token
   let configToValidate = config;
-  if (config.pixiv?.refreshToken && isPlaceholderToken(config.pixiv.refreshToken)) {
+  const currentToken = config.pixiv?.refreshToken;
+  
+  // If token is missing or is a placeholder, try to get from unified storage
+  if (!currentToken || isPlaceholderToken(currentToken)) {
     // Try to get token from unified storage (same as loadConfig does)
-    const unifiedToken = getBestAvailableToken(config.pixiv.refreshToken, config.storage?.databasePath);
+    const unifiedToken = getBestAvailableToken(currentToken, config.storage?.databasePath);
     if (unifiedToken) {
       // Use the token from unified storage for validation
-      // This prevents false errors when config file has placeholder but unified storage has real token
+      // This prevents false errors when config file has placeholder/missing token but unified storage has real token
       configToValidate = {
         ...config,
         pixiv: {
@@ -219,8 +222,8 @@ router.get('/', async (req: Request, res: Response) => {
             },
           };
 
-          // Validate configuration
-          const validationResult = validateConfig(mergedConfig);
+          // Validate configuration (automatically checks unified storage for tokens)
+          const validationResult = validateConfigWithUnifiedStorage(mergedConfig);
           if (validationResult.valid) {
             // Write to file to ensure consistency
             writeFileSync(configPath, JSON.stringify(mergedConfig, null, 2), 'utf-8');
@@ -819,8 +822,8 @@ router.post('/history/:id/apply', async (req: Request, res: Response) => {
       },
     };
 
-    // Validate configuration
-    const validationResult = validateConfig(mergedConfig);
+    // Validate configuration (automatically checks unified storage for tokens)
+    const validationResult = validateConfigWithUnifiedStorage(mergedConfig);
     if (!validationResult.valid) {
       database.close();
       return res.status(400).json({

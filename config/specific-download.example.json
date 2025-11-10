@@ -11,7 +11,7 @@
     "clientId": "MOBrBDS8blbauoSck0ZfDbtuzpyT",
     "clientSecret": "lsACyCD94FhDUtGTXi3QzcFE2uU1hqtDaKeqrdwj",
     "deviceToken": "pixiv",
-    "refreshToken": "YOUR_REFRESH_TOKEN",
+    "refreshToken": "REDACTED_TOKEN",
     "userAgent": "PixivAndroidApp/5.0.234 (Android 11; Pixel 6)"
   },
   "network": {

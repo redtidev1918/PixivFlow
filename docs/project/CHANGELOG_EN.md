@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- ✨ Added pixiv-token-getter adapter support (2025-11-10)
+  - New `pixiv-token-getter-adapter.ts` module supporting login via pixiv-token-getter library
+  - Supports both interactive and headless login modes
+  - Provides better login experience and error handling
+  - Automatically detects if pixiv-token-getter is available, falls back to other login methods if not
+  - Electron app automatically integrates pixiv-token-getter adapter
+
 ### Improved
 - ✨ Optimized metadata file storage location (2025-01-XX)
   - Moved metadata JSON files from download directory to `data/metadata` directory to keep download directory clean
@@ -17,7 +25,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Improved error handling: metadata save failures no longer cause download failures, only log warnings
   - Updated project structure documentation to reflect new metadata directory location
 
-### Added
+### Removed
+- 🗑️ Removed mobile support (iOS/Android) (2025-11-10)
+  - Deleted Android directory and related mobile code
+  - Removed mobile-related documentation and configuration files
+  - Project now focuses on desktop applications (Windows/macOS/Linux) and web browser access
+  - Updated documentation to clearly state desktop-only support, no mobile support
+- 🗑️ Cleaned up test files and example files (2025-11-10)
+  - Deleted `test-pixiv-token-getter.ts` test file
+  - Deleted `terminal-login-example.ts` example file
+  - Deleted test files: `test-concurrency.ts`, `test-download.ts`, `test-scheduled-download.ts`, etc.
+  - Removed related test scripts from `package.json` (`login:example`, `test:token-getter`)
+  - Cleaned up compiled files in `dist` directory
 - ✨ Added global installation documentation and instructions (2025-01-XX)
   - Added global installation method in README.md
   - Added global installation steps in QUICKSTART.md

@@ -588,7 +588,169 @@ docker-compose up -d
 - 系统会自动将数据库中的宿主机路径转换为容器内路径
 - 如果仍有问题，检查卷挂载是否正确：`docker-compose ps` 和 `docker-compose config`
 
-### 8. Docker 构建时无法连接 Docker Hub
+### 8. Docker 网络问题：容器无法访问主机代理
+
+**问题描述**：
+在 macOS 上使用 Docker 时，如果代理软件（如 Clash、Surge、V2Ray 等）只监听在 `127.0.0.1`，Docker 容器无法直接访问。
+
+**解决方案**：
+
+#### 方案 1：使用 host.docker.internal（推荐）
+
+使用 `host.docker.internal` 是 Docker Desktop 推荐的方式，可以自动解析到主机 IP：
+
+```yaml
+environment:
+  - HTTP_PROXY=http://host.docker.internal:7890
+  - HTTPS_PROXY=http://host.docker.internal:7890
+```
+
+**说明**：
+- `host.docker.internal` 是 Docker Desktop 提供的特殊主机名，指向宿主机
+- 将 `7890` 替换为你实际的代理端口
+- 在 Linux 上，Docker 20.10+ 也支持 `host.docker.internal`
+
+#### 方案 2：使用代理转发服务
+
+如果方案 1 不工作，可以使用代理转发服务：
+
+1. **启动代理转发服务**（在主机上运行）：
+   ```bash
+   # 使用自动启动脚本（推荐）
+   ./scripts/start-proxy-forwarder.sh 6154 127.0.0.1:6152
+   
+   # 或手动启动
+   node scripts/proxy-forwarder.js 6154 127.0.0.1:6152
+   ```
+
+2. **配置 Docker 使用转发端口**：
+   ```yaml
+   environment:
+     - HTTP_PROXY=http://host.docker.internal:6154
+     - HTTPS_PROXY=http://host.docker.internal:6154
+   ```
+
+3. **验证转发服务**：
+   ```bash
+   # 在主机上测试
+   curl -v -x http://127.0.0.1:6154 https://www.google.com
+   ```
+
+**注意事项**：
+- 代理转发服务需要持续运行
+- 如果代理端口不是 6152，请相应修改转发服务的参数
+- 查看日志：`tail -f /tmp/proxy-forwarder-6154.log`
+
+#### 方案 3：使用 Docker 网关 IP（Linux）
+
+在 Linux 上，可以使用 Docker 默认网关：
+
+```yaml
+environment:
+  - HTTP_PROXY=http://172.17.0.1:7890
+  - HTTPS_PROXY=http://172.17.0.1:7890
+```
+
+**说明**：
+- `172.17.0.1` 是 Docker 默认网桥的网关 IP
+- 可以通过 `./scripts/get-docker-gateway.sh` 获取实际的网关 IP
+
+#### 故障排除
+
+如果仍然无法连接：
+
+1. **检查转发服务是否运行**：
+   ```bash
+   lsof -i :6154
+   ```
+
+2. **检查容器是否能访问网关**：
+   ```bash
+   docker-compose run --rm pixivflow ping -c 1 172.17.0.1
+   ```
+
+3. **检查转发服务日志**：
+   ```bash
+   tail -f /tmp/proxy-forwarder-6154.log
+   ```
+
+4. **尝试直接测试代理**：
+   ```bash
+   curl -x http://127.0.0.1:6152 https://www.google.com
+   ```
+
+### 9. 随机下载相关问题
+
+**问题描述**：
+在使用 Docker 执行随机下载时，可能遇到以下问题：
+1. Token 刷新超时
+2. 容器内无法进行交互式登录
+3. 代理连接可能失败
+
+**解决方案**：
+
+#### 1. 确保 Token 在主机上有效
+
+在运行 Docker 命令之前，先在主机上验证 token：
+
+```bash
+node -e "const { loadConfig, getConfigPath } = require('./dist/config'); const { TerminalLogin } = require('./dist/terminal-login'); const config = loadConfig(getConfigPath()); TerminalLogin.refresh(config.pixiv.refreshToken).then(() => console.log('✓ Token is valid')).catch(e => console.log('✗ Token is invalid:', e.message))"
+```
+
+如果 token 无效，在主机上重新登录：
+
+```bash
+node dist/index.js login
+```
+
+#### 2. 使用便捷脚本
+
+使用 `scripts/docker.sh` 脚本执行随机下载：
+
+```bash
+# 随机下载一张图片
+./scripts/docker.sh random
+
+# 随机下载一篇小说
+./scripts/docker.sh random --novel
+
+# 随机下载5个作品
+./scripts/docker.sh random --limit 5
+```
+
+脚本会自动：
+- 验证 token 是否有效
+- 使用 docker-compose 运行（自动使用代理和配置）
+- 提供清晰的错误提示
+
+#### 3. 增加网络超时时间
+
+如果遇到超时问题，可以在配置文件中增加超时时间：
+
+```json
+{
+  "network": {
+    "timeoutMs": 30000,
+    "retries": 3,
+    "retryDelay": 1000
+  }
+}
+```
+
+#### 4. 常见问题
+
+**Q: 为什么容器内无法登录？**
+
+A: 容器内没有图形界面，无法打开浏览器进行交互式登录。需要在主机上登录后，将 token 更新到配置文件中。
+
+**Q: Token 刷新超时怎么办？**
+
+A:
+1. 增加配置文件中的 `timeoutMs` 值
+2. 检查网络连接和代理设置
+3. 确保代理服务正常运行
+
+### 10. Docker 构建时无法连接 Docker Hub
 
 **可能原因**：
 - 网络连接问题
@@ -671,8 +833,6 @@ docker-compose build
 - [配置指南](../guides/CONFIG_GUIDE.md)
 - [快速开始](../getting-started/QUICKSTART.md)
 - [WebUI 使用指南](../webui/WEBUI_README.md)
-- [Docker 网络问题解决方案](DOCKER_NETWORK_SOLUTION.md) - 解决代理连接问题
-- [Docker 随机下载问题解决方案](DOCKER_RANDOM_DOWNLOAD_FIX.md) - 解决随机下载相关问题
 
 ---
 

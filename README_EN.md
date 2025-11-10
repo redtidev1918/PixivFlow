@@ -395,7 +395,7 @@ Then visit http://localhost:3000 to use the WebUI (backend server).
 > **Note**:
 > - Development mode uses Vite dev server (port 5173), production mode uses Express server (port 3000)
 > - Docker deployment uses production mode, frontend static files are built into the image, access port is 3000
-> - For detailed Docker deployment instructions, see [Docker Usage Guide](docs/docker/DOCKER.md) and [WebUI Setup Guide](docs/webui/WEBUI_SETUP.md)
+> - For detailed Docker deployment instructions, see [Docker Usage Guide](docs/docker/DOCKER.md) and [WebUI Usage Guide](docs/webui/WEBUI_README.md)
 
 **WebUI API Endpoints**:
 - Root path `GET /` - Returns API info (when static files not configured)
@@ -415,7 +415,7 @@ Then visit http://localhost:3000 to use the WebUI (backend server).
 - 🎯 Task management (start/stop downloads)
 - 📈 Download history viewing
 
-For detailed instructions, see [WebUI Usage Guide](docs/webui/WEBUI_README.md) and [WebUI Setup Guide](docs/webui/WEBUI_SETUP.md).
+For detailed instructions, see [WebUI Usage Guide](docs/webui/WEBUI_README.md).
 
 ---
 
@@ -516,8 +516,6 @@ For detailed instructions, see [Docker Usage Guide](docs/docker/DOCKER.md).
 
 **Related Documentation**:
 - [Docker Usage Guide](docs/docker/DOCKER.md) - Complete Docker deployment and usage instructions
-- [Docker Network Solution](docs/docker/DOCKER_NETWORK_SOLUTION.md) - Solve proxy connection issues
-- [Docker Random Download Fix](docs/docker/DOCKER_RANDOM_DOWNLOAD_FIX.md) - Solve random download related issues
 
 ---
 
@@ -656,9 +654,7 @@ npm run start migrate-config --dry-run # Preview changes
 For detailed instructions, see [Docker Usage Guide](docs/docker/DOCKER.md).
 
 **Related Documentation**:
-- [Docker Usage Guide](docs/docker/DOCKER.md) - Complete Docker deployment and usage instructions
-- [Docker Network Solution](docs/docker/DOCKER_NETWORK_SOLUTION.md) - Solve proxy connection issues
-- [Docker Random Download Fix](docs/docker/DOCKER_RANDOM_DOWNLOAD_FIX.md) - Solve random download related issues
+- [Docker Usage Guide](docs/docker/DOCKER.md) - Complete Docker deployment and usage instructions (includes solutions for network issues and random download problems)
 
 ### 🎨 Advanced CLI Tool
 
@@ -706,16 +702,13 @@ Detailed guide: [Script Usage Guide](docs/scripts/SCRIPTS_GUIDE.md)
 | [📊 RANKING_DOWNLOAD_GUIDE](docs/guides/RANKING_DOWNLOAD_GUIDE.md) | Ranking download guide |
 | [🔄 CONFIG-PATH-MIGRATION](docs/guides/CONFIG-PATH-MIGRATION.md) | Configuration path migration guide |
 | [🛠️ SCRIPTS_GUIDE](docs/scripts/SCRIPTS_GUIDE.md) | All scripts detailed guide |
-| [🌐 WEBUI_README](docs/webui/WEBUI_README.md) | WebUI usage guide |
-| [🚀 WEBUI_SETUP](docs/webui/WEBUI_SETUP.md) | WebUI setup guide |
+| [🌐 WEBUI_README](docs/webui/WEBUI_README.md) | WebUI usage guide and setup instructions |
 
 ### 🐳 Docker Documentation
 
 | Document | Description |
 |----------|-------------|
-| [🐳 DOCKER](docs/docker/DOCKER.md) | Docker usage guide |
-| [🔧 DOCKER_NETWORK_SOLUTION](docs/docker/DOCKER_NETWORK_SOLUTION.md) | Docker network issue solution |
-| [🔧 DOCKER_RANDOM_DOWNLOAD_FIX](docs/docker/DOCKER_RANDOM_DOWNLOAD_FIX.md) | Docker random download issue solution |
+| [🐳 DOCKER](docs/docker/DOCKER.md) | Docker usage guide (includes solutions for common issues) |
 
 ### 📄 Project Documentation
 

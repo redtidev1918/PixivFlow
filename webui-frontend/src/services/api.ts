@@ -448,6 +448,46 @@ export const api = {
   ): Promise<AxiosResponse<ApiResponse<void>>> =>
     apiClient.put(`/config/files/${filename}/content`, { content }),
 
+  /**
+   * Diagnose and analyze current configuration
+   */
+  diagnoseConfig: (): Promise<AxiosResponse<ApiResponse<{
+    stats: {
+      totalFields: number;
+      totalSections: number;
+      totalTargets: number;
+      maxDepth: number;
+      fieldTypes: Record<string, number>;
+    };
+    errors: string[];
+    warnings: string[];
+    fields: Array<{
+      path: string;
+      name: string;
+      type: string;
+      required: boolean;
+      description?: string;
+      defaultValue?: any;
+      enumValues?: any[];
+      depth: number;
+      isLeaf: boolean;
+    }>;
+    sections: Record<string, any[]>;
+  }>>> =>
+    apiClient.get('/config/diagnose'),
+
+  /**
+   * Repair current configuration file
+   * @param createBackup - Whether to create a backup before repairing (default: true)
+   */
+  repairConfig: (createBackup?: boolean): Promise<AxiosResponse<ApiResponse<{
+    fixed: boolean;
+    errors: string[];
+    warnings: string[];
+    backupPath?: string;
+  }>>> =>
+    apiClient.post('/config/repair', { createBackup }),
+
   // ========== Download Management ==========
 
   /**

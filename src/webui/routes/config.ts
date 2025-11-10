@@ -50,12 +50,53 @@ const router = Router();
  * GET /api/config
  * Get current configuration
  * If there's an active config history, automatically apply it to ensure consistency
+ * Uses config parser to normalize and repair configuration for frontend display
  */
 router.get('/', async (req: Request, res: Response) => {
   let database: Database | null = null;
   try {
     const configPath = getConfigPath();
-    let config = loadConfig(configPath);
+    const configManager = getConfigManager('config');
+    
+    // Try to load config, but handle errors gracefully
+    let config: StandaloneConfig;
+    try {
+      config = loadConfig(configPath);
+    } catch (error) {
+      // If config loading fails, try to repair it
+      logger.warn('Failed to load config, attempting repair', {
+        error: error instanceof Error ? error.message : String(error),
+        configPath,
+      });
+      
+      // Try to repair the configuration
+      const repairResult = configManager.repairConfig(configPath, true);
+      if (repairResult.success && repairResult.fixed) {
+        // Retry loading after repair
+        try {
+          config = loadConfig(configPath);
+          logger.info('Configuration repaired and loaded successfully');
+        } catch (retryError) {
+          // If still fails, read raw config and normalize it
+          const rawConfig = readConfigRaw(configPath);
+          if (rawConfig) {
+            config = configManager.normalizeConfigForDisplay(rawConfig) as StandaloneConfig;
+            logger.info('Using normalized raw config after repair failure');
+          } else {
+            throw retryError;
+          }
+        }
+      } else {
+        // Read raw config and normalize it
+        const rawConfig = readConfigRaw(configPath);
+        if (rawConfig) {
+          config = configManager.normalizeConfigForDisplay(rawConfig) as StandaloneConfig;
+          logger.info('Using normalized raw config');
+        } else {
+          throw error;
+        }
+      }
+    }
 
     // Check if there's an active config history and apply it if needed
     if (config.storage?.databasePath) {
@@ -142,16 +183,25 @@ router.get('/', async (req: Request, res: Response) => {
       }
     }
 
+    // Normalize config for frontend display (ensures all sections exist)
+    const normalizedConfig = configManager.normalizeConfigForDisplay(config);
+    
     // Remove sensitive information before sending
-    const safeConfig = maskSensitiveFields(config);
+    const safeConfig = maskSensitiveFields(normalizedConfig);
 
     // Include config path information
-    res.json({
+    // Ensure targets is always included (even if empty array)
+    const configWithMeta = {
       ...safeConfig,
+      targets: Array.isArray(safeConfig.targets) ? safeConfig.targets : [],
       _meta: {
         configPath,
         configPathRelative: relative(process.cwd(), configPath),
       },
+    };
+
+    res.json({
+      data: configWithMeta,
     });
   } catch (error) {
     if (error instanceof ConfigError) {
@@ -171,8 +221,14 @@ router.get('/', async (req: Request, res: Response) => {
         warnings: validationWarnings,
       });
 
-      return res.json({
-        ...safeConfig,
+      // Normalize config for frontend display
+      const configManager = getConfigManager('config');
+      const normalizedConfig = configManager.normalizeConfigForDisplay(safeConfig || {});
+      
+      // Ensure targets is always included (even if empty array)
+      const configWithMeta = {
+        ...normalizedConfig,
+        targets: Array.isArray(normalizedConfig.targets) ? normalizedConfig.targets : [],
         _meta: {
           configPath,
           configPathRelative: relative(process.cwd(), configPath),
@@ -182,6 +238,10 @@ router.get('/', async (req: Request, res: Response) => {
           errors: validationErrors,
           warnings: validationWarnings,
         },
+      };
+
+      return res.json({
+        data: configWithMeta,
       });
     }
     logger.error('Failed to get config', { error });
@@ -945,6 +1005,94 @@ router.get('/files/:filename/content', async (req: Request, res: Response) => {
     logger.error('Failed to read config file content', { error });
     res.status(500).json({
       errorCode: ErrorCode.CONFIG_GET_FAILED,
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+/**
+ * GET /api/config/diagnose
+ * Diagnose and analyze current configuration
+ */
+router.get('/diagnose', async (req: Request, res: Response) => {
+  try {
+    const configPath = getConfigPath();
+    const configManager = getConfigManager('config');
+    
+    // Parse the configuration
+    const parseResult = configManager.parseConfig(configPath);
+    
+    if (!parseResult) {
+      return res.status(500).json({
+        errorCode: ErrorCode.CONFIG_GET_FAILED,
+        message: 'Failed to parse configuration file',
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        stats: parseResult.stats,
+        errors: parseResult.errors,
+        warnings: parseResult.warnings,
+        fields: parseResult.fields.map(f => ({
+          path: f.path,
+          name: f.name,
+          type: f.type,
+          required: f.required,
+          description: f.description,
+          defaultValue: f.defaultValue,
+          enumValues: f.enumValues,
+          depth: f.depth,
+          isLeaf: f.isLeaf,
+        })),
+        sections: parseResult.sections,
+      },
+    });
+  } catch (error) {
+    logger.error('Failed to diagnose config', { error });
+    res.status(500).json({
+      errorCode: ErrorCode.CONFIG_GET_FAILED,
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+/**
+ * POST /api/config/repair
+ * Repair current configuration file
+ */
+router.post('/repair', async (req: Request, res: Response) => {
+  try {
+    const { createBackup = true } = req.body;
+    const configPath = getConfigPath();
+    const configManager = getConfigManager('config');
+    
+    // Repair the configuration
+    const repairResult = configManager.repairConfig(configPath, createBackup);
+    
+    if (!repairResult.success) {
+      return res.status(500).json({
+        errorCode: ErrorCode.CONFIG_UPDATE_FAILED,
+        message: 'Failed to repair configuration',
+        details: repairResult.errors,
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        fixed: repairResult.fixed,
+        errors: repairResult.errors,
+        warnings: repairResult.warnings,
+        backupPath: repairResult.backupPath,
+      },
+      errorCode: ErrorCode.CONFIG_UPDATE_SUCCESS,
+    });
+  } catch (error) {
+    logger.error('Failed to repair config', { error });
+    res.status(500).json({
+      errorCode: ErrorCode.CONFIG_UPDATE_FAILED,
       message: error instanceof Error ? error.message : String(error),
     });
   }

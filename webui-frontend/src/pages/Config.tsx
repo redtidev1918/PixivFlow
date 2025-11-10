@@ -161,13 +161,18 @@ export default function Config() {
 
   useEffect(() => {
     if (configData?.data?.data) {
-      // Remove _meta from form data
-      const { _meta, ...configWithoutMeta } = configData.data.data;
+      // Remove _meta and _validation from form data
+      const config = configData.data.data as any;
+      const { _meta, _validation, ...configWithoutMeta } = config;
       // Ensure targets is always an array (even if undefined in config)
       const formData = {
         ...configWithoutMeta,
-        targets: configWithoutMeta.targets || [],
+        targets: Array.isArray(configWithoutMeta.targets) ? configWithoutMeta.targets : [],
       };
+      // Debug log to verify targets are loaded
+      if (formData.targets && formData.targets.length > 0) {
+        console.log('Loaded targets:', formData.targets.length, formData.targets);
+      }
       form.setFieldsValue(formData);
     }
   }, [configData, form]);

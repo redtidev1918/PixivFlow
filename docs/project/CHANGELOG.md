@@ -9,15 +9,13 @@
 
 ## [未发布]
 
-### 改进
-- ✨ 优化元数据文件存储位置（2025-01-XX）
-  - 将元数据 JSON 文件从下载目录移动到 `data/metadata` 目录，保持下载目录整洁
-  - 增强 `saveMetadata` 方法的错误处理和输入验证
-  - 添加文件名安全处理，防止特殊字符导致文件系统错误
-  - 改进错误处理：元数据保存失败不会导致下载失败，仅记录警告日志
-  - 更新项目结构文档，说明新的元数据目录位置
-
 ### 新增
+- ✨ 添加 pixiv-token-getter 适配器支持（2025-11-10）
+  - 新增 `pixiv-token-getter-adapter.ts` 模块，支持使用 pixiv-token-getter 库进行登录
+  - 支持交互式登录和 headless 登录两种模式
+  - 提供更好的登录体验和错误处理
+  - 自动检测 pixiv-token-getter 是否可用，如果不可用则回退到其他登录方式
+  - Electron 应用自动集成 pixiv-token-getter 适配器
 - ✨ 添加全局安装文档和说明（2025-11-08）
   - 在 README.md 中添加全局安装方式说明
   - 在 QUICKSTART.md 中添加全局安装步骤
@@ -30,6 +28,19 @@
   - 前端界面提供删除按钮和批量删除功能
   - 完善的错误处理和用户提示
   - 自动刷新任务列表
+
+### 移除
+- 🗑️ 移除移动端支持（iOS/Android）（2025-11-10）
+  - 删除 Android 目录和相关移动端代码
+  - 删除移动端相关的文档和配置文件
+  - 项目现在专注于桌面应用（Windows/macOS/Linux）和 Web 浏览器访问
+  - 更新文档，明确说明仅支持桌面应用，不支持移动端
+- 🗑️ 清理测试文件和示例文件（2025-11-10）
+  - 删除 `test-pixiv-token-getter.ts` 测试文件
+  - 删除 `terminal-login-example.ts` 示例文件
+  - 删除 `test-concurrency.ts`、`test-download.ts`、`test-scheduled-download.ts` 等测试文件
+  - 从 `package.json` 中移除相关的测试脚本（`login:example`、`test:token-getter`）
+  - 清理 `dist` 目录中的编译文件
 
 ### 测试
 - ✅ 测试排名下载功能（2025-11-08）

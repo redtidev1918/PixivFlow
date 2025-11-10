@@ -1,6 +1,6 @@
 # 🖥️ PixivFlow Electron 桌面应用指南
 
-PixivFlow WebUI 现在支持打包为 Electron 桌面应用，可以在 Windows、macOS 和 Linux 上运行。
+PixivFlow WebUI 现在支持打包为 Electron 桌面应用。
 
 ## 📋 前置要求
 
@@ -197,7 +197,6 @@ npm run electron:pack
 
 ## 📚 相关文档
 
-- [WebUI 设置指南](./WEBUI_SETUP.md)
 - [WebUI 使用指南](./WEBUI_README.md)
 - [构建资源说明](../../webui-frontend/build/README.md)
 

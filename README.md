@@ -343,7 +343,7 @@ npm run electron:build:linux  # 仅 Linux
 > - Docker 部署使用生产模式，前端静态文件已内置在镜像中，访问端口为 3000
 > - Electron 桌面应用会自动启动后端服务器，无需手动启动
 > - **平台支持**：当前仅支持 Windows / macOS / Linux 桌面应用，不支持移动端（iOS/Android）
-> - 详细说明请查看 [WebUI 设置指南](docs/webui/WEBUI_SETUP.md) 和 [Electron 桌面应用指南](docs/webui/ELECTRON_GUIDE.md)
+> - 详细说明请查看 [WebUI 使用指南](docs/webui/WEBUI_README.md) 和 [Electron 桌面应用指南](docs/webui/ELECTRON_GUIDE.md)
 
 **WebUI API 端点**：
 - 根路径 `GET /` - 返回 API 信息（当未配置静态文件时）
@@ -363,7 +363,7 @@ npm run electron:build:linux  # 仅 Linux
 - 🎯 任务管理（启动/停止下载）
 - 📈 下载历史查看
 
-详细说明请查看 [WebUI 使用指南](docs/webui/WEBUI_README.md) 和 [WebUI 设置指南](docs/webui/WEBUI_SETUP.md)。
+详细说明请查看 [WebUI 使用指南](docs/webui/WEBUI_README.md)。
 
 ---
 
@@ -464,8 +464,6 @@ docker-compose build
 
 **相关文档**：
 - [Docker 使用指南](docs/docker/DOCKER.md) - 完整的 Docker 部署和使用说明
-- [Docker 网络问题解决方案](docs/docker/DOCKER_NETWORK_SOLUTION.md) - 解决代理连接问题
-- [Docker 随机下载问题解决方案](docs/docker/DOCKER_RANDOM_DOWNLOAD_FIX.md) - 解决随机下载相关问题
 
 ---
 
@@ -613,9 +611,7 @@ npm run start migrate-config --dry-run # 预览更改
 详细说明请查看 [Docker 使用指南](docs/docker/DOCKER.md)。
 
 **相关文档**：
-- [Docker 使用指南](docs/docker/DOCKER.md) - 完整的 Docker 部署和使用说明
-- [Docker 网络问题解决方案](docs/docker/DOCKER_NETWORK_SOLUTION.md) - 解决代理连接问题
-- [Docker 随机下载问题解决方案](docs/docker/DOCKER_RANDOM_DOWNLOAD_FIX.md) - 解决随机下载相关问题
+- [Docker 使用指南](docs/docker/DOCKER.md) - 完整的 Docker 部署和使用说明（包含网络问题和随机下载问题的解决方案）
 
 ### 🎨 内置 CLI 命令
 
@@ -677,12 +673,9 @@ pixivflow migrate-config --dry-run # 预览迁移更改
 
 | 文档 | 说明 | 推荐度 |
 |------|------|--------|
-| [🌐 WEBUI_README](docs/webui/WEBUI_README.md) | **WebUI 使用指南** - Web 管理界面 | ⭐⭐⭐⭐ |
-| [🚀 WEBUI_SETUP](docs/webui/WEBUI_SETUP.md) | **WebUI 设置指南** - WebUI 部署配置 | ⭐⭐⭐ |
+| [🌐 WEBUI_README](docs/webui/WEBUI_README.md) | **WebUI 使用指南** - Web 管理界面和部署配置 | ⭐⭐⭐⭐ |
 | [🖥️ ELECTRON_GUIDE](docs/webui/ELECTRON_GUIDE.md) | **Electron 桌面应用指南** - 桌面应用打包和使用 | ⭐⭐⭐⭐ |
-| [🐳 DOCKER](docs/docker/DOCKER.md) | **Docker 使用指南** - Docker 部署和使用 | ⭐⭐⭐⭐ |
-| [🔧 DOCKER_NETWORK_SOLUTION](docs/docker/DOCKER_NETWORK_SOLUTION.md) | **Docker 网络问题** - 代理连接问题解决 | ⭐⭐⭐ |
-| [🔧 DOCKER_RANDOM_DOWNLOAD_FIX](docs/docker/DOCKER_RANDOM_DOWNLOAD_FIX.md) | **Docker 随机下载** - 随机下载问题解决 | ⭐⭐⭐ |
+| [🐳 DOCKER](docs/docker/DOCKER.md) | **Docker 使用指南** - Docker 部署和使用（包含常见问题解决方案） | ⭐⭐⭐⭐ |
 
 ### 📄 项目文档
 

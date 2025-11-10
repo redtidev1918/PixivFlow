@@ -4,57 +4,90 @@
 
 PixivFlow WebUI 是一个现代化的 Web 界面，用于管理和监控 PixivFlow 下载任务。它提供了友好的图形界面，替代了命令行操作。
 
-## 🚀 快速开始
+## 📋 前置要求
 
-### 1. 安装依赖
+- Node.js 18+ 和 npm 9+
+- 已安装项目依赖
+
+## 🔧 安装步骤
+
+### 1. 安装后端依赖
 
 ```bash
-# 安装后端依赖
 npm install
+```
 
-# 安装前端依赖
+这将安装所有后端依赖，包括：
+- Express.js
+- Socket.IO
+- CORS
+- 其他现有依赖
+
+### 2. 安装前端依赖
+
+```bash
 cd webui-frontend
 npm install
 cd ..
 ```
 
-### 2. 构建项目
+这将安装前端依赖，包括：
+- React 18
+- TypeScript
+- Vite
+- Ant Design
+- React Query
+- 其他前端库
+
+### 3. 构建项目
 
 ```bash
-# 构建后端
+# 构建后端 TypeScript 代码
 npm run build
-
-# 构建前端（可选，开发时不需要）
-npm run webui:build
 ```
 
-### 3. 启动 WebUI
+## 🚀 启动 WebUI
 
-#### 方式 1：仅启动后端（开发模式）
+### 开发模式（推荐）
 
+**终端 1 - 启动后端：**
 ```bash
 npm run webui
 ```
 
-前端在开发模式下单独运行：
-
+**终端 2 - 启动前端开发服务器：**
 ```bash
 npm run webui:frontend
 ```
 
-#### 方式 2：生产模式（后端 + 前端）
+然后访问：http://localhost:5173
+
+### 生产模式
 
 ```bash
-# 先构建前端
+# 1. 构建前端
 npm run webui:build
 
-# 启动后端（会自动提供前端静态文件）
-npm run webui
+# 2. 启动后端（会自动提供前端静态文件）
+STATIC_PATH=webui-frontend/dist npm run webui
 ```
 
-### 4. 访问 WebUI
+然后访问：http://localhost:3000
 
-打开浏览器访问：http://localhost:3000
+## 📝 环境变量
+
+可以通过环境变量配置 WebUI：
+
+```bash
+# 端口（默认：3000）
+PORT=3000 npm run webui
+
+# 主机（默认：localhost）
+HOST=0.0.0.0 npm run webui
+
+# 前端静态文件路径（生产模式）
+STATIC_PATH=webui-frontend/dist npm run webui
+```
 
 ---
 
@@ -275,21 +308,45 @@ npm run dev
 
 ## 🐛 故障排除
 
-### 端口被占用
+### 问题 1: 端口被占用
 
+**解决方案：**
 ```bash
-# 使用其他端口
 PORT=3001 npm run webui
 ```
 
-### 前端无法连接后端
+### 问题 2: 前端无法连接后端
 
-检查：
+**检查：**
 1. 后端是否正在运行
-2. 前端代理配置是否正确（`webui-frontend/vite.config.ts`）
-3. CORS 配置是否正确
+2. 前端代理配置（`webui-frontend/vite.config.ts`）
+3. 浏览器控制台是否有错误
 
-### 文件预览错误（ERR_INVALID_CHAR）
+### 问题 3: 编译错误
+
+**解决方案：**
+```bash
+# 清理并重新构建
+npm run clean
+npm run build
+```
+
+### 问题 4: 依赖安装失败
+
+**解决方案：**
+```bash
+# 清理 node_modules 并重新安装
+rm -rf node_modules package-lock.json
+npm install
+
+# 前端同样处理
+cd webui-frontend
+rm -rf node_modules package-lock.json
+npm install
+cd ..
+```
+
+### 问题 5: 文件预览错误（ERR_INVALID_CHAR）
 
 **问题**：预览包含日文、中文等特殊字符的文件名时出现错误。
 
@@ -305,13 +362,22 @@ PORT=3001 npm run webui
 - ✅ 中文文件名预览正常
 - ✅ Content-Type 正确设置
 
-### 编译错误
+**说明**：文件预览功能已支持包含特殊字符的文件名（日文、中文等）。如果遇到问题，请确保：
+1. 后端服务器已重启以加载最新代码
+2. 使用最新版本的代码
 
-```bash
-# 清理并重新构建
-npm run clean
-npm run build
-```
+### 问题 6: 访问根路径返回 "Cannot GET /" 错误
+
+**问题**：访问 http://localhost:3000 时返回 "Cannot GET /" 错误。
+
+**状态**：✅ 已修复（2025-11-08）
+
+**说明**：
+- 当未配置静态文件路径时，根路径现在会返回 API 信息 JSON 响应
+- 这是正常行为，表示后端 API 服务器正在运行
+- 要使用前端界面，请：
+  - 开发模式：访问 http://localhost:5173（前端开发服务器）
+  - 生产模式：设置 `STATIC_PATH` 环境变量并构建前端
 
 ## 📚 更多信息
 

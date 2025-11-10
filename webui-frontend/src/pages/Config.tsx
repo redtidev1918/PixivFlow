@@ -302,41 +302,41 @@ export default function Config() {
               }
             } catch (error) {
               // If validation fails, still allow import but warn user
-              console.warn('Config validation error:', error);
-            }
-            
-            // Set form values first (for UI feedback)
-            form.setFieldsValue(configToImport);
-            
-            // Persist configuration to file - this is required
-            try {
-              await updateConfigMutation.mutateAsync(configToImport);
-              
-              // Save to history after successful persistence
-              try {
-                const timestamp = new Date().toISOString().split('T')[0];
-                const historyName = `Imported Config ${timestamp}`;
-                await api.saveConfigHistory(historyName, configToImport, 'Imported from file');
-              } catch (error) {
-                // History save failure is not critical, just log it
-                console.warn('Failed to save imported config to history:', error);
-              }
-              
-              // Refresh config data to ensure UI is in sync
-              await queryClient.invalidateQueries({ queryKey: ['config'] });
-              
-              message.success(t('config.configImportedAndSaved'));
-            } catch (error: any) {
-              const { message: errorMessage } = extractErrorInfo(error);
-              message.error(
-                `${t('config.configImportFailed')}: ${errorMessage || error?.message || t('config.unknownError')}`
-              );
-              console.error('Failed to persist imported config:', error);
-            }
-          } catch (error) {
-            message.error(t('config.configFormatError'));
-            console.error('Failed to parse imported config:', error);
+            console.warn('Config validation error:', error);
           }
+          
+          // Set form values first (for UI feedback)
+          form.setFieldsValue(configToImport);
+          
+          // Persist configuration to file - this is required
+          try {
+            await updateConfigMutation.mutateAsync(configToImport);
+            
+            // Save to history after successful persistence
+            try {
+              const timestamp = new Date().toISOString().split('T')[0];
+              const historyName = `Imported Config ${timestamp}`;
+              await api.saveConfigHistory(historyName, configToImport, 'Imported from file');
+            } catch (error) {
+              // History save failure is not critical, just log it
+              console.warn('Failed to save imported config to history:', error);
+            }
+            
+            // Refresh config data to ensure UI is in sync
+            await queryClient.invalidateQueries({ queryKey: ['config'] });
+            
+            message.success(t('config.configImportedAndSaved'));
+          } catch (error: any) {
+            const { message: errorMessage } = extractErrorInfo(error);
+            message.error(
+              `${t('config.configImportFailed')}: ${errorMessage || error?.message || t('config.unknownError')}`
+            );
+            console.error('Failed to persist imported config:', error);
+          }
+        } catch (error) {
+          message.error(t('config.configFormatError'));
+          console.error('Failed to parse imported config:', error);
+        }
         };
         reader.readAsText(file);
       }

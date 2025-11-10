@@ -40,19 +40,50 @@ export class DownloadTaskManager {
 
   /**
    * Start a download task
+   * @param taskId - Unique task identifier
+   * @param targetId - Optional target ID to download (downloads all if not provided)
+   * @param customConfig - Optional configuration override
+   * @param configPaths - Optional array of config file paths to use (merges targets from all configs)
    */
   async startTask(
     taskId: string,
     targetId?: string,
-    customConfig?: Partial<StandaloneConfig>
+    customConfig?: Partial<StandaloneConfig>,
+    configPaths?: string[]
   ): Promise<void> {
     // Check if there's already an active task
     if (this.activeTask) {
       throw new Error('Another download task is already running');
     }
 
-    const configPath = getConfigPath();
-    let config = loadConfig(configPath);
+    let config: StandaloneConfig;
+    
+    // If multiple config paths are provided, merge their targets
+    if (configPaths && configPaths.length > 0) {
+      // Load the first config as base
+      const baseConfig = loadConfig(configPaths[0]);
+      const allTargets: any[] = [...(baseConfig.targets || [])];
+      
+      // Merge targets from other configs
+      for (let i = 1; i < configPaths.length; i++) {
+        const otherConfig = loadConfig(configPaths[i]);
+        if (otherConfig.targets && otherConfig.targets.length > 0) {
+          allTargets.push(...otherConfig.targets);
+        }
+      }
+      
+      // Use base config but with merged targets
+      config = {
+        ...baseConfig,
+        targets: allTargets,
+      };
+      
+      this.addLog(taskId, 'info', `使用 ${configPaths.length} 个配置文件，共 ${allTargets.length} 个下载目标`);
+    } else {
+      // Use single config (default behavior)
+      const configPath = getConfigPath();
+      config = loadConfig(configPath);
+    }
 
     // Merge custom config if provided
     if (customConfig) {
@@ -72,7 +103,9 @@ export class DownloadTaskManager {
     const database = new Database(config.storage!.databasePath!);
     database.migrate();
 
-    const auth = new PixivAuth(config.pixiv, config.network!, database, configPath);
+    // Use the first config path for auth (or default if none specified)
+    const authConfigPath = configPaths && configPaths.length > 0 ? configPaths[0] : getConfigPath();
+    const auth = new PixivAuth(config.pixiv, config.network!, database, authConfigPath);
     const pixivClient = new PixivClient(auth, config);
     const fileService = new FileService(config.storage!);
     const downloadManager = new DownloadManager(config, pixivClient, database, fileService);

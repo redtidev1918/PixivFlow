@@ -6,6 +6,7 @@ import { ConfigError } from './utils/errors';
 import { logger } from './logger';
 import { ConfigPathMigrator } from './utils/config-path-migrator';
 import { getBestAvailableToken, isPlaceholderToken, saveTokenToStorage } from './utils/token-manager';
+import { getConfigManager } from './utils/config-manager';
 
 export type TargetType = 'illustration' | 'novel';
 
@@ -588,25 +589,83 @@ function processConfigPlaceholders(config: StandaloneConfig): StandaloneConfig {
 
 /**
  * Get the resolved configuration file path
+ * If no path is specified, automatically selects the first available config file
  */
 export function getConfigPath(configPath?: string): string {
-  return resolve(
-    configPath ?? process.env.PIXIV_DOWNLOADER_CONFIG ?? 'config/standalone.config.json'
-  );
+  // If explicitly provided or via environment variable, use it
+  if (configPath || process.env.PIXIV_DOWNLOADER_CONFIG) {
+    return resolve(
+      configPath ?? process.env.PIXIV_DOWNLOADER_CONFIG ?? 'config/standalone.config.json'
+    );
+  }
+
+  // Otherwise, use ConfigManager to find the first available config
+  try {
+    const configManager = getConfigManager('config');
+    const currentConfig = configManager.getCurrentConfigFile();
+    if (currentConfig) {
+      return currentConfig;
+    }
+  } catch (error) {
+    logger.warn('Failed to use ConfigManager, falling back to default path', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  // Fallback to default path
+  return resolve('config/standalone.config.json');
 }
 
 /**
  * Load configuration from file with environment variable support
  */
 export function loadConfig(configPath?: string): StandaloneConfig {
-  const resolvedPath = getConfigPath(configPath);
+  let resolvedPath = getConfigPath(configPath);
 
+  // If config file doesn't exist, try to find or create one
   if (!existsSync(resolvedPath)) {
-    throw new ConfigError(
-      `Configuration file not found at ${resolvedPath}\n` +
-      `Please create a configuration file or set PIXIV_DOWNLOADER_CONFIG environment variable.\n` +
-      `You can use the setup wizard: npm run setup`
-    );
+    try {
+      const configManager = getConfigManager('config');
+      const firstAvailable = configManager.getFirstAvailableConfig();
+      if (firstAvailable) {
+        resolvedPath = firstAvailable;
+        configManager.setCurrentConfigFile(resolvedPath);
+        logger.info('Auto-selected first available config file', { path: resolvedPath });
+      } else {
+        // No config files exist, create a default one
+        const defaultConfigPath = configManager.getDefaultConfigPath();
+        const defaultConfig: StandaloneConfig = {
+          logLevel: 'info',
+          pixiv: {
+            clientId: 'MOBrBDS8blbauoSck0ZfDbtuzpyT',
+            clientSecret: 'lsACyCD94FhDUtGTXi3QzcFE2uU1hqtDaKeqrdwj',
+            deviceToken: 'pixiv',
+            refreshToken: 'YOUR_REFRESH_TOKEN',
+            userAgent: 'PixivAndroidApp/5.0.234 (Android 11; Pixel 5)',
+          },
+          storage: {
+            databasePath: './data/pixiv-downloader.db',
+            downloadDirectory: './downloads',
+            illustrationDirectory: './downloads/illustrations',
+            novelDirectory: './downloads/novels',
+            illustrationOrganization: 'flat',
+            novelOrganization: 'flat',
+          },
+          targets: [],
+        };
+        configManager.saveConfig(defaultConfig, defaultConfigPath);
+        resolvedPath = defaultConfigPath;
+        configManager.setCurrentConfigFile(resolvedPath);
+        logger.info('Created default configuration file', { path: resolvedPath });
+      }
+    } catch (error) {
+      // If ConfigManager fails, throw the original error
+      throw new ConfigError(
+        `Configuration file not found at ${resolvedPath}\n` +
+        `Please create a configuration file or set PIXIV_DOWNLOADER_CONFIG environment variable.\n` +
+        `You can use the setup wizard: npm run setup`
+      );
+    }
   }
 
   let raw: string;

@@ -83,9 +83,15 @@ export default function Download() {
     queryFn: () => api.getIncompleteTasks(),
   });
 
+  // Get configuration files list
+  const { data: configFilesData } = useQuery({
+    queryKey: ['configFiles'],
+    queryFn: () => api.listConfigFiles(),
+  });
+
   const startDownloadMutation = useMutation({
-    mutationFn: (values: { targetId?: string; config?: any }) =>
-      api.startDownload(values.targetId, values.config),
+    mutationFn: (values: { targetId?: string; config?: any; configPaths?: string[] }) =>
+      api.startDownload(values.targetId, values.config, values.configPaths),
     onSuccess: () => {
       message.success(t('download.taskStarted'));
       setShowStartModal(false);
@@ -111,7 +117,7 @@ export default function Download() {
   });
 
   const runAllMutation = useMutation({
-    mutationFn: () => api.runAllDownloads(),
+    mutationFn: (configPaths?: string[]) => api.runAllDownloads(configPaths),
     onSuccess: () => {
       message.success(t('download.allTargetsStarted'));
       queryClient.invalidateQueries({ queryKey: ['download', 'status'] });
@@ -181,7 +187,9 @@ export default function Download() {
   };
 
   const handleRunAll = () => {
-    runAllMutation.mutate();
+    // Get selected config files from form (if any)
+    const selectedConfigPaths = form.getFieldValue('configPaths');
+    runAllMutation.mutate(selectedConfigPaths);
   };
 
   const getStatusTag = (status: string) => {
@@ -808,6 +816,28 @@ export default function Download() {
           style={{ marginBottom: 24 }}
         />
         <Form form={form} onFinish={handleStart} layout="vertical">
+          <Form.Item
+            name="configPaths"
+            label={t('download.selectConfigFiles')}
+            tooltip={t('download.selectConfigFilesTooltip')}
+            extra={t('download.selectConfigFilesExtra')}
+          >
+            <Select
+              mode="multiple"
+              placeholder={t('download.selectConfigFilesPlaceholder')}
+              allowClear
+              size="large"
+              showSearch
+              filterOption={(input, option) => {
+                const label = option?.label as string;
+                return label?.toLowerCase().includes(input.toLowerCase()) || false;
+              }}
+              options={configFilesData?.data?.data?.map((file: any) => ({
+                label: `${file.filename}${file.isActive ? ` (${t('config.activeConfig')})` : ''}`,
+                value: file.path,
+              })) || []}
+            />
+          </Form.Item>
           <Form.Item
             name="targetId"
             label={t('download.selectTarget')}

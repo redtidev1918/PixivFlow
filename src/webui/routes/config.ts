@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
-import { relative } from 'path';
+import { relative, join } from 'path';
 import { loadConfig, getConfigPath, StandaloneConfig, ConfigValidationError } from '../../config';
 import { logger } from '../../logger';
 import { validateConfig } from '../utils/config-validator';
@@ -8,6 +8,7 @@ import { ErrorCode } from '../utils/error-codes';
 import { ConfigError } from '../../utils/errors';
 import { Database } from '../../storage/Database';
 import { getBestAvailableToken, isPlaceholderToken } from '../../utils/token-manager';
+import { getConfigManager } from '../../utils/config-manager';
 
 function readConfigRaw(configPath: string): Partial<StandaloneConfig> | null {
   try {
@@ -722,6 +723,177 @@ router.post('/history/:id/apply', async (req: Request, res: Response) => {
       }
     }
     logger.error('Failed to apply config history', { error });
+    res.status(500).json({
+      errorCode: ErrorCode.CONFIG_UPDATE_FAILED,
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+/**
+ * GET /api/config/files
+ * List all configuration files in the config directory
+ */
+router.get('/files', async (req: Request, res: Response) => {
+  try {
+    const configManager = getConfigManager('config');
+    const files = configManager.listConfigFiles();
+    const currentConfig = configManager.getCurrentConfigFile();
+    
+    res.json({
+      data: files.map(file => ({
+        filename: file.filename,
+        path: file.path,
+        pathRelative: relative(process.cwd(), file.path),
+        modifiedTime: file.modifiedTime.toISOString(),
+        size: file.size,
+        isActive: file.path === currentConfig,
+      })),
+    });
+  } catch (error) {
+    logger.error('Failed to list config files', { error });
+    res.status(500).json({ errorCode: ErrorCode.CONFIG_GET_FAILED });
+  }
+});
+
+/**
+ * POST /api/config/files/switch
+ * Switch to a different configuration file
+ */
+router.post('/files/switch', async (req: Request, res: Response) => {
+  try {
+    const { path } = req.body;
+    
+    if (!path) {
+      return res.status(400).json({
+        errorCode: ErrorCode.CONFIG_INVALID,
+        message: 'Config file path is required',
+      });
+    }
+
+    const configManager = getConfigManager('config');
+    
+    // Validate that the file exists and is readable
+    const config = configManager.readConfig(path);
+    if (!config) {
+      return res.status(404).json({
+        errorCode: ErrorCode.CONFIG_GET_FAILED,
+        message: 'Configuration file not found or invalid',
+      });
+    }
+
+    // Validate the configuration
+    const validationResult = validateConfig(config);
+    if (!validationResult.valid) {
+      return res.status(400).json({
+        errorCode: ErrorCode.CONFIG_INVALID,
+        details: validationResult.errors,
+      });
+    }
+
+    // Set as current config
+    configManager.setCurrentConfigFile(path);
+    
+    logger.info('Switched configuration file', { path });
+
+    res.json({
+      success: true,
+      errorCode: ErrorCode.CONFIG_UPDATE_SUCCESS,
+    });
+  } catch (error) {
+    logger.error('Failed to switch config file', { error });
+    res.status(500).json({
+      errorCode: ErrorCode.CONFIG_UPDATE_FAILED,
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+/**
+ * POST /api/config/files/import
+ * Import a configuration and save it with auto-numbering
+ */
+router.post('/files/import', async (req: Request, res: Response) => {
+  try {
+    const { config, name } = req.body;
+    
+    if (!config) {
+      return res.status(400).json({
+        errorCode: ErrorCode.CONFIG_INVALID,
+        message: 'Configuration object is required',
+      });
+    }
+
+    // Validate the configuration
+    const validationResult = validateConfig(config);
+    if (!validationResult.valid) {
+      return res.status(400).json({
+        errorCode: ErrorCode.CONFIG_INVALID,
+        details: validationResult.errors,
+      });
+    }
+
+    const configManager = getConfigManager('config');
+    
+    // Import and save with auto-numbering
+    const savedPath = configManager.importConfig(config, name);
+    
+    logger.info('Imported configuration file', { path: savedPath });
+
+    res.json({
+      success: true,
+      data: {
+        path: savedPath,
+        pathRelative: relative(process.cwd(), savedPath),
+        filename: relative(configManager.getConfigDir(), savedPath),
+      },
+      errorCode: ErrorCode.CONFIG_UPDATE_SUCCESS,
+    });
+  } catch (error) {
+    logger.error('Failed to import config file', { error });
+    res.status(500).json({
+      errorCode: ErrorCode.CONFIG_UPDATE_FAILED,
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+/**
+ * DELETE /api/config/files/:filename
+ * Delete a configuration file
+ */
+router.delete('/files/:filename', async (req: Request, res: Response) => {
+  try {
+    const { filename } = req.params;
+    const configManager = getConfigManager('config');
+    const configDir = configManager.getConfigDir();
+    const path = join(configDir, filename);
+    
+    // Validate filename to prevent directory traversal
+    if (!filename.match(/^standalone\.config(\.\d+)?\.json$/)) {
+      return res.status(400).json({
+        errorCode: ErrorCode.CONFIG_INVALID,
+        message: 'Invalid configuration filename',
+      });
+    }
+
+    const deleted = configManager.deleteConfig(path);
+    
+    if (!deleted) {
+      return res.status(404).json({
+        errorCode: ErrorCode.CONFIG_GET_FAILED,
+        message: 'Configuration file not found',
+      });
+    }
+
+    logger.info('Deleted configuration file', { filename, path });
+
+    res.json({
+      success: true,
+      errorCode: ErrorCode.CONFIG_UPDATE_SUCCESS,
+    });
+  } catch (error) {
+    logger.error('Failed to delete config file', { error });
     res.status(500).json({
       errorCode: ErrorCode.CONFIG_UPDATE_FAILED,
       message: error instanceof Error ? error.message : String(error),

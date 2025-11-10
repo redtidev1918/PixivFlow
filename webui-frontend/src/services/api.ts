@@ -381,18 +381,64 @@ export const api = {
   deleteConfigHistory: (id: number): Promise<AxiosResponse<ApiResponse<void>>> =>
     apiClient.delete(`/config/history/${id}`),
 
+  // ========== Configuration Files ==========
+
+  /**
+   * List all configuration files in the config directory
+   */
+  listConfigFiles: (): Promise<AxiosResponse<ApiResponse<Array<{
+    filename: string;
+    path: string;
+    pathRelative: string;
+    modifiedTime: string;
+    size: number;
+    isActive: boolean;
+  }>>>> =>
+    apiClient.get('/config/files'),
+
+  /**
+   * Switch to a different configuration file
+   * @param path - Path to the configuration file
+   */
+  switchConfigFile: (path: string): Promise<AxiosResponse<ApiResponse<void>>> =>
+    apiClient.post('/config/files/switch', { path }),
+
+  /**
+   * Import a configuration and save it with auto-numbering
+   * @param config - Configuration object to import
+   * @param name - Optional name for the config
+   */
+  importConfigFile: (
+    config: Partial<ConfigData>,
+    name?: string
+  ): Promise<AxiosResponse<ApiResponse<{
+    path: string;
+    pathRelative: string;
+    filename: string;
+  }>>> =>
+    apiClient.post('/config/files/import', { config, name }),
+
+  /**
+   * Delete a configuration file
+   * @param filename - Filename to delete
+   */
+  deleteConfigFile: (filename: string): Promise<AxiosResponse<ApiResponse<void>>> =>
+    apiClient.delete(`/config/files/${filename}`),
+
   // ========== Download Management ==========
 
   /**
    * Start a download task
    * @param targetId - Optional target ID to download (downloads all if not provided)
    * @param config - Optional configuration override
+   * @param configPaths - Optional array of config file paths to use
    */
   startDownload: (
     targetId?: string,
-    config?: Partial<ConfigData>
+    config?: Partial<ConfigData>,
+    configPaths?: string[]
   ): Promise<AxiosResponse<ApiResponse<{ taskId: string }>>> =>
-    apiClient.post('/download/start', { targetId, config }),
+    apiClient.post('/download/start', { targetId, config, configPaths }),
 
   /**
    * Stop a running download task
@@ -437,9 +483,10 @@ export const api = {
 
   /**
    * Run all configured download targets
+   * @param configPaths - Optional array of config file paths to use
    */
-  runAllDownloads: (): Promise<AxiosResponse<ApiResponse<{ taskId: string }>>> =>
-    apiClient.post('/download/run-all'),
+  runAllDownloads: (configPaths?: string[]): Promise<AxiosResponse<ApiResponse<{ taskId: string }>>> =>
+    apiClient.post('/download/run-all', { configPaths }),
 
   /**
    * Download random works

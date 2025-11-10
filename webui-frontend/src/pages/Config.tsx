@@ -146,19 +146,33 @@ export default function Config() {
     queryFn: () => api.getConfigHistory(),
   });
 
+  // Get configuration files list
+  const { data: configFilesData, refetch: refetchConfigFiles } = useQuery({
+    queryKey: ['configFiles'],
+    queryFn: () => api.listConfigFiles(),
+  });
+
   useEffect(() => {
     if (configData?.data?.data) {
       // Remove _meta from form data
       const { _meta, ...configWithoutMeta } = configData.data.data;
-      form.setFieldsValue(configWithoutMeta);
+      // Ensure targets is always an array (even if undefined in config)
+      const formData = {
+        ...configWithoutMeta,
+        targets: configWithoutMeta.targets || [],
+      };
+      form.setFieldsValue(formData);
     }
   }, [configData, form]);
 
   const updateConfigMutation = useMutation({
     mutationFn: (values: any) => api.updateConfig(values),
-    onSuccess: () => {
+    onSuccess: async () => {
       message.success(t('config.saveSuccess'));
-      queryClient.invalidateQueries({ queryKey: ['config'] });
+      // Invalidate and refetch config to ensure UI is in sync
+      await queryClient.invalidateQueries({ queryKey: ['config'] });
+      // Refetch immediately to get the latest config
+      await queryClient.refetchQueries({ queryKey: ['config'] });
     },
     onError: (error: any) => {
       const { errorCode, message: errorMessage, details } = extractErrorInfo(error);
@@ -230,26 +244,72 @@ export default function Config() {
     setTargetModalVisible(true);
   };
 
-  const handleDeleteTarget = (index: number) => {
+  const handleDeleteTarget = async (index: number) => {
     const targets = form.getFieldValue('targets') || [];
-    targets.splice(index, 1);
-    form.setFieldsValue({ targets });
-    message.success(t('config.targetDeleted'));
+    const newTargets = [...targets]; // Create a new array to avoid mutation issues
+    newTargets.splice(index, 1);
+    form.setFieldsValue({ targets: newTargets });
+    
+    // Auto-save to backend immediately
+    try {
+      // Get current config from server to ensure we have all fields
+      const currentConfig = configData?.data?.data || {};
+      const { _meta, ...configWithoutMeta } = currentConfig;
+      
+      // Get all form values and merge with server config
+      const allValues = form.getFieldsValue();
+      // Ensure targets is always included in the payload, and merge with server config
+      const payload = {
+        ...configWithoutMeta, // Start with server config to preserve all fields
+        ...allValues, // Override with form values
+        targets: newTargets, // Explicitly set targets
+      };
+      await updateConfigMutation.mutateAsync(payload);
+      message.success(t('config.targetDeleted'));
+    } catch (error) {
+      // If save fails, still show success for UI update, but warn user
+      message.warning(t('config.targetDeletedButSaveFailed'));
+      console.error('Failed to auto-save after deleting target:', error);
+    }
   };
 
   const handleSaveTarget = () => {
-    targetForm.validateFields().then((values) => {
-      const targets = form.getFieldValue('targets') || [];
+    targetForm.validateFields().then(async (values) => {
+      const currentTargets = form.getFieldValue('targets') || [];
+      const newTargets = [...currentTargets]; // Create a new array to avoid mutation issues
+      
       if (editingTarget && typeof editingTarget._index === 'number') {
-        targets[editingTarget._index] = values;
+        newTargets[editingTarget._index] = values;
       } else {
-        targets.push(values);
+        newTargets.push(values);
       }
-      form.setFieldsValue({ targets });
+      
+      form.setFieldsValue({ targets: newTargets });
       setTargetModalVisible(false);
       setTargetStep(0);
       targetForm.resetFields();
-      message.success(t('config.targetSaved'));
+      
+      // Auto-save to backend immediately
+      try {
+        // Get current config from server to ensure we have all fields
+        const currentConfig = configData?.data?.data || {};
+        const { _meta, ...configWithoutMeta } = currentConfig;
+        
+        // Get all form values and merge with server config
+        const allValues = form.getFieldsValue();
+        // Ensure targets is always included in the payload, and merge with server config
+        const payload = {
+          ...configWithoutMeta, // Start with server config to preserve all fields
+          ...allValues, // Override with form values
+          targets: newTargets, // Explicitly set targets
+        };
+        await updateConfigMutation.mutateAsync(payload);
+        message.success(t('config.targetSaved'));
+      } catch (error) {
+        // If save fails, still show success for UI update, but warn user
+        message.warning(t('config.targetSavedButSaveFailed'));
+        console.error('Failed to auto-save after adding target:', error);
+      }
     });
   };
 
@@ -302,28 +362,22 @@ export default function Config() {
               }
             } catch (error) {
               // If validation fails, still allow import but warn user
-            console.warn('Config validation error:', error);
-          }
-          
-          // Set form values first (for UI feedback)
-          form.setFieldsValue(configToImport);
-          
-          // Persist configuration to file - this is required
-          try {
-            await updateConfigMutation.mutateAsync(configToImport);
-            
-            // Save to history after successful persistence
-            try {
-              const timestamp = new Date().toISOString().split('T')[0];
-              const historyName = `Imported Config ${timestamp}`;
-              await api.saveConfigHistory(historyName, configToImport, 'Imported from file');
-            } catch (error) {
-              // History save failure is not critical, just log it
-              console.warn('Failed to save imported config to history:', error);
+              console.warn('Config validation error:', error);
             }
+          
+          // Import configuration file with auto-numbering
+          try {
+            const timestamp = new Date().toISOString().split('T')[0];
+            const importName = `imported-${timestamp}`;
+            const result = await api.importConfigFile(configToImport, importName);
             
-            // Refresh config data to ensure UI is in sync
+            // Switch to the newly imported config
+            await api.switchConfigFile(result.data.data.path);
+            
+            // Refresh config data and files list
             await queryClient.invalidateQueries({ queryKey: ['config'] });
+            await queryClient.invalidateQueries({ queryKey: ['configFiles'] });
+            refetchConfigFiles();
             
             message.success(t('config.configImportedAndSaved'));
           } catch (error: any) {
@@ -331,7 +385,7 @@ export default function Config() {
             message.error(
               `${t('config.configImportFailed')}: ${errorMessage || error?.message || t('config.unknownError')}`
             );
-            console.error('Failed to persist imported config:', error);
+            console.error('Failed to import config file:', error);
           }
         } catch (error) {
           message.error(t('config.configFormatError'));
@@ -769,6 +823,129 @@ export default function Config() {
               <Form.Item label={t('config.downloadTimeout')} name={['download', 'timeout']}>
                 <InputNumber min={1000} style={{ width: '100%' }} />
               </Form.Item>
+            </Card>
+          </Tabs.TabPane>
+
+          {/* 配置文件管理 */}
+          <Tabs.TabPane tab={t('config.tabConfigFiles')} key="files">
+            <Card
+              title={t('config.configFiles')}
+              extra={
+                <Button icon={<ReloadOutlined />} onClick={() => refetchConfigFiles()}>
+                  {t('common.refresh')}
+                </Button>
+              }
+            >
+              {configFilesData?.data?.data && configFilesData.data.data.length > 0 ? (
+                <Table
+                  columns={[
+                    {
+                      title: t('config.fileName'),
+                      dataIndex: 'filename',
+                      key: 'filename',
+                      render: (filename: string, record: any) => (
+                        <Space>
+                          <Text strong={record.isActive}>{filename}</Text>
+                          {record.isActive && (
+                            <Tag color="green">{t('config.activeConfig')}</Tag>
+                          )}
+                        </Space>
+                      ),
+                    },
+                    {
+                      title: t('config.filePath'),
+                      dataIndex: 'pathRelative',
+                      key: 'pathRelative',
+                      render: (path: string) => <Text type="secondary" style={{ fontSize: 12 }}>{path}</Text>,
+                    },
+                    {
+                      title: t('config.fileModified'),
+                      dataIndex: 'modifiedTime',
+                      key: 'modifiedTime',
+                      render: (date: string) => new Date(date).toLocaleString(),
+                    },
+                    {
+                      title: t('config.fileSize'),
+                      dataIndex: 'size',
+                      key: 'size',
+                      render: (size: number) => `${(size / 1024).toFixed(2)} KB`,
+                    },
+                    {
+                      title: t('common.actions'),
+                      key: 'action',
+                      width: 200,
+                      render: (_: any, record: any) => (
+                        <Space>
+                          {!record.isActive && (
+                            <Button
+                              type="link"
+                              icon={<PlayCircleOutlined />}
+                              onClick={async () => {
+                                try {
+                                  await api.switchConfigFile(record.path);
+                                  message.success(t('config.configSwitched'));
+                                  await queryClient.invalidateQueries({ queryKey: ['config'] });
+                                  await queryClient.invalidateQueries({ queryKey: ['configFiles'] });
+                                  refetchConfigFiles();
+                                  // Reload config data
+                                  setTimeout(() => {
+                                    window.location.reload();
+                                  }, 1000);
+                                } catch (error: any) {
+                                  message.error(t('config.configSwitchFailed'));
+                                }
+                              }}
+                              size="small"
+                            >
+                              {t('config.switch')}
+                            </Button>
+                          )}
+                          <Popconfirm
+                            title={t('config.deleteConfigFileConfirm')}
+                            onConfirm={async () => {
+                              try {
+                                await api.deleteConfigFile(record.filename);
+                                message.success(t('config.configFileDeleted'));
+                                refetchConfigFiles();
+                                // If we deleted the active config, reload
+                                if (record.isActive) {
+                                  setTimeout(() => {
+                                    window.location.reload();
+                                  }, 1000);
+                                }
+                              } catch (error: any) {
+                                message.error(t('config.configFileDeleteFailed'));
+                              }
+                            }}
+                            okText={t('common.ok')}
+                            cancelText={t('common.cancel')}
+                          >
+                            <Button
+                              type="link"
+                              danger
+                              icon={<DeleteOutlined />}
+                              size="small"
+                            >
+                              {t('common.delete')}
+                            </Button>
+                          </Popconfirm>
+                        </Space>
+                      ),
+                    },
+                  ]}
+                  dataSource={configFilesData.data.data}
+                  rowKey="filename"
+                  pagination={{ pageSize: 10 }}
+                  locale={{ emptyText: t('config.configFilesEmpty') }}
+                />
+              ) : (
+                <Alert
+                  message={t('config.configFilesEmpty')}
+                  description={t('config.configFilesEmptyDesc')}
+                  type="info"
+                  showIcon
+                />
+              )}
             </Card>
           </Tabs.TabPane>
 

@@ -53,10 +53,11 @@ function convertFilePathToContainerPath(filePath: string, config: any): string {
 /**
  * POST /api/download/start
  * Start a download task
+ * Body: { targetId?: string, config?: Partial<StandaloneConfig>, configPaths?: string[] }
  */
 router.post('/start', async (req: Request, res: Response) => {
   try {
-    const { targetId, config } = req.body;
+    const { targetId, config, configPaths } = req.body;
 
     // Check if there's already an active task
     if (downloadTaskManager.hasActiveTask()) {
@@ -67,8 +68,8 @@ router.post('/start', async (req: Request, res: Response) => {
 
     const taskId = `task_${Date.now()}`;
 
-    // Start task in background
-    downloadTaskManager.startTask(taskId, targetId, config).catch((error) => {
+    // Start task in background with optional config paths
+    downloadTaskManager.startTask(taskId, targetId, config, configPaths).catch((error) => {
       logger.error('Background task error', { error, taskId });
     });
 
@@ -272,9 +273,12 @@ router.get('/history', async (req: Request, res: Response) => {
 /**
  * POST /api/download/run-all
  * Run all targets (equivalent to npm run download)
+ * Body: { configPaths?: string[] } - Optional array of config file paths
  */
 router.post('/run-all', async (req: Request, res: Response) => {
   try {
+    const { configPaths } = req.body;
+
     if (downloadTaskManager.hasActiveTask()) {
       return res.status(409).json({
         errorCode: ErrorCode.DOWNLOAD_TASK_ALREADY_RUNNING,
@@ -283,8 +287,8 @@ router.post('/run-all', async (req: Request, res: Response) => {
 
     const taskId = `task_all_${Date.now()}`;
 
-    // Start task in background
-    downloadTaskManager.startTask(taskId).catch((error) => {
+    // Start task in background with optional config paths
+    downloadTaskManager.startTask(taskId, undefined, undefined, configPaths).catch((error) => {
       logger.error('Background task error', { error, taskId });
     });
 

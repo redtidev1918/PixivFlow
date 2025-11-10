@@ -45,9 +45,11 @@ router.get('/status', async (req: Request, res: Response) => {
     logger.debug('Auth status check', { authenticated, hasToken, configPath });
 
     res.json({
-      authenticated,
-      hasToken,
-      isAuthenticated: authenticated, // Alias for compatibility
+      data: {
+        authenticated,
+        hasToken,
+        isAuthenticated: authenticated, // Alias for compatibility
+      },
     });
   } catch (error) {
     if (error instanceof ConfigError) {
@@ -88,12 +90,14 @@ router.get('/status', async (req: Request, res: Response) => {
       });
       
       return res.json({
-        authenticated,
-        hasToken,
-        isAuthenticated: authenticated, // Alias for compatibility
-        configReady: false, // Config is not fully ready (validation failed)
-        errors: validationErrors,
-        warnings: validationWarnings,
+        data: {
+          authenticated,
+          hasToken,
+          isAuthenticated: authenticated, // Alias for compatibility
+          configReady: false, // Config is not fully ready (validation failed)
+          errors: validationErrors,
+          warnings: validationWarnings,
+        },
       });
     }
     logger.error('Failed to get auth status', { error });

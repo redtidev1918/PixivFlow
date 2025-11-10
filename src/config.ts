@@ -5,6 +5,7 @@ import cron from 'node-cron';
 import { ConfigError } from './utils/errors';
 import { logger } from './logger';
 import { ConfigPathMigrator } from './utils/config-path-migrator';
+import { getBestAvailableToken, isPlaceholderToken, saveTokenToStorage } from './utils/token-manager';
 
 export type TargetType = 'illustration' | 'novel';
 
@@ -662,9 +663,6 @@ export function loadConfig(configPath?: string): StandaloneConfig {
     }
   }
 
-  // Validate configuration
-  validateConfig(parsed, resolvedPath);
-
   // Apply defaults - use config file directory as base path to ensure paths are resolved correctly
   // This prevents the app from accidentally using paths from the development machine
   const config = applyDefaults(parsed, configDir);
@@ -688,6 +686,51 @@ export function loadConfig(configPath?: string): StandaloneConfig {
     logPath = join(process.cwd(), 'data', 'pixiv-downloader.log');
   }
   logger.setLogPath(logPath);
+
+  // Token Storage Strategy:
+  // 1. Unified storage is the primary source of truth for tokens
+  // 2. Config file is automatically synced from unified storage if it has a placeholder
+  // 3. When a valid token exists in config file, it's synced to unified storage
+  // This allows users to switch between config files without losing authentication
+  
+  // Check if config file has a placeholder token
+  const hasPlaceholderToken = isPlaceholderToken(config.pixiv?.refreshToken);
+  
+  if (hasPlaceholderToken) {
+    // Config file has placeholder - try to load from unified storage
+    const unifiedToken = getBestAvailableToken(config.pixiv?.refreshToken, config.storage?.databasePath);
+    if (unifiedToken) {
+      logger.info('Config file has placeholder token, using token from unified storage');
+      config.pixiv.refreshToken = unifiedToken;
+      
+      // Automatically sync token to config file (synchronous update)
+      // This ensures config file always has the real token after loading
+      try {
+        const configData = JSON.parse(raw);
+        configData.pixiv = configData.pixiv || {};
+        configData.pixiv.refreshToken = unifiedToken;
+        writeFileSync(resolvedPath, JSON.stringify(configData, null, 2), 'utf-8');
+        logger.info('Config file automatically synced with token from unified storage');
+      } catch (error) {
+        // Log warning but don't fail - config object already has the token
+        logger.warn('Failed to sync token to config file (using in-memory token)', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    } else {
+      // No token in unified storage either - user needs to login
+      logger.warn('No valid token found in config file or unified storage - login required');
+    }
+  } else if (config.pixiv?.refreshToken) {
+    // Config file has a valid token - sync it to unified storage
+    // This ensures unified storage is always up-to-date when config file has a token
+    saveTokenToStorage(config.pixiv.refreshToken, config.storage?.databasePath);
+    logger.debug('Token from config file synced to unified storage');
+  }
+
+  // Validate configuration AFTER token has been potentially filled from unified storage
+  // Pass the database path to validation so it can check unified storage if needed
+  validateConfig(config, resolvedPath, config.storage?.databasePath);
 
   // Process placeholders (e.g., YESTERDAY)
   return processConfigPlaceholders(config);
@@ -974,8 +1017,11 @@ export class ConfigValidationError extends Error {
 
 /**
  * Validate configuration with detailed error messages
+ * @param config Configuration to validate
+ * @param location Location description for error messages
+ * @param databasePath Optional database path to check unified storage for tokens
  */
-function validateConfig(config: Partial<StandaloneConfig>, location: string): void {
+function validateConfig(config: Partial<StandaloneConfig>, location: string, databasePath?: string): void {
   const errors: string[] = [];
   const warnings: string[] = [];
 
@@ -992,11 +1038,28 @@ function validateConfig(config: Partial<StandaloneConfig>, location: string): vo
     if (!config.pixiv.deviceToken || config.pixiv.deviceToken.trim() === '') {
       errors.push('pixiv.deviceToken: Required field is missing or empty');
     }
-    if (!config.pixiv.refreshToken || config.pixiv.refreshToken.trim() === '') {
-      errors.push('pixiv.refreshToken: Required field is missing or empty');
-    } else if (config.pixiv.refreshToken === 'YOUR_REFRESH_TOKEN') {
+    
+    // Token validation: Check if token exists in config OR unified storage
+    // This allows config files with placeholder tokens if unified storage has a valid token
+    const configToken = config.pixiv.refreshToken;
+    const hasValidConfigToken = !isPlaceholderToken(configToken);
+    
+    if (!hasValidConfigToken && databasePath) {
+      // Config file has placeholder - check unified storage
+      const unifiedToken = getBestAvailableToken(configToken, databasePath);
+      if (unifiedToken) {
+        // Unified storage has token - this is acceptable, config will be synced
+        logger.debug('Config file has placeholder token, but unified storage has valid token - validation passed');
+      } else {
+        // No token anywhere - this is an error
+        errors.push('pixiv.refreshToken: Please replace "YOUR_REFRESH_TOKEN" with your actual refresh token or login');
+      }
+    } else if (!hasValidConfigToken) {
+      // No database path and config has placeholder - error
       errors.push('pixiv.refreshToken: Please replace "YOUR_REFRESH_TOKEN" with your actual refresh token');
     }
+    // If hasValidConfigToken is true, token is valid - no error
+    
     if (!config.pixiv.userAgent || config.pixiv.userAgent.trim() === '') {
       errors.push('pixiv.userAgent: Required field is missing or empty');
     }

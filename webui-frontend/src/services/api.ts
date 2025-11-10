@@ -340,6 +340,47 @@ export const api = {
   restoreConfig: (backupPath: string): Promise<AxiosResponse<ApiResponse<ConfigData>>> =>
     apiClient.post('/config/restore', { backupPath }),
 
+  /**
+   * Get configuration history
+   */
+  getConfigHistory: (): Promise<AxiosResponse<ApiResponse<Array<{
+    id: number;
+    name: string;
+    description: string | null;
+    config: ConfigData;
+    created_at: string;
+    updated_at: string;
+    is_active: number;
+  }>>>> =>
+    apiClient.get('/config/history'),
+
+  /**
+   * Save configuration to history
+   * @param name - Configuration name
+   * @param config - Configuration object
+   * @param description - Optional description
+   */
+  saveConfigHistory: (
+    name: string,
+    config: Partial<ConfigData>,
+    description?: string
+  ): Promise<AxiosResponse<ApiResponse<{ id: number }>>> =>
+    apiClient.post('/config/history', { name, config, description }),
+
+  /**
+   * Apply a configuration history entry
+   * @param id - History entry ID
+   */
+  applyConfigHistory: (id: number): Promise<AxiosResponse<ApiResponse<void>>> =>
+    apiClient.post(`/config/history/${id}/apply`),
+
+  /**
+   * Delete a configuration history entry
+   * @param id - History entry ID
+   */
+  deleteConfigHistory: (id: number): Promise<AxiosResponse<ApiResponse<void>>> =>
+    apiClient.delete(`/config/history/${id}`),
+
   // ========== Download Management ==========
 
   /**

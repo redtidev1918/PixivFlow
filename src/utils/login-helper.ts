@@ -8,9 +8,11 @@ import * as path from 'path';
 import { TerminalLogin, LoginInfo } from '../terminal-login';
 import { loadConfig, StandaloneConfig } from '../config';
 import { logger } from '../logger';
+import { saveTokenToStorage, clearTokenFromStorage } from './token-manager';
 
 /**
  * Update config file with new refresh token
+ * Also saves token to unified storage for cross-config-file persistence
  */
 export async function updateConfigWithToken(
   configPath: string,
@@ -21,8 +23,32 @@ export async function updateConfigWithToken(
     configData.pixiv.refreshToken = refreshToken;
     await fs.writeFile(configPath, JSON.stringify(configData, null, 2), 'utf-8');
     logger.info('Configuration updated with new refresh token');
+    
+    // Also save to unified storage for cross-config-file persistence
+    saveTokenToStorage(refreshToken, configData.storage?.databasePath);
   } catch (error) {
     throw new Error(`Failed to update config file: ${error}`);
+  }
+}
+
+/**
+ * Clear refresh token from config file (logout)
+ * Also clears token from unified storage
+ */
+export async function clearConfigToken(
+  configPath: string
+): Promise<void> {
+  try {
+    const configData = JSON.parse(await fs.readFile(configPath, 'utf-8')) as StandaloneConfig;
+    // Clear the refresh token by setting it to placeholder
+    configData.pixiv.refreshToken = 'YOUR_REFRESH_TOKEN';
+    await fs.writeFile(configPath, JSON.stringify(configData, null, 2), 'utf-8');
+    logger.info('Configuration updated: refresh token cleared');
+    
+    // Also clear from unified storage
+    clearTokenFromStorage(configData.storage?.databasePath);
+  } catch (error) {
+    throw new Error(`Failed to clear token from config file: ${error}`);
   }
 }
 

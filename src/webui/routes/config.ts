@@ -7,6 +7,7 @@ import { validateConfig } from '../utils/config-validator';
 import { ErrorCode } from '../utils/error-codes';
 import { ConfigError } from '../../utils/errors';
 import { Database } from '../../storage/Database';
+import { getBestAvailableToken, isPlaceholderToken } from '../../utils/token-manager';
 
 function readConfigRaw(configPath: string): Partial<StandaloneConfig> | null {
   try {
@@ -65,13 +66,45 @@ router.get('/', async (req: Request, res: Response) => {
         if (activeConfig) {
           const historyConfig = JSON.parse(activeConfig.config_json) as StandaloneConfig;
           
+          // Get actual refreshToken from config file or unified storage (not placeholder)
+          let actualRefreshToken: string | undefined = undefined;
+          try {
+            const rawConfig = readConfigRaw(getConfigPath());
+            const configToken = rawConfig?.pixiv?.refreshToken;
+            
+            // Check config file token first
+            if (!isPlaceholderToken(configToken)) {
+              actualRefreshToken = configToken;
+            } else {
+              // If config file has placeholder, check unified storage
+              const databasePath = rawConfig?.storage?.databasePath || config.storage?.databasePath;
+              const unifiedToken = getBestAvailableToken(configToken, databasePath);
+              if (unifiedToken) {
+                actualRefreshToken = unifiedToken;
+              }
+            }
+          } catch (error) {
+            // Ignore errors
+          }
+          // Fallback to config if it's not a placeholder
+          if (!actualRefreshToken && config.pixiv?.refreshToken && !isPlaceholderToken(config.pixiv.refreshToken)) {
+            actualRefreshToken = config.pixiv.refreshToken;
+          }
+          // Last resort: check unified storage with config's database path
+          if (!actualRefreshToken && config.storage?.databasePath) {
+            const unifiedToken = getBestAvailableToken(undefined, config.storage.databasePath);
+            if (unifiedToken) {
+              actualRefreshToken = unifiedToken;
+            }
+          }
+          
           // Merge with current config to preserve sensitive data
           const mergedConfig: StandaloneConfig = {
             ...historyConfig,
             pixiv: {
               ...historyConfig.pixiv,
-              // Preserve current sensitive fields
-              refreshToken: config.pixiv?.refreshToken || historyConfig.pixiv?.refreshToken,
+              // Preserve current sensitive fields (use actual token, not placeholder)
+              refreshToken: actualRefreshToken || historyConfig.pixiv?.refreshToken,
               clientSecret: config.pixiv?.clientSecret || historyConfig.pixiv?.clientSecret,
               deviceToken: config.pixiv?.deviceToken || historyConfig.pixiv?.deviceToken,
               clientId: config.pixiv?.clientId || historyConfig.pixiv?.clientId,
@@ -177,6 +210,31 @@ router.put('/', async (req: Request, res: Response) => {
       }
     }
 
+    // Helper function to check if a token is a placeholder
+    const isPlaceholderToken = (token: string | undefined): boolean => {
+      if (!token) return false;
+      const lowerToken = token.toLowerCase().trim();
+      return lowerToken === 'your_refresh_token' || 
+             lowerToken === '***' ||
+             lowerToken === '';
+    };
+
+    // Try to get the actual refreshToken from the raw config file
+    // This is needed because if config validation fails, currentConfig might have placeholder
+    let actualRefreshToken: string | undefined = undefined;
+    try {
+      const rawConfig = readConfigRaw(configPath);
+      if (rawConfig?.pixiv?.refreshToken && !isPlaceholderToken(rawConfig.pixiv.refreshToken)) {
+        actualRefreshToken = rawConfig.pixiv.refreshToken;
+      }
+    } catch (error) {
+      // Ignore errors when reading raw config
+    }
+    // Fallback to currentConfig if raw read didn't work
+    if (!actualRefreshToken && currentConfig.pixiv?.refreshToken && !isPlaceholderToken(currentConfig.pixiv.refreshToken)) {
+      actualRefreshToken = currentConfig.pixiv.refreshToken;
+    }
+
     // Merge with existing config (preserve sensitive data)
     const updatedConfig: StandaloneConfig = {
       ...(currentConfig as StandaloneConfig),
@@ -185,10 +243,13 @@ router.put('/', async (req: Request, res: Response) => {
         ...(currentConfig.pixiv ?? {}),
         ...(req.body.pixiv ?? {}),
         // Preserve sensitive/required fields unless explicitly provided
+        // If request provides a valid token, use it; otherwise use actual token from file (not placeholder)
         refreshToken:
-          req.body.pixiv?.refreshToken && req.body.pixiv.refreshToken !== '***'
+          req.body.pixiv?.refreshToken && 
+          req.body.pixiv.refreshToken !== '***' && 
+          !isPlaceholderToken(req.body.pixiv.refreshToken)
             ? req.body.pixiv.refreshToken
-            : currentConfig.pixiv?.refreshToken,
+            : actualRefreshToken || currentConfig.pixiv?.refreshToken,
         clientSecret:
           req.body.pixiv?.clientSecret && req.body.pixiv.clientSecret !== '***'
             ? req.body.pixiv.clientSecret
@@ -589,13 +650,37 @@ router.post('/history/:id/apply', async (req: Request, res: Response) => {
 
     const historyConfig = JSON.parse(entry.config_json) as StandaloneConfig;
     
+    // Helper function to check if a token is a placeholder
+    const isPlaceholderToken = (token: string | undefined): boolean => {
+      if (!token) return false;
+      const lowerToken = token.toLowerCase().trim();
+      return lowerToken === 'your_refresh_token' || 
+             lowerToken === '***' ||
+             lowerToken === '';
+    };
+
+    // Get actual refreshToken from raw config file (not placeholder)
+    let actualRefreshToken: string | undefined = undefined;
+    try {
+      const rawConfig = readConfigRaw(configPath);
+      if (rawConfig?.pixiv?.refreshToken && !isPlaceholderToken(rawConfig.pixiv.refreshToken)) {
+        actualRefreshToken = rawConfig.pixiv.refreshToken;
+      }
+    } catch (error) {
+      // Ignore errors
+    }
+    // Fallback to currentConfig if it's not a placeholder
+    if (!actualRefreshToken && currentConfig.pixiv?.refreshToken && !isPlaceholderToken(currentConfig.pixiv.refreshToken)) {
+      actualRefreshToken = currentConfig.pixiv.refreshToken;
+    }
+    
     // Merge with current config to preserve sensitive data
     const mergedConfig: StandaloneConfig = {
       ...historyConfig,
       pixiv: {
         ...historyConfig.pixiv,
-        // Preserve current sensitive fields
-        refreshToken: currentConfig.pixiv?.refreshToken || historyConfig.pixiv?.refreshToken,
+        // Preserve current sensitive fields (use actual token, not placeholder)
+        refreshToken: actualRefreshToken || historyConfig.pixiv?.refreshToken,
         clientSecret: currentConfig.pixiv?.clientSecret || historyConfig.pixiv?.clientSecret,
         deviceToken: currentConfig.pixiv?.deviceToken || historyConfig.pixiv?.deviceToken,
         clientId: currentConfig.pixiv?.clientId || historyConfig.pixiv?.clientId,

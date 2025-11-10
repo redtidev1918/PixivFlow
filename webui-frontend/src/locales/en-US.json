@@ -57,7 +57,15 @@
     "files": "File Browser",
     "language": "Language",
     "languageZh": "中文",
-    "languageEn": "English"
+    "languageEn": "English",
+    "login": "Login",
+    "logout": "Logout",
+    "logoutSuccess": "Logged out successfully",
+    "logoutFailed": "Logout failed",
+    "refreshToken": "Refresh Token",
+    "refreshingToken": "Refreshing token...",
+    "tokenRefreshed": "Token refreshed",
+    "tokenRefreshFailed": "Token refresh failed"
   },
   "dashboard": {
     "title": "Dashboard",

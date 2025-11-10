@@ -2,10 +2,11 @@ import { Router, Request, Response } from 'express';
 import { readFileSync, existsSync } from 'fs';
 import { TerminalLogin } from '../../terminal-login';
 import { loadConfig, getConfigPath, ConfigValidationError, StandaloneConfig } from '../../config';
-import { updateConfigWithToken } from '../../utils/login-helper';
+import { updateConfigWithToken, clearConfigToken } from '../../utils/login-helper';
 import { logger } from '../../logger';
 import { ErrorCode } from '../utils/error-codes';
 import { ConfigError } from '../../utils/errors';
+import { getBestAvailableToken, isPlaceholderToken } from '../../utils/token-manager';
 
 const router = Router();
 
@@ -59,11 +60,24 @@ router.get('/status', async (req: Request, res: Response) => {
           ? error.cause.warnings
           : [];
       
-      // Even if validation fails, check for refreshToken in raw config
+      // Even if validation fails, check for refreshToken in raw config or unified storage
       // This allows users to be authenticated even if other config fields are missing
       const configPath = getConfigPath();
       const rawConfig = readConfigRaw(configPath);
-      const hasToken = !!rawConfig?.pixiv?.refreshToken;
+      
+      // Check config file token first
+      let configToken = rawConfig?.pixiv?.refreshToken;
+      if (isPlaceholderToken(configToken)) {
+        // If config file has placeholder, check unified storage
+        // We need to determine database path from config (even if invalid)
+        const databasePath = rawConfig?.storage?.databasePath;
+        const unifiedToken = getBestAvailableToken(configToken, databasePath);
+        if (unifiedToken) {
+          configToken = unifiedToken;
+        }
+      }
+      
+      const hasToken = !isPlaceholderToken(configToken);
       const authenticated = hasToken; // User is authenticated if they have a refreshToken
       
       logger.warn('Configuration invalid when checking auth status', {
@@ -336,12 +350,19 @@ router.post('/login-with-token', async (req: Request, res: Response) => {
  */
 router.post('/logout', async (req: Request, res: Response) => {
   try {
-    // In a real implementation, you might want to invalidate the token
-    // For now, we just return success
+    const configPath = getConfigPath();
+    
+    // Clear the refresh token from config file
+    await clearConfigToken(configPath);
+    
+    logger.info('User logged out successfully');
     res.json({ success: true, errorCode: ErrorCode.AUTH_LOGOUT_SUCCESS });
   } catch (error) {
     logger.error('Logout failed', { error });
-    res.status(500).json({ errorCode: ErrorCode.AUTH_LOGOUT_FAILED });
+    res.status(500).json({ 
+      errorCode: ErrorCode.AUTH_LOGOUT_FAILED,
+      message: error instanceof Error ? error.message : String(error),
+    });
   }
 });
 

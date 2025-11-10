@@ -11,6 +11,22 @@ export interface ValidationResult {
 }
 
 /**
+ * Check if a token is a placeholder (not a real token)
+ * This matches the logic in src/utils/token-manager.ts
+ */
+function isPlaceholderToken(token: string | undefined | null): boolean {
+  if (!token || typeof token !== 'string') {
+    return true;
+  }
+  const trimmed = token.trim();
+  return trimmed === '' || 
+         trimmed === 'YOUR_REFRESH_TOKEN' || 
+         trimmed.toLowerCase() === 'your_refresh_token' ||
+         trimmed === '***' ||
+         trimmed.length < 10;
+}
+
+/**
  * Validate configuration
  */
 export function validateConfig(config: StandaloneConfig): ValidationResult {
@@ -23,7 +39,8 @@ export function validateConfig(config: StandaloneConfig): ValidationResult {
     if (!config.pixiv.clientId) {
       errors.push({ code: 'CONFIG_VALIDATION_PIXIV_CLIENT_ID_REQUIRED' });
     }
-    if (!config.pixiv.refreshToken) {
+    // Check if refreshToken exists and is not a placeholder
+    if (!config.pixiv.refreshToken || isPlaceholderToken(config.pixiv.refreshToken)) {
       errors.push({ code: 'CONFIG_VALIDATION_PIXIV_REFRESH_TOKEN_REQUIRED' });
     }
   }

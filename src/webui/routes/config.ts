@@ -85,6 +85,33 @@ function isValidConfigFilename(filename: string): boolean {
 }
 
 /**
+ * Validate configuration, automatically checking unified storage for tokens
+ * If config has placeholder token but unified storage has real token, use the real token for validation
+ * This matches the behavior of loadConfig() which auto-fills tokens from unified storage
+ */
+function validateConfigWithUnifiedStorage(config: StandaloneConfig): ReturnType<typeof validateConfig> {
+  // Check if token is placeholder and if unified storage has a token
+  let configToValidate = config;
+  if (config.pixiv?.refreshToken && isPlaceholderToken(config.pixiv.refreshToken)) {
+    // Try to get token from unified storage (same as loadConfig does)
+    const unifiedToken = getBestAvailableToken(config.pixiv.refreshToken, config.storage?.databasePath);
+    if (unifiedToken) {
+      // Use the token from unified storage for validation
+      // This prevents false errors when config file has placeholder but unified storage has real token
+      configToValidate = {
+        ...config,
+        pixiv: {
+          ...config.pixiv,
+          refreshToken: unifiedToken,
+        },
+      };
+    }
+  }
+  
+  return validateConfig(configToValidate);
+}
+
+/**
  * GET /api/config
  * Get current configuration
  * If there's an active config history, automatically apply it to ensure consistency
@@ -372,8 +399,8 @@ router.put('/', async (req: Request, res: Response) => {
       targets: req.body.targets ?? currentConfig.targets ?? [],
     };
 
-    // Validate configuration
-    const validationResult = validateConfig(updatedConfig);
+    // Validate configuration (automatically checks unified storage for tokens)
+    const validationResult = validateConfigWithUnifiedStorage(updatedConfig);
     if (!validationResult.valid) {
       return res.status(400).json({
         errorCode: ErrorCode.CONFIG_INVALID,
@@ -418,11 +445,16 @@ router.put('/', async (req: Request, res: Response) => {
 /**
  * POST /api/config/validate
  * Validate configuration
+ * Note: This validates the config as-is. The actual loadConfig() function
+ * will automatically fill placeholder tokens from unified storage.
  */
 router.post('/validate', async (req: Request, res: Response) => {
   try {
     const config = req.body as StandaloneConfig;
-    const validationResult = validateConfig(config);
+    
+    // Validate configuration (automatically checks unified storage for tokens)
+    // This matches the behavior of loadConfig() which auto-fills tokens
+    const validationResult = validateConfigWithUnifiedStorage(config);
 
     res.json({
       valid: validationResult.valid,
@@ -889,8 +921,8 @@ router.post('/files/switch', async (req: Request, res: Response) => {
       });
     }
 
-    // Validate the configuration
-    const validationResult = validateConfig(config);
+    // Validate the configuration (automatically checks unified storage for tokens)
+    const validationResult = validateConfigWithUnifiedStorage(config);
     if (!validationResult.valid) {
       return res.status(400).json({
         errorCode: ErrorCode.CONFIG_INVALID,
@@ -931,8 +963,8 @@ router.post('/files/import', async (req: Request, res: Response) => {
       });
     }
 
-    // Validate the configuration
-    const validationResult = validateConfig(config);
+    // Validate the configuration (automatically checks unified storage for tokens)
+    const validationResult = validateConfigWithUnifiedStorage(config);
     if (!validationResult.valid) {
       return res.status(400).json({
         errorCode: ErrorCode.CONFIG_INVALID,
@@ -1185,8 +1217,8 @@ router.put('/files/:filename/content', async (req: Request, res: Response) => {
       });
     }
 
-    // Validate configuration structure
-    const validationResult = validateConfig(parsedConfig);
+    // Validate configuration structure (automatically checks unified storage for tokens)
+    const validationResult = validateConfigWithUnifiedStorage(parsedConfig);
     if (!validationResult.valid) {
       return res.status(400).json({
         errorCode: ErrorCode.CONFIG_INVALID,

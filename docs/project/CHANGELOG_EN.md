@@ -16,9 +16,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Provides better login experience and error handling
   - Automatically detects if pixiv-token-getter is available, falls back to other login methods if not
   - Electron app automatically integrates pixiv-token-getter adapter
+- ✨ Added global installation documentation and instructions (2025-11-08)
+  - Added global installation method in README.md
+  - Added global installation steps in QUICKSTART.md
+  - Added global installation option in START_HERE.md
+  - Updated command quick reference, including commands after global installation
+  - Explained configuration file location and usage after global installation
 
 ### Improved
-- ✨ Optimized metadata file storage location (2025-01-XX)
+- ✨ Optimized metadata file storage location (2025-11-09)
   - Moved metadata JSON files from download directory to `data/metadata` directory to keep download directory clean
   - Enhanced error handling and input validation in `saveMetadata` method
   - Added filename sanitization to prevent filesystem errors from special characters
@@ -37,15 +43,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Deleted test files: `test-concurrency.ts`, `test-download.ts`, `test-scheduled-download.ts`, etc.
   - Removed related test scripts from `package.json` (`login:example`, `test:token-getter`)
   - Cleaned up compiled files in `dist` directory
-- ✨ Added global installation documentation and instructions (2025-01-XX)
-  - Added global installation method in README.md
-  - Added global installation steps in QUICKSTART.md
-  - Added global installation option in START_HERE.md
-  - Updated command quick reference, including commands after global installation
-  - Explained configuration file location and usage after global installation
 
 ### Fixed
-- 🐛 Fixed dynamic concurrency control rate limit detection logic (2025-01-XX)
+- 🐛 Fixed dynamic concurrency control rate limit detection logic (2025-11-08)
   - Fixed incorrect rate limit detection in `processInParallel`
   - Now correctly identifies `NetworkError.isRateLimit` property instead of relying on error message string matching
   - Improved log output when rate limited, including detailed concurrency change information
@@ -59,7 +59,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [2.0.0] - 2024-12
+## [2.0.0] - 2025-11
 
 ### Added
 - ✨ Complete TypeScript rewrite

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Form, Input, Button, Card, message, Typography, Alert, Space, Radio, Spin, Modal, Divider, Steps } from 'antd';
-import { LoginOutlined, ToolOutlined, CheckCircleOutlined, RocketOutlined, SafetyOutlined, ThunderboltOutlined, ReloadOutlined, KeyOutlined } from '@ant-design/icons';
+import { Form, Input, Button, Card, message, Typography, Alert, Space, Radio, Spin, Divider, Steps } from 'antd';
+import { LoginOutlined, CheckCircleOutlined, RocketOutlined, SafetyOutlined, ThunderboltOutlined, ReloadOutlined, KeyOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -13,7 +13,6 @@ export default function Login() {
   const { t } = useTranslation();
   const [form] = Form.useForm();
   const [loginMode, setLoginMode] = useState<'interactive' | 'token'>('interactive');
-  const [diagnosticsVisible, setDiagnosticsVisible] = useState(false);
   const [loginStep, setLoginStep] = useState(0);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -36,15 +35,6 @@ export default function Login() {
     queryFn: () => api.getConfig(),
   });
 
-  const diagnoseMutation = useMutation({
-    mutationFn: () => api.diagnoseLogin(),
-    onSuccess: () => {
-      setDiagnosticsVisible(true);
-    },
-    onError: (error: any) => {
-      message.error('诊断失败: ' + (error.response?.data?.message || error.message));
-    },
-  });
 
   const loginMutation = useMutation({
     mutationFn: ({ username, password, headless, proxy }: { username: string; password: string; headless: boolean; proxy?: any }) =>
@@ -233,7 +223,7 @@ export default function Login() {
     }
   };
 
-  const handleLogin = (values?: { username?: string; password?: string; refreshToken?: string }) => {
+  const handleLogin = async (values?: { username?: string; password?: string; refreshToken?: string }) => {
     setLoginStep(1);
     
     // Handle token login mode
@@ -248,7 +238,65 @@ export default function Login() {
       return;
     }
     
-    // Interactive mode: no username/password needed
+    // Interactive mode: check if we're in Electron
+    const isElectron = typeof window !== 'undefined' && (window as any).electron;
+    
+    if (isElectron && (window as any).electron.openLoginWindow) {
+      // Use Electron in-app login window
+      console.log('[Login] Using Electron in-app login window...');
+      
+      // Store event listener references for cleanup
+      let loginSuccessHandler: ((data: any) => void) | null = null;
+      let loginErrorHandler: ((error: any) => void) | null = null;
+      
+      try {
+        // Set up event listeners
+        loginSuccessHandler = async (data: any) => {
+          console.log('[Login] Login success from Electron:', data);
+          
+          // Save token to backend
+          try {
+            await api.loginWithToken(data.refreshToken);
+            // Call the component-level handleLoginSuccess function
+            handleLoginSuccess();
+          } catch (error: any) {
+            console.error('[Login] Failed to save token to backend:', error);
+            message.error('登录成功，但保存 token 失败: ' + (error.message || '未知错误'));
+            setLoginStep(0);
+          }
+        };
+        
+        loginErrorHandler = (error: any) => {
+          console.error('[Login] Login error from Electron:', error);
+          message.error('登录失败: ' + (error.message || '未知错误'));
+          setLoginStep(0);
+        };
+        
+        // Register event listeners
+        // Note: IPC event listeners are automatically cleaned up when the window is closed
+        if ((window as any).electron.onLoginSuccess && loginSuccessHandler) {
+          (window as any).electron.onLoginSuccess(loginSuccessHandler);
+        }
+        if ((window as any).electron.onLoginError && loginErrorHandler) {
+          (window as any).electron.onLoginError(loginErrorHandler);
+        }
+        
+        // Open login window
+        const result = await (window as any).electron.openLoginWindow();
+        if (!result.success) {
+          throw new Error(result.error || '无法打开登录窗口');
+        }
+        
+        message.info('登录窗口已打开，请在窗口中完成登录。登录成功后窗口将自动关闭。');
+      } catch (error: any) {
+        console.error('[Login] Failed to open Electron login window:', error);
+        message.error('无法打开登录窗口: ' + (error.message || '未知错误'));
+        setLoginStep(0);
+      }
+      return;
+    }
+    
+    // Fallback to backend API (Puppeteer/Python)
     const username = '';
     const password = '';
     
@@ -263,7 +311,7 @@ export default function Login() {
     // Mark interactive login as active before starting
     isInteractiveLoginActiveRef.current = true;
     pollingStartTimeRef.current = Date.now();
-    console.log('[Login] Starting interactive login, polling will begin...');
+    console.log('[Login] Starting interactive login via backend API, polling will begin...');
     
     loginMutation.mutate({ username, password, headless: false, proxy });
   };
@@ -607,271 +655,10 @@ export default function Login() {
             >
               {t('login.note')}
             </Paragraph>
-            
-            <Button
-              type="link"
-              icon={<ToolOutlined />}
-              onClick={() => diagnoseMutation.mutate()}
-              loading={diagnoseMutation.isPending}
-              style={{ fontSize: '13px' }}
-            >
-              诊断登录环境
-            </Button>
           </div>
         </Space>
       </Card>
 
-      <Modal
-        title={
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <ToolOutlined style={{ color: '#1890ff' }} />
-            <span style={{ fontSize: '18px', fontWeight: 600 }}>登录环境诊断</span>
-          </div>
-        }
-        open={diagnosticsVisible}
-        onCancel={() => setDiagnosticsVisible(false)}
-        footer={[
-          <Button 
-            key="close" 
-            type="primary"
-            onClick={() => setDiagnosticsVisible(false)}
-            style={{
-              borderRadius: '6px',
-              fontWeight: 500,
-            }}
-          >
-            关闭
-          </Button>,
-        ]}
-        width={800}
-        style={{ top: 40 }}
-      >
-        {diagnoseMutation.data && (() => {
-          // API response structure: Axios wraps response in .data
-          // Backend returns: { success: true, diagnostics: {...}, environment: {...} }
-          // Axios response: diagnoseMutation.data.data = { success: true, diagnostics: {...}, ... }
-          // TypeScript types expect ApiResponse<T> which has a .data property, but backend returns directly
-          // So we access the actual data: if wrapped in ApiResponse, use .data, otherwise use directly
-          const apiResponse = diagnoseMutation.data.data as any;
-          const responseData = apiResponse?.data || apiResponse;
-          const diagnostics = responseData?.diagnostics;
-          const puppeteerAvailable = diagnostics?.puppeteer?.available;
-          const gpptAvailable = diagnostics?.pythonGppt?.available;
-          const recommendation = diagnostics?.recommendation;
-          
-          // 判断是否有可用的登录方式
-          const hasLoginMethod = puppeteerAvailable || gpptAvailable;
-          
-          return (
-            <div style={{ maxHeight: '70vh', overflow: 'auto' }}>
-              <Alert
-                message={
-                  <span style={{ fontSize: '15px', fontWeight: 600 }}>
-                    {hasLoginMethod ? '✅ 登录环境正常' : '❌ 登录环境异常'}
-                  </span>
-                }
-                description={
-                  <span style={{ fontSize: '13px' }}>
-                    {hasLoginMethod
-                      ? recommendation || '至少有一种登录方式可用。'
-                      : '未找到可用的登录方式，请检查依赖安装。'}
-                  </span>
-                }
-                type={hasLoginMethod ? 'success' : 'error'}
-                showIcon
-                style={{ 
-                  marginBottom: 20,
-                  borderRadius: '8px',
-                  border: hasLoginMethod ? '1px solid #b7eb8f' : '1px solid #ffccc7',
-                }}
-              />
-              
-              {/* 显示各个登录方式的状态 */}
-              {diagnostics && (
-                <div style={{ marginBottom: 20 }}>
-                  <Title level={5} style={{ marginBottom: 12, fontSize: '15px' }}>
-                    可用的登录方式
-                  </Title>
-                  {diagnostics.puppeteer && (
-                    <Card
-                      size="small"
-                      style={{ 
-                        marginBottom: 12,
-                        borderRadius: '8px',
-                        border: diagnostics.puppeteer.available 
-                          ? '1px solid #b7eb8f' 
-                          : '1px solid #ffe58f',
-                        background: diagnostics.puppeteer.available 
-                          ? '#f6ffed' 
-                          : '#fffbe6',
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
-                        <div style={{ 
-                          fontSize: '24px',
-                          marginTop: '4px',
-                        }}>
-                          {diagnostics.puppeteer.available ? '✅' : '⚠️'}
-                        </div>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ 
-                            fontSize: '14px', 
-                            fontWeight: 600,
-                            marginBottom: '4px',
-                            color: diagnostics.puppeteer.available ? '#52c41a' : '#faad14',
-                          }}>
-                            Puppeteer (交互模式)
-                            {diagnostics.puppeteer.recommended && (
-                              <span style={{
-                                marginLeft: '8px',
-                                padding: '2px 8px',
-                                background: '#1890ff',
-                                color: 'white',
-                                borderRadius: '4px',
-                                fontSize: '12px',
-                                fontWeight: 500,
-                              }}>
-                                推荐
-                              </span>
-                            )}
-                          </div>
-                          <div style={{ fontSize: '13px', color: '#666' }}>
-                            {diagnostics.puppeteer.description}
-                          </div>
-                        </div>
-                      </div>
-                    </Card>
-                  )}
-                  {diagnostics.pythonGppt && (
-                    <Card
-                      size="small"
-                      style={{ 
-                        borderRadius: '8px',
-                        border: diagnostics.pythonGppt.available 
-                          ? '1px solid #b7eb8f' 
-                          : '1px solid #ffe58f',
-                        background: diagnostics.pythonGppt.available 
-                          ? '#f6ffed' 
-                          : '#fffbe6',
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
-                        <div style={{ 
-                          fontSize: '24px',
-                          marginTop: '4px',
-                        }}>
-                          {diagnostics.pythonGppt.available ? '✅' : '⚠️'}
-                        </div>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ 
-                            fontSize: '14px', 
-                            fontWeight: 600,
-                            marginBottom: '4px',
-                            color: diagnostics.pythonGppt.available ? '#52c41a' : '#faad14',
-                          }}>
-                            Python gppt (无头模式)
-                          </div>
-                          <div style={{ fontSize: '13px', color: '#666' }}>
-                            {diagnostics.pythonGppt.description}
-                          </div>
-                        </div>
-                      </div>
-                    </Card>
-                  )}
-                </div>
-              )}
-              
-              <Divider style={{ margin: '20px 0' }} />
-              
-              <div style={{ marginBottom: 16 }}>
-                <Title level={5} style={{ marginBottom: 12, fontSize: '15px' }}>
-                  详细诊断信息
-                </Title>
-                <div style={{ 
-                  background: '#f5f5f5', 
-                  padding: 16, 
-                  borderRadius: 8, 
-                  fontFamily: 'Monaco, Consolas, monospace', 
-                  fontSize: 12,
-                  maxHeight: '300px',
-                  overflow: 'auto',
-                }}>
-                  <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
-                    {JSON.stringify(responseData, null, 2)}
-                  </pre>
-                </div>
-              </div>
-
-              {!hasLoginMethod && (
-                <>
-                  <Divider style={{ margin: '20px 0' }} />
-                  <Alert
-                    message={
-                      <span style={{ fontSize: '15px', fontWeight: 600 }}>
-                        💡 解决方案
-                      </span>
-                    }
-                    description={
-                      <div style={{ fontSize: '13px' }}>
-                        <div style={{ 
-                          padding: '12px', 
-                          background: '#e6f7ff',
-                          borderRadius: '6px',
-                          marginBottom: '12px',
-                          borderLeft: '3px solid #1890ff',
-                        }}>
-                          <p style={{ margin: '0 0 8px 0' }}>
-                            <strong>推荐方案（无需 Python）：</strong>
-                          </p>
-                          <p style={{ margin: '0 0 8px 0' }}>
-                            Puppeteer 应该已经随项目安装。如果不可用，请尝试：
-                          </p>
-                          <ol style={{ margin: 0, paddingLeft: '20px' }}>
-                            <li>在项目目录运行: <code style={{ 
-                              background: '#fff',
-                              padding: '2px 6px',
-                              borderRadius: '3px',
-                              border: '1px solid #d9d9d9',
-                            }}>npm install</code></li>
-                            <li>重启应用后重试</li>
-                          </ol>
-                        </div>
-                        
-                        <div style={{ 
-                          padding: '12px', 
-                          background: '#fff7e6',
-                          borderRadius: '6px',
-                          borderLeft: '3px solid #faad14',
-                        }}>
-                          <p style={{ margin: '0 0 8px 0' }}>
-                            <strong>备选方案（使用 Python）：</strong>
-                          </p>
-                          <ol style={{ margin: 0, paddingLeft: '20px' }}>
-                            <li>安装 Python 3.9+: <a href="https://www.python.org/downloads/" target="_blank" rel="noopener noreferrer">https://www.python.org/downloads/</a></li>
-                            <li>安装 gppt: 在终端运行 <code style={{ 
-                              background: '#fff',
-                              padding: '2px 6px',
-                              borderRadius: '3px',
-                              border: '1px solid #d9d9d9',
-                            }}>pip install gppt</code></li>
-                            <li>重启应用后重试</li>
-                          </ol>
-                        </div>
-                      </div>
-                    }
-                    type="info"
-                    showIcon
-                    style={{ 
-                      borderRadius: '8px',
-                      border: '1px solid #91d5ff',
-                    }}
-                  />
-                </>
-              )}
-            </div>
-          );
-        })()}
-      </Modal>
     </div>
   );
 }

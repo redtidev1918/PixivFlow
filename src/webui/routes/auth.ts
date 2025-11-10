@@ -5,8 +5,6 @@ import { updateConfigWithToken } from '../../utils/login-helper';
 import { logger } from '../../logger';
 import { ErrorCode } from '../utils/error-codes';
 import { ConfigError } from '../../utils/errors';
-import { checkPythonGpptAvailable } from '../../python-login-adapter';
-import { checkPuppeteerAvailable } from '../../puppeteer-login-adapter';
 
 const router = Router();
 
@@ -58,69 +56,6 @@ router.get('/status', async (req: Request, res: Response) => {
 });
 
 /**
- * GET /api/auth/diagnose
- * Diagnose login dependencies (Puppeteer, Python, gppt, etc.)
- */
-router.get('/diagnose', async (req: Request, res: Response) => {
-  try {
-    logger.info('Running login diagnostics...');
-    
-    // Check Puppeteer (Node.js native - preferred method)
-    const puppeteerAvailable = await checkPuppeteerAvailable();
-    
-    // Check Python gppt (fallback method)
-    const pythonGpptAvailable = await checkPythonGpptAvailable();
-    
-    const diagnostics = {
-      puppeteer: {
-        available: puppeteerAvailable,
-        recommended: true,
-        description: 'Node.js native browser automation (no external dependencies)',
-      },
-      pythonGppt: {
-        available: pythonGpptAvailable,
-        recommended: false,
-        description: 'Python-based login (requires Python 3.9+ and gppt package)',
-      },
-      recommendation: puppeteerAvailable 
-        ? 'Puppeteer is available and will be used (no Python needed!)' 
-        : pythonGpptAvailable
-        ? 'Python gppt is available and will be used as fallback'
-        : 'No login method available. Puppeteer should be installed by default.',
-    };
-    
-    logger.info('Diagnostics result:', { diagnostics });
-    
-    res.json({
-      success: true,
-      diagnostics,
-      environment: {
-        platform: process.platform,
-        arch: process.arch,
-        nodeVersion: process.version,
-        isElectron: !!process.versions.electron,
-        electronVersion: process.versions.electron,
-        execPath: process.execPath,
-        cwd: process.cwd(),
-        env: {
-          PATH: process.env.PATH,
-          NODE_PATH: process.env.NODE_PATH,
-          HOME: process.env.HOME,
-          USER: process.env.USER,
-        },
-      },
-    });
-  } catch (error) {
-    logger.error('Diagnostics failed', { error });
-    res.status(500).json({
-      success: false,
-      errorCode: ErrorCode.AUTH_LOGIN_FAILED,
-      message: error instanceof Error ? error.message : String(error),
-    });
-  }
-});
-
-/**
  * POST /api/auth/login
  * Login to Pixiv
  * 
@@ -163,6 +98,27 @@ router.post('/login', async (req: Request, res: Response) => {
 
     logger.info('Starting login process', { headless, hasUsername: !!username });
     
+    // Check if we're in Electron environment
+    let isElectron = false;
+    if (typeof process !== 'undefined') {
+      if (process.versions?.electron !== undefined) {
+        isElectron = true;
+      } else {
+        // Check for Electron-specific process.type (cast to any to avoid TypeScript error)
+        const proc = process as any;
+        if (proc.type === 'renderer' || proc.type === 'browser') {
+          isElectron = true;
+        }
+      }
+    }
+    
+    // In Electron environment, if it's interactive login (headless=false), 
+    // we should recommend using Electron's login window instead
+    if (isElectron && !headless) {
+      logger.warn('Interactive login requested in Electron environment - Puppeteer may not work');
+      logger.warn('Recommendation: Use Electron\'s built-in login window from the frontend');
+    }
+    
     const login = new TerminalLogin({
       headless: headless as boolean,
       username: username || undefined,
@@ -170,15 +126,34 @@ router.post('/login', async (req: Request, res: Response) => {
       proxy: proxyConfig,
     });
 
-    const loginInfo = await login.login({
-      headless: headless as boolean,
-      username: username || undefined,
-      password: password || undefined,
-      proxy: proxyConfig,
-    });
+    let loginInfo;
+    try {
+      loginInfo = await login.login({
+        headless: headless as boolean,
+        username: username || undefined,
+        password: password || undefined,
+        proxy: proxyConfig,
+      });
 
-    if (!loginInfo) {
-      throw new Error('Login returned null - login may have been cancelled or failed');
+      if (!loginInfo) {
+        throw new Error('Login returned null - login may have been cancelled or failed');
+      }
+    } catch (error: any) {
+      const errorMsg = error?.message || String(error);
+      
+      // Check if it's an Electron-related Puppeteer error
+      if (isElectron && errorMsg.includes('Electron environment')) {
+        logger.error('Puppeteer login failed in Electron environment', { error: errorMsg });
+        return res.status(400).json({
+          errorCode: ErrorCode.AUTH_LOGIN_FAILED,
+          message: 'Puppeteer cannot launch browser in Electron environment. Please use Electron\'s built-in login window instead. ' +
+                   'If you are using the Electron app, the login window should open automatically from the frontend.',
+          electronLoginRecommended: true, // Flag to indicate Electron login should be used
+        });
+      }
+      
+      // Re-throw other errors to be handled by the outer catch block
+      throw error;
     }
 
     logger.info('Login successful, updating config file...');

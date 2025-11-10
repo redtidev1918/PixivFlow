@@ -9,7 +9,17 @@
  * - gppt package installed via pip: `pip install gppt`
  * - Chrome browser and ChromeDriver for Selenium
  * 
- * Reference: https://github.com/eggplants/get-pixivpy-token
+ * Based on get-pixivpy-token (gppt) implementation:
+ * https://github.com/eggplants/get-pixivpy-token
+ * 
+ * Usage example from gppt:
+ * ```python
+ * from gppt import GetPixivToken
+ * 
+ * g = GetPixivToken(headless=False, username=None, password=None)
+ * res = g.login(headless=None, username=None, password=None)
+ * # res.response contains: access_token, refresh_token, expires_in, user, etc.
+ * ```
  */
 
 import { spawn } from 'child_process';
@@ -320,13 +330,14 @@ from selenium.webdriver.support import expected_conditions as EC
 ${proxyEnvVars}
 
 try:
-    print("[i]: Initializing browser (non-headless mode)...", file=sys.stderr)
-    # CRITICAL: Explicitly set headless=False to prevent browser from closing
-    # This ensures the browser window stays open during the login process
+    print("[i]: Initializing GetPixivToken (interactive mode)...", file=sys.stderr)
+    # According to gppt API: GetPixivToken(headless=False, username=None, password=None)
+    # For interactive mode, we don't pass username/password - user will login manually
     g = GetPixivToken(headless=False)
     
-    # Monkey patch to increase timeout from 20 seconds to 5 minutes (300 seconds)
+    # Monkey patch to increase timeout from default 20 seconds to 5 minutes (300 seconds)
     # This gives users more time to complete the login process
+    # Based on gppt's internal implementation
     import types
     from gppt.consts import REDIRECT_URI
     original_wait_for_redirect = g._GetPixivToken__wait_for_redirect
@@ -356,18 +367,25 @@ try:
     print("[i]: This may take a few minutes. Please do not close the browser window.", file=sys.stderr)
     print("[i]: The browser will remain open until login is complete.", file=sys.stderr)
     
-    # Call login - this will wait for user to complete login in browser
+    # Call login() - according to gppt API: g.login(headless=None, username=None, password=None)
+    # For interactive mode, we don't pass parameters - user will login manually
     res = g.login()
+    
+    # According to gppt, res is a dict with 'response' key containing the full OAuth response
+    # But res itself also contains the token fields directly
+    # We'll use res.response if available, otherwise use res directly
+    response_data = res.response if hasattr(res, 'response') and res.response else res
     
     # Verify browser is still running after login attempt
     if hasattr(g, 'driver') and g.driver:
         try:
             # Keep browser open until we get the result
-            if res:
+            if response_data:
                 print("[+]: Login successful! Retrieving token...", file=sys.stderr)
                 # Don't close browser immediately - ensure we have the result first
                 time.sleep(0.5)  # Small delay to ensure all data is captured
-                print(json.dumps(res, indent=2))
+                # Output the response in gppt format (same as gppt CLI output)
+                print(json.dumps(response_data, indent=2))
                 # Browser will be closed by gppt's cleanup, but we ensure data is captured first
             else:
                 print("ERROR: Login returned None. Please try again.", file=sys.stderr)
@@ -375,16 +393,16 @@ try:
         except Exception as post_login_error:
             print(f"[WARNING]: Post-login check failed: {post_login_error}", file=sys.stderr)
             # If we have a result despite the error, still try to return it
-            if res:
+            if response_data:
                 print("[+]: Login successful (despite warning)! Retrieving token...", file=sys.stderr)
-                print(json.dumps(res, indent=2))
+                print(json.dumps(response_data, indent=2))
             else:
                 raise
     else:
         # Browser closed unexpectedly, but check if we got a result before it closed
-        if res:
+        if response_data:
             print("[+]: Login successful! Retrieving token...", file=sys.stderr)
-            print(json.dumps(res, indent=2))
+            print(json.dumps(response_data, indent=2))
         else:
             print("ERROR: Browser closed before login completed. Please try again.", file=sys.stderr)
             sys.exit(1)
@@ -554,10 +572,12 @@ try:
         print("[DEBUG]: No proxy configured in environment variables.", file=sys.stderr)
         print("[DEBUG]: If login fails, set HTTPS_PROXY or ALL_PROXY environment variable.", file=sys.stderr)
     
-    print("[DEBUG]: Initializing GetPixivToken (this may take a moment to start Chrome)...", file=sys.stderr)
+    print("[DEBUG]: Initializing GetPixivToken (headless mode)...", file=sys.stderr)
+    # According to gppt API: GetPixivToken(headless=True, username=username, password=password)
     g = GetPixivToken(headless=True, username=username, password=password)
     
-    # Monkey patch to increase timeout from 20 seconds to 2 minutes (120 seconds) for headless mode
+    # Monkey patch to increase timeout from default 20 seconds to 2 minutes (120 seconds) for headless mode
+    # Based on gppt's internal implementation
     original_wait_for_redirect = g._GetPixivToken__wait_for_redirect
     def patched_wait_for_redirect(self):
         WebDriverWait(self.driver, 120).until(EC.url_matches(f"^{REDIRECT_URI}"))
@@ -568,8 +588,15 @@ try:
     print("[DEBUG]: This may take 20-30 seconds. Please wait...", file=sys.stderr)
     
     try:
+        # According to gppt API: g.login(headless=None, username=None, password=None)
+        # For headless mode with credentials, we can pass them here too, but they're already in constructor
         res = g.login()
         print("[DEBUG]: login() completed", file=sys.stderr)
+        
+        # According to gppt, res is a dict with 'response' key containing the full OAuth response
+        # But res itself also contains the token fields directly
+        # We'll use res.response if available, otherwise use res directly
+        response_data = res.response if hasattr(res, 'response') and res.response else res
     except Exception as login_error:
         # Try to get more diagnostic information if available
         diagnostic_info = {}
@@ -588,24 +615,25 @@ try:
             print(f"[DEBUG]: Diagnostic info: {diagnostic_info}", file=sys.stderr)
         raise login_error
     
-    if res is None:
+    if response_data is None:
         print("ERROR: gppt.login() returned None", file=sys.stderr)
         print(json.dumps({"error": "gppt.login() returned None"}), file=sys.stdout)
         sys.exit(1)
     
-    if not isinstance(res, dict):
-        print(f"ERROR: gppt.login() returned unexpected type: {type(res)}", file=sys.stderr)
-        print(json.dumps({"error": f"Unexpected return type: {type(res)}"}), file=sys.stdout)
+    if not isinstance(response_data, dict):
+        print(f"ERROR: gppt.login() returned unexpected type: {type(response_data)}", file=sys.stderr)
+        print(json.dumps({"error": f"Unexpected return type: {type(response_data)}"}), file=sys.stdout)
         sys.exit(1)
     
-    if 'access_token' not in res:
+    if 'access_token' not in response_data:
         print(f"ERROR: gppt.login() response missing access_token", file=sys.stderr)
-        print(f"Response keys: {list(res.keys()) if isinstance(res, dict) else 'N/A'}", file=sys.stderr)
-        print(json.dumps({"error": "Response missing access_token", "keys": list(res.keys()) if isinstance(res, dict) else None}), file=sys.stdout)
+        print(f"Response keys: {list(response_data.keys()) if isinstance(response_data, dict) else 'N/A'}", file=sys.stderr)
+        print(json.dumps({"error": "Response missing access_token", "keys": list(response_data.keys()) if isinstance(response_data, dict) else None}), file=sys.stdout)
         sys.exit(1)
     
     print("[+]: Success!", file=sys.stderr)
-    print(json.dumps(res, indent=2))
+    # Output in gppt format (same as gppt CLI output)
+    print(json.dumps(response_data, indent=2))
 except json.JSONDecodeError as e:
     error_msg = f"JSON decode error: {str(e)}"
     print(error_msg, file=sys.stderr)
@@ -738,16 +766,31 @@ except Exception as e:
 
 /**
  * Convert gppt response to LoginInfo format
+ * 
+ * According to gppt API, the response structure is:
+ * {
+ *   "access_token": "...",
+ *   "expires_in": 3600,
+ *   "refresh_token": "...",
+ *   "scope": "",
+ *   "token_type": "bearer",
+ *   "user": { ... }
+ * }
+ * 
+ * Reference: https://github.com/eggplants/get-pixivpy-token
  */
 function convertGpptResponseToLoginInfo(response: any): LoginInfo {
+  // Handle both direct response and response.response format
+  const data = response.response || response;
+  
   return {
-    access_token: response.access_token,
-    expires_in: response.expires_in,
-    token_type: response.token_type || 'bearer',
-    scope: response.scope || '',
-    refresh_token: response.refresh_token,
-    user: response.user,
-    response: response,
+    access_token: data.access_token,
+    expires_in: data.expires_in,
+    token_type: data.token_type || 'bearer',
+    scope: data.scope || '',
+    refresh_token: data.refresh_token,
+    user: data.user,
+    response: data, // Store the full response for reference
   };
 }
 

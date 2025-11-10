@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { readdirSync, statSync, existsSync, unlinkSync, readFileSync } from 'fs';
-import { join, extname, basename, resolve, relative } from 'path';
+import { join, extname, basename, resolve, relative, dirname, isAbsolute } from 'path';
 import { loadConfig, getConfigPath } from '../../config';
 import { logger } from '../../logger';
 import { Database } from '../../storage/Database';
@@ -166,19 +166,47 @@ router.get('/list', async (req: Request, res: Response) => {
     const configPath = getConfigPath();
     const config = loadConfig(configPath);
 
-    const baseDir =
+    // Ensure storage configuration exists
+    if (!config.storage) {
+      logger.error('Storage configuration is missing', { configPath });
+      return res.status(500).json({ 
+        errorCode: ErrorCode.FILE_READ_FAILED,
+        error: 'Storage configuration is missing' 
+      });
+    }
+
+    let baseDir =
       type === 'novel'
-        ? config.storage!.novelDirectory!
-        : config.storage!.illustrationDirectory!;
+        ? config.storage.novelDirectory
+        : config.storage.illustrationDirectory;
+
+    if (!baseDir) {
+      logger.error('Base directory is not configured', { type, storage: config.storage });
+      return res.status(500).json({ 
+        errorCode: ErrorCode.FILE_READ_FAILED,
+        error: `Base directory for ${type} is not configured` 
+      });
+    }
 
     const fullPath = dirPath ? join(baseDir, String(dirPath)) : baseDir;
 
+    logger.info('Listing files', { 
+      type, 
+      baseDir, 
+      dirPath, 
+      fullPath, 
+      exists: existsSync(fullPath),
+      itemsCount: existsSync(fullPath) ? readdirSync(fullPath).length : 0
+    });
+
     // Security: Ensure path is within base directory
     if (!fullPath.startsWith(baseDir)) {
+      logger.warn('Path traversal attempt detected', { baseDir, fullPath });
       return res.status(400).json({ errorCode: ErrorCode.FILE_PATH_INVALID });
     }
 
     if (!existsSync(fullPath)) {
+      logger.warn('Directory does not exist', { fullPath, baseDir, type });
       return res.json({ files: [], directories: [] });
     }
 
@@ -343,9 +371,11 @@ router.get('/list', async (req: Request, res: Response) => {
     }
 
     res.json({
-      files,
-      directories,
-      currentPath: dirPath || '/',
+      data: {
+        files,
+        directories,
+        currentPath: dirPath || '/',
+      },
     });
   } catch (error) {
     // Close database connection on error
@@ -587,8 +617,10 @@ router.post('/normalize', async (req: Request, res: Response) => {
     database = null;
 
     res.json({
-      success: true,
-      result,
+      data: {
+        success: true,
+        result,
+      },
     });
   } catch (error) {
     if (database) {

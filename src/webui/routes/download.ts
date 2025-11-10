@@ -248,7 +248,9 @@ router.get('/history', async (req: Request, res: Response) => {
       })),
     };
 
-    res.json(convertedResult);
+    res.json({
+      data: convertedResult,
+    });
   } catch (error) {
     if (database) {
       try {

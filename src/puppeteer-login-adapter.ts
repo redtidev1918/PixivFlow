@@ -11,8 +11,15 @@
  * - Better integration with Node.js/Electron
  * - Easier to maintain and debug
  * 
- * Based on the gppt implementation:
+ * Based on the gppt (get-pixivpy-token) implementation:
  * https://github.com/eggplants/get-pixivpy-token
+ * 
+ * The implementation follows the same OAuth 2.0 PKCE flow as gppt:
+ * 1. Generate code_verifier and code_challenge
+ * 2. Navigate to Pixiv login page with PKCE parameters
+ * 3. Wait for user to complete login (interactive) or auto-fill credentials (headless)
+ * 4. Extract authorization code from redirect URL
+ * 5. Exchange authorization code for access_token and refresh_token
  */
 
 import puppeteer, { Browser, Page } from 'puppeteer';
@@ -127,7 +134,31 @@ export async function loginWithPuppeteerInteractive(proxy?: ProxyConfig): Promis
       console.log(`[i]: Using proxy: ${proxyUrl}`);
     }
     
-    browser = await puppeteer.launch(launchOptions);
+    // Try to launch browser
+    try {
+      browser = await puppeteer.launch(launchOptions);
+    } catch (launchError: any) {
+      const errorMsg = launchError?.message || String(launchError);
+      
+      // Check if we're in Electron environment
+      if (isElectronEnvironment()) {
+        console.error('[!]: Puppeteer cannot launch browser in Electron environment');
+        console.error('[!]: Error:', errorMsg);
+        console.error('[!]: In Electron apps, please use the Electron login window instead');
+        console.error('[!]: If you\'re using the Electron app, the login window should open automatically');
+        throw new Error(
+          'Puppeteer cannot launch browser in Electron environment. ' +
+          'Please use Electron\'s built-in login window. ' +
+          'If you\'re calling this from the backend API in an Electron app, ' +
+          'the frontend should use the Electron login window instead. ' +
+          `Original error: ${errorMsg}`
+        );
+      }
+      
+      // For non-Electron environments, throw the original error
+      throw launchError;
+    }
+    
     const page = await browser.newPage();
     
     // Set user agent to avoid detection
@@ -273,7 +304,30 @@ export async function loginWithPuppeteerHeadless(
     }
     
     console.log('[i]: Starting headless browser...');
-    browser = await puppeteer.launch(launchOptions);
+    
+    // Try to launch browser
+    try {
+      browser = await puppeteer.launch(launchOptions);
+    } catch (launchError: any) {
+      const errorMsg = launchError?.message || String(launchError);
+      
+      // Check if we're in Electron environment
+      if (isElectronEnvironment()) {
+        console.error('[!]: Puppeteer cannot launch browser in Electron environment');
+        console.error('[!]: Error:', errorMsg);
+        console.error('[!]: In Electron apps, headless mode is not supported');
+        throw new Error(
+          'Puppeteer cannot launch browser in Electron environment. ' +
+          'Headless mode is not supported in Electron apps. ' +
+          'Please use Electron\'s built-in login window or Python gppt instead. ' +
+          `Original error: ${errorMsg}`
+        );
+      }
+      
+      // For non-Electron environments, throw the original error
+      throw launchError;
+    }
+    
     const page = await browser.newPage();
     
     // Set user agent
@@ -653,11 +707,51 @@ async function exchangeCodeForToken(code: string, codeVerifier: string): Promise
 }
 
 /**
- * Check if Puppeteer is available
- * This should always return true since Puppeteer is a project dependency
+ * Check if we're running in an Electron environment
+ */
+function isElectronEnvironment(): boolean {
+  // Check for Electron-specific environment variables or process properties
+  if (typeof process === 'undefined') {
+    return false;
+  }
+  
+  // Check for Electron version
+  if (process.versions?.electron !== undefined) {
+    return true;
+  }
+  
+  // Check for Electron-specific process.type (cast to any to avoid TypeScript error)
+  const proc = process as any;
+  if (proc.type === 'renderer' || proc.type === 'browser') {
+    return true;
+  }
+  
+  // Check for Electron environment variables
+  if (process.env?.ELECTRON_IS_DEV !== undefined) {
+    return true;
+  }
+  
+  if (process.env?.ELECTRON_RUN_AS_NODE !== undefined && process.env.ELECTRON_RUN_AS_NODE !== '1') {
+    return true;
+  }
+  
+  return false;
+}
+
+/**
+ * Check if Puppeteer is available and can actually launch a browser
+ * In Electron environments, Puppeteer might not be able to launch a browser
  */
 export async function checkPuppeteerAvailable(): Promise<boolean> {
   try {
+    // Check if we're in an Electron environment
+    if (isElectronEnvironment()) {
+      console.log('[Puppeteer] Detected Electron environment - Puppeteer may not work properly');
+      console.log('[Puppeteer] In Electron apps, it\'s recommended to use Electron\'s built-in login window instead');
+      // In Electron, we'll still try, but expect it might fail
+      // The actual availability will be tested when we try to launch
+    }
+    
     // Try to import puppeteer
     // Use dynamic import to handle cases where module might not be available
     const puppeteer = await import('puppeteer');

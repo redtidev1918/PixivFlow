@@ -57,3 +57,20 @@ webui-frontend/release
 
 # Backend build output
 dist/
+
+# Test files
+test-*.js
+test-*.ts
+test-*.sh
+**/test-*.ts
+**/test-*.js
+TEST_*.md
+**/TEST_*.md
+
+# Temporary files
+*.backup
+*.tmp
+*.temp
+*.bak
+*.log
+/tmp/

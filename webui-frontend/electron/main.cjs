@@ -2,14 +2,31 @@ const { app, BrowserWindow, shell, ipcMain, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
+const crypto = require('crypto');
+const axios = require('axios');
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 
 let mainWindow = null;
 let backendProcess = null;
+let loginWindow = null; // 登录窗口
+let currentLoginCodeVerifier = null; // 当前登录流程的 code verifier
+let loginUrlCheckInterval = null; // 登录窗口 URL 检查定时器
+let currentLoadTimeout = null; // 当前登录窗口加载的超时计时器
 const BACKEND_PORT = 3000;
 let isAppClosing = false;
 const activeTimers = new Set(); // 跟踪所有活动的定时器
 let appData = null; // 应用数据目录信息（生产模式下）
+let backendRestartCount = 0; // 后端重启次数
+const MAX_BACKEND_RESTARTS = 5; // 最大重启次数
+let isBackendStarting = false; // 后端是否正在启动中
+
+// Pixiv OAuth 常量
+const PIXIV_CLIENT_ID = 'MOBrBDS8blbauoSck0ZfDbtuzpyT';
+const PIXIV_CLIENT_SECRET = 'lsACyCD94FhDUtGTXi3QzcFE2uU1hqtDaKeqrdwj';
+const PIXIV_REDIRECT_URI = 'https://app-api.pixiv.net/web/v1/users/auth/pixiv/callback';
+const PIXIV_LOGIN_URL = 'https://app-api.pixiv.net/web/v1/login';
+const PIXIV_AUTH_TOKEN_URL = 'https://oauth.secure.pixiv.net/auth/token';
+const PIXIV_USER_AGENT = 'PixivIOSApp/7.13.3 (iOS 14.6; iPhone13,2)';
 
 // 全局错误处理 - 防止应用闪退
 // 必须在应用初始化之前设置，以便捕获所有错误
@@ -241,6 +258,216 @@ function validatePath(dirPath, description) {
   return true;
 }
 
+// REF: https://www.electronjs.org/docs/latest/api/net
+// 检查端口是否被占用（同时检查 IPv4 和 IPv6）
+function checkPortInUse(port, callback) {
+  const net = require('net');
+  let checkedIPv4 = false;
+  let checkedIPv6 = false;
+  let ipv4InUse = false;
+  let ipv6InUse = false;
+  
+  const checkComplete = () => {
+    if (checkedIPv4 && checkedIPv6) {
+      callback(ipv4InUse || ipv6InUse);
+    }
+  };
+  
+  // 检查 IPv4 (127.0.0.1)
+  const serverIPv4 = net.createServer();
+  serverIPv4.listen(port, '127.0.0.1', () => {
+    serverIPv4.once('close', () => {
+      ipv4InUse = false;
+      checkedIPv4 = true;
+      checkComplete();
+    });
+    serverIPv4.close();
+  });
+  serverIPv4.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      ipv4InUse = true;
+    }
+    checkedIPv4 = true;
+    checkComplete();
+  });
+  
+  // 检查 IPv6 (::1)
+  const serverIPv6 = net.createServer();
+  serverIPv6.listen(port, '::1', () => {
+    serverIPv6.once('close', () => {
+      ipv6InUse = false;
+      checkedIPv6 = true;
+      checkComplete();
+    });
+    serverIPv6.close();
+  });
+  serverIPv6.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      ipv6InUse = true;
+    }
+    checkedIPv6 = true;
+    checkComplete();
+  });
+  
+  // 超时保护（5秒）
+  setTimeout(() => {
+    if (!checkedIPv4) {
+      checkedIPv4 = true;
+      checkComplete();
+    }
+    if (!checkedIPv6) {
+      checkedIPv6 = true;
+      checkComplete();
+    }
+  }, 5000);
+}
+
+// 查找占用指定端口的进程（跨平台）
+function findProcessUsingPort(port, callback) {
+  const { exec } = require('child_process');
+  
+  if (process.platform === 'win32') {
+    // Windows: 使用 netstat
+    exec(`netstat -ano | findstr :${port}`, (error, stdout) => {
+      if (error) {
+        callback(null);
+        return;
+      }
+      const lines = stdout.trim().split('\n');
+      const pids = new Set();
+      for (const line of lines) {
+        const parts = line.trim().split(/\s+/);
+        if (parts.length >= 5) {
+          const pid = parts[parts.length - 1];
+          if (pid && !isNaN(pid)) {
+            pids.add(pid);
+          }
+        }
+      }
+      callback(Array.from(pids));
+    });
+  } else {
+    // macOS/Linux: 使用 lsof，尝试多种方法
+    // 方法1: 使用 -ti 选项（最快）
+    exec(`lsof -ti :${port}`, { timeout: 5000 }, (error1, stdout1) => {
+      if (!error1 && stdout1 && stdout1.trim()) {
+        const pids = stdout1.trim().split('\n').filter(pid => pid && pid.trim() && !isNaN(parseInt(pid)));
+        if (pids.length > 0) {
+          safeLog(`🔍 找到占用端口 ${port} 的进程: ${pids.join(', ')}`);
+          callback(pids);
+          return;
+        }
+      }
+      
+      // 方法2: 使用 -i 选项获取详细信息（如果方法1失败）
+      exec(`lsof -i :${port}`, { timeout: 5000 }, (error2, stdout2) => {
+        if (!error2 && stdout2 && stdout2.trim()) {
+          const lines = stdout2.trim().split('\n').slice(1); // 跳过标题行
+          const pids = new Set();
+          for (const line of lines) {
+            const parts = line.trim().split(/\s+/);
+            if (parts.length >= 2) {
+              const pid = parts[1];
+              if (pid && !isNaN(parseInt(pid))) {
+                pids.add(pid);
+              }
+            }
+          }
+          if (pids.size > 0) {
+            const pidArray = Array.from(pids);
+            safeLog(`🔍 找到占用端口 ${port} 的进程: ${pidArray.join(', ')}`);
+            callback(pidArray);
+            return;
+          }
+        }
+        
+        // 如果都失败了，返回 null
+        callback(null);
+      });
+    });
+  }
+}
+
+// 杀死指定PID的进程
+function killProcess(pid, callback) {
+  const { exec } = require('child_process');
+  
+  if (process.platform === 'win32') {
+    exec(`taskkill /PID ${pid} /F`, (error) => {
+      callback(!error);
+    });
+  } else {
+    exec(`kill -9 ${pid}`, (error) => {
+      callback(!error);
+    });
+  }
+}
+
+// 清理占用端口的进程
+async function cleanupPort(port) {
+  return new Promise((resolve) => {
+    checkPortInUse(port, (inUse) => {
+      if (!inUse) {
+        safeLog(`✅ 端口 ${port} 可用`);
+        resolve(true);
+        return;
+      }
+      
+      safeLog(`⚠️  端口 ${port} 被占用，正在查找占用进程...`);
+      findProcessUsingPort(port, (pids) => {
+        if (!pids || pids.length === 0) {
+          safeLog(`⚠️  无法找到占用端口 ${port} 的进程`);
+          resolve(false);
+          return;
+        }
+        
+        safeLog(`🔍 找到 ${pids.length} 个占用端口的进程: ${pids.join(', ')}`);
+        
+        // 杀死所有占用端口的进程
+        let killedCount = 0;
+        const totalPids = pids.length;
+        
+        for (const pid of pids) {
+          // 跳过当前进程和父进程
+          if (pid === process.pid.toString() || pid === process.ppid?.toString()) {
+            safeLog(`⚠️  跳过当前进程 PID: ${pid}`);
+            killedCount++;
+            if (killedCount === totalPids) {
+              checkPortInUse(port, (stillInUse) => {
+                resolve(!stillInUse);
+              });
+            }
+            continue;
+          }
+          
+          killProcess(pid, (success) => {
+            if (success) {
+              safeLog(`✅ 已终止进程 PID: ${pid}`);
+            } else {
+              safeLog(`⚠️  无法终止进程 PID: ${pid}`);
+            }
+            
+            killedCount++;
+            if (killedCount === totalPids) {
+              // 等待一小段时间，让系统释放端口
+              safeSetTimeout(() => {
+                checkPortInUse(port, (stillInUse) => {
+                  if (!stillInUse) {
+                    safeLog(`✅ 端口 ${port} 已释放`);
+                  } else {
+                    safeLog(`⚠️  端口 ${port} 仍被占用`);
+                  }
+                  resolve(!stillInUse);
+                });
+              }, 1000);
+            }
+          });
+        }
+      });
+    });
+  });
+}
+
 // 检查后端是否已启动
 function checkBackendReady(callback) {
   const http = require('http');
@@ -266,17 +493,83 @@ function notifyBackendReady() {
   }
 }
 
-// 启动后端服务器
-function startBackend() {
-  if (backendProcess) {
-    console.log('⚠️  后端进程已存在，跳过启动');
-    // 检查后端是否已经就绪
-    checkBackendReady((ready) => {
-      if (ready) {
-        notifyBackendReady();
-      }
-    });
+// 启动后端服务器 - 彻底重写版本
+// REF: https://www.electronjs.org/docs/latest/api/process
+async function startBackend() {
+  // 如果正在启动中，跳过
+  if (isBackendStarting) {
+    safeLog('⚠️  后端正在启动中，跳过重复启动');
     return;
+  }
+  
+  // 如果后端进程已存在，先停止它
+  if (backendProcess) {
+    safeLog('⚠️  后端进程已存在，先停止现有进程...');
+    await stopBackend();
+    // 等待进程完全退出
+    await new Promise(resolve => safeSetTimeout(resolve, 1000));
+  }
+  
+  // 检查重启次数限制
+  if (backendRestartCount >= MAX_BACKEND_RESTARTS) {
+    safeError(`❌ 后端重启次数已达上限 (${MAX_BACKEND_RESTARTS})，停止自动重启`);
+    if (mainWindow) {
+      mainWindow.webContents.send('backend-error', 
+        `后端服务器启动失败，已尝试 ${MAX_BACKEND_RESTARTS} 次。请检查日志并手动重启应用。`);
+    }
+    return;
+  }
+  
+  isBackendStarting = true;
+  backendRestartCount++;
+  
+  // 在启动前彻底清理端口
+  safeLog(`🔧 准备启动后端服务器 (尝试 ${backendRestartCount}/${MAX_BACKEND_RESTARTS})...`);
+  safeLog(`🔍 检查端口 ${BACKEND_PORT} 状态...`);
+  
+  // 先检查端口是否被占用
+  const portInUse = await new Promise((resolve) => {
+    checkPortInUse(BACKEND_PORT, (inUse) => {
+      resolve(inUse);
+    });
+  });
+  
+  if (portInUse) {
+    safeLog(`⚠️  端口 ${BACKEND_PORT} 被占用，开始清理...`);
+    const portCleaned = await cleanupPort(BACKEND_PORT);
+    if (!portCleaned) {
+      safeError('⚠️  端口清理失败，但仍尝试启动后端...');
+    } else {
+      safeLog('✅ 端口清理成功');
+    }
+    // 等待端口完全释放
+    await new Promise(resolve => safeSetTimeout(resolve, 1000));
+    
+    // 再次检查端口
+    const stillInUse = await new Promise((resolve) => {
+      checkPortInUse(BACKEND_PORT, (inUse) => {
+        resolve(inUse);
+      });
+    });
+    
+    if (stillInUse) {
+      safeError(`❌ 端口 ${BACKEND_PORT} 仍被占用，无法启动后端`);
+      isBackendStarting = false;
+      if (mainWindow) {
+        mainWindow.webContents.send('backend-error', 
+          `端口 ${BACKEND_PORT} 被占用，无法启动后端服务器。请手动关闭占用端口的进程。`);
+      }
+      return;
+    }
+  } else {
+    safeLog(`✅ 端口 ${BACKEND_PORT} 可用`);
+  }
+  
+  // 再次确保后端进程不存在
+  if (backendProcess) {
+    safeLog('⚠️  检测到后端进程仍存在，强制清理...');
+    await stopBackend();
+    await new Promise(resolve => safeSetTimeout(resolve, 500));
   }
 
   // 在开发模式下，使用 npm run webui
@@ -569,54 +862,1833 @@ function startBackend() {
   // 错误处理（必须在 spawn 之后设置）
   if (backendProcess) {
     backendProcess.on('error', (err) => {
-      console.error('❌ 后端进程启动错误:', err);
-      console.error('错误详情:', err.message);
+      isBackendStarting = false;
+      safeError('❌ 后端进程启动错误:', err);
+      safeError('错误详情:', err.message);
       if (mainWindow) {
         mainWindow.webContents.send('backend-error', err.message);
       }
       backendProcess = null;
+      
+      // 延迟后尝试重启
+      if (!isAppClosing && backendRestartCount < MAX_BACKEND_RESTARTS) {
+        safeSetTimeout(() => {
+          if (!backendProcess && !isAppClosing) {
+            startBackend();
+          }
+        }, 3000);
+      }
     });
 
-    backendProcess.on('exit', (code, signal) => {
+    backendProcess.on('exit', async (code, signal) => {
+      isBackendStarting = false;
+      
+      // 清理端口（无论是否正常退出）
+      safeLog('🧹 清理后端进程占用的端口...');
+      await cleanupPort(BACKEND_PORT);
+      await new Promise(resolve => safeSetTimeout(resolve, 500));
+      
       if (code === 0) {
-        console.log('✅ 后端进程正常退出');
+        safeLog('✅ 后端进程正常退出');
+        backendRestartCount = 0; // 重置重启计数
       } else {
-        console.error(`❌ 后端进程异常退出，退出码: ${code}, 信号: ${signal || '无'}`);
-        // 如果不是主动退出，尝试重启（最多重试3次）
-        if (code !== null && code !== 0 && !signal) {
-          safeLog('⚠️  后端进程异常退出，将在3秒后尝试重启...');
-          safeSetTimeout(() => {
-            if (!backendProcess && !isAppClosing) {
-              safeLog('🔄 尝试重启后端进程...');
-              startBackend();
+        safeError(`❌ 后端进程异常退出，退出码: ${code}, 信号: ${signal || '无'}`);
+        
+        // 检查退出原因，如果是端口占用错误，增加延迟时间
+        const isPortError = code === 1 && signal === null; // 端口错误通常是退出码1
+        
+        // 如果不是主动退出且未达到重启限制，尝试重启
+        if (code !== null && code !== 0 && !signal && !isAppClosing) {
+          if (backendRestartCount < MAX_BACKEND_RESTARTS) {
+            const delay = isPortError ? 5000 : 3000; // 端口错误时延迟更长时间
+            safeLog(`⚠️  后端进程异常退出，将在 ${delay / 1000} 秒后尝试重启 (${backendRestartCount}/${MAX_BACKEND_RESTARTS})...`);
+            safeSetTimeout(async () => {
+              if (!backendProcess && !isAppClosing) {
+                // 在重启前再次确保端口已释放
+                const portInUse = await new Promise((resolve) => {
+                  checkPortInUse(BACKEND_PORT, (inUse) => {
+                    resolve(inUse);
+                  });
+                });
+                if (portInUse) {
+                  safeLog('⚠️  端口仍被占用，清理端口...');
+                  await cleanupPort(BACKEND_PORT);
+                  await new Promise(resolve => safeSetTimeout(resolve, 1000));
+                }
+                startBackend();
+              }
+            }, delay);
+          } else {
+            safeError(`❌ 后端重启次数已达上限，停止自动重启`);
+            if (mainWindow) {
+              mainWindow.webContents.send('backend-error', 
+                `后端服务器启动失败，已尝试 ${MAX_BACKEND_RESTARTS} 次。请检查日志并手动重启应用。`);
             }
-          }, 3000);
+          }
         }
       }
       backendProcess = null;
     });
+    
+    // 标记后端启动完成（成功或失败都重置标志）
+    safeSetTimeout(() => {
+      // 检查后端是否成功启动
+      checkBackendReady((ready) => {
+        if (ready) {
+          isBackendStarting = false;
+          backendRestartCount = 0; // 重置重启计数
+          safeLog('✅ 后端服务器启动成功');
+        }
+      });
+    }, 2000);
+  } else {
+    isBackendStarting = false;
   }
 }
 
 // 停止后端服务器
-function stopBackend() {
-  if (backendProcess) {
-    console.log('🛑 正在停止后端服务器...');
-    // 尝试优雅关闭
-    if (process.platform === 'win32') {
-      backendProcess.kill();
-    } else {
-      backendProcess.kill('SIGTERM');
-      // 如果3秒后还没退出，强制杀死
-      safeSetTimeout(() => {
-        if (backendProcess && !isAppClosing) {
-          safeLog('⚠️  后端进程未响应 SIGTERM，强制终止...');
-          backendProcess.kill('SIGKILL');
-        }
-      }, 3000);
-    }
-    backendProcess = null;
+/**
+ * 生成 PKCE code verifier
+ */
+function generateCodeVerifier() {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
+  let result = '';
+  for (let i = 0; i < 128; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
   }
+  return result;
+}
+
+/**
+ * 生成 PKCE code challenge
+ */
+function generateCodeChallenge(verifier) {
+  const hash = crypto.createHash('sha256').update(verifier).digest();
+  return hash.toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=/g, '');
+}
+
+/**
+ * 使用授权码交换 token - 改进版本，添加重试机制和更详细的错误处理
+ * REF: https://www.electronjs.org/docs/latest/api/net
+ */
+async function exchangeCodeForToken(code, codeVerifier, retryCount = 0) {
+  const MAX_RETRIES = 3;
+  const RETRY_DELAY = 2000; // 2秒
+  
+  try {
+    safeLog(`🔄 正在交换 token (尝试 ${retryCount + 1}/${MAX_RETRIES + 1})...`);
+    
+    const response = await axios.post(
+      PIXIV_AUTH_TOKEN_URL,
+      new URLSearchParams({
+        client_id: PIXIV_CLIENT_ID,
+        client_secret: PIXIV_CLIENT_SECRET,
+        code: code,
+        code_verifier: codeVerifier,
+        grant_type: 'authorization_code',
+        include_policy: 'true',
+        redirect_uri: PIXIV_REDIRECT_URI,
+      }).toString(),
+      {
+        headers: {
+          'user-agent': PIXIV_USER_AGENT,
+          'app-os-version': '14.6',
+          'app-os': 'ios',
+          'content-type': 'application/x-www-form-urlencoded',
+        },
+        timeout: 30000,
+        validateStatus: (status) => status >= 200 && status < 300, // 只接受 2xx 状态码
+      }
+    );
+    
+    // 验证响应数据
+    if (!response.data) {
+      throw new Error('Token 交换响应数据为空');
+    }
+    
+    if (!response.data.access_token || !response.data.refresh_token) {
+      throw new Error('Token 交换响应缺少必要的 token 字段');
+    }
+    
+    safeLog('✅ Token 交换成功');
+    
+    return {
+      success: true,
+      data: {
+        accessToken: response.data.access_token,
+        refreshToken: response.data.refresh_token,
+        expiresIn: response.data.expires_in,
+        tokenType: response.data.token_type || 'bearer',
+        scope: response.data.scope || '',
+        user: response.data.user,
+      },
+    };
+  } catch (error) {
+    safeError('❌ Token 交换失败:', error.message);
+    
+    // 如果是网络错误且未达到最大重试次数，尝试重试
+    if (retryCount < MAX_RETRIES) {
+      const isNetworkError = 
+        !error.response && 
+        (error.code === 'ECONNABORTED' || 
+         error.code === 'ETIMEDOUT' || 
+         error.code === 'ENOTFOUND' ||
+         error.message.includes('timeout') ||
+         error.message.includes('Network Error'));
+      
+      if (isNetworkError) {
+        safeLog(`🔄 网络错误，将在 ${RETRY_DELAY / 1000} 秒后重试...`);
+        await new Promise(resolve => safeSetTimeout(resolve, RETRY_DELAY));
+        return exchangeCodeForToken(code, codeVerifier, retryCount + 1);
+      }
+    }
+    
+    // 如果是 HTTP 错误，提供更详细的错误信息
+    if (axios.isAxiosError(error) && error.response) {
+      const status = error.response.status;
+      const statusText = error.response.statusText;
+      const data = error.response.data;
+      
+      safeError(`   HTTP 状态: ${status} ${statusText}`);
+      if (data) {
+        safeError(`   响应数据: ${JSON.stringify(data)}`);
+      }
+      
+      // 根据状态码提供更具体的错误信息
+      if (status === 400) {
+        throw new Error(`Token 交换失败: 请求参数错误 (${statusText})。授权码可能已过期或无效。`);
+      } else if (status === 401) {
+        throw new Error(`Token 交换失败: 认证失败 (${statusText})。请检查客户端 ID 和密钥。`);
+      } else if (status === 500) {
+        throw new Error(`Token 交换失败: 服务器错误 (${statusText})。请稍后重试。`);
+      } else {
+        throw new Error(`Token 交换失败: ${status} ${statusText}`);
+      }
+    }
+    
+    // 其他错误
+    throw new Error(`Token 交换失败: ${error.message}`);
+  }
+}
+
+/**
+ * 从配置文件或环境变量读取代理配置
+ * @returns {Object|null} 代理配置对象，如果没有配置则返回 null
+ */
+function getProxyConfig() {
+  try {
+    // 1. 优先从配置文件读取
+    if (appData && appData.configPath && fs.existsSync(appData.configPath)) {
+      try {
+        const configContent = fs.readFileSync(appData.configPath, 'utf8');
+        const config = JSON.parse(configContent);
+        
+        if (config.network && config.network.proxy && config.network.proxy.enabled) {
+          const proxy = config.network.proxy;
+          if (proxy.host && proxy.port) {
+            console.log('📖 [代理检测] 从配置文件读取代理配置:', {
+              host: proxy.host,
+              port: proxy.port,
+              protocol: proxy.protocol || 'http'
+            });
+            return {
+              enabled: true,
+              host: proxy.host,
+              port: proxy.port,
+              protocol: proxy.protocol || 'http',
+              username: proxy.username,
+              password: proxy.password,
+              source: 'config-file'
+            };
+          }
+        }
+      } catch (configError) {
+        console.warn('⚠️  [代理检测] 读取配置文件失败:', configError.message);
+      }
+    }
+    
+    // 2. 从环境变量读取（优先级：all_proxy > https_proxy > http_proxy）
+    let proxyUrl = null;
+    let envVarName = null;
+    
+    if (process.env.all_proxy || process.env.ALL_PROXY) {
+      proxyUrl = process.env.all_proxy || process.env.ALL_PROXY;
+      envVarName = 'all_proxy';
+    } else if (process.env.https_proxy || process.env.HTTPS_PROXY) {
+      proxyUrl = process.env.https_proxy || process.env.HTTPS_PROXY;
+      envVarName = 'https_proxy';
+    } else if (process.env.http_proxy || process.env.HTTP_PROXY) {
+      proxyUrl = process.env.http_proxy || process.env.HTTP_PROXY;
+      envVarName = 'http_proxy';
+    }
+    
+    if (proxyUrl) {
+      try {
+        const url = new URL(proxyUrl);
+        const protocol = url.protocol.replace(':', '').toLowerCase();
+        
+        // 映射协议类型
+        let mappedProtocol = 'http';
+        if (protocol === 'socks5' || protocol === 'socks') {
+          mappedProtocol = 'socks5';
+        } else if (protocol === 'socks4') {
+          mappedProtocol = 'socks4';
+        } else if (protocol === 'https') {
+          mappedProtocol = 'https';
+        } else {
+          mappedProtocol = 'http';
+        }
+        
+        const port = parseInt(url.port || (protocol.startsWith('socks') ? '1080' : '8080'), 10);
+        
+        console.log('📖 [代理检测] 从环境变量读取代理配置:', {
+          host: url.hostname,
+          port: port,
+          protocol: mappedProtocol,
+          envVar: envVarName
+        });
+        
+        return {
+          enabled: true,
+          host: url.hostname,
+          port: port,
+          protocol: mappedProtocol,
+          username: url.username || undefined,
+          password: url.password || undefined,
+          source: 'environment'
+        };
+      } catch (urlError) {
+        console.warn('⚠️  [代理检测] 解析环境变量代理URL失败:', urlError.message);
+      }
+    }
+    
+    console.log('ℹ️  [代理检测] 未检测到显式代理配置（配置文件或环境变量）');
+    console.log('ℹ️  [代理检测] 将使用系统代理设置（如果已配置）');
+    return null;
+  } catch (error) {
+    console.error('❌ [代理检测] 获取代理配置时发生错误:', error);
+    return null;
+  }
+}
+
+/**
+ * 检测系统代理设置
+ * @param {Session} session Electron session 对象
+ * @returns {Promise<Object|null>} 检测到的系统代理配置，如果没有则返回 null
+ */
+async function detectSystemProxy(session) {
+  try {
+    // 使用 resolveProxy 检测系统代理
+    // 测试多个 URL 来检测系统代理（HTTPS 和 HTTP）
+    const testUrls = [
+      'https://www.pixiv.net',
+      'http://www.pixiv.net',
+      'https://app-api.pixiv.net'
+    ];
+    
+    for (const testUrl of testUrls) {
+      try {
+        const proxyResult = await session.resolveProxy(testUrl);
+        
+        console.log(`🔍 [系统代理检测] resolveProxy(${testUrl}) 结果:`, proxyResult);
+        
+        if (proxyResult && proxyResult !== 'DIRECT' && proxyResult.trim() !== 'DIRECT') {
+          // 解析代理结果
+          // 格式可能是: "PROXY 127.0.0.1:7890" 或 "SOCKS5 127.0.0.1:1080" 或 "PROXY 127.0.0.1:6152"
+          // 也可能包含多个代理: "PROXY 127.0.0.1:7890; SOCKS5 127.0.0.1:1080"
+          const proxyStrings = proxyResult.split(';').map(s => s.trim());
+          
+          for (const proxyString of proxyStrings) {
+            if (proxyString === 'DIRECT' || proxyString === '') {
+              continue;
+            }
+            
+            const parts = proxyString.split(/\s+/);
+            if (parts.length >= 2) {
+              const proxyType = parts[0].toUpperCase();
+              const proxyAddr = parts[1];
+              
+              // 解析地址和端口
+              const [host, portStr] = proxyAddr.split(':');
+              const port = parseInt(portStr || '8080', 10);
+              
+              // 确定协议
+              let protocol = 'http';
+              if (proxyType === 'SOCKS5' || proxyType === 'SOCKS') {
+                protocol = 'socks5';
+              } else if (proxyType === 'SOCKS4') {
+                protocol = 'socks4';
+              } else if (proxyType === 'HTTPS') {
+                protocol = 'https';
+              } else if (proxyType === 'PROXY') {
+                // HTTP 代理
+                protocol = 'http';
+              }
+              
+              console.log('✅ [系统代理检测] 检测到系统代理:', {
+                type: proxyType,
+                host: host,
+                port: port,
+                protocol: protocol,
+                raw: proxyResult,
+                testUrl: testUrl
+              });
+              
+              // 返回第一个有效的代理配置
+              return {
+                enabled: true,
+                host: host,
+                port: port,
+                protocol: protocol,
+                source: 'system'
+              };
+            }
+          }
+        }
+      } catch (urlError) {
+        console.warn(`⚠️  [系统代理检测] 检测 ${testUrl} 时出错:`, urlError.message);
+      }
+    }
+    
+    console.log('ℹ️  [系统代理检测] 未检测到系统代理设置（resolveProxy 返回 DIRECT）');
+    console.log('ℹ️  [系统代理检测] 注意: Electron 仍可能使用系统代理设置（即使 resolveProxy 返回 DIRECT）');
+    return null;
+  } catch (error) {
+    console.warn('⚠️  [系统代理检测] 检测系统代理时出错:', error.message);
+    return null;
+  }
+}
+
+/**
+ * 构建代理 URL 字符串
+ * @param {Object} proxyConfig 代理配置对象
+ * @returns {string} 代理 URL 字符串
+ */
+function buildProxyUrl(proxyConfig) {
+  if (!proxyConfig || !proxyConfig.enabled || !proxyConfig.host || !proxyConfig.port) {
+    return '';
+  }
+  
+  const protocol = proxyConfig.protocol || 'http';
+  const host = proxyConfig.host;
+  const port = proxyConfig.port;
+  
+  // 构建代理 URL
+  let proxyUrl = `${protocol}://`;
+  
+  // 如果有用户名和密码，添加到 URL 中
+  if (proxyConfig.username && proxyConfig.password) {
+    proxyUrl += `${encodeURIComponent(proxyConfig.username)}:${encodeURIComponent(proxyConfig.password)}@`;
+  }
+  
+  proxyUrl += `${host}:${port}`;
+  
+  return proxyUrl;
+}
+
+/**
+ * 创建登录窗口 - 彻底重写版本
+ * 使用多重机制确保100%捕获授权码
+ */
+function createLoginWindow(codeVerifier, codeChallenge) {
+  // 如果已有登录窗口，先关闭
+  if (loginWindow) {
+    loginWindow.close();
+  }
+
+  // 保存 code verifier 供回调使用
+  currentLoginCodeVerifier = codeVerifier;
+  isProcessingAuthCode = false; // 重置处理标志
+
+  // 构建登录 URL
+  const loginParams = new URLSearchParams({
+    code_challenge: codeChallenge,
+    code_challenge_method: 'S256',
+    client: 'pixiv-android',
+  });
+  const loginUrl = `${PIXIV_LOGIN_URL}?${loginParams.toString()}`;
+
+  console.log('🚀 创建登录窗口，URL:', loginUrl);
+
+  // 创建登录窗口
+  console.log('📝 正在创建登录窗口...');
+  loginWindow = new BrowserWindow({
+    width: 900,
+    height: 700,
+    // 移除 parent 和 modal，确保窗口可以正常显示
+    // parent: mainWindow,
+    // modal: true,
+    show: false, // 先不显示，等页面加载完成后再显示
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      webSecurity: false, // 禁用 webSecurity 以允许加载 Pixiv 登录页面
+      allowRunningInsecureContent: true,
+      enableRemoteModule: false,
+    },
+    title: 'Pixiv 登录',
+    autoHideMenuBar: true, // 自动隐藏菜单栏
+  });
+  
+  console.log('✅ 登录窗口已创建，窗口ID:', loginWindow.id);
+  
+  // 定义加载状态变量（需要在所有回调之前定义，以便回调可以访问）
+  let loadAttempts = 0;
+  const maxLoadAttempts = 5; // 增加重试次数
+  let urlLoaded = false; // 标记 URL 是否已加载
+  let isCurrentlyLoading = false; // 防止并发加载
+  let failLoadRetryCount = 0;
+  const maxFailLoadRetries = 3;
+  let redirectDetectedInCurrentLoad = false; // 当前加载是否检测到重定向
+  let redirectUrlToLoad = null; // 待加载的重定向URL
+  
+  // 先加载一个加载页面，改善用户体验
+  const loadingPageHTML = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval'; script-src * 'unsafe-inline' 'unsafe-eval'; connect-src * 'unsafe-inline'; img-src * data: blob: 'unsafe-inline'; frame-src *; style-src * 'unsafe-inline';">
+  <title>Pixiv 登录 - 加载中...</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      color: white;
+    }
+    .container {
+      text-align: center;
+      padding: 40px;
+    }
+    .spinner {
+      border: 4px solid rgba(255, 255, 255, 0.3);
+      border-top: 4px solid white;
+      border-radius: 50%;
+      width: 50px;
+      height: 50px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 20px;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    h1 { margin: 0 0 10px 0; font-size: 24px; font-weight: 600; }
+    .status { margin: 10px 0; opacity: 0.9; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="spinner"></div>
+    <h1>Pixiv 登录</h1>
+    <div class="status" id="status">正在加载登录页面...</div>
+  </div>
+  <script>
+    console.log('[登录窗口] 加载页面已显示');
+  </script>
+</body>
+</html>`;
+  
+  // 先加载加载页面
+  loginWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(loadingPageHTML)}`);
+  console.log('📄 已加载初始加载页面');
+  
+  // 在开发模式下打开开发者工具，方便调试
+  if (isDev) {
+    loginWindow.webContents.openDevTools();
+    console.log('🔧 开发模式：已打开开发者工具');
+  }
+  
+  // 获取session用于拦截请求
+  const session = loginWindow.webContents.session;
+  
+  // 在加载 URL 之前设置 User-Agent（重要！）
+  const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+  loginWindow.webContents.setUserAgent(userAgent);
+  
+  // 读取并设置代理配置（在设置 User-Agent 之后）
+  // 注意：代理设置必须在加载任何 URL 之前完成
+  // 使用 Promise 保存代理设置状态，确保在加载真实 URL 前代理已设置
+  let proxySetupPromise = (async () => {
+    try {
+      console.log('🔍 [代理设置] 开始检测代理配置...');
+      
+      // 1. 首先检查配置文件和环境变量
+      let proxyConfig = getProxyConfig();
+      
+      // 2. 如果没有显式配置，尝试检测系统代理
+      if (!proxyConfig) {
+        console.log('🔍 [代理设置] 尝试检测系统代理设置...');
+        const systemProxy = await detectSystemProxy(session);
+        if (systemProxy) {
+          proxyConfig = systemProxy;
+          console.log('✅ [代理设置] 检测到系统代理，将使用系统代理设置');
+        }
+      }
+      
+      if (proxyConfig) {
+        console.log('🌐 [代理设置] 检测到代理配置，来源:', proxyConfig.source || 'unknown');
+        console.log('🌐 [代理设置] 代理详情:', {
+          host: proxyConfig.host,
+          port: proxyConfig.port,
+          protocol: proxyConfig.protocol
+        });
+        
+        // 如果是系统代理，不设置 proxyRules，让 Electron 自动使用系统代理
+        if (proxyConfig.source === 'system') {
+          console.log('ℹ️  [代理设置] 使用系统代理，Electron 将自动使用系统代理设置');
+          // 不调用 setProxy，Electron 默认会使用系统代理
+          return { success: true, source: 'system', config: proxyConfig };
+        } else {
+          // 对于配置文件或环境变量的代理，需要显式设置
+          const proxyUrl = buildProxyUrl(proxyConfig);
+          
+          try {
+            // 设置代理（等待设置完成）
+            await session.setProxy({
+              proxyRules: proxyUrl,
+              proxyBypassRules: 'localhost,127.0.0.1,::1' // 本地地址不走代理
+            });
+            console.log('✅ [代理设置] 代理设置成功:', proxyUrl);
+            return { success: true, source: proxyConfig.source, config: proxyConfig };
+          } catch (proxyError) {
+            console.error('❌ [代理设置] 代理设置失败:', proxyError);
+            console.error('   错误详情:', proxyError.message);
+            console.log('ℹ️  [代理设置] 将回退到使用系统代理或直连');
+            // 即使代理设置失败，也继续执行（可能使用系统代理）
+            return { success: false, source: proxyConfig.source, error: proxyError.message };
+          }
+        }
+      } else {
+        console.log('ℹ️  [代理设置] 未检测到任何代理配置');
+        console.log('ℹ️  [代理设置] Electron 将使用系统代理设置（如果已配置）或直连');
+        // 如果没有配置代理，Electron 默认会使用系统代理设置
+        return { success: false, source: 'none', config: null };
+      }
+    } catch (error) {
+      console.error('❌ [代理设置] 读取代理配置失败:', error);
+      console.log('ℹ️  [代理设置] 将使用系统代理或直连');
+      // 即使代理配置读取失败，也继续执行，使用系统代理或直连
+      return { success: false, source: 'error', error: error.message };
+    }
+  })();
+  
+  // 将代理设置 Promise 保存到窗口对象，以便在加载真实 URL 前检查
+  loginWindow._proxySetupPromise = proxySetupPromise;
+
+  // 设置额外的请求头，使请求看起来更像真实浏览器
+  const requestFilter = { urls: ['*://*/*'] };
+  
+  // 在发送请求前修改请求头
+  session.webRequest.onBeforeSendHeaders(requestFilter, (details, callback) => {
+    const headers = details.requestHeaders || {};
+    
+    // 确保 User-Agent 正确设置
+    headers['User-Agent'] = userAgent;
+    
+    // 添加其他浏览器请求头
+    if (!headers['Accept']) {
+      headers['Accept'] = 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7';
+    }
+    if (!headers['Accept-Language']) {
+      headers['Accept-Language'] = 'en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7';
+    }
+    if (!headers['Accept-Encoding']) {
+      headers['Accept-Encoding'] = 'gzip, deflate, br';
+    }
+    if (!headers['Sec-Fetch-Dest']) {
+      headers['Sec-Fetch-Dest'] = 'document';
+    }
+    if (!headers['Sec-Fetch-Mode']) {
+      headers['Sec-Fetch-Mode'] = 'navigate';
+    }
+    if (!headers['Sec-Fetch-Site']) {
+      headers['Sec-Fetch-Site'] = 'none';
+    }
+    if (!headers['Sec-Fetch-User']) {
+      headers['Sec-Fetch-User'] = '?1';
+    }
+    if (!headers['Upgrade-Insecure-Requests']) {
+      headers['Upgrade-Insecure-Requests'] = '1';
+    }
+    
+    console.log('📤 [请求头]', details.url.substring(0, 100), 'Headers:', Object.keys(headers).join(', '));
+    
+    callback({ requestHeaders: headers });
+  });
+
+  // ========== 方案1: 拦截所有网络请求和响应 ==========
+  // 这是最可靠的方法，可以捕获所有HTTP请求和重定向
+  
+  // 拦截重定向（最关键的拦截点）
+  session.webRequest.onBeforeRedirect(requestFilter, (details) => {
+    if (details.redirectURL) {
+      console.log('🔍 [拦截-重定向]', details.redirectURL);
+      checkForCallbackUrl(details.redirectURL);
+    }
+  });
+
+  // 拦截响应头（可能包含Location头）
+  session.webRequest.onHeadersReceived(requestFilter, (details) => {
+    // 只检查窗口是否存在，不检查可见性（加载阶段窗口可能还没显示）
+    if (!loginWindow || loginWindow.isDestroyed()) {
+      return;
+    }
+    
+    if (details.responseHeaders) {
+      const location = details.responseHeaders['location'] || details.responseHeaders['Location'];
+      if (location && location.length > 0) {
+        const locationUrl = Array.isArray(location) ? location[0] : location;
+        console.log('🔍 [拦截-响应头]', locationUrl);
+        
+        // 如果检测到重定向到登录页面，直接加载该URL
+        if (locationUrl.includes('accounts.pixiv.net/login') && !urlLoaded) {
+          console.log('✅ [响应头处理] 检测到登录页面重定向，准备加载:', locationUrl);
+          
+          // 确保URL是完整的（如果不是，需要处理相对路径）
+          let redirectUrl = locationUrl;
+          if (!redirectUrl.startsWith('http')) {
+            try {
+              redirectUrl = new URL(redirectUrl, details.url).href;
+            } catch (e) {
+              console.warn('⚠️  [响应头处理] URL解析失败:', e.message);
+              redirectUrl = locationUrl;
+            }
+          }
+          
+          // 防止重复处理
+          if (redirectUrlToLoad === redirectUrl) {
+            console.log('⚠️  [响应头处理] 重定向URL已处理，跳过');
+            return;
+          }
+          
+          redirectUrlToLoad = redirectUrl;
+          
+          // 设置重定向标志
+          redirectDetectedInCurrentLoad = true;
+          
+          // 清除当前超时
+          if (currentLoadTimeout) {
+            clearTimeout(currentLoadTimeout);
+            currentLoadTimeout = null;
+          }
+          
+          // 标记正在加载，防止重复加载
+          isCurrentlyLoading = true;
+          
+          // 直接加载重定向URL
+          setTimeout(() => {
+            if (loginWindow && !loginWindow.isDestroyed()) {
+              console.log('🌐 [响应头处理] 直接加载登录页面:', redirectUrl);
+              loginWindow.webContents.loadURL(redirectUrl, {
+                userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                extraHeaders: 'Accept-Language: en-US,en;q=0.9\nAccept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8\n'
+              }).then(() => {
+                console.log('✅ [响应头处理] 登录页面加载成功');
+                urlLoaded = true;
+                isCurrentlyLoading = false;
+                // 清除超时
+                if (currentLoadTimeout) {
+                  clearTimeout(currentLoadTimeout);
+                  currentLoadTimeout = null;
+                }
+                // 显示窗口
+                if (!loginWindow.isVisible()) {
+                  loginWindow.show();
+                }
+              }).catch((err) => {
+                console.error('❌ [响应头处理] 加载登录页面失败:', err.message);
+                // 如果加载失败，重置状态以便重试
+                urlLoaded = false;
+                isCurrentlyLoading = false;
+                redirectUrlToLoad = null;
+              });
+            }
+          }, 200); // 短暂延迟，确保响应处理完成
+        }
+        
+        checkForCallbackUrl(locationUrl);
+      }
+    }
+    // 也检查响应URL本身
+    if (details.url) {
+      checkForCallbackUrl(details.url);
+    }
+  });
+
+  // 拦截所有请求URL
+  session.webRequest.onBeforeRequest(requestFilter, (details) => {
+    if (details.url) {
+      // 只检查包含callback或code的URL，减少日志噪音
+      if (details.url.includes('callback') || details.url.includes('code=') || details.url.includes('error=')) {
+        console.log('🔍 [拦截-请求]', details.url);
+        checkForCallbackUrl(details.url);
+      }
+    }
+  });
+
+  // ========== 方案2: 监听Electron导航事件 ==========
+  loginWindow.webContents.on('did-navigate', (event, url) => {
+    console.log('🔍 [导航]', url);
+    checkForCallbackUrl(url);
+  });
+
+  loginWindow.webContents.on('did-navigate-in-page', (event, url) => {
+    console.log('🔍 [页面内导航]', url);
+    checkForCallbackUrl(url);
+  });
+
+  loginWindow.webContents.on('did-get-response-details', (event, status, newURL, originalURL, httpResponseCode) => {
+    if (newURL) {
+      console.log('🔍 [响应详情]', newURL, '状态码:', httpResponseCode);
+      checkForCallbackUrl(newURL);
+    }
+  });
+
+  // 监听加载开始
+  loginWindow.webContents.on('did-start-loading', () => {
+    const currentUrl = loginWindow.webContents.getURL();
+    console.log('🔄 [开始加载]', currentUrl);
+  });
+
+  // 监听控制台消息
+  loginWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
+    if (level >= 2) { // 只显示警告和错误
+      console.log(`📢 [控制台 ${level === 2 ? '警告' : '错误'}]`, message, `(${sourceId}:${line})`);
+    }
+  });
+
+  // 监听加载停止（可能是成功或失败）
+  loginWindow.webContents.on('did-stop-loading', () => {
+    const currentUrl = loginWindow.webContents.getURL();
+    console.log('⏹️  [停止加载]', currentUrl);
+    
+    // 检查页面内容
+    loginWindow.webContents.executeJavaScript(`
+      (function() {
+        try {
+          return {
+            url: window.location.href,
+            title: document.title,
+            bodyText: document.body ? document.body.innerText.substring(0, 100) : 'no body',
+            bodyHTML: document.body ? document.body.innerHTML.substring(0, 200) : 'no body',
+            readyState: document.readyState,
+            hasContent: document.body && document.body.children.length > 0,
+            scripts: Array.from(document.scripts).length,
+            stylesheets: Array.from(document.styleSheets).length
+          };
+        } catch(e) {
+          return { error: e.message };
+        }
+      })();
+    `).then(result => {
+      console.log('📄 [页面状态]', JSON.stringify(result, null, 2));
+    }).catch(err => {
+      console.log('⚠️  [无法获取页面状态]', err.message);
+    });
+  });
+
+  // ========== 方案3: 页面加载完成后注入JavaScript监听 ==========
+  loginWindow.webContents.on('did-finish-load', () => {
+    const currentUrl = loginWindow.webContents.getURL();
+    console.log('✅ [加载完成]', currentUrl);
+    checkForCallbackUrl(currentUrl);
+
+    // 注入JavaScript代码，在页面中监听URL变化
+    loginWindow.webContents.executeJavaScript(`
+      (function() {
+        console.log('[注入脚本] 开始监听URL变化...');
+        
+        // 立即检查当前URL
+        if (window.location.href) {
+          console.log('[注入脚本] 当前URL:', window.location.href);
+          // 通过postMessage通知主进程（如果可能）
+        }
+        
+        // 监听popstate事件（浏览器前进/后退）
+        window.addEventListener('popstate', function() {
+          console.log('[注入脚本] popstate:', window.location.href);
+        });
+        
+        // 监听hashchange事件
+        window.addEventListener('hashchange', function() {
+          console.log('[注入脚本] hashchange:', window.location.href);
+        });
+        
+        // 重写pushState和replaceState以捕获所有URL变化
+        const originalPushState = history.pushState;
+        const originalReplaceState = history.replaceState;
+        
+        history.pushState = function() {
+          originalPushState.apply(history, arguments);
+          console.log('[注入脚本] pushState:', window.location.href);
+        };
+        
+        history.replaceState = function() {
+          originalReplaceState.apply(history, arguments);
+          console.log('[注入脚本] replaceState:', window.location.href);
+        };
+        
+        // 定期检查URL变化（每100ms）
+        let lastUrl = window.location.href;
+        setInterval(function() {
+          const currentUrl = window.location.href;
+          if (currentUrl !== lastUrl) {
+            console.log('[注入脚本] URL变化:', lastUrl, '->', currentUrl);
+            lastUrl = currentUrl;
+          }
+        }, 100);
+      })();
+    `).catch(err => {
+      // 忽略注入失败（某些页面可能不允许注入）
+      console.log('⚠️  无法注入脚本（可能被CSP阻止）:', err.message);
+    });
+  });
+
+  // ========== 方案4: 高频轮询检查（每100ms） ==========
+  // 清除之前的定时器
+  if (loginUrlCheckInterval) {
+    clearInterval(loginUrlCheckInterval);
+    loginUrlCheckInterval = null;
+  }
+  
+  // 使用更频繁的轮询（每100ms）
+  loginUrlCheckInterval = safeSetInterval(() => {
+    if (loginWindow && !loginWindow.isDestroyed() && !isProcessingAuthCode) {
+      try {
+        const currentUrl = loginWindow.webContents.getURL();
+        if (currentUrl && currentUrl !== 'about:blank' && currentUrl.startsWith('http')) {
+          // 只检查包含callback或code的URL，减少检查频率
+          if (currentUrl.includes('callback') || currentUrl.includes('code=') || currentUrl.includes('error=')) {
+            checkForCallbackUrl(currentUrl);
+          }
+        }
+      } catch (error) {
+        // 忽略错误
+      }
+    } else if (!loginWindow || loginWindow.isDestroyed()) {
+      // 窗口已关闭，清除定时器
+      if (loginUrlCheckInterval) {
+        clearInterval(loginUrlCheckInterval);
+        loginUrlCheckInterval = null;
+      }
+    }
+  }, 100); // 每100ms检查一次
+
+  // ========== 方案5: 监听DOMContentLoaded和所有页面事件 ==========
+  loginWindow.webContents.on('dom-ready', () => {
+    const currentUrl = loginWindow.webContents.getURL();
+    console.log('🔍 [DOM就绪]', currentUrl);
+    checkForCallbackUrl(currentUrl);
+  });
+
+  // 加载登录页面（User-Agent 已在上面设置）
+  console.log('📥 准备加载登录页面:', loginUrl);
+  
+  // 使用更可靠的加载方式，添加重试机制
+  // 注意：状态变量已在上面定义
+  
+  // 清除之前的超时计时器（如果存在）
+  if (currentLoadTimeout) {
+    clearTimeout(currentLoadTimeout);
+    currentLoadTimeout = null;
+  }
+  
+  const tryLoadURL = () => {
+    // 如果已经检测到重定向URL，不再重试原始URL
+    if (redirectUrlToLoad) {
+      console.log('⚠️  已检测到重定向URL，跳过原始URL加载');
+      return;
+    }
+    
+    // 防止并发加载
+    if (isCurrentlyLoading) {
+      console.log('⚠️  正在加载中，跳过重复请求');
+      return;
+    }
+    
+    // 如果已经成功加载，不再重试
+    if (urlLoaded && loadAttempts > 0) {
+      const currentUrl = loginWindow?.webContents?.getURL();
+      if (currentUrl && currentUrl !== 'about:blank' && currentUrl.startsWith('http')) {
+        console.log('⚠️  URL 已经加载，跳过重复加载');
+        return;
+      }
+    }
+    
+    loadAttempts++;
+    isCurrentlyLoading = true;
+    redirectDetectedInCurrentLoad = false; // 重置重定向检测标志
+    
+    console.log(`📥 尝试加载登录页面 (${loadAttempts}/${maxLoadAttempts})...`);
+    
+    // 先设置额外的请求头（只设置一次）
+    if (loadAttempts === 1) {
+      // 监听请求发送
+      loginWindow.webContents.session.webRequest.onBeforeRequest(
+        { urls: ['*://app-api.pixiv.net/*', '*://*.pixiv.net/*'] },
+        (details, callback) => {
+          console.log('🌐 [请求发送]', details.method, details.url);
+          callback({});
+        }
+      );
+      
+      loginWindow.webContents.session.webRequest.onBeforeSendHeaders(
+        { urls: ['*://app-api.pixiv.net/*', '*://*.pixiv.net/*'] },
+        (details, callback) => {
+          console.log('📤 [发送请求头]', details.url);
+          details.requestHeaders['Accept-Language'] = 'en-US,en;q=0.9';
+          details.requestHeaders['Accept'] = 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8';
+          callback({ requestHeaders: details.requestHeaders });
+        }
+      );
+      
+      // 监听响应
+      loginWindow.webContents.session.webRequest.onCompleted(
+        { urls: ['*://app-api.pixiv.net/*', '*://*.pixiv.net/*'] },
+        (details) => {
+          console.log('✅ [请求完成]', details.statusCode, details.url);
+        }
+      );
+      
+      // 监听重定向
+      loginWindow.webContents.session.webRequest.onBeforeRedirect(
+        { urls: ['*://app-api.pixiv.net/*', '*://*.pixiv.net/*'] },
+        (details) => {
+          if (details.redirectURL) {
+            console.log('🔄 [检测到重定向]', details.redirectURL);
+            redirectDetectedInCurrentLoad = true;
+            
+            // 如果重定向到 accounts.pixiv.net/login，直接加载该URL
+            if (details.redirectURL.includes('accounts.pixiv.net/login')) {
+              console.log('✅ [重定向处理] 检测到登录页面重定向，直接加载:', details.redirectURL);
+              
+              // 清除当前超时
+              if (currentLoadTimeout) {
+                clearTimeout(currentLoadTimeout);
+                currentLoadTimeout = null;
+              }
+              
+              // 延迟一小段时间后直接加载重定向URL，确保重定向流程完成
+              setTimeout(() => {
+                if (loginWindow && !loginWindow.isDestroyed() && isCurrentlyLoading) {
+                  console.log('🌐 [重定向处理] 直接加载登录页面:', details.redirectURL);
+                  loginWindow.webContents.loadURL(details.redirectURL, {
+                    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    extraHeaders: 'Accept-Language: en-US,en;q=0.9\nAccept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8\n'
+                  }).then(() => {
+                    console.log('✅ [重定向处理] 登录页面加载成功');
+                    urlLoaded = true;
+                    isCurrentlyLoading = false;
+                    if (currentLoadTimeout) {
+                      clearTimeout(currentLoadTimeout);
+                      currentLoadTimeout = null;
+                    }
+                  }).catch((err) => {
+                    console.warn('⚠️  [重定向处理] 直接加载失败，继续等待原始流程:', err.message);
+                    // 如果直接加载失败，继续等待原始加载流程
+                  });
+                }
+              }, 500); // 等待500ms确保重定向流程完成
+            }
+            
+            // 重置超时计时器，给重定向更多时间
+            if (currentLoadTimeout) {
+              clearTimeout(currentLoadTimeout);
+              currentLoadTimeout = setTimeout(() => {
+                if (isCurrentlyLoading) {
+                  console.error(`⏱️  加载超时（重定向后）(尝试 ${loadAttempts}/${maxLoadAttempts})`);
+                  isCurrentlyLoading = false;
+                  currentLoadTimeout = null;
+                  if (loadAttempts >= maxLoadAttempts) {
+                    urlLoaded = true;
+                  } else {
+                    const retryDelay = 1000 * loadAttempts;
+                    setTimeout(() => {
+                      if (loginWindow && !loginWindow.isDestroyed() && !urlLoaded) {
+                        tryLoadURL();
+                      }
+                    }, retryDelay);
+                  }
+                }
+              }, 60000); // 重定向后给60秒
+            }
+          }
+        }
+      );
+      
+      // 监听请求错误 - 改进版本，处理网络错误
+      loginWindow.webContents.session.webRequest.onErrorOccurred(
+        { urls: ['*://app-api.pixiv.net/*', '*://*.pixiv.net/*', '*://accounts.pixiv.net/*'] },
+        (details) => {
+          const errorCode = details.error;
+          const url = details.url;
+          
+          // ERR_ABORTED 通常表示请求被取消（可能是重定向），不一定需要处理
+          if (errorCode === 'net::ERR_ABORTED' || errorCode === 'ERR_ABORTED') {
+            console.log('⚠️  [请求取消]', url, '(可能是正常的重定向)');
+            return;
+          }
+          
+          // ERR_FAILED 表示请求失败，可能需要重试
+          if (errorCode === 'net::ERR_FAILED' || errorCode === 'ERR_FAILED') {
+            console.error('❌ [请求失败]', errorCode, url);
+            
+            // 如果这是登录URL的初始请求，尝试重试
+            if (url.includes('app-api.pixiv.net/web/v1/login')) {
+              failLoadRetryCount++;
+              if (failLoadRetryCount < maxFailLoadRetries) {
+                console.log(`🔄 [请求失败] 将在2秒后重试 (${failLoadRetryCount}/${maxFailLoadRetries})...`);
+                safeSetTimeout(() => {
+                  if (loginWindow && !loginWindow.isDestroyed() && !urlLoaded && !isCurrentlyLoading) {
+                    isCurrentlyLoading = false; // 重置状态以便重试
+                    tryLoadURL();
+                  }
+                }, 2000);
+              } else {
+                console.error('❌ [请求失败] 重试次数已达上限，停止重试');
+                // 显示错误页面
+                if (loginWindow && !loginWindow.isDestroyed()) {
+                  loginWindow.webContents.executeJavaScript(`
+                    document.body.innerHTML = '<div style="padding: 40px; font-family: Arial, sans-serif; text-align: center; background: #f5f5f5; height: 100vh; display: flex; align-items: center; justify-content: center;"><div style="background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); max-width: 500px;"><h2 style="color: #333; margin-bottom: 15px;">网络连接失败</h2><p style="color: #666; margin-bottom: 10px;">无法连接到 Pixiv 服务器。请检查：</p><ul style="text-align: left; color: #666; margin-bottom: 20px;"><li>网络连接是否正常</li><li>代理设置是否正确</li><li>防火墙是否阻止连接</li></ul><button onclick="location.reload()" style="padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; margin-right: 10px;">重试</button><button onclick="window.close()" style="padding: 10px 20px; background: #ccc; color: #333; border: none; border-radius: 6px; cursor: pointer; font-size: 14px;">关闭</button></div></div>';
+                  `).catch(() => {});
+                }
+              }
+            }
+          } else {
+            // 其他错误
+            console.error('❌ [请求错误]', errorCode, url);
+          }
+        }
+      );
+    }
+    
+    // 清除之前的超时计时器
+    if (currentLoadTimeout) {
+      clearTimeout(currentLoadTimeout);
+      currentLoadTimeout = null;
+    }
+    
+    // 添加超时机制（30秒，如果检测到重定向会延长到60秒）
+    currentLoadTimeout = setTimeout(() => {
+      if (isCurrentlyLoading) {
+        console.error(`⏱️  加载超时 (尝试 ${loadAttempts}/${maxLoadAttempts})`);
+        isCurrentlyLoading = false;
+        currentLoadTimeout = null;
+        if (loadAttempts >= maxLoadAttempts) {
+          urlLoaded = true;
+          // 显示超时错误
+          if (loginWindow && !loginWindow.isDestroyed()) {
+            loginWindow.webContents.executeJavaScript(`
+              document.body.innerHTML = '<div style="padding: 40px; font-family: Arial, sans-serif; text-align: center; background: #f5f5f5; height: 100vh; display: flex; align-items: center; justify-content: center;"><div style="background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); max-width: 500px;"><h2 style="color: #333; margin-bottom: 15px;">加载超时</h2><p style="color: #666; margin-bottom: 10px;">页面加载时间过长，请检查网络连接</p><button onclick="location.reload()" style="padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; margin-right: 10px;">重试</button><button onclick="window.close()" style="padding: 10px 20px; background: #ccc; color: #333; border: none; border-radius: 6px; cursor: pointer; font-size: 14px;">关闭</button></div></div>';
+            `).catch(() => {});
+          }
+        } else {
+          // 重试
+          const retryDelay = 1000 * loadAttempts;
+          setTimeout(() => {
+            if (loginWindow && !loginWindow.isDestroyed() && !urlLoaded) {
+              tryLoadURL();
+            }
+          }, retryDelay);
+        }
+      }
+    }, 30000); // 30秒超时
+    
+    // 在加载前先检查网络连接
+    console.log('🔍 检查网络连接...');
+    axios.get('https://app-api.pixiv.net', { 
+      timeout: 5000,
+      validateStatus: () => true // 接受任何状态码，只要连接成功
+    }).then((response) => {
+      console.log('✅ 网络连接正常，可以访问 Pixiv 服务器 (状态码:', response.status, ')');
+    }).catch((error) => {
+      console.warn('⚠️  网络连接检查失败:', error.message);
+      console.warn('   这可能是网络问题或防火墙阻止。尝试继续加载...');
+    });
+
+    // 尝试加载 URL - 改进版本，更好的错误处理
+    console.log('🌐 调用 loadURL:', loginUrl);
+    
+    // 添加加载失败监听器（在加载前设置）
+    const onLoadFailed = (event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+      // 只处理主框架的加载失败
+      if (!isMainFrame) {
+        return;
+      }
+      
+      console.error('❌ [页面加载失败]', {
+        errorCode,
+        errorDescription,
+        validatedURL,
+        isMainFrame
+      });
+      
+      // ERR_ABORTED 通常表示请求被取消（可能是重定向），不一定需要处理
+      if (errorCode === -3 || errorCode === 'ERR_ABORTED' || errorDescription?.includes('ERR_ABORTED')) {
+        console.log('⚠️  [页面加载取消] 可能是正常的重定向过程');
+        
+        // 等待一小段时间，看是否有重定向发生
+        safeSetTimeout(() => {
+          const currentUrl = loginWindow?.webContents?.getURL();
+          if (currentUrl && currentUrl.startsWith('http') && currentUrl !== loginUrl) {
+            console.log('✅ [页面加载取消] 检测到页面已重定向到:', currentUrl);
+            urlLoaded = true;
+            isCurrentlyLoading = false;
+            if (currentLoadTimeout) {
+              clearTimeout(currentLoadTimeout);
+              currentLoadTimeout = null;
+            }
+          } else if (isCurrentlyLoading && !redirectUrlToLoad) {
+            // 如果还是没有重定向，可能需要重试
+            console.log('⚠️  [页面加载取消] 未检测到重定向，可能需要重试');
+            isCurrentlyLoading = false;
+          }
+        }, 1000);
+        
+        return;
+      }
+      
+      // ERR_FAILED 表示请求失败
+      if (errorCode === -2 || errorCode === 'ERR_FAILED' || errorDescription?.includes('ERR_FAILED')) {
+        console.error('❌ [页面加载失败] 网络错误，尝试重试...');
+        failLoadRetryCount++;
+        
+        if (failLoadRetryCount < maxFailLoadRetries) {
+          console.log(`🔄 [页面加载失败] 将在2秒后重试 (${failLoadRetryCount}/${maxFailLoadRetries})...`);
+          isCurrentlyLoading = false;
+          safeSetTimeout(() => {
+            if (loginWindow && !loginWindow.isDestroyed() && !urlLoaded) {
+              tryLoadURL();
+            }
+          }, 2000);
+        } else {
+          console.error('❌ [页面加载失败] 重试次数已达上限');
+          urlLoaded = true; // 标记为已加载（即使失败），避免无限重试
+          isCurrentlyLoading = false;
+          
+          // 显示错误页面
+          if (loginWindow && !loginWindow.isDestroyed()) {
+            const errorMsg = errorDescription || '网络连接失败，请检查网络设置和代理配置';
+            const errorCodeStr = String(errorCode);
+            loginWindow.webContents.executeJavaScript(`
+              (function() {
+                const errorCode = ${JSON.stringify(errorCodeStr)};
+                const errorMsg = ${JSON.stringify(errorMsg)};
+                document.body.innerHTML = '<div style="padding: 40px; font-family: Arial, sans-serif; text-align: center; background: #f5f5f5; height: 100vh; display: flex; align-items: center; justify-content: center;"><div style="background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); max-width: 500px;"><h2 style="color: #333; margin-bottom: 15px;">无法加载登录页面</h2><p style="color: #666; margin-bottom: 10px;">错误代码: ' + errorCode + '</p><p style="color: #666; margin-bottom: 20px;">' + errorMsg + '</p><button onclick="location.reload()" style="padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; margin-right: 10px;">重试</button><button onclick="window.close()" style="padding: 10px 20px; background: #ccc; color: #333; border: none; border-radius: 6px; cursor: pointer; font-size: 14px;">关闭</button></div></div>';
+              })();
+            `).catch(() => {});
+          }
+        }
+      }
+    };
+    
+    // 只在第一次加载时添加监听器
+    if (loadAttempts === 1) {
+      loginWindow.webContents.once('did-fail-load', onLoadFailed);
+    }
+    
+    loginWindow.webContents.loadURL(loginUrl, {
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      extraHeaders: 'Accept-Language: en-US,en;q=0.9\nAccept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8\nReferer: https://www.pixiv.net/\n'
+    }).then(() => {
+      if (currentLoadTimeout) {
+        clearTimeout(currentLoadTimeout);
+        currentLoadTimeout = null;
+      }
+      console.log('✅ loadURL Promise resolved - 登录页面加载成功');
+      urlLoaded = true;
+      isCurrentlyLoading = false;
+      // 重置失败重试计数
+      failLoadRetryCount = 0;
+      
+      // 显示窗口
+      if (loginWindow && !loginWindow.isDestroyed() && !loginWindow.isVisible()) {
+        loginWindow.show();
+      }
+    }).catch((error) => {
+      if (currentLoadTimeout) {
+        clearTimeout(currentLoadTimeout);
+        currentLoadTimeout = null;
+      }
+      
+      // 如果检测到重定向且错误是 ERR_ABORTED，可能是正常的重定向过程
+      if (redirectDetectedInCurrentLoad && (error.code === 'ERR_ABORTED' || error.errno === -3)) {
+        console.log('⚠️  检测到重定向过程中的 ERR_ABORTED，这可能是正常的');
+        
+        // 如果已经有重定向URL待加载，不再重试
+        if (redirectUrlToLoad) {
+          console.log('✅ 重定向URL已设置，等待重定向加载完成');
+          isCurrentlyLoading = false; // 重置状态，让重定向加载继续
+          return; // 不继续错误处理
+        }
+        
+        // 否则，等待一下看是否有重定向URL被设置
+        setTimeout(() => {
+          if (redirectUrlToLoad) {
+            console.log('✅ 检测到重定向URL，等待加载完成');
+            isCurrentlyLoading = false;
+            return;
+          }
+          
+          // 如果还是没有重定向URL，继续等待或重试
+          console.log('⚠️  等待重定向URL设置...');
+          currentLoadTimeout = setTimeout(() => {
+            if (isCurrentlyLoading && !redirectUrlToLoad) {
+              console.error(`⏱️  重定向后加载超时 (尝试 ${loadAttempts}/${maxLoadAttempts})`);
+              isCurrentlyLoading = false;
+              currentLoadTimeout = null;
+              if (loadAttempts >= maxLoadAttempts) {
+                urlLoaded = true;
+              } else {
+                const retryDelay = 1000 * loadAttempts;
+                setTimeout(() => {
+                  if (loginWindow && !loginWindow.isDestroyed() && !urlLoaded && !redirectUrlToLoad) {
+                    tryLoadURL();
+                  }
+                }, retryDelay);
+              }
+            }
+          }, 10000); // 给10秒等待重定向URL
+        }, 1000);
+        
+        return; // 不继续错误处理
+      }
+      
+      isCurrentlyLoading = false;
+      console.error(`❌ loadURL Promise rejected - 加载登录页面失败 (尝试 ${loadAttempts}/${maxLoadAttempts}):`, error);
+      
+      // 如果是最后一次尝试，显示错误信息
+      if (loadAttempts >= maxLoadAttempts) {
+        console.error('❌ 所有加载尝试都失败了');
+        urlLoaded = true; // 标记为已尝试，避免无限重试
+        // 显示错误信息给用户（但不关闭窗口）
+        if (loginWindow && !loginWindow.isDestroyed()) {
+          const errorMsg = error.message || error.code || '未知错误';
+          loginWindow.webContents.executeJavaScript(`
+            document.body.innerHTML = '<div style="padding: 40px; font-family: Arial, sans-serif; text-align: center; background: #f5f5f5; height: 100vh; display: flex; align-items: center; justify-content: center;"><div style="background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); max-width: 500px;"><h2 style="color: #333; margin-bottom: 15px;">加载失败</h2><p style="color: #666; margin-bottom: 10px;">无法加载 Pixiv 登录页面</p><p style="color: #999; font-size: 12px; margin-bottom: 20px;">错误: ${errorMsg}</p><button onclick="location.reload()" style="padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; margin-right: 10px;">重试</button><button onclick="window.close()" style="padding: 10px 20px; background: #ccc; color: #333; border: none; border-radius: 6px; cursor: pointer; font-size: 14px;">关闭</button></div></div>';
+          `).catch(() => {});
+        }
+      } else {
+        // 等待一段时间后重试
+        const retryDelay = 1000 * loadAttempts; // 递增延迟：1s, 2s, 3s, 4s, 5s
+        setTimeout(() => {
+          if (loginWindow && !loginWindow.isDestroyed() && !urlLoaded) {
+            tryLoadURL();
+          }
+        }, retryDelay);
+      }
+    });
+  };
+
+  // 监听窗口加载错误（在 tryLoadURL 定义之后）
+  loginWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+    const errorName = getErrorName(errorCode);
+    
+    // 如果检测到重定向URL，忽略 ERR_ABORTED 错误（这是重定向过程中的正常行为）
+    if (redirectUrlToLoad && errorCode === -3) { // ERR_ABORTED
+      console.log('ℹ️  [重定向处理] 检测到 ERR_ABORTED，重定向URL已设置，忽略该错误');
+      return; // 忽略该错误，不进行任何处理
+    }
+    
+    // 如果检测到重定向且错误是 ERR_ABORTED，忽略该错误（这是重定向过程中的正常行为）
+    if (redirectDetectedInCurrentLoad && errorCode === -3) { // ERR_ABORTED
+      console.log('ℹ️  [重定向处理] 检测到 ERR_ABORTED，这是重定向过程中的正常行为，忽略该错误');
+      // 等待一下，看是否有重定向URL被设置
+      setTimeout(() => {
+        if (redirectUrlToLoad) {
+          console.log('✅ [重定向处理] 重定向URL已设置，等待加载完成');
+          return;
+        }
+      }, 500);
+      return; // 忽略该错误，不进行任何处理
+    }
+    
+    // 如果URL是 app-api.pixiv.net 且错误是 ERR_ABORTED，可能是重定向前的正常行为
+    if (validatedURL && validatedURL.includes('app-api.pixiv.net') && errorCode === -3) {
+      console.log('ℹ️  [重定向处理] app-api.pixiv.net 请求被中止，可能是重定向前的正常行为，继续等待...');
+      // 等待一小段时间，看是否会有重定向
+      setTimeout(() => {
+        const currentUrl = loginWindow?.webContents?.getURL();
+        if (currentUrl && currentUrl.includes('accounts.pixiv.net')) {
+          console.log('✅ [重定向处理] 重定向成功，当前URL:', currentUrl);
+          return; // 重定向成功，不需要处理错误
+        }
+        // 检查是否有重定向URL待加载
+        if (redirectUrlToLoad) {
+          console.log('✅ [重定向处理] 检测到重定向URL，等待加载完成');
+          return;
+        }
+      }, 1000);
+      // 不立即处理错误，等待重定向完成
+      return;
+    }
+    
+    console.error('❌ 登录窗口加载失败:', {
+      errorCode,
+      errorDescription,
+      validatedURL,
+      isMainFrame,
+      errorName
+    });
+    
+    // 提供更详细的错误诊断
+    if (errorCode === -2) { // ERR_FAILED
+      console.error('💡 ERR_FAILED (-2) 可能的原因:');
+      console.error('   1. 网络连接问题 - 请检查网络连接');
+      console.error('   2. DNS 解析失败 - 请检查 DNS 设置');
+      console.error('   3. SSL/TLS 握手失败 - 可能是证书问题');
+      console.error('   4. 防火墙或代理阻止 - 请检查防火墙设置');
+      console.error('   5. Pixiv 服务器暂时不可用 - 请稍后重试');
+      console.error('   6. 代理配置问题 - 如果使用代理，请检查代理设置');
+      console.error('      - 检查配置文件中的 network.proxy 设置');
+      console.error('      - 检查环境变量 (all_proxy, https_proxy, http_proxy)');
+      console.error('      - 确保代理服务器正在运行且可访问');
+    }
+    
+    // 如果是主框架加载失败，尝试重试（不包括 ERR_ABORTED，因为它可能在重定向过程中被忽略）
+    if (isMainFrame && errorCode !== -3 && failLoadRetryCount < maxFailLoadRetries) {
+      failLoadRetryCount++;
+      const retryDelay = 1000 * failLoadRetryCount; // 递增延迟：1s, 2s, 3s
+      console.log(`🔄 主框架加载失败，将在 ${retryDelay/1000} 秒后重试 (${failLoadRetryCount}/${maxFailLoadRetries})...`);
+      
+      setTimeout(() => {
+        if (loginWindow && !loginWindow.isDestroyed()) {
+          console.log('🔄 重试加载登录页面...');
+          // 重置 urlLoaded 标志，允许重试
+          urlLoaded = false;
+          isCurrentlyLoading = false;
+          loadAttempts = 0; // 重置加载尝试计数
+          redirectDetectedInCurrentLoad = false; // 重置重定向检测标志
+          tryLoadURL();
+        }
+      }, retryDelay);
+    } else if (isMainFrame && errorCode !== -3 && failLoadRetryCount >= maxFailLoadRetries) {
+      // 所有重试都失败了，显示错误信息
+      console.error('❌ 所有重试都失败了，显示错误信息');
+      if (loginWindow && !loginWindow.isDestroyed()) {
+        const errorMsg = errorDescription || getErrorName(errorCode);
+        loginWindow.webContents.executeJavaScript(`
+          document.body.innerHTML = '<div style="padding: 40px; font-family: Arial, sans-serif; text-align: center; background: #f5f5f5; height: 100vh; display: flex; align-items: center; justify-content: center;"><div style="background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); max-width: 500px;"><h2 style="color: #333; margin-bottom: 15px;">加载失败</h2><p style="color: #666; margin-bottom: 10px;">无法加载 Pixiv 登录页面</p><p style="color: #999; font-size: 12px; margin-bottom: 20px;">错误: ${errorMsg}</p><button onclick="location.reload()" style="padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; margin-right: 10px;">重试</button><button onclick="window.close()" style="padding: 10px 20px; background: #ccc; color: #333; border: none; border-radius: 6px; cursor: pointer; font-size: 14px;">关闭</button></div></div>';
+        `).catch(() => {});
+      }
+    }
+  });
+
+  // 窗口准备好后显示窗口（加载页面已经加载）
+  loginWindow.once('ready-to-show', () => {
+    if (loginWindow && !loginWindow.isDestroyed()) {
+      // 显示窗口（加载页面已经加载，所以可以立即显示）
+      loginWindow.show();
+      loginWindow.focus();
+      console.log('✅ 登录窗口已准备好并显示（显示加载页面）');
+    }
+  });
+  
+  // 当页面加载完成时显示窗口
+  loginWindow.webContents.on('did-finish-load', () => {
+    if (loginWindow && !loginWindow.isDestroyed()) {
+      const currentUrl = loginWindow.webContents.getURL();
+      console.log('✅ 页面加载完成，URL:', currentUrl);
+      
+      // 如果加载的是登录页面（accounts.pixiv.net/login），标记为已加载
+      if (currentUrl && currentUrl.includes('accounts.pixiv.net/login')) {
+        console.log('✅ [页面加载] 登录页面加载成功');
+        urlLoaded = true;
+        isCurrentlyLoading = false;
+        redirectDetectedInCurrentLoad = false;
+        // 清除超时计时器
+        if (currentLoadTimeout) {
+          clearTimeout(currentLoadTimeout);
+          currentLoadTimeout = null;
+        }
+      }
+      
+      // 确保窗口显示
+      if (!loginWindow.isVisible()) {
+        loginWindow.show();
+        loginWindow.focus();
+        console.log('✅ [页面加载] 窗口已显示');
+      }
+      
+      // 如果加载的是加载页面，开始加载真实URL
+      if (currentUrl.startsWith('data:text/html')) {
+        console.log('📥 [页面加载] 加载页面已显示，等待代理设置完成...');
+        
+        // 确保代理设置完成后再加载真实 URL
+        (async () => {
+          try {
+            if (loginWindow._proxySetupPromise) {
+              const proxyResult = await loginWindow._proxySetupPromise;
+              if (proxyResult && proxyResult.success) {
+                console.log('✅ [页面加载] 代理设置检查完成，代理来源:', proxyResult.source);
+              } else {
+                console.log('ℹ️  [页面加载] 代理设置检查完成，将使用系统代理或直连');
+              }
+            }
+          } catch (error) {
+            console.warn('⚠️  [页面加载] 代理设置检查时出错:', error);
+            // 即使出错也继续，可能使用系统代理
+          }
+          
+          // 延迟一点时间，确保加载页面完全显示和代理设置生效
+          setTimeout(() => {
+            if (loginWindow && !loginWindow.isDestroyed() && !urlLoaded && !isCurrentlyLoading) {
+              console.log('🚀 [页面加载] 开始加载真实登录URL...');
+              tryLoadURL();
+            }
+          }, 500);
+        })();
+      }
+    }
+  });
+
+  // 监听窗口关闭
+  loginWindow.on('closed', () => {
+    console.log('🔒 登录窗口已关闭');
+    // 清理超时计时器
+    if (currentLoadTimeout) {
+      clearTimeout(currentLoadTimeout);
+      currentLoadTimeout = null;
+    }
+    // 清理URL检查定时器
+    if (loginUrlCheckInterval) {
+      clearInterval(loginUrlCheckInterval);
+      loginUrlCheckInterval = null;
+    }
+    // 使用统一的清理函数
+    closeLoginWindow();
+  });
+  
+  // 不再需要立即加载URL，因为加载流程已经改进了：
+  // 1. 先加载加载页面（立即显示给用户）
+  // 2. 在 did-finish-load 事件中检测到加载页面后，加载真实URL
+  // 这样用户可以立即看到加载状态，而不是白屏
+
+  return loginWindow;
+}
+
+// 防止重复处理授权码
+let isProcessingAuthCode = false;
+
+/**
+ * 关闭登录窗口的辅助函数
+ * 确保窗口被正确关闭并清理所有相关资源
+ */
+function closeLoginWindow() {
+  // 清理超时计时器
+  if (currentLoadTimeout) {
+    clearTimeout(currentLoadTimeout);
+    currentLoadTimeout = null;
+  }
+  
+  // 清理URL检查定时器
+  if (loginUrlCheckInterval) {
+    clearInterval(loginUrlCheckInterval);
+    loginUrlCheckInterval = null;
+  }
+  
+  if (loginWindow) {
+    try {
+      console.log('🔒 正在关闭登录窗口...');
+      if (!loginWindow.isDestroyed()) {
+        loginWindow.close();
+      }
+    } catch (e) {
+      console.error('⚠️  关闭登录窗口时出错:', e.message);
+    } finally {
+      loginWindow = null;
+    }
+  }
+  
+  // 停止轮询
+  if (loginUrlCheckInterval) {
+    clearInterval(loginUrlCheckInterval);
+    loginUrlCheckInterval = null;
+  }
+  
+  // 清除状态
+  currentLoginCodeVerifier = null;
+  isProcessingAuthCode = false;
+}
+
+/**
+ * 检查 URL 是否为回调 URL 并提取授权码
+ * 彻底重写版本 - 更严格的验证和更详细的日志
+ */
+async function checkForCallbackUrl(url) {
+  // 如果正在处理，忽略（防止重复处理）
+  if (isProcessingAuthCode) {
+    return false;
+  }
+
+  // 如果没有code verifier，说明登录流程未开始或已结束
+  if (!currentLoginCodeVerifier) {
+    return false;
+  }
+
+  // 如果URL为空或无效，忽略
+  if (!url || typeof url !== 'string' || url === 'about:blank' || url === 'about:') {
+    return false;
+  }
+
+  // 快速检查：如果URL不包含code或error参数，直接返回
+  if (!url.includes('code=') && !url.includes('error=')) {
+    return false;
+  }
+
+  try {
+    const urlObj = new URL(url);
+    
+    // 检查 URL 中是否有 code 参数
+    const code = urlObj.searchParams.get('code');
+    
+    if (code && code.length > 0 && currentLoginCodeVerifier) {
+      // 立即标记为正在处理，防止重复处理
+      isProcessingAuthCode = true;
+      
+      console.log('');
+      console.log('═══════════════════════════════════════════════════════');
+      console.log('✅✅✅ 成功检测到授权码！');
+      console.log('═══════════════════════════════════════════════════════');
+      console.log('   授权码 (前20字符):', code.substring(0, 20) + '...');
+      console.log('   授权码长度:', code.length);
+      console.log('   来源 URL:', url);
+      console.log('   时间戳:', new Date().toISOString());
+      console.log('═══════════════════════════════════════════════════════');
+      console.log('');
+      
+      // 保存code verifier（在清除之前）
+      const codeVerifier = currentLoginCodeVerifier;
+      
+      // 立即清除，防止重复使用
+      currentLoginCodeVerifier = null;
+      
+      // 立即关闭登录窗口（不等待token交换完成）
+      closeLoginWindow();
+
+      // 异步交换token（不阻塞）
+      exchangeCodeForToken(code, codeVerifier)
+        .then(async (result) => {
+          console.log('');
+          console.log('═══════════════════════════════════════════════════════');
+          console.log('✅✅✅ Token 交换成功！');
+          console.log('═══════════════════════════════════════════════════════');
+          console.log('   Access Token (前20字符):', result.data.accessToken ? result.data.accessToken.substring(0, 20) + '...' : 'N/A');
+          console.log('   Refresh Token (前20字符):', result.data.refreshToken ? result.data.refreshToken.substring(0, 20) + '...' : 'N/A');
+          console.log('   过期时间:', result.data.expiresIn, '秒');
+          console.log('   用户信息:', result.data.user ? JSON.stringify(result.data.user, null, 2) : 'N/A');
+          console.log('═══════════════════════════════════════════════════════');
+          console.log('');
+          
+          // 确保登录窗口已关闭（双重保险）
+          closeLoginWindow();
+          
+          // 尝试将 token 保存到后端配置
+          // REF: https://www.electronjs.org/docs/latest/api/ipc-main
+          try {
+            safeLog('💾 正在保存 token 到后端配置...');
+            
+            // 等待后端就绪
+            let backendReady = false;
+            for (let i = 0; i < 10; i++) {
+              await new Promise(resolve => safeSetTimeout(resolve, 500));
+              checkBackendReady((ready) => {
+                backendReady = ready;
+              });
+              if (backendReady) {
+                break;
+              }
+            }
+            
+            if (backendReady) {
+              // 调用后端 API 保存 token
+              try {
+                const response = await axios.post(
+                  `http://localhost:${BACKEND_PORT}/api/auth/login-with-token`,
+                  {
+                    refreshToken: result.data.refreshToken
+                  },
+                  {
+                    timeout: 10000,
+                    headers: {
+                      'Content-Type': 'application/json'
+                    }
+                  }
+                );
+                
+                if (response.data && response.data.success) {
+                  safeLog('✅ Token 已成功保存到后端配置');
+                } else {
+                  safeLog('⚠️  Token 保存到后端配置失败，但 token 仍然有效');
+                }
+              } catch (saveError) {
+                safeLog('⚠️  保存 token 到后端配置时出错:', saveError.message);
+                safeLog('   前端仍会尝试保存 token');
+              }
+            } else {
+              safeLog('⚠️  后端未就绪，前端将尝试保存 token');
+            }
+          } catch (saveError) {
+            safeLog('⚠️  保存 token 时出错:', saveError.message);
+          }
+          
+          // 通知主窗口登录成功（前端也会尝试保存 token）
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('login-success', result.data);
+          }
+        })
+        .catch((error) => {
+          console.error('');
+          console.error('═══════════════════════════════════════════════════════');
+          console.error('❌❌❌ Token 交换失败！');
+          console.error('═══════════════════════════════════════════════════════');
+          console.error('   错误消息:', error.message);
+          
+          if (axios.isAxiosError(error) && error.response) {
+            console.error('   HTTP状态:', error.response.status, error.response.statusText);
+            console.error('   响应数据:', JSON.stringify(error.response.data, null, 2));
+          } else if (error.response) {
+            console.error('   HTTP状态:', error.response.status);
+            console.error('   响应数据:', JSON.stringify(error.response.data, null, 2));
+          }
+          
+          if (error.request) {
+            console.error('   请求信息:', error.request);
+          }
+          
+          console.error('   错误堆栈:', error.stack);
+          console.error('═══════════════════════════════════════════════════════');
+          console.error('');
+          
+          // 确保登录窗口已关闭（即使失败也要关闭）
+          closeLoginWindow();
+          
+          // 通知主窗口登录失败
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('login-error', { 
+              message: error.message,
+              details: error.response ? error.response.data : null
+            });
+          }
+        })
+        .finally(() => {
+          // 最终确保窗口已关闭并清理资源
+          closeLoginWindow();
+        });
+      
+      return true; // 表示已找到授权码
+    }
+    
+    // 检查是否有错误参数
+    const error = urlObj.searchParams.get('error');
+    if (error) {
+      console.error('');
+      console.error('═══════════════════════════════════════════════════════');
+      console.error('❌ 登录过程中发生错误');
+      console.error('═══════════════════════════════════════════════════════');
+      console.error('   错误代码:', error);
+      const errorDescription = urlObj.searchParams.get('error_description') || error;
+      console.error('   错误描述:', errorDescription);
+      console.error('   错误URL:', url);
+      console.error('═══════════════════════════════════════════════════════');
+      console.error('');
+      
+      // 关闭登录窗口并清理资源
+      closeLoginWindow();
+
+      // 通知主窗口登录失败
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('login-error', { 
+          message: errorDescription,
+          errorCode: error
+        });
+      }
+      
+      return true; // 表示已处理错误
+    }
+    
+    return false; // 未找到code或error参数
+  } catch (error) {
+    // URL 解析失败
+    // 只对看起来像完整URL的字符串输出警告（减少噪音）
+    if (url && url.startsWith('http') && url.length > 10) {
+      // 静默忽略，避免日志噪音
+      // console.log('⚠️  URL解析失败:', url.substring(0, 100), error.message);
+    }
+    return false;
+  }
+}
+
+// 停止后端服务器 - 改进版本，确保完全清理
+// REF: https://www.electronjs.org/docs/latest/api/child-process
+async function stopBackend() {
+  return new Promise((resolve) => {
+    if (!backendProcess) {
+      resolve();
+      return;
+    }
+    
+    safeLog('🛑 正在停止后端服务器...');
+    isBackendStarting = false;
+    
+    const proc = backendProcess;
+    backendProcess = null; // 立即清空引用，防止重复调用
+    
+    // 标记进程已退出
+    let exited = false;
+    const onExit = () => {
+      if (!exited) {
+        exited = true;
+        safeLog('✅ 后端进程已停止');
+        // 清理端口
+        cleanupPort(BACKEND_PORT).then(() => {
+          resolve();
+        });
+      }
+    };
+    
+    proc.once('exit', onExit);
+    
+    // 尝试优雅关闭
+    try {
+      if (process.platform === 'win32') {
+        proc.kill();
+      } else {
+        proc.kill('SIGTERM');
+      }
+      
+      // 如果5秒后还没退出，强制杀死
+      safeSetTimeout(() => {
+        if (!exited && proc && !proc.killed) {
+          safeLog('⚠️  后端进程未响应，强制终止...');
+          try {
+            proc.kill('SIGKILL');
+          } catch (err) {
+            safeError('强制终止进程失败:', err);
+          }
+        }
+        
+        // 如果10秒后还没退出，认为已停止
+        safeSetTimeout(() => {
+          if (!exited) {
+            onExit();
+          }
+        }, 5000);
+      }, 5000);
+    } catch (err) {
+      safeError('停止后端进程时出错:', err);
+      onExit();
+    }
+  });
 }
 
 function createWindow() {
@@ -814,6 +2886,42 @@ function createWindow() {
     notifyBackendReady();
   });
 
+  // 处理登录窗口请求
+  ipcMain.handle('open-login-window', async () => {
+    try {
+      console.log('📞 收到打开登录窗口的请求');
+      
+      // 生成 PKCE 参数
+      const codeVerifier = generateCodeVerifier();
+      const codeChallenge = generateCodeChallenge(codeVerifier);
+      console.log('✅ PKCE 参数已生成');
+      
+      // 创建登录窗口
+      const window = createLoginWindow(codeVerifier, codeChallenge);
+      
+      if (!window) {
+        throw new Error('创建登录窗口失败：返回值为 null');
+      }
+      
+      console.log('✅ 登录窗口创建成功，窗口ID:', window.id);
+      
+      return { success: true };
+    } catch (error) {
+      console.error('❌ 打开登录窗口失败:', error);
+      console.error('错误堆栈:', error.stack);
+      return { success: false, error: error.message };
+    }
+  });
+
+  // 关闭登录窗口
+  ipcMain.handle('close-login-window', async () => {
+    if (loginWindow) {
+      closeLoginWindow();
+      return { success: true };
+    }
+    return { success: false, error: '登录窗口不存在' };
+  });
+
   // 处理外部链接
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
@@ -929,7 +3037,10 @@ app.on('window-all-closed', () => {
   // macOS 上通常应用会保持运行
   if (process.platform !== 'darwin') {
     clearAllTimers();
-    stopBackend();
+    // stopBackend 现在是 async 函数，但在应用关闭时我们不需要等待
+    stopBackend().catch(err => {
+      safeError('停止后端进程时出错:', err);
+    });
     app.quit();
   }
 });

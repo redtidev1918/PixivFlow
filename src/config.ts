@@ -1,5 +1,5 @@
 import { readFileSync, existsSync, writeFileSync } from 'node:fs';
-import { resolve, dirname, isAbsolute, join } from 'node:path';
+import { resolve, dirname, isAbsolute, join, basename } from 'node:path';
 import cron from 'node-cron';
 
 import { ConfigError } from './utils/errors';
@@ -464,11 +464,36 @@ function applyDefaults(config: Partial<StandaloneConfig>, basePath?: string): St
   };
 
   // Resolve storage paths - storage is guaranteed to exist after merge
-  // Use baseDir instead of process.cwd() to ensure paths are resolved relative to config file location
+  // For paths like "./downloads", if config is in config/ subdirectory, resolve relative to project root
+  // Otherwise, resolve relative to config file location (for Electron app user data directory)
   const storage = merged.storage!;
+  
+  // Determine the correct base directory for resolving relative paths
+  // If config is in a subdirectory (like config/), use project root for download directories
+  // This ensures "./downloads" resolves to project root, not config/downloads
+  let pathBaseDir = baseDir;
+  const projectRoot = resolve(baseDir, '..');
+  const baseDirName = basename(baseDir);
+  
+  // If config is in a standard subdirectory (like "config"), use project root for storage paths
+  // Check if the resolved path would be under config directory, and if so, use project root instead
+  if (baseDirName === 'config' && !isAbsolute(storage.downloadDirectory!)) {
+    const testPath = resolve(baseDir, storage.downloadDirectory!);
+    // If the resolved path is under config directory, use project root instead
+    if (testPath.startsWith(baseDir)) {
+      pathBaseDir = projectRoot;
+      logger.debug('Using project root for storage paths (config in subdirectory)', {
+        configDir: baseDir,
+        projectRoot: pathBaseDir,
+        downloadDirectory: storage.downloadDirectory,
+      });
+    }
+  }
+  
   const downloadDir = isAbsolute(storage.downloadDirectory!)
     ? storage.downloadDirectory!
-    : resolve(baseDir, storage.downloadDirectory!);
+    : resolve(pathBaseDir, storage.downloadDirectory!);
+  
   if (!storage.illustrationDirectory) {
     storage.illustrationDirectory = resolve(downloadDir, 'illustrations');
   } else if (!isAbsolute(storage.illustrationDirectory)) {
@@ -485,9 +510,10 @@ function applyDefaults(config: Partial<StandaloneConfig>, basePath?: string): St
   }
 
   // Resolve database path - use baseDir to ensure relative paths are resolved correctly
+  // Database path should still use config directory as base (or project root if config is in subdirectory)
   storage.databasePath = isAbsolute(storage.databasePath!)
     ? storage.databasePath!
-    : resolve(baseDir, storage.databasePath!);
+    : resolve(pathBaseDir, storage.databasePath!);
 
   return merged;
 }

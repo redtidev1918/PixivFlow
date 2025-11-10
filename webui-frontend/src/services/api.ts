@@ -266,12 +266,6 @@ export const api = {
     apiClient.get('/auth/status'),
 
   /**
-   * Diagnose login issues and check configuration
-   */
-  diagnoseLogin: (): Promise<AxiosResponse<ApiResponse<any>>> =>
-    apiClient.get('/auth/diagnose'),
-
-  /**
    * Login to Pixiv
    * @param username - Pixiv username or email
    * @param password - Pixiv password

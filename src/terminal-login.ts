@@ -3,6 +3,12 @@
  * 
  * This module provides terminal-based authentication for Pixiv using Python gppt.
  * It supports both interactive and headless login modes.
+ * 
+ * Based on get-pixivpy-token (gppt) implementation:
+ * https://github.com/eggplants/get-pixivpy-token
+ * 
+ * The module tries Puppeteer first (Node.js native, no external dependencies),
+ * then falls back to Python gppt if Puppeteer fails or is unavailable.
  */
 
 import * as readline from 'readline';
@@ -27,6 +33,8 @@ import {
 export type ProxyConfig = PuppeteerProxyConfig;
 
 // Constants from gppt/consts.py
+// These match the constants used in get-pixivpy-token (gppt)
+// Reference: https://github.com/eggplants/get-pixivpy-token
 const USER_AGENT = 'PixivIOSApp/7.13.3 (iOS 14.6; iPhone13,2)';
 const AUTH_TOKEN_URL = 'https://oauth.secure.pixiv.net/auth/token';
 const CLIENT_ID = 'MOBrBDS8blbauoSck0ZfDbtuzpyT';
@@ -222,11 +230,15 @@ export class TerminalLogin {
 
   /**
    * Refresh OAuth token using refresh token
-   * Based on GetPixivToken.refresh() static method
+   * 
+   * Based on gppt's refresh token implementation.
+   * This matches the token refresh flow used by get-pixivpy-token.
+   * 
+   * Reference: https://github.com/eggplants/get-pixivpy-token
    */
   static async refresh(refreshToken: string): Promise<LoginInfo> {
     try {
-      const response = await axios.post<LoginInfo>(
+      const response = await axios.post<OAuthResponse>(
         AUTH_TOKEN_URL,
         new URLSearchParams({
           client_id: CLIENT_ID,
@@ -246,9 +258,14 @@ export class TerminalLogin {
         }
       );
 
-      return response.data;
+      // Convert OAuthResponse to LoginInfo
+      return {
+        ...response.data,
+        response: response.data,
+      };
     } catch (error) {
-      throw new PixivLoginFailedError(`Failed to refresh token: ${error}`);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      throw new PixivLoginFailedError(`Failed to refresh token: ${errorMessage}`);
     }
   }
 

@@ -22,10 +22,12 @@ router.get('/', async (req: Request, res: Response) => {
 
     if (!existsSync(logPath)) {
       return res.json({
-        logs: [],
-        total: 0,
-        page: Number(page),
-        limit: Number(limit),
+        data: {
+          logs: [],
+          total: 0,
+          page: Number(page),
+          limit: Number(limit),
+        },
       });
     }
 
@@ -54,10 +56,12 @@ router.get('/', async (req: Request, res: Response) => {
     const paginatedLines = filteredLines.slice(start, end);
 
     res.json({
-      logs: paginatedLines,
-      total: filteredLines.length,
-      page: Number(page),
-      limit: Number(limit),
+      data: {
+        logs: paginatedLines,
+        total: filteredLines.length,
+        page: Number(page),
+        limit: Number(limit),
+      },
     });
   } catch (error) {
     logger.error('Failed to get logs', { error });

@@ -23,7 +23,9 @@ router.get('/overview', async (req: Request, res: Response) => {
     database.close();
     database = null;
 
-    res.json(stats);
+    res.json({
+      data: stats,
+    });
   } catch (error) {
     if (database) {
       try {
@@ -59,9 +61,11 @@ router.get('/downloads', async (req: Request, res: Response) => {
     database = null;
 
     res.json({
-      period,
-      downloads: downloads.length,
-      data: downloads,
+      data: {
+        period,
+        downloads: downloads.length,
+        data: downloads,
+      },
     });
   } catch (error) {
     if (database) {
@@ -95,7 +99,9 @@ router.get('/tags', async (req: Request, res: Response) => {
     database.close();
     database = null;
 
-    res.json({ tags });
+    res.json({
+      data: { tags },
+    });
   } catch (error) {
     if (database) {
       try {
@@ -128,7 +134,9 @@ router.get('/authors', async (req: Request, res: Response) => {
     database.close();
     database = null;
 
-    res.json({ authors });
+    res.json({
+      data: { authors },
+    });
   } catch (error) {
     if (database) {
       try {

@@ -22,6 +22,16 @@ contextBridge.exposeInMainWorld('electron', {
     ipcRenderer.on('backend-ready', callback);
   },
 
+  // 登录相关
+  openLoginWindow: () => ipcRenderer.invoke('open-login-window'),
+  closeLoginWindow: () => ipcRenderer.invoke('close-login-window'),
+  onLoginSuccess: (callback) => {
+    ipcRenderer.on('login-success', (event, data) => callback(data));
+  },
+  onLoginError: (callback) => {
+    ipcRenderer.on('login-error', (event, error) => callback(error));
+  },
+
   // 文件系统操作（如果需要）
   // openFile: () => ipcRenderer.invoke('dialog:openFile'),
   // saveFile: () => ipcRenderer.invoke('dialog:saveFile'),

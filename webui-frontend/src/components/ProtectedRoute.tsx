@@ -17,14 +17,19 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
     queryKey: ['authStatus'],
     queryFn: () => api.getAuthStatus(),
     retry: false,
-    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+    staleTime: 0, // No cache - always fetch fresh data
+    refetchOnMount: true, // Always refetch when component mounts
+    refetchOnWindowFocus: false, // Don't refetch on window focus to avoid unnecessary requests
   });
 
   // Helper to check if authenticated from API response
   const isAuthenticated = (response: any): boolean => {
     // API response structure: response.data.data.authenticated or response.data.authenticated
     const responseData = response?.data?.data || response?.data;
-    return responseData?.authenticated === true || responseData?.isAuthenticated === true;
+    // Check multiple possible fields: authenticated, isAuthenticated, hasToken
+    return responseData?.authenticated === true 
+      || responseData?.isAuthenticated === true 
+      || responseData?.hasToken === true;
   };
 
   if (isLoading) {

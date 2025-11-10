@@ -185,9 +185,21 @@ export default function Config() {
   });
 
   const handleSave = () => {
-    form.validateFields().then((values) => {
-      updateConfigMutation.mutate(values);
-    });
+    // Get all field values first (form.getFieldsValue() gets all values regardless of validation)
+    const values = form.getFieldsValue();
+    
+    // Try to validate fields, but don't block saving if validation fails
+    // Backend will do the final validation anyway
+    form.validateFields()
+      .then(() => {
+        // If validation passes, save
+        updateConfigMutation.mutate(values);
+      })
+      .catch(() => {
+        // Even if frontend validation fails, still try to save
+        // Backend validation is more complete and will catch real issues
+        updateConfigMutation.mutate(values);
+      });
   };
 
   const handleValidate = () => {
@@ -453,16 +465,16 @@ export default function Config() {
 
   return (
     <div>
-      <Space style={{ marginBottom: 16, width: '100%', justifyContent: 'space-between' }}>
-        <div>
-          <Title level={2} style={{ margin: 0 }}>
+      <div style={{ marginBottom: 16, width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
+        <div style={{ flex: '1 1 auto', minWidth: 200 }}>
+          <Title level={2} style={{ margin: 0, whiteSpace: 'normal', wordBreak: 'normal' }}>
             {t('config.title')}
           </Title>
           <Text type="secondary" style={{ fontSize: 12 }}>
             {t('config.currentConfigFile')}: {currentConfigPath}
           </Text>
         </div>
-        <Space>
+        <Space wrap>
           <Button icon={<ReloadOutlined />} onClick={() => queryClient.invalidateQueries({ queryKey: ['config'] })}>
             {t('common.refresh')}
           </Button>
@@ -490,7 +502,7 @@ export default function Config() {
             {t('config.saveConfig')}
           </Button>
         </Space>
-      </Space>
+      </div>
 
       <Form form={form} layout="vertical">
         <Tabs activeKey={activeTab} onChange={setActiveTab}>

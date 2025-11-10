@@ -1,5 +1,5 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { Layout, Menu, theme, Select } from 'antd';
+import { Layout, Menu, theme, Select, Button, Space } from 'antd';
 import {
   DashboardOutlined,
   SettingOutlined,
@@ -7,9 +7,11 @@ import {
   HistoryOutlined,
   FileTextOutlined,
   FolderOutlined,
+  LoginOutlined,
 } from '@ant-design/icons';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useLogin } from '../../hooks/useLogin';
 
 const { Header, Sider, Content } = Layout;
 
@@ -21,6 +23,7 @@ export default function AppLayout() {
   const {
     token: { colorBgContainer },
   } = theme.useToken();
+  const { isLoggingIn, handleLogin } = useLogin();
 
   const menuItems = [
     {
@@ -98,15 +101,25 @@ export default function AppLayout() {
         <Header style={{ padding: 0, background: colorBgContainer }}>
           <div style={{ padding: '0 24px', lineHeight: '64px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h1 style={{ margin: 0, fontSize: '20px' }}>{t('layout.title')}</h1>
-            <Select
-              value={i18n.language}
-              onChange={handleLanguageChange}
-              style={{ width: 120 }}
-              options={[
-                { label: t('layout.languageZh'), value: 'zh-CN' },
-                { label: t('layout.languageEn'), value: 'en-US' },
-              ]}
-            />
+            <Space>
+              <Button
+                type="primary"
+                icon={<LoginOutlined />}
+                onClick={handleLogin}
+                loading={isLoggingIn}
+              >
+                {t('dashboard.relogin')}
+              </Button>
+              <Select
+                value={i18n.language}
+                onChange={handleLanguageChange}
+                style={{ width: 120 }}
+                options={[
+                  { label: t('layout.languageZh'), value: 'zh-CN' },
+                  { label: t('layout.languageEn'), value: 'en-US' },
+                ]}
+              />
+            </Space>
           </div>
         </Header>
         <Content

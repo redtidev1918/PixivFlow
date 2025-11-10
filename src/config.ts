@@ -675,7 +675,18 @@ export function loadConfig(configPath?: string): StandaloneConfig {
   }
 
   // Set log file path
-  const logPath = join(process.cwd(), 'data', 'pixiv-downloader.log');
+  // For Electron app, use the data directory from config (app data directory)
+  // For standalone mode, use project directory
+  // If storage.databasePath is absolute and points to a data directory, use that directory for logs
+  let logPath: string;
+  if (config.storage?.databasePath && isAbsolute(config.storage.databasePath)) {
+    // Extract data directory from database path (e.g., /path/to/appData/data/pixiv-downloader.db -> /path/to/appData/data)
+    const dataDir = dirname(config.storage.databasePath);
+    logPath = join(dataDir, 'pixiv-downloader.log');
+  } else {
+    // Fallback to project directory for standalone mode
+    logPath = join(process.cwd(), 'data', 'pixiv-downloader.log');
+  }
   logger.setLogPath(logPath);
 
   // Process placeholders (e.g., YESTERDAY)

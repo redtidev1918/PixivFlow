@@ -26,10 +26,20 @@ contextBridge.exposeInMainWorld('electron', {
   openLoginWindow: () => ipcRenderer.invoke('open-login-window'),
   closeLoginWindow: () => ipcRenderer.invoke('close-login-window'),
   onLoginSuccess: (callback) => {
-    ipcRenderer.on('login-success', (event, data) => callback(data));
+    const handler = (event, data) => callback(data);
+    ipcRenderer.on('login-success', handler);
+    // Return cleanup function
+    return () => {
+      ipcRenderer.removeListener('login-success', handler);
+    };
   },
   onLoginError: (callback) => {
-    ipcRenderer.on('login-error', (event, error) => callback(error));
+    const handler = (event, error) => callback(error);
+    ipcRenderer.on('login-error', handler);
+    // Return cleanup function
+    return () => {
+      ipcRenderer.removeListener('login-error', handler);
+    };
   },
 
   // 文件系统操作（如果需要）

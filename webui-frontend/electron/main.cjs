@@ -4,11 +4,60 @@ const fs = require('fs');
 const { spawn } = require('child_process');
 const crypto = require('crypto');
 const axios = require('axios');
+const os = require('os');
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
+
+// 尝试加载 puppeteer-core（用于 Puppeteer 登录）
+let puppeteer = null;
+try {
+  puppeteer = require('puppeteer-core');
+  console.log('✅ Puppeteer-core 已加载');
+} catch (error) {
+  console.warn('⚠️  Puppeteer-core 未安装，将使用 BrowserWindow 登录方案');
+  console.warn('   如需使用 Puppeteer 登录，请运行: cd webui-frontend && npm install puppeteer-core');
+}
+
+// 尝试加载 pixiv-token-getter（优先使用）
+let pixivTokenGetter = null;
+let pixivTokenGetterAdapter = null;
+try {
+  pixivTokenGetter = require('pixiv-token-getter');
+  // 尝试加载适配器（如果可用）
+  try {
+    // 尝试多个可能的路径
+    const possiblePaths = [
+      path.join(__dirname, '../../dist/pixiv-token-getter-adapter.js'), // 开发模式：从 electron 目录
+      path.join(process.cwd(), 'dist/pixiv-token-getter-adapter.js'), // 从项目根目录
+      path.join(process.resourcesPath || '', 'dist/pixiv-token-getter-adapter.js'), // 生产模式
+    ];
+    
+    let adapterPath = null;
+    for (const possiblePath of possiblePaths) {
+      if (possiblePath && fs.existsSync(possiblePath)) {
+        adapterPath = possiblePath;
+        break;
+      }
+    }
+    
+    if (adapterPath) {
+      pixivTokenGetterAdapter = require(adapterPath);
+      console.log('✅ pixiv-token-getter 适配器已加载:', adapterPath);
+    } else {
+      console.log('✅ pixiv-token-getter 已加载（直接使用，未找到适配器）');
+    }
+  } catch (adapterError) {
+    console.log('✅ pixiv-token-getter 已加载（直接使用，适配器加载失败）');
+    console.log('   适配器错误:', adapterError.message);
+  }
+} catch (error) {
+  console.warn('⚠️  pixiv-token-getter 未安装，将使用 Puppeteer 或 BrowserWindow 登录方案');
+  console.warn('   如需使用 pixiv-token-getter 登录，请运行: npm install pixiv-token-getter');
+}
 
 let mainWindow = null;
 let backendProcess = null;
-let loginWindow = null; // 登录窗口
+let loginWindow = null; // 登录窗口（BrowserWindow 方案）
+let puppeteerBrowser = null; // Puppeteer 浏览器实例
 let currentLoginCodeVerifier = null; // 当前登录流程的 code verifier
 let loginUrlCheckInterval = null; // 登录窗口 URL 检查定时器
 let currentLoadTimeout = null; // 当前登录窗口加载的超时计时器
@@ -471,12 +520,14 @@ async function cleanupPort(port) {
 // 检查后端是否已启动
 function checkBackendReady(callback) {
   const http = require('http');
-  const req = http.get(`http://localhost:${BACKEND_PORT}/api/health`, { timeout: 1000 }, (res) => {
+  const req = http.get(`http://localhost:${BACKEND_PORT}/api/health`, { timeout: 3000 }, (res) => {
     if (res.statusCode === 200) {
       callback(true);
     } else {
       callback(false);
     }
+    res.on('data', () => {}); // 消费响应数据
+    res.on('end', () => {});
   });
   req.on('error', () => callback(false));
   req.on('timeout', () => {
@@ -598,8 +649,9 @@ async function startBackend() {
     }
     
     // 在开发模式下，也使用应用数据目录的配置文件
-    // 使用已初始化的应用数据目录（如果还没有初始化，则初始化）
+    // 应用数据目录应该已经在 app.whenReady() 中初始化
     if (!appData) {
+      console.error('❌ 应用数据目录未初始化，尝试初始化...');
       appData = initializeAppData();
       if (!appData) {
         console.error('❌ 无法初始化应用数据目录');
@@ -641,20 +693,40 @@ async function startBackend() {
     };
     
     // 如果已经构建过，直接运行，避免重复构建
-    if (!needsBuild) {
-      backendProcess = spawn('node', [backendDistPath], {
-        cwd: projectRoot,
-        shell: false,
-        stdio: ['ignore', 'pipe', 'pipe'],
-        env: env,
-      });
-    } else {
-      backendProcess = spawn('npm', ['run', 'webui'], {
-        cwd: projectRoot,
-        shell: true,
-        stdio: ['ignore', 'pipe', 'pipe'],
-        env: env,
-      });
+    try {
+      if (!needsBuild) {
+        safeLog(`🚀 启动后端: node ${backendDistPath}`);
+        backendProcess = spawn('node', [backendDistPath], {
+          cwd: projectRoot,
+          shell: false,
+          stdio: ['ignore', 'pipe', 'pipe'],
+          env: env,
+        });
+      } else {
+        safeLog(`🚀 启动后端: npm run webui`);
+        backendProcess = spawn('npm', ['run', 'webui'], {
+          cwd: projectRoot,
+          shell: true,
+          stdio: ['ignore', 'pipe', 'pipe'],
+          env: env,
+        });
+      }
+    } catch (error) {
+      isBackendStarting = false;
+      safeError('❌ 无法启动后端进程:', error);
+      if (mainWindow) {
+        mainWindow.webContents.send('backend-error', `无法启动后端进程: ${error.message}`);
+      }
+      return;
+    }
+    
+    if (!backendProcess) {
+      isBackendStarting = false;
+      safeError('❌ 后端进程创建失败');
+      if (mainWindow) {
+        mainWindow.webContents.send('backend-error', '后端进程创建失败');
+      }
+      return;
     }
     
     // 监听后端进程输出，检测启动完成
@@ -664,15 +736,18 @@ async function startBackend() {
         checkBackendReady((ready) => {
           if (ready && !backendReady) {
             backendReady = true;
+            isBackendStarting = false; // 立即重置启动标志
+            backendRestartCount = 0; // 重置重启计数
+            safeLog('✅ 后端服务器启动成功');
             notifyBackendReady();
           }
         });
       }
     };
     
-    // 定期检查后端是否就绪（最多30秒）
+    // 定期检查后端是否就绪（最多60秒）
     let checkAttempts = 0;
-    const maxCheckAttempts = 60; // 30秒
+    const maxCheckAttempts = 120; // 60秒
     const readyCheckInterval = safeSetInterval(() => {
       if (backendReady || isAppClosing) {
         clearInterval(readyCheckInterval);
@@ -684,7 +759,11 @@ async function startBackend() {
       if (checkAttempts >= maxCheckAttempts) {
         clearInterval(readyCheckInterval);
         activeTimers.delete(readyCheckInterval);
+        isBackendStarting = false; // 超时后也重置标志
         safeError('⚠️  后端服务器启动检查超时');
+        if (mainWindow) {
+          mainWindow.webContents.send('backend-error', '后端服务器启动超时，请检查日志');
+        }
       }
     }, 500);
     
@@ -701,7 +780,7 @@ async function startBackend() {
               output.includes('WebUI server') ||
               output.includes('PORT:')) {
             // 延迟一点再检查，确保服务器完全启动
-            safeSetTimeout(() => checkReady(), 500);
+            safeSetTimeout(() => checkReady(), 1000);
           }
         }
       });
@@ -784,21 +863,40 @@ async function startBackend() {
       PIXIV_DOWNLOADER_CONFIG: appData.configPath, // 设置配置文件路径
     };
 
-    console.log(`🚀 启动后端进程: ${backendExecutable} ${finalBackendPath}`);
-    console.log(`📦 NODE_PATH: ${nodePath}`);
-    console.log(`📁 STATIC_PATH: ${staticPath}`);
-    console.log(`📁 配置文件路径: ${appData.configPath}`);
-    console.log(`📁 应用数据目录: ${appData.appDataDir}`);
-    console.log(`📁 ELECTRON_RUN_AS_NODE: ${backendEnv.ELECTRON_RUN_AS_NODE}`);
-    console.log(`📁 STATIC_PATH 存在: ${fs.existsSync(staticPath)}`);
+    safeLog(`🚀 启动后端进程: ${backendExecutable} ${finalBackendPath}`);
+    safeLog(`📦 NODE_PATH: ${nodePath}`);
+    safeLog(`📁 STATIC_PATH: ${staticPath}`);
+    safeLog(`📁 配置文件路径: ${appData.configPath}`);
+    safeLog(`📁 应用数据目录: ${appData.appDataDir}`);
+    safeLog(`📁 ELECTRON_RUN_AS_NODE: ${backendEnv.ELECTRON_RUN_AS_NODE}`);
+    safeLog(`📁 STATIC_PATH 存在: ${fs.existsSync(staticPath)}`);
     if (fs.existsSync(staticPath)) {
-      console.log(`📁 STATIC_PATH 内容: ${fs.readdirSync(staticPath).join(', ')}`);
+      safeLog(`📁 STATIC_PATH 内容: ${fs.readdirSync(staticPath).join(', ')}`);
     }
-    backendProcess = spawn(backendExecutable, [finalBackendPath], {
-      stdio: ['ignore', 'pipe', 'pipe'], // 使用 pipe 以便捕获输出
-      cwd: appData.appDataDir, // 设置工作目录为应用数据目录
-      env: backendEnv,
-    });
+    
+    try {
+      backendProcess = spawn(backendExecutable, [finalBackendPath], {
+        stdio: ['ignore', 'pipe', 'pipe'], // 使用 pipe 以便捕获输出
+        cwd: appData.appDataDir, // 设置工作目录为应用数据目录
+        env: backendEnv,
+      });
+    } catch (error) {
+      isBackendStarting = false;
+      safeError('❌ 无法启动后端进程:', error);
+      if (mainWindow) {
+        mainWindow.webContents.send('backend-error', `无法启动后端进程: ${error.message}`);
+      }
+      return;
+    }
+    
+    if (!backendProcess) {
+      isBackendStarting = false;
+      safeError('❌ 后端进程创建失败');
+      if (mainWindow) {
+        mainWindow.webContents.send('backend-error', '后端进程创建失败');
+      }
+      return;
+    }
 
     // 监听后端进程输出，检测启动完成
     let backendReady = false;
@@ -807,15 +905,18 @@ async function startBackend() {
         checkBackendReady((ready) => {
           if (ready && !backendReady) {
             backendReady = true;
+            isBackendStarting = false; // 立即重置启动标志
+            backendRestartCount = 0; // 重置重启计数
+            safeLog('✅ 后端服务器启动成功');
             notifyBackendReady();
           }
         });
       }
     };
     
-    // 定期检查后端是否就绪（最多30秒）
+    // 定期检查后端是否就绪（最多60秒）
     let checkAttempts = 0;
-    const maxCheckAttempts = 60; // 30秒
+    const maxCheckAttempts = 120; // 60秒
     const readyCheckInterval = safeSetInterval(() => {
       if (backendReady || isAppClosing) {
         clearInterval(readyCheckInterval);
@@ -827,7 +928,11 @@ async function startBackend() {
       if (checkAttempts >= maxCheckAttempts) {
         clearInterval(readyCheckInterval);
         activeTimers.delete(readyCheckInterval);
+        isBackendStarting = false; // 超时后也重置标志
         safeError('⚠️  后端服务器启动检查超时');
+        if (mainWindow) {
+          mainWindow.webContents.send('backend-error', '后端服务器启动超时，请检查日志');
+        }
       }
     }, 500);
     
@@ -844,7 +949,7 @@ async function startBackend() {
               output.includes('WebUI server') ||
               output.includes('PORT:')) {
             // 延迟一点再检查，确保服务器完全启动
-            safeSetTimeout(() => checkReady(), 500);
+            safeSetTimeout(() => checkReady(), 1000);
           }
         }
       });
@@ -930,18 +1035,12 @@ async function startBackend() {
       backendProcess = null;
     });
     
-    // 标记后端启动完成（成功或失败都重置标志）
-    safeSetTimeout(() => {
-      // 检查后端是否成功启动
-      checkBackendReady((ready) => {
-        if (ready) {
-          isBackendStarting = false;
-          backendRestartCount = 0; // 重置重启计数
-          safeLog('✅ 后端服务器启动成功');
-        }
-      });
-    }, 2000);
-  } else {
+    // 注意：isBackendStarting 标志现在在 checkReady() 回调中重置
+    // 这里不再需要额外的重置逻辑，因为启动检测已经在上面处理了
+  }
+  
+  // 如果 backendProcess 为 null，说明启动失败，重置标志
+  if (!backendProcess) {
     isBackendStarting = false;
   }
 }
@@ -968,6 +1067,413 @@ function generateCodeChallenge(verifier) {
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
     .replace(/=/g, '');
+}
+
+/**
+ * 查找系统 Chrome/Chromium 可执行文件路径
+ * 用于 Puppeteer 在 Electron 环境中的配置
+ */
+function findChromeExecutable() {
+  const platform = process.platform;
+  const possiblePaths = [];
+
+  if (platform === 'darwin') {
+    // macOS
+    possiblePaths.push(
+      '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+      '/Applications/Chromium.app/Contents/MacOS/Chromium',
+      '/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary',
+      path.join(os.homedir(), 'Applications', 'Google Chrome.app', 'Contents', 'MacOS', 'Google Chrome'),
+      path.join(os.homedir(), 'Applications', 'Chromium.app', 'Contents', 'MacOS', 'Chromium')
+    );
+  } else if (platform === 'win32') {
+    // Windows
+    const programFiles = process.env['ProgramFiles'] || 'C:\\Program Files';
+    const programFilesX86 = process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)';
+    const localAppData = process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local');
+    
+    possiblePaths.push(
+      path.join(programFiles, 'Google', 'Chrome', 'Application', 'chrome.exe'),
+      path.join(programFilesX86, 'Google', 'Chrome', 'Application', 'chrome.exe'),
+      path.join(localAppData, 'Google', 'Chrome', 'Application', 'chrome.exe'),
+      path.join(programFiles, 'Chromium', 'Application', 'chrome.exe'),
+      path.join(programFilesX86, 'Chromium', 'Application', 'chrome.exe'),
+      path.join(localAppData, 'Chromium', 'Application', 'chrome.exe')
+    );
+  } else if (platform === 'linux') {
+    // Linux
+    possiblePaths.push(
+      '/usr/bin/google-chrome',
+      '/usr/bin/google-chrome-stable',
+      '/usr/bin/chromium',
+      '/usr/bin/chromium-browser',
+      '/snap/bin/chromium',
+      '/usr/local/bin/chrome',
+      '/usr/local/bin/chromium'
+    );
+  }
+
+  // 检查每个可能的路径
+  for (const chromePath of possiblePaths) {
+    try {
+      if (fs.existsSync(chromePath)) {
+        console.log(`✅ 找到 Chrome/Chromium: ${chromePath}`);
+        return chromePath;
+      }
+    } catch (error) {
+      // 忽略文件系统错误
+    }
+  }
+
+  console.warn('⚠️  未找到系统 Chrome/Chromium，Puppeteer 将尝试使用默认路径');
+  return null;
+}
+
+/**
+ * 使用 pixiv-token-getter 进行登录（Electron 环境）
+ * 这是推荐的登录方法，优先使用
+ */
+async function loginWithPixivTokenGetter(proxyConfig) {
+  if (!pixivTokenGetter) {
+    throw new Error('pixiv-token-getter 未安装，无法使用 pixiv-token-getter 登录');
+  }
+
+  try {
+    console.log('🚀 开始使用 pixiv-token-getter 登录...');
+    
+    // 检查是否有适配器可用
+    if (pixivTokenGetterAdapter && pixivTokenGetterAdapter.loginWithPixivTokenGetterInteractive) {
+      console.log('📦 使用适配器进行登录...');
+      const loginInfo = await pixivTokenGetterAdapter.loginWithPixivTokenGetterInteractive(proxyConfig);
+      
+      if (!loginInfo) {
+        throw new Error('pixiv-token-getter 登录失败：返回结果为空');
+      }
+      
+      // 转换格式以匹配 Electron 的期望格式
+      return {
+        success: true,
+        data: {
+          accessToken: loginInfo.access_token || loginInfo.accessToken,
+          refreshToken: loginInfo.refresh_token || loginInfo.refreshToken,
+          expiresIn: loginInfo.expires_in || loginInfo.expiresIn,
+          tokenType: loginInfo.token_type || loginInfo.tokenType || 'bearer',
+          user: loginInfo.user || {},
+        },
+      };
+    } else {
+      // 直接使用 pixiv-token-getter
+      console.log('📦 直接使用 pixiv-token-getter 进行登录...');
+      
+      // 注意：pixiv-token-getter 不支持代理配置，但我们可以继续
+      if (proxyConfig && proxyConfig.enabled) {
+        console.warn('⚠️  pixiv-token-getter 不支持代理配置，将不使用代理');
+      }
+      
+      const { getTokenInteractive } = pixivTokenGetter;
+      const tokenInfo = await getTokenInteractive({
+        headless: false,
+        timeout: 300000, // 5 分钟
+        onBrowserOpen: () => {
+          console.log('🌐 浏览器已打开，请完成登录...');
+        },
+        onPageReady: (page, url) => {
+          console.log(`📱 登录页面已就绪: ${url}`);
+        },
+      });
+      
+      // 转换格式
+      const user = tokenInfo.user || {};
+      return {
+        success: true,
+        data: {
+          accessToken: tokenInfo.access_token,
+          refreshToken: tokenInfo.refresh_token,
+          expiresIn: tokenInfo.expires_in,
+          tokenType: tokenInfo.token_type || 'bearer',
+          user: {
+            id: user.id || '',
+            name: user.name || '',
+            account: user.account || '',
+            profile_image_urls: user.profile_image_urls || {
+              px_16x16: '',
+              px_50x50: '',
+              px_170x170: '',
+            },
+            mail_address: user.mail_address || '',
+            is_premium: user.is_premium || false,
+            x_restrict: user.x_restrict || 0,
+            is_mail_authorized: user.is_mail_authorized || false,
+            require_policy_agreement: user.require_policy_agreement || false,
+          },
+        },
+      };
+    }
+  } catch (error) {
+    console.error('❌ pixiv-token-getter 登录失败:', error);
+    throw error;
+  }
+}
+
+/**
+ * 使用 Puppeteer 进行登录（Electron 环境）
+ */
+async function loginWithPuppeteer(codeVerifier, codeChallenge, proxyConfig) {
+  if (!puppeteer) {
+    throw new Error('Puppeteer-core 未安装，无法使用 Puppeteer 登录');
+  }
+
+  let browser = null;
+  
+  try {
+    console.log('🚀 开始使用 Puppeteer 登录...');
+    
+    // 构建登录 URL
+    const loginParams = new URLSearchParams({
+      code_challenge: codeChallenge,
+      code_challenge_method: 'S256',
+      client: 'pixiv-android',
+    });
+    const loginUrl = `${PIXIV_LOGIN_URL}?${loginParams.toString()}`;
+    
+    console.log('🌐 登录 URL:', loginUrl);
+    
+    // 配置 Puppeteer 启动选项
+    const launchOptions = {
+      headless: false, // 显示浏览器窗口
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-blink-features=AutomationControlled',
+        '--disable-dev-shm-usage',
+        '--disable-accelerated-2d-canvas',
+        '--no-first-run',
+        '--disable-gpu',
+      ],
+      ignoreHTTPSErrors: true,
+    };
+    
+    // 尝试查找系统 Chrome
+    const chromeExecutable = findChromeExecutable();
+    if (chromeExecutable) {
+      launchOptions.executablePath = chromeExecutable;
+    }
+    
+    // 添加代理配置
+    if (proxyConfig && proxyConfig.enabled) {
+      const proxyUrl = buildProxyUrl(proxyConfig);
+      if (proxyUrl) {
+        launchOptions.args.push(`--proxy-server=${proxyUrl}`);
+        console.log(`🔌 使用代理: ${proxyUrl}`);
+      }
+    }
+    
+    // 启动浏览器
+    console.log('🌐 正在启动浏览器...');
+    browser = await puppeteer.launch(launchOptions);
+    puppeteerBrowser = browser; // 保存浏览器实例以便后续关闭
+    console.log('✅ 浏览器已启动');
+    
+    const page = await browser.newPage();
+    
+    // 设置 User-Agent
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+    
+    // 设置额外的 HTTP 头
+    await page.setExtraHTTPHeaders({
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+    });
+    
+    // 导航到登录页面
+    console.log('📱 正在打开登录页面...');
+    try {
+      await page.goto(loginUrl, { waitUntil: 'networkidle2', timeout: 60000 });
+    } catch (error) {
+      console.log('⚠️  networkidle2 超时，尝试 domcontentloaded...');
+      await page.goto(loginUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    }
+    
+    console.log('✅ 登录页面已打开');
+    console.log('👤 请在浏览器窗口中完成登录...');
+    
+    // 等待授权码（最多 5 分钟）
+    const code = await waitForAuthCodePuppeteer(page, 300000);
+    
+    if (!code) {
+      // 再次尝试从当前 URL 提取 code
+      const currentUrl = page.url();
+      console.log(`🔍 当前页面 URL: ${currentUrl}`);
+      
+      try {
+        const urlObj = new URL(currentUrl);
+        const codeFromUrl = urlObj.searchParams.get('code');
+        if (codeFromUrl) {
+          console.log('✅ 从当前 URL 中找到授权码');
+          const loginInfo = await exchangeCodeForToken(codeFromUrl, codeVerifier);
+          await browser.close();
+          browser = null;
+          return loginInfo;
+        }
+      } catch (e) {
+        // URL 解析失败
+      }
+      
+      throw new Error('未能获取授权码。登录可能已取消或超时，请重试。');
+    }
+    
+    console.log('✅ 授权码已获取');
+    console.log('🔄 正在交换 token...');
+    
+    // 交换 code 获取 token
+    const loginInfo = await exchangeCodeForToken(code, codeVerifier);
+    
+    console.log('✅ 登录成功！');
+    
+    // 关闭浏览器
+    try {
+      await browser.close();
+      browser = null;
+      puppeteerBrowser = null;
+    } catch (e) {
+      console.warn('⚠️  关闭浏览器时出错，但登录已成功');
+    }
+    
+    return loginInfo;
+  } catch (error) {
+    console.error('❌ Puppeteer 登录失败:', error);
+    
+    // 清理资源
+    if (browser) {
+      try {
+        await browser.close();
+      } catch (e) {
+        // 忽略清理错误
+      }
+      puppeteerBrowser = null;
+    }
+    
+    throw error;
+  }
+}
+
+/**
+ * 等待 Puppeteer 页面中的授权码
+ */
+function waitForAuthCodePuppeteer(page, timeoutMs) {
+  return new Promise((resolve) => {
+    let resolved = false;
+    let pollInterval = null;
+    
+    const cleanup = () => {
+      if (resolved) return;
+      resolved = true;
+      try {
+        page.off('response', onResponse);
+        page.off('framenavigated', onFrameNavigated);
+        if (pollInterval) {
+          clearInterval(pollInterval);
+          pollInterval = null;
+        }
+      } catch (e) {
+        // 忽略清理错误
+      }
+    };
+    
+    const timeout = setTimeout(() => {
+      if (!resolved) {
+        cleanup();
+        console.log('⏱️  等待授权码超时');
+        resolve(null);
+      }
+    }, timeoutMs);
+    
+    const checkUrlForCode = (url) => {
+      try {
+        const urlObj = new URL(url);
+        const code = urlObj.searchParams.get('code');
+        if (code) {
+          console.log('✅ 在 URL 中找到授权码');
+          return code;
+        }
+      } catch (e) {
+        // 无效 URL，忽略
+      }
+      return null;
+    };
+    
+    // 立即检查当前 URL
+    try {
+      const currentUrl = page.url();
+      const currentCode = checkUrlForCode(currentUrl);
+      if (currentCode) {
+        cleanup();
+        clearTimeout(timeout);
+        resolve(currentCode);
+        return;
+      }
+    } catch (e) {
+      // 继续使用监听器
+    }
+    
+    // 监听响应事件
+    const onResponse = async (response) => {
+      if (resolved) return;
+      try {
+        const url = response.url();
+        const code = checkUrlForCode(url);
+        if (code) {
+          cleanup();
+          clearTimeout(timeout);
+          resolve(code);
+        }
+      } catch (e) {
+        // 忽略错误
+      }
+    };
+    
+    // 监听导航事件
+    const onFrameNavigated = async (frame) => {
+      if (resolved || frame !== page.mainFrame()) return;
+      try {
+        const url = frame.url();
+        const code = checkUrlForCode(url);
+        if (code) {
+          cleanup();
+          clearTimeout(timeout);
+          resolve(code);
+        }
+      } catch (e) {
+        // 忽略错误
+      }
+    };
+    
+    // 定期轮询 URL
+    pollInterval = setInterval(async () => {
+      if (resolved) {
+        if (pollInterval) {
+          clearInterval(pollInterval);
+        }
+        return;
+      }
+      
+      try {
+        const url = page.url();
+        const code = checkUrlForCode(url);
+        if (code) {
+          cleanup();
+          clearTimeout(timeout);
+          resolve(code);
+        }
+      } catch (e) {
+        // 忽略错误
+      }
+    }, 1000); // 每秒检查一次
+    
+    // 设置监听器
+    page.on('response', onResponse);
+    page.on('framenavigated', onFrameNavigated);
+  });
 }
 
 /**
@@ -1175,14 +1681,269 @@ function getProxyConfig() {
 }
 
 /**
+ * 尝试常见的网络服务名称来检测代理
+ * @param {Function} resolve Promise resolve 函数
+ */
+function tryCommonServices(resolve) {
+  const { exec } = require('child_process');
+  const commonServices = ['Wi-Fi', 'Ethernet', 'Thunderbolt Bridge'];
+  let serviceIndex = 0;
+  
+  function tryNextService() {
+    if (serviceIndex >= commonServices.length) {
+      console.log('ℹ️  [系统代理检测-macOS] 所有常见服务名称都尝试失败');
+      resolve(null);
+      return;
+    }
+    
+    const service = commonServices[serviceIndex];
+    console.log(`🔍 [系统代理检测-macOS] 尝试服务名称: ${service}`);
+    
+    // 检测 HTTP 代理
+    exec(`networksetup -getwebproxy "${service}"`, (httpError, httpStdout, httpStderr) => {
+      if (!httpError && httpStdout && httpStdout.includes('Enabled: Yes')) {
+        const hostMatch = httpStdout.match(/Server: (.+)/);
+        const portMatch = httpStdout.match(/Port: (\d+)/);
+        if (hostMatch && portMatch) {
+          const host = hostMatch[1].trim();
+          const port = parseInt(portMatch[1].trim(), 10);
+          console.log(`✅ [系统代理检测-macOS] 在服务 "${service}" 上检测到 HTTP 代理:`, { host, port });
+          resolve({
+            enabled: true,
+            host: host,
+            port: port,
+            protocol: 'http',
+            source: 'system-macos'
+          });
+          return;
+        }
+      }
+      
+      // 检测 HTTPS 代理
+      exec(`networksetup -getsecurewebproxy "${service}"`, (httpsError, httpsStdout, httpsStderr) => {
+        if (!httpsError && httpsStdout && httpsStdout.includes('Enabled: Yes')) {
+          const hostMatch = httpsStdout.match(/Server: (.+)/);
+          const portMatch = httpsStdout.match(/Port: (\d+)/);
+          if (hostMatch && portMatch) {
+            const host = hostMatch[1].trim();
+            const port = parseInt(portMatch[1].trim(), 10);
+            console.log(`✅ [系统代理检测-macOS] 在服务 "${service}" 上检测到 HTTPS 代理:`, { host, port });
+            resolve({
+              enabled: true,
+              host: host,
+              port: port,
+              protocol: 'https',
+              source: 'system-macos'
+            });
+            return;
+          }
+        }
+        
+        // 检测 SOCKS 代理
+        exec(`networksetup -getsocksfirewallproxy "${service}"`, (socksError, socksStdout, socksStderr) => {
+          if (!socksError && socksStdout && socksStdout.includes('Enabled: Yes')) {
+            const hostMatch = socksStdout.match(/Server: (.+)/);
+            const portMatch = socksStdout.match(/Port: (\d+)/);
+            if (hostMatch && portMatch) {
+              const host = hostMatch[1].trim();
+              const port = parseInt(portMatch[1].trim(), 10);
+              console.log(`✅ [系统代理检测-macOS] 在服务 "${service}" 上检测到 SOCKS 代理:`, { host, port });
+              resolve({
+                enabled: true,
+                host: host,
+                port: port,
+                protocol: 'socks5',
+                source: 'system-macos'
+              });
+              return;
+            }
+          }
+          
+          // 尝试下一个服务
+          serviceIndex++;
+          tryNextService();
+        });
+      });
+    });
+  }
+  
+  tryNextService();
+}
+
+/**
+ * 在 macOS 上使用系统命令检测代理设置
+ * @returns {Promise<Object|null>} 检测到的系统代理配置，如果没有则返回 null
+ */
+async function detectSystemProxyMacOS() {
+  return new Promise((resolve) => {
+    try {
+      const { exec } = require('child_process');
+      const os = require('os');
+      
+      // 只在 macOS 上执行
+      if (os.platform() !== 'darwin') {
+        resolve(null);
+        return;
+      }
+      
+      // 获取当前网络服务（通常是 Wi-Fi 或以太网）
+      exec('networksetup -listnetworkserviceorder', (error, stdout, stderr) => {
+        if (error) {
+          console.log('ℹ️  [系统代理检测-macOS] 无法获取网络服务列表:', error.message);
+          // 如果无法获取网络服务列表，尝试使用常见的服务名称
+          tryCommonServices(resolve);
+          return;
+        }
+        
+        // 解析网络服务名称
+        // 格式示例:
+        // (1) Wi-Fi
+        //     (Hardware Port: Wi-Fi, Device: en0)
+        // (2) Thunderbolt Bridge
+        //     (Hardware Port: Thunderbolt Bridge, Device: bridge0)
+        const lines = stdout.split('\n');
+        const services = [];
+        
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i].trim();
+          // 查找服务名称（通常在括号前的行）
+          if (line && !line.startsWith('(') && !line.startsWith('*')) {
+            const nextLine = i + 1 < lines.length ? lines[i + 1].trim() : '';
+            // 如果下一行包含 Hardware Port，说明这是有效的网络服务
+            if (nextLine.includes('Hardware Port:')) {
+              services.push(line);
+            }
+          }
+        }
+        
+        // 优先使用 Wi-Fi 或以太网
+        let networkService = services.find(s => 
+          s.toLowerCase().includes('wi-fi') || 
+          s.toLowerCase().includes('ethernet') ||
+          s.toLowerCase().includes('thunderbolt')
+        ) || services[0];
+        
+        if (!networkService) {
+          // 如果没有找到，尝试使用常见的服务名称
+          console.log('ℹ️  [系统代理检测-macOS] 无法从网络服务列表解析服务名称，尝试常见服务名称');
+          tryCommonServices(resolve);
+          return;
+        }
+        
+        console.log(`🔍 [系统代理检测-macOS] 检测网络服务: ${networkService}`);
+        console.log(`ℹ️  [系统代理检测-macOS] 可用服务列表: ${services.join(', ')}`);
+        
+        // 检测 HTTP 代理
+        exec(`networksetup -getwebproxy "${networkService}"`, (httpError, httpStdout, httpStderr) => {
+          if (!httpError && httpStdout) {
+            const httpEnabled = httpStdout.includes('Enabled: Yes');
+            if (httpEnabled) {
+              const hostMatch = httpStdout.match(/Server: (.+)/);
+              const portMatch = httpStdout.match(/Port: (\d+)/);
+              
+              if (hostMatch && portMatch) {
+                const host = hostMatch[1].trim();
+                const port = parseInt(portMatch[1].trim(), 10);
+                
+                console.log('✅ [系统代理检测-macOS] 检测到 HTTP 代理:', { host, port });
+                resolve({
+                  enabled: true,
+                  host: host,
+                  port: port,
+                  protocol: 'http',
+                  source: 'system-macos'
+                });
+                return;
+              }
+            }
+          }
+          
+          // 检测 HTTPS 代理
+          exec(`networksetup -getsecurewebproxy "${networkService}"`, (httpsError, httpsStdout, httpsStderr) => {
+            if (!httpsError && httpsStdout) {
+              const httpsEnabled = httpsStdout.includes('Enabled: Yes');
+              if (httpsEnabled) {
+                const hostMatch = httpsStdout.match(/Server: (.+)/);
+                const portMatch = httpsStdout.match(/Port: (\d+)/);
+                
+                if (hostMatch && portMatch) {
+                  const host = hostMatch[1].trim();
+                  const port = parseInt(portMatch[1].trim(), 10);
+                  
+                  console.log('✅ [系统代理检测-macOS] 检测到 HTTPS 代理:', { host, port });
+                  resolve({
+                    enabled: true,
+                    host: host,
+                    port: port,
+                    protocol: 'https',
+                    source: 'system-macos'
+                  });
+                  return;
+                }
+              }
+            }
+            
+            // 检测 SOCKS 代理
+            exec(`networksetup -getsocksfirewallproxy "${networkService}"`, (socksError, socksStdout, socksStderr) => {
+              if (!socksError && socksStdout) {
+                const socksEnabled = socksStdout.includes('Enabled: Yes');
+                if (socksEnabled) {
+                  const hostMatch = socksStdout.match(/Server: (.+)/);
+                  const portMatch = socksStdout.match(/Port: (\d+)/);
+                  
+                  if (hostMatch && portMatch) {
+                    const host = hostMatch[1].trim();
+                    const port = parseInt(portMatch[1].trim(), 10);
+                    
+                    console.log('✅ [系统代理检测-macOS] 检测到 SOCKS 代理:', { host, port });
+                    resolve({
+                      enabled: true,
+                      host: host,
+                      port: port,
+                      protocol: 'socks5',
+                      source: 'system-macos'
+                    });
+                    return;
+                  }
+                }
+              }
+              
+              // 没有检测到任何代理
+              console.log('ℹ️  [系统代理检测-macOS] 未检测到系统代理设置');
+              resolve(null);
+            });
+          });
+        });
+      });
+    } catch (error) {
+      console.warn('⚠️  [系统代理检测-macOS] 检测系统代理时出错:', error.message);
+      resolve(null);
+    }
+  });
+}
+
+/**
  * 检测系统代理设置
  * @param {Session} session Electron session 对象
  * @returns {Promise<Object|null>} 检测到的系统代理配置，如果没有则返回 null
  */
 async function detectSystemProxy(session) {
   try {
-    // 使用 resolveProxy 检测系统代理
-    // 测试多个 URL 来检测系统代理（HTTPS 和 HTTP）
+    console.log('🔍 [系统代理检测] 开始检测系统代理设置...');
+    
+    // 方法1: 在 macOS 上使用系统命令检测（更可靠）
+    const os = require('os');
+    if (os.platform() === 'darwin') {
+      console.log('🔍 [系统代理检测] 使用 macOS 系统命令检测...');
+      const macOSProxy = await detectSystemProxyMacOS();
+      if (macOSProxy) {
+        console.log('✅ [系统代理检测] 通过 macOS 系统命令检测到代理:', macOSProxy);
+        return macOSProxy;
+      }
+    }
+    
+    // 方法2: 使用 resolveProxy 检测系统代理（跨平台）
+    console.log('🔍 [系统代理检测] 使用 resolveProxy 检测系统代理...');
     const testUrls = [
       'https://www.pixiv.net',
       'http://www.pixiv.net',
@@ -1228,7 +1989,7 @@ async function detectSystemProxy(session) {
                 protocol = 'http';
               }
               
-              console.log('✅ [系统代理检测] 检测到系统代理:', {
+              console.log('✅ [系统代理检测] 通过 resolveProxy 检测到系统代理:', {
                 type: proxyType,
                 host: host,
                 port: port,
@@ -1254,7 +2015,8 @@ async function detectSystemProxy(session) {
     }
     
     console.log('ℹ️  [系统代理检测] 未检测到系统代理设置（resolveProxy 返回 DIRECT）');
-    console.log('ℹ️  [系统代理检测] 注意: Electron 仍可能使用系统代理设置（即使 resolveProxy 返回 DIRECT）');
+    console.log('ℹ️  [系统代理检测] 注意: Electron 仍可能自动使用系统代理设置（即使 resolveProxy 返回 DIRECT）');
+    console.log('ℹ️  [系统代理检测] Electron 默认会使用系统代理设置，无需手动配置');
     return null;
   } catch (error) {
     console.warn('⚠️  [系统代理检测] 检测系统代理时出错:', error.message);
@@ -1292,6 +2054,11 @@ function buildProxyUrl(proxyConfig) {
 /**
  * 创建登录窗口 - 彻底重写版本
  * 使用多重机制确保100%捕获授权码
+ */
+/**
+ * @deprecated 此函数已被废弃，不再使用
+ * 新的登录方案使用系统浏览器 + 授权码输入对话框
+ * 保留此函数仅供参考，可能在将来移除
  */
 function createLoginWindow(codeVerifier, codeChallenge) {
   // 如果已有登录窗口，先关闭
@@ -1442,11 +2209,17 @@ function createLoginWindow(codeVerifier, codeChallenge) {
           protocol: proxyConfig.protocol
         });
         
-        // 如果是系统代理，不设置 proxyRules，让 Electron 自动使用系统代理
-        if (proxyConfig.source === 'system') {
-          console.log('ℹ️  [代理设置] 使用系统代理，Electron 将自动使用系统代理设置');
+        // 如果是系统代理（通过系统命令或 resolveProxy 检测到的），不设置 proxyRules，让 Electron 自动使用系统代理
+        if (proxyConfig.source === 'system' || proxyConfig.source === 'system-macos') {
+          console.log('ℹ️  [代理设置] 检测到系统代理，Electron 将自动使用系统代理设置');
+          console.log('ℹ️  [代理设置] 系统代理信息:', {
+            host: proxyConfig.host,
+            port: proxyConfig.port,
+            protocol: proxyConfig.protocol
+          });
           // 不调用 setProxy，Electron 默认会使用系统代理
-          return { success: true, source: 'system', config: proxyConfig };
+          // 这样可以确保 Electron 使用系统的完整代理配置（包括 PAC 脚本、代理规则等）
+          return { success: true, source: proxyConfig.source, config: proxyConfig };
         } else {
           // 对于配置文件或环境变量的代理，需要显式设置
           const proxyUrl = buildProxyUrl(proxyConfig);
@@ -1468,10 +2241,11 @@ function createLoginWindow(codeVerifier, codeChallenge) {
           }
         }
       } else {
-        console.log('ℹ️  [代理设置] 未检测到任何代理配置');
-        console.log('ℹ️  [代理设置] Electron 将使用系统代理设置（如果已配置）或直连');
+        console.log('ℹ️  [代理设置] 未检测到任何代理配置（配置文件、环境变量或系统代理）');
+        console.log('ℹ️  [代理设置] Electron 将自动使用系统代理设置（如果已配置）或直连');
+        console.log('ℹ️  [代理设置] 注意: 即使没有检测到代理配置，Electron 也会自动使用系统代理设置');
         // 如果没有配置代理，Electron 默认会使用系统代理设置
-        return { success: false, source: 'none', config: null };
+        return { success: true, source: 'system-auto', config: null };
       }
     } catch (error) {
       console.error('❌ [代理设置] 读取代理配置失败:', error);
@@ -1549,9 +2323,10 @@ function createLoginWindow(codeVerifier, codeChallenge) {
         const locationUrl = Array.isArray(location) ? location[0] : location;
         console.log('🔍 [拦截-响应头]', locationUrl);
         
-        // 如果检测到重定向到登录页面，直接加载该URL
+        // 如果检测到重定向到登录页面，记录重定向URL但不立即加载
+        // 让浏览器自然处理重定向，这样更可靠
         if (locationUrl.includes('accounts.pixiv.net/login') && !urlLoaded) {
-          console.log('✅ [响应头处理] 检测到登录页面重定向，准备加载:', locationUrl);
+          console.log('✅ [响应头处理] 检测到登录页面重定向:', locationUrl);
           
           // 确保URL是完整的（如果不是，需要处理相对路径）
           let redirectUrl = locationUrl;
@@ -1566,53 +2341,69 @@ function createLoginWindow(codeVerifier, codeChallenge) {
           
           // 防止重复处理
           if (redirectUrlToLoad === redirectUrl) {
-            console.log('⚠️  [响应头处理] 重定向URL已处理，跳过');
+            console.log('⚠️  [响应头处理] 重定向URL已记录，跳过');
             return;
           }
           
+          // 只记录重定向URL，不立即加载
+          // 让浏览器的重定向机制自然处理，这样更可靠
           redirectUrlToLoad = redirectUrl;
-          
-          // 设置重定向标志
           redirectDetectedInCurrentLoad = true;
           
-          // 清除当前超时
-          if (currentLoadTimeout) {
-            clearTimeout(currentLoadTimeout);
-            currentLoadTimeout = null;
-          }
+          console.log('ℹ️  [响应头处理] 已记录重定向URL，等待浏览器自然重定向...');
           
-          // 标记正在加载，防止重复加载
-          isCurrentlyLoading = true;
-          
-          // 直接加载重定向URL
+          // 设置一个超时，如果浏览器没有自动重定向，再手动加载
           setTimeout(() => {
             if (loginWindow && !loginWindow.isDestroyed()) {
-              console.log('🌐 [响应头处理] 直接加载登录页面:', redirectUrl);
-              loginWindow.webContents.loadURL(redirectUrl, {
-                userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                extraHeaders: 'Accept-Language: en-US,en;q=0.9\nAccept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8\n'
-              }).then(() => {
-                console.log('✅ [响应头处理] 登录页面加载成功');
+              const currentUrl = loginWindow.webContents.getURL();
+              // 如果当前URL还不是登录页面，且重定向URL已记录，则手动加载
+              if (!currentUrl.includes('accounts.pixiv.net/login') && redirectUrlToLoad) {
+                console.log('⚠️  [响应头处理] 浏览器未自动重定向，手动加载登录页面:', redirectUrlToLoad);
+                loginWindow.webContents.loadURL(redirectUrlToLoad, {
+                  userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                  extraHeaders: 'Accept-Language: en-US,en;q=0.9\nAccept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8\n'
+                }).then(() => {
+                  console.log('✅ [响应头处理] 手动加载登录页面成功');
+                  urlLoaded = true;
+                  isCurrentlyLoading = false;
+                  // 清除超时
+                  if (currentLoadTimeout) {
+                    clearTimeout(currentLoadTimeout);
+                    currentLoadTimeout = null;
+                  }
+                  // 显示窗口
+                  if (!loginWindow.isVisible()) {
+                    loginWindow.show();
+                  }
+                }).catch((err) => {
+                  console.error('❌ [响应头处理] 手动加载登录页面失败:', err.message);
+                  // 如果加载失败，清除重定向URL记录，允许重试原始URL
+                  urlLoaded = false;
+                  isCurrentlyLoading = false;
+                  redirectUrlToLoad = null;
+                  redirectDetectedInCurrentLoad = false;
+                  // 重试原始URL
+                  if (loadAttempts < maxLoadAttempts) {
+                    console.log('🔄 [响应头处理] 将重试加载原始URL...');
+                    setTimeout(() => {
+                      if (loginWindow && !loginWindow.isDestroyed() && !urlLoaded) {
+                        tryLoadURL();
+                      }
+                    }, 2000);
+                  }
+                });
+              } else if (currentUrl.includes('accounts.pixiv.net/login')) {
+                // 浏览器已经自动重定向了
+                console.log('✅ [响应头处理] 浏览器已自动重定向到登录页面');
                 urlLoaded = true;
                 isCurrentlyLoading = false;
-                // 清除超时
                 if (currentLoadTimeout) {
                   clearTimeout(currentLoadTimeout);
                   currentLoadTimeout = null;
                 }
-                // 显示窗口
-                if (!loginWindow.isVisible()) {
-                  loginWindow.show();
-                }
-              }).catch((err) => {
-                console.error('❌ [响应头处理] 加载登录页面失败:', err.message);
-                // 如果加载失败，重置状态以便重试
-                urlLoaded = false;
-                isCurrentlyLoading = false;
-                redirectUrlToLoad = null;
-              });
+              }
             }
-          }, 200); // 短暂延迟，确保响应处理完成
+          }, 1000); // 等待1秒，给浏览器时间自动处理重定向
         }
         
         checkForCallbackUrl(locationUrl);
@@ -1638,17 +2429,33 @@ function createLoginWindow(codeVerifier, codeChallenge) {
   // ========== 方案2: 监听Electron导航事件 ==========
   loginWindow.webContents.on('did-navigate', (event, url) => {
     console.log('🔍 [导航]', url);
+    // 检查是否是回调URL
+    if (url.includes('callback') || url.includes('code=') || url.includes('error=')) {
+      console.log('🎯 检测到可能的回调URL！');
+      console.log('   完整URL:', url);
+    }
     checkForCallbackUrl(url);
   });
 
   loginWindow.webContents.on('did-navigate-in-page', (event, url) => {
     console.log('🔍 [页面内导航]', url);
+    // 检查是否是回调URL
+    if (url.includes('callback') || url.includes('code=') || url.includes('error=')) {
+      console.log('🎯 检测到可能的回调URL（页面内导航）！');
+      console.log('   完整URL:', url);
+    }
     checkForCallbackUrl(url);
   });
 
   loginWindow.webContents.on('did-get-response-details', (event, status, newURL, originalURL, httpResponseCode) => {
     if (newURL) {
-      console.log('🔍 [响应详情]', newURL, '状态码:', httpResponseCode);
+      // 检查是否是回调URL
+      if (newURL.includes('callback') || newURL.includes('code=') || newURL.includes('error=')) {
+        console.log('🎯 检测到可能的回调URL（响应详情）！');
+        console.log('   完整URL:', newURL);
+        console.log('   状态码:', httpResponseCode);
+        console.log('   原始URL:', originalURL);
+      }
       checkForCallbackUrl(newURL);
     }
   });
@@ -1700,6 +2507,11 @@ function createLoginWindow(codeVerifier, codeChallenge) {
   loginWindow.webContents.on('did-finish-load', () => {
     const currentUrl = loginWindow.webContents.getURL();
     console.log('✅ [加载完成]', currentUrl);
+    // 检查是否是回调URL
+    if (currentUrl.includes('callback') || currentUrl.includes('code=') || currentUrl.includes('error=')) {
+      console.log('🎯 检测到可能的回调URL（加载完成）！');
+      console.log('   完整URL:', currentUrl);
+    }
     checkForCallbackUrl(currentUrl);
 
     // 注入JavaScript代码，在页面中监听URL变化
@@ -2232,6 +3044,38 @@ function createLoginWindow(codeVerifier, codeChallenge) {
       return;
     }
     
+    // 如果重定向URL加载失败，清除重定向URL记录，允许重试原始URL
+    if (validatedURL && redirectUrlToLoad && validatedURL.includes('accounts.pixiv.net')) {
+      if (errorCode === -2) { // ERR_FAILED
+        console.error('❌ [重定向处理] 重定向URL加载失败:', validatedURL);
+        console.error('   错误代码:', errorCode, errorDescription);
+        // 清除重定向URL记录，允许重试原始URL
+        redirectUrlToLoad = null;
+        redirectDetectedInCurrentLoad = false;
+        urlLoaded = false;
+        isCurrentlyLoading = false;
+        
+        // 如果还有重试机会，重试原始URL
+        if (failLoadRetryCount < maxFailLoadRetries && loadAttempts < maxLoadAttempts) {
+          failLoadRetryCount++;
+          const retryDelay = 2000; // 2秒后重试
+          console.log(`🔄 [重定向处理] 将在 ${retryDelay/1000} 秒后重试加载原始URL (${failLoadRetryCount}/${maxFailLoadRetries})...`);
+          
+          setTimeout(() => {
+            if (loginWindow && !loginWindow.isDestroyed() && !urlLoaded) {
+              console.log('🔄 [重定向处理] 重试加载原始URL...');
+              tryLoadURL();
+            }
+          }, retryDelay);
+          return; // 已处理，不继续错误处理
+        }
+      } else if (errorCode === -3) { // ERR_ABORTED
+        // 重定向URL加载被中止，可能是正常的，等待一下
+        console.log('ℹ️  [重定向处理] 重定向URL加载被中止，等待中...');
+        return; // 忽略该错误
+      }
+    }
+    
     console.error('❌ 登录窗口加载失败:', {
       errorCode,
       errorDescription,
@@ -2266,8 +3110,12 @@ function createLoginWindow(codeVerifier, codeChallenge) {
           // 重置 urlLoaded 标志，允许重试
           urlLoaded = false;
           isCurrentlyLoading = false;
+          // 如果重定向URL加载失败，清除重定向URL记录
+          if (errorCode === -2 && validatedURL && validatedURL.includes('accounts.pixiv.net')) {
+            redirectUrlToLoad = null;
+            redirectDetectedInCurrentLoad = false;
+          }
           loadAttempts = 0; // 重置加载尝试计数
-          redirectDetectedInCurrentLoad = false; // 重置重定向检测标志
           tryLoadURL();
         }
       }, retryDelay);
@@ -2423,6 +3271,7 @@ function closeLoginWindow() {
 /**
  * 检查 URL 是否为回调 URL 并提取授权码
  * 彻底重写版本 - 更严格的验证和更详细的日志
+ * 增强版本 - 支持更多回调URL格式和更好的错误处理
  */
 async function checkForCallbackUrl(url) {
   // 如果正在处理，忽略（防止重复处理）
@@ -2441,191 +3290,734 @@ async function checkForCallbackUrl(url) {
   }
 
   // 快速检查：如果URL不包含code或error参数，直接返回
-  if (!url.includes('code=') && !url.includes('error=')) {
+  // 同时检查callback URL模式
+  const hasCode = url.includes('code=') || url.includes('?code=') || url.includes('&code=');
+  const hasError = url.includes('error=') || url.includes('?error=') || url.includes('&error=');
+  const isCallbackUrl = url.includes('callback') || url.includes('app-api.pixiv.net/web/v1/users/auth/pixiv/callback');
+  
+  // 如果是回调URL但没有code或error参数，记录日志以便调试
+  if (isCallbackUrl && !hasCode && !hasError) {
+    console.log('🔍 检测到回调URL但没有code/error参数:', url);
+  }
+  
+  if (!hasCode && !hasError && !isCallbackUrl) {
     return false;
   }
 
   try {
-    const urlObj = new URL(url);
+    let urlObj;
+    try {
+      urlObj = new URL(url);
+    } catch (e) {
+      // 如果URL解析失败，尝试处理相对URL
+      if (url.startsWith('/')) {
+        try {
+          urlObj = new URL(url, 'https://app-api.pixiv.net');
+        } catch (e2) {
+          // 如果还是失败，检查是否是fragment中的参数
+          const hashMatch = url.match(/[#&](code|error)=([^&]+)/);
+          if (hashMatch) {
+            // 从hash中提取参数
+            const paramName = hashMatch[1];
+            const paramValue = hashMatch[2];
+            if (paramName === 'code' && paramValue && paramValue.length > 0) {
+              return handleAuthCode(paramValue, url);
+            } else if (paramName === 'error') {
+              return handleAuthError(paramValue, url);
+            }
+          }
+          return false;
+        }
+      } else {
+        return false;
+      }
+    }
     
-    // 检查 URL 中是否有 code 参数
-    const code = urlObj.searchParams.get('code');
+    // 检查 URL 中是否有 code 参数（包括search和hash）
+    const code = urlObj.searchParams.get('code') || (urlObj.hash ? new URLSearchParams(urlObj.hash.substring(1)).get('code') : null);
     
     if (code && code.length > 0 && currentLoginCodeVerifier) {
-      // 立即标记为正在处理，防止重复处理
-      isProcessingAuthCode = true;
-      
       console.log('');
       console.log('═══════════════════════════════════════════════════════');
-      console.log('✅✅✅ 成功检测到授权码！');
+      console.log('🎉🎉🎉 成功捕获回调URL！');
       console.log('═══════════════════════════════════════════════════════');
-      console.log('   授权码 (前20字符):', code.substring(0, 20) + '...');
+      console.log('   回调URL:', url);
+      console.log('   授权码 (前30字符):', code.substring(0, 30) + '...');
       console.log('   授权码长度:', code.length);
-      console.log('   来源 URL:', url);
       console.log('   时间戳:', new Date().toISOString());
       console.log('═══════════════════════════════════════════════════════');
       console.log('');
-      
-      // 保存code verifier（在清除之前）
-      const codeVerifier = currentLoginCodeVerifier;
-      
-      // 立即清除，防止重复使用
-      currentLoginCodeVerifier = null;
-      
-      // 立即关闭登录窗口（不等待token交换完成）
-      closeLoginWindow();
-
-      // 异步交换token（不阻塞）
-      exchangeCodeForToken(code, codeVerifier)
-        .then(async (result) => {
-          console.log('');
-          console.log('═══════════════════════════════════════════════════════');
-          console.log('✅✅✅ Token 交换成功！');
-          console.log('═══════════════════════════════════════════════════════');
-          console.log('   Access Token (前20字符):', result.data.accessToken ? result.data.accessToken.substring(0, 20) + '...' : 'N/A');
-          console.log('   Refresh Token (前20字符):', result.data.refreshToken ? result.data.refreshToken.substring(0, 20) + '...' : 'N/A');
-          console.log('   过期时间:', result.data.expiresIn, '秒');
-          console.log('   用户信息:', result.data.user ? JSON.stringify(result.data.user, null, 2) : 'N/A');
-          console.log('═══════════════════════════════════════════════════════');
-          console.log('');
-          
-          // 确保登录窗口已关闭（双重保险）
-          closeLoginWindow();
-          
-          // 尝试将 token 保存到后端配置
-          // REF: https://www.electronjs.org/docs/latest/api/ipc-main
-          try {
-            safeLog('💾 正在保存 token 到后端配置...');
-            
-            // 等待后端就绪
-            let backendReady = false;
-            for (let i = 0; i < 10; i++) {
-              await new Promise(resolve => safeSetTimeout(resolve, 500));
-              checkBackendReady((ready) => {
-                backendReady = ready;
-              });
-              if (backendReady) {
-                break;
-              }
-            }
-            
-            if (backendReady) {
-              // 调用后端 API 保存 token
-              try {
-                const response = await axios.post(
-                  `http://localhost:${BACKEND_PORT}/api/auth/login-with-token`,
-                  {
-                    refreshToken: result.data.refreshToken
-                  },
-                  {
-                    timeout: 10000,
-                    headers: {
-                      'Content-Type': 'application/json'
-                    }
-                  }
-                );
-                
-                if (response.data && response.data.success) {
-                  safeLog('✅ Token 已成功保存到后端配置');
-                } else {
-                  safeLog('⚠️  Token 保存到后端配置失败，但 token 仍然有效');
-                }
-              } catch (saveError) {
-                safeLog('⚠️  保存 token 到后端配置时出错:', saveError.message);
-                safeLog('   前端仍会尝试保存 token');
-              }
-            } else {
-              safeLog('⚠️  后端未就绪，前端将尝试保存 token');
-            }
-          } catch (saveError) {
-            safeLog('⚠️  保存 token 时出错:', saveError.message);
-          }
-          
-          // 通知主窗口登录成功（前端也会尝试保存 token）
-          if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.webContents.send('login-success', result.data);
-          }
-        })
-        .catch((error) => {
-          console.error('');
-          console.error('═══════════════════════════════════════════════════════');
-          console.error('❌❌❌ Token 交换失败！');
-          console.error('═══════════════════════════════════════════════════════');
-          console.error('   错误消息:', error.message);
-          
-          if (axios.isAxiosError(error) && error.response) {
-            console.error('   HTTP状态:', error.response.status, error.response.statusText);
-            console.error('   响应数据:', JSON.stringify(error.response.data, null, 2));
-          } else if (error.response) {
-            console.error('   HTTP状态:', error.response.status);
-            console.error('   响应数据:', JSON.stringify(error.response.data, null, 2));
-          }
-          
-          if (error.request) {
-            console.error('   请求信息:', error.request);
-          }
-          
-          console.error('   错误堆栈:', error.stack);
-          console.error('═══════════════════════════════════════════════════════');
-          console.error('');
-          
-          // 确保登录窗口已关闭（即使失败也要关闭）
-          closeLoginWindow();
-          
-          // 通知主窗口登录失败
-          if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.webContents.send('login-error', { 
-              message: error.message,
-              details: error.response ? error.response.data : null
-            });
-          }
-        })
-        .finally(() => {
-          // 最终确保窗口已关闭并清理资源
-          closeLoginWindow();
-        });
-      
-      return true; // 表示已找到授权码
+      return handleAuthCode(code, url);
     }
     
-    // 检查是否有错误参数
-    const error = urlObj.searchParams.get('error');
+    // 检查是否有错误参数（包括search和hash）
+    const error = urlObj.searchParams.get('error') || (urlObj.hash ? new URLSearchParams(urlObj.hash.substring(1)).get('error') : null);
     if (error) {
-      console.error('');
-      console.error('═══════════════════════════════════════════════════════');
-      console.error('❌ 登录过程中发生错误');
-      console.error('═══════════════════════════════════════════════════════');
-      console.error('   错误代码:', error);
-      const errorDescription = urlObj.searchParams.get('error_description') || error;
-      console.error('   错误描述:', errorDescription);
-      console.error('   错误URL:', url);
-      console.error('═══════════════════════════════════════════════════════');
-      console.error('');
-      
-      // 关闭登录窗口并清理资源
-      closeLoginWindow();
-
-      // 通知主窗口登录失败
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('login-error', { 
-          message: errorDescription,
-          errorCode: error
-        });
-      }
-      
-      return true; // 表示已处理错误
+      const errorDescription = urlObj.searchParams.get('error_description') || 
+                              (urlObj.hash ? new URLSearchParams(urlObj.hash.substring(1)).get('error_description') : null) ||
+                              error;
+      return handleAuthError(error, errorDescription, url);
     }
     
     return false; // 未找到code或error参数
   } catch (error) {
-    // URL 解析失败
-    // 只对看起来像完整URL的字符串输出警告（减少噪音）
-    if (url && url.startsWith('http') && url.length > 10) {
-      // 静默忽略，避免日志噪音
-      // console.log('⚠️  URL解析失败:', url.substring(0, 100), error.message);
+    // URL 解析失败 - 尝试从原始URL字符串中提取
+    try {
+      // 尝试使用正则表达式提取code参数
+      const codeMatch = url.match(/[?&#]code=([^&#]+)/);
+      if (codeMatch && codeMatch[1] && currentLoginCodeVerifier) {
+        const code = decodeURIComponent(codeMatch[1]);
+        if (code && code.length > 0) {
+          console.log('⚠️  从URL字符串中提取到授权码（URL解析失败）');
+          return handleAuthCode(code, url);
+        }
+      }
+      
+      // 尝试提取error参数
+      const errorMatch = url.match(/[?&#]error=([^&#]+)/);
+      if (errorMatch && errorMatch[1]) {
+        const error = decodeURIComponent(errorMatch[1]);
+        const errorDescMatch = url.match(/[?&#]error_description=([^&#]+)/);
+        const errorDescription = errorDescMatch ? decodeURIComponent(errorDescMatch[1]) : error;
+        return handleAuthError(error, errorDescription, url);
+      }
+    } catch (extractError) {
+      // 提取也失败，静默忽略
     }
     return false;
   }
+}
+
+/**
+ * 处理授权码 - 提取并交换token
+ */
+async function handleAuthCode(code, sourceUrl) {
+  // 立即标记为正在处理，防止重复处理
+  if (isProcessingAuthCode) {
+    return false;
+  }
+  
+  isProcessingAuthCode = true;
+  
+  console.log('');
+  console.log('═══════════════════════════════════════════════════════');
+  console.log('✅✅✅ 成功检测到授权码！');
+  console.log('═══════════════════════════════════════════════════════');
+  console.log('   授权码 (前20字符):', code.substring(0, 20) + '...');
+  console.log('   授权码长度:', code.length);
+  console.log('   来源 URL:', sourceUrl);
+  console.log('   时间戳:', new Date().toISOString());
+  console.log('═══════════════════════════════════════════════════════');
+  console.log('');
+  
+  // 保存code verifier（在清除之前）
+  const codeVerifier = currentLoginCodeVerifier;
+  
+  // 立即清除，防止重复使用
+  currentLoginCodeVerifier = null;
+  
+  // 立即关闭登录窗口（不等待token交换完成）
+  closeLoginWindow();
+
+  // 异步交换token（不阻塞）
+  exchangeCodeForToken(code, codeVerifier)
+    .then(async (result) => {
+      console.log('');
+      console.log('═══════════════════════════════════════════════════════');
+      console.log('✅✅✅ Token 交换成功！');
+      console.log('═══════════════════════════════════════════════════════');
+      console.log('   Access Token (前20字符):', result.data.accessToken ? result.data.accessToken.substring(0, 20) + '...' : 'N/A');
+      console.log('   Refresh Token (前20字符):', result.data.refreshToken ? result.data.refreshToken.substring(0, 20) + '...' : 'N/A');
+      console.log('   过期时间:', result.data.expiresIn, '秒');
+      console.log('   用户信息:', result.data.user ? JSON.stringify(result.data.user, null, 2) : 'N/A');
+      console.log('═══════════════════════════════════════════════════════');
+      console.log('');
+      
+      // 确保登录窗口已关闭（双重保险）
+      closeLoginWindow();
+      
+      // 尝试将 token 保存到后端配置（带重试机制）
+      await saveTokenToBackend(result.data.refreshToken, 3);
+      
+      // 通知主窗口登录成功（前端也会尝试保存 token）
+      // 使用标志位防止重复发送
+      let eventSent = false;
+      const sendLoginSuccessEvent = () => {
+        // 如果事件已经发送成功，不再重复发送
+        if (eventSent) {
+          return;
+        }
+        
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          const eventData = result.data;
+          console.log('📤 发送 login-success 事件到主窗口 (BrowserWindow):', {
+            hasRefreshToken: !!eventData.refreshToken,
+            hasAccessToken: !!eventData.accessToken,
+            windowReady: !mainWindow.isDestroyed(),
+          });
+          try {
+            mainWindow.webContents.send('login-success', eventData);
+            console.log('✅ login-success 事件已发送 (BrowserWindow)');
+            eventSent = true; // 标记为已发送
+            
+            // 备选方案：如果 3 秒后还在登录页面，强制导航到 dashboard
+            // 前端应该已经处理了导航，但这是最后的保障
+            setTimeout(() => {
+              try {
+                const currentUrl = mainWindow.webContents.getURL();
+                console.log('🔍 检查当前页面 URL:', currentUrl);
+                if (currentUrl && currentUrl.includes('/login')) {
+                  console.log('🔄 检测到仍在登录页面，尝试强制导航到 dashboard...');
+                  // 使用 loadURL 作为最后的手段
+                  const dashboardUrl = `http://localhost:${BACKEND_PORT}/dashboard`;
+                  mainWindow.webContents.loadURL(dashboardUrl).then(() => {
+                    console.log('✅ 已通过 loadURL 导航到 dashboard');
+                  }).catch(err => {
+                    console.error('❌ loadURL 导航失败:', err.message);
+                    // 最后尝试：使用 executeJavaScript
+                    mainWindow.webContents.executeJavaScript(`
+                      window.location.href = '/dashboard';
+                    `).catch(jsErr => {
+                      console.error('❌ executeJavaScript 导航也失败:', jsErr.message);
+                    });
+                  });
+                } else {
+                  console.log('✅ 页面已不在登录页面，导航成功');
+                }
+              } catch (checkError) {
+                console.error('❌ 检查页面 URL 时出错:', checkError.message);
+              }
+            }, 3000); // 增加到 3 秒，给前端更多时间处理
+          } catch (sendError) {
+            console.error('❌ 发送登录成功事件失败:', sendError.message);
+            // 发送失败时不设置标志，允许重试
+          }
+        } else {
+          console.error('❌ 主窗口不存在或已销毁，无法发送事件');
+          // 窗口未准备好时不设置标志，允许重试
+        }
+      };
+      
+      // 立即尝试发送，如果页面未加载，延迟后重试（但只会发送一次）
+      sendLoginSuccessEvent();
+      setTimeout(sendLoginSuccessEvent, 500);
+      setTimeout(sendLoginSuccessEvent, 1000);
+    })
+    .catch((error) => {
+      console.error('');
+      console.error('═══════════════════════════════════════════════════════');
+      console.error('❌❌❌ Token 交换失败！');
+      console.error('═══════════════════════════════════════════════════════');
+      console.error('   错误消息:', error.message);
+      
+      if (axios.isAxiosError(error) && error.response) {
+        console.error('   HTTP状态:', error.response.status, error.response.statusText);
+        console.error('   响应数据:', JSON.stringify(error.response.data, null, 2));
+      } else if (error.response) {
+        console.error('   HTTP状态:', error.response.status);
+        console.error('   响应数据:', JSON.stringify(error.response.data, null, 2));
+      }
+      
+      if (error.request) {
+        console.error('   请求信息:', error.request);
+      }
+      
+      console.error('   错误堆栈:', error.stack);
+      console.error('═══════════════════════════════════════════════════════');
+      console.error('');
+      
+      // 确保登录窗口已关闭（即使失败也要关闭）
+      closeLoginWindow();
+      
+      // 通知主窗口登录失败
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        try {
+          mainWindow.webContents.send('login-error', { 
+            message: error.message || 'Token交换失败',
+            details: error.response ? error.response.data : null,
+            code: error.code || 'UNKNOWN_ERROR'
+          });
+          console.log('✅ 已发送登录失败事件到主窗口');
+        } catch (sendError) {
+          console.error('❌ 发送登录失败事件失败:', sendError.message);
+        }
+      }
+    })
+    .finally(() => {
+      // 最终确保窗口已关闭并清理资源
+      closeLoginWindow();
+      isProcessingAuthCode = false;
+    });
+  
+  return true; // 表示已找到授权码
+}
+
+/**
+ * 处理认证错误
+ */
+function handleAuthError(error, errorDescription, sourceUrl) {
+  console.error('');
+  console.error('═══════════════════════════════════════════════════════');
+  console.error('❌ 登录过程中发生错误');
+  console.error('═══════════════════════════════════════════════════════');
+  console.error('   错误代码:', error);
+  console.error('   错误描述:', errorDescription);
+  console.error('   错误URL:', sourceUrl);
+  console.error('═══════════════════════════════════════════════════════');
+  console.error('');
+  
+  // 关闭登录窗口并清理资源
+  closeLoginWindow();
+  isProcessingAuthCode = false;
+  currentLoginCodeVerifier = null;
+
+  // 通知主窗口登录失败
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    try {
+      mainWindow.webContents.send('login-error', { 
+        message: errorDescription || error || '登录过程中发生错误',
+        errorCode: error,
+        code: error || 'AUTH_ERROR'
+      });
+      console.log('✅ 已发送登录错误事件到主窗口');
+    } catch (sendError) {
+      console.error('❌ 发送登录错误事件失败:', sendError.message);
+    }
+  }
+  
+  return true; // 表示已处理错误
+}
+
+/**
+ * 显示授权码输入对话框
+ * 引导用户从浏览器回调URL中提取授权码
+ */
+function showAuthCodeInputDialog() {
+  return new Promise((resolve) => {
+    // 创建授权码输入窗口
+    const authCodeWindow = new BrowserWindow({
+      width: 600,
+      height: 500,
+      parent: mainWindow,
+      modal: true,
+      resizable: false,
+      webPreferences: {
+        nodeIntegration: true,
+        contextIsolation: false,
+        webSecurity: true,
+      },
+      title: 'Pixiv 登录 - 输入授权码',
+      show: false,
+    });
+
+    // 创建辅助页面HTML
+    const helperHTML = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Pixiv 登录 - 输入授权码</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: #f5f5f5;
+      padding: 30px;
+      color: #333;
+    }
+    .container {
+      max-width: 540px;
+      margin: 0 auto;
+    }
+    h1 {
+      font-size: 24px;
+      margin-bottom: 10px;
+      color: #333;
+    }
+    .subtitle {
+      color: #666;
+      font-size: 14px;
+      margin-bottom: 30px;
+    }
+    .steps {
+      background: white;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .step {
+      margin-bottom: 20px;
+    }
+    .step:last-child {
+      margin-bottom: 0;
+    }
+    .step-number {
+      display: inline-block;
+      width: 24px;
+      height: 24px;
+      background: #667eea;
+      color: white;
+      border-radius: 50%;
+      text-align: center;
+      line-height: 24px;
+      font-size: 14px;
+      font-weight: bold;
+      margin-right: 10px;
+    }
+    .step-text {
+      display: inline-block;
+      vertical-align: top;
+      width: calc(100% - 40px);
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    .code-example {
+      background: #f8f9fa;
+      border: 1px solid #e9ecef;
+      border-radius: 4px;
+      padding: 10px;
+      margin-top: 10px;
+      font-family: 'Monaco', 'Courier New', monospace;
+      font-size: 12px;
+      color: #495057;
+      word-break: break-all;
+    }
+    .code-example .highlight {
+      color: #667eea;
+      font-weight: bold;
+    }
+    .input-section {
+      background: white;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .input-group {
+      margin-bottom: 20px;
+    }
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      color: #333;
+    }
+    input {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+      font-family: 'Monaco', 'Courier New', monospace;
+    }
+    input:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+    }
+    .buttons {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+    }
+    button {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 4px;
+      font-size: 14px;
+      cursor: pointer;
+      font-weight: 500;
+      transition: background 0.2s;
+    }
+    .btn-primary {
+      background: #667eea;
+      color: white;
+    }
+    .btn-primary:hover {
+      background: #5568d3;
+    }
+    .btn-secondary {
+      background: #e9ecef;
+      color: #495057;
+    }
+    .btn-secondary:hover {
+      background: #dee2e6;
+    }
+    .help-text {
+      font-size: 12px;
+      color: #666;
+      margin-top: 8px;
+    }
+    .error {
+      color: #dc3545;
+      font-size: 12px;
+      margin-top: 8px;
+      display: none;
+    }
+    .error.show {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Pixiv 登录</h1>
+    <p class="subtitle">请在浏览器中完成登录，然后输入授权码</p>
+    
+    <div class="steps">
+      <div class="step">
+        <span class="step-number">1</span>
+        <span class="step-text">在浏览器中完成 Pixiv 登录</span>
+      </div>
+      <div class="step">
+        <span class="step-number">2</span>
+        <span class="step-text">登录成功后，浏览器会跳转到回调页面。查看浏览器地址栏中的URL，找到 <span class="highlight">code=</span> 后面的部分</span>
+      </div>
+      <div class="step">
+        <span class="step-number">3</span>
+        <span class="step-text">复制授权码（code= 后面的字符串），粘贴到下面的输入框中</span>
+      </div>
+    </div>
+    
+    <div class="code-example">
+      示例URL：<br>
+      https://app-api.pixiv.net/web/v1/users/auth/pixiv/callback?<span class="highlight">code=xxxxxxxxxxxxxxxxxxxxxxxx</span>&state=...
+    </div>
+    
+    <div class="input-section">
+      <div class="input-group">
+        <label for="authCode">授权码 (Authorization Code)</label>
+        <input 
+          type="text" 
+          id="authCode" 
+          placeholder="请输入授权码..." 
+          autocomplete="off"
+          autofocus
+        />
+        <div class="help-text">从浏览器回调URL的 code= 参数中复制</div>
+        <div class="error" id="error"></div>
+      </div>
+      
+      <div class="buttons">
+        <button class="btn-secondary" id="cancelBtn">取消</button>
+        <button class="btn-primary" id="submitBtn">确定</button>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    const { ipcRenderer } = require('electron');
+    const authCodeInput = document.getElementById('authCode');
+    const submitBtn = document.getElementById('submitBtn');
+    const cancelBtn = document.getElementById('cancelBtn');
+    const errorDiv = document.getElementById('error');
+    
+    // 从全局变量获取通道名称（将在页面加载后注入）
+    let submitChannel = 'auth-code-submitted';
+    let cancelChannel = 'auth-code-cancelled';
+    
+    function showError(message) {
+      errorDiv.textContent = message;
+      errorDiv.classList.add('show');
+    }
+    
+    function hideError() {
+      errorDiv.classList.remove('show');
+    }
+    
+    function validateAuthCode(code) {
+      if (!code || code.trim() === '') {
+        return '请输入授权码';
+      }
+      if (code.length < 10) {
+        return '授权码长度不正确，请检查是否复制完整';
+      }
+      return null;
+    }
+    
+    submitBtn.addEventListener('click', () => {
+      const code = authCodeInput.value.trim();
+      const error = validateAuthCode(code);
+      
+      if (error) {
+        showError(error);
+        return;
+      }
+      
+      hideError();
+      ipcRenderer.send(submitChannel, code);
+    });
+    
+    cancelBtn.addEventListener('click', () => {
+      ipcRenderer.send(cancelChannel);
+    });
+    
+    // 按 Enter 键提交
+    authCodeInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        submitBtn.click();
+      }
+    });
+    
+    // 自动从剪贴板粘贴（如果包含code=）
+    navigator.clipboard.readText().then(text => {
+      const match = text.match(/[?&]code=([^&]+)/);
+      if (match && match[1]) {
+        authCodeInput.value = match[1];
+        authCodeInput.select();
+      }
+    }).catch(() => {
+      // 忽略剪贴板读取错误
+    });
+    
+    // 设置通道名称的函数（将在页面加载后调用）
+    window.setChannels = function(submit, cancel) {
+      submitChannel = submit;
+      cancelChannel = cancel;
+    };
+  </script>
+</body>
+</html>`;
+
+    // 创建唯一的事件通道
+    const channelId = `auth-code-${Date.now()}-${Math.random()}`;
+    const submitChannel = `${channelId}-submit`;
+    const cancelChannel = `${channelId}-cancel`;
+
+    // 处理授权码提交
+    const submitHandler = (event, code) => {
+      // 只处理来自 authCodeWindow 的事件
+      if (event.sender === authCodeWindow.webContents) {
+        if (authCodeWindow && !authCodeWindow.isDestroyed()) {
+          authCodeWindow.close();
+        }
+        ipcMain.removeListener(submitChannel, submitHandler);
+        ipcMain.removeListener(cancelChannel, cancelHandler);
+        resolve(code);
+      }
+    };
+
+    // 处理取消
+    const cancelHandler = (event) => {
+      // 只处理来自 authCodeWindow 的事件
+      if (event.sender === authCodeWindow.webContents) {
+        if (authCodeWindow && !authCodeWindow.isDestroyed()) {
+          authCodeWindow.close();
+        }
+        ipcMain.removeListener(submitChannel, submitHandler);
+        ipcMain.removeListener(cancelChannel, cancelHandler);
+        resolve(null);
+      }
+    };
+
+    ipcMain.on(submitChannel, submitHandler);
+    ipcMain.on(cancelChannel, cancelHandler);
+
+    // 加载辅助页面
+    authCodeWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(helperHTML)}`);
+
+    // 页面加载完成后注入通道名称
+    authCodeWindow.webContents.once('did-finish-load', () => {
+      authCodeWindow.webContents.executeJavaScript(`
+        if (window.setChannels) {
+          window.setChannels('${submitChannel}', '${cancelChannel}');
+        }
+      `).catch(err => {
+        console.error('注入通道名称失败:', err);
+      });
+    });
+
+    // 窗口关闭时清理
+    authCodeWindow.on('closed', () => {
+      // 移除事件监听器
+      ipcMain.removeListener(submitChannel, submitHandler);
+      ipcMain.removeListener(cancelChannel, cancelHandler);
+      // 如果窗口关闭时还没有resolve，resolve为null
+      resolve(null);
+    });
+
+    // 显示窗口
+    authCodeWindow.once('ready-to-show', () => {
+      authCodeWindow.show();
+      authCodeWindow.focus();
+    });
+  });
+}
+
+/**
+ * 保存token到后端（带重试机制）
+ */
+async function saveTokenToBackend(refreshToken, maxRetries = 3) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      safeLog(`💾 正在保存 token 到后端配置 (尝试 ${attempt}/${maxRetries})...`);
+      
+      // 等待后端就绪（最多等待10秒）
+      let backendReady = false;
+      for (let i = 0; i < 20; i++) {
+        await new Promise(resolve => safeSetTimeout(resolve, 500));
+        try {
+          const response = await axios.get(`http://localhost:${BACKEND_PORT}/api/health`, {
+            timeout: 2000,
+            validateStatus: () => true
+          });
+          if (response.status === 200) {
+            backendReady = true;
+            break;
+          }
+        } catch (e) {
+          // 继续等待
+        }
+      }
+      
+      if (!backendReady) {
+        safeLog(`⚠️  后端未就绪 (尝试 ${attempt}/${maxRetries})，前端将尝试保存 token`);
+        if (attempt < maxRetries) {
+          await new Promise(resolve => safeSetTimeout(resolve, 2000));
+          continue;
+        }
+        return false;
+      }
+      
+      // 调用后端 API 保存 token
+      const response = await axios.post(
+        `http://localhost:${BACKEND_PORT}/api/auth/login-with-token`,
+        {
+          refreshToken: refreshToken
+        },
+        {
+          timeout: 15000,
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          validateStatus: (status) => status >= 200 && status < 500
+        }
+      );
+      
+      if (response.data && response.data.success) {
+        safeLog('✅ Token 已成功保存到后端配置');
+        return true;
+      } else {
+        throw new Error(response.data?.message || '保存token失败：响应未成功');
+      }
+    } catch (saveError) {
+      const errorMsg = saveError.response?.data?.message || saveError.message || '未知错误';
+      safeLog(`⚠️  保存 token 到后端配置失败 (尝试 ${attempt}/${maxRetries}):`, errorMsg);
+      
+      if (attempt < maxRetries) {
+        // 等待后重试（指数退避）
+        const delay = 1000 * Math.pow(2, attempt - 1);
+        safeLog(`   将在 ${delay / 1000} 秒后重试...`);
+        await new Promise(resolve => safeSetTimeout(resolve, delay));
+      } else {
+        safeLog('⚠️  所有重试都失败，前端仍会尝试保存 token');
+        return false;
+      }
+    }
+  }
+  
+  return false;
 }
 
 // 停止后端服务器 - 改进版本，确保完全清理
@@ -2687,6 +4079,461 @@ async function stopBackend() {
     } catch (err) {
       safeError('停止后端进程时出错:', err);
       onExit();
+    }
+  });
+}
+
+// 初始化 IPC 处理程序（只注册一次，避免重复注册）
+function setupIpcHandlers() {
+  // 移除已存在的处理程序（如果存在），避免重复注册错误
+  try {
+    ipcMain.removeAllListeners('backend-ready');
+    ipcMain.removeHandler('open-login-window');
+    ipcMain.removeHandler('close-login-window');
+    ipcMain.removeHandler('window-minimize');
+    ipcMain.removeHandler('window-maximize');
+    ipcMain.removeHandler('window-close');
+  } catch (error) {
+    // 如果移除失败（比如处理程序不存在），忽略错误
+    console.log('清理 IPC 处理程序:', error.message);
+  }
+
+  // 监听后端就绪事件
+  ipcMain.on('backend-ready', () => {
+    notifyBackendReady();
+  });
+
+  // 处理登录窗口请求 - 优先使用 pixiv-token-getter，然后是 Puppeteer，最后是 BrowserWindow
+  ipcMain.handle('open-login-window', async (event, options = {}) => {
+    try {
+      const useTokenGetter = options.useTokenGetter !== false && pixivTokenGetter !== null; // 默认优先使用 pixiv-token-getter（如果可用）
+      const usePuppeteer = options.usePuppeteer !== false && puppeteer !== null; // 默认使用 Puppeteer（如果可用）
+      const proxyConfig = options.proxy || null;
+      
+      // 优先使用 pixiv-token-getter
+      if (useTokenGetter) {
+        console.log('📞 收到打开登录窗口的请求（使用 pixiv-token-getter，推荐方法）');
+        
+        // 清除 code verifier（pixiv-token-getter 不需要）
+        currentLoginCodeVerifier = null;
+        isProcessingAuthCode = false;
+        
+        // 使用 pixiv-token-getter 进行登录（异步执行，不阻塞响应）
+        loginWithPixivTokenGetter(proxyConfig)
+          .then(async (loginInfo) => {
+            console.log('✅ pixiv-token-getter 登录成功');
+            
+            // 清除 code verifier
+            currentLoginCodeVerifier = null;
+            isProcessingAuthCode = false;
+            
+            // 保存 token 到后端
+            if (loginInfo && loginInfo.data && loginInfo.data.refreshToken) {
+              await saveTokenToBackend(loginInfo.data.refreshToken);
+            }
+            
+            // 通知主窗口登录成功
+            // 使用标志位防止重复发送
+            let eventSent = false;
+            const sendLoginSuccessEvent = () => {
+              // 如果事件已经发送成功，不再重复发送
+              if (eventSent) {
+                return;
+              }
+              
+              if (mainWindow && !mainWindow.isDestroyed()) {
+                const eventData = {
+                  accessToken: loginInfo.data.accessToken,
+                  refreshToken: loginInfo.data.refreshToken,
+                  expiresIn: loginInfo.data.expiresIn,
+                  user: loginInfo.data.user,
+                };
+                console.log('📤 发送 login-success 事件到主窗口:', {
+                  hasRefreshToken: !!eventData.refreshToken,
+                  hasAccessToken: !!eventData.accessToken,
+                  windowReady: !mainWindow.isDestroyed(),
+                });
+                try {
+                  mainWindow.webContents.send('login-success', eventData);
+                  console.log('✅ login-success 事件已发送');
+                  eventSent = true; // 标记为已发送
+                  
+                  // 如果事件发送成功，也可以尝试重新加载页面或导航到 dashboard
+                  // 作为备选方案，等待 2 秒后检查是否需要手动导航
+                  setTimeout(() => {
+                    const currentUrl = mainWindow.webContents.getURL();
+                    console.log('🔍 当前页面 URL:', currentUrl);
+                    // 如果还在登录页面，尝试导航到 dashboard
+                    if (currentUrl && currentUrl.includes('/login')) {
+                      console.log('🔄 检测到仍在登录页面，尝试导航到 dashboard...');
+                      mainWindow.webContents.executeJavaScript(`
+                        if (window.location.pathname === '/login' || window.location.pathname.includes('/login')) {
+                          window.location.href = '/dashboard';
+                        }
+                      `).catch(err => {
+                        console.error('❌ 执行导航脚本失败:', err.message);
+                      });
+                    }
+                  }, 2000);
+                } catch (sendError) {
+                  console.error('❌ 发送 login-success 事件失败:', sendError.message);
+                  // 发送失败时不设置标志，允许重试
+                }
+              } else {
+                console.error('❌ 主窗口不存在或已销毁，无法发送事件');
+                // 窗口未准备好时不设置标志，允许重试
+              }
+            };
+            
+            // 立即尝试发送，如果页面未加载，延迟后重试（但只会发送一次）
+            sendLoginSuccessEvent();
+            setTimeout(sendLoginSuccessEvent, 500);
+            setTimeout(sendLoginSuccessEvent, 1000);
+          })
+          .catch(async (error) => {
+            console.error('❌ pixiv-token-getter 登录失败:', error);
+            console.log('🔄 回退到 Puppeteer 登录...');
+            
+            // 清除 code verifier
+            currentLoginCodeVerifier = null;
+            isProcessingAuthCode = false;
+            
+            // 如果 pixiv-token-getter 失败，回退到 Puppeteer
+            if (usePuppeteer) {
+              try {
+                // 生成 PKCE 参数
+                const codeVerifier = generateCodeVerifier();
+                const codeChallenge = generateCodeChallenge(codeVerifier);
+                console.log('✅ PKCE 参数已生成');
+                console.log('   Code Challenge:', codeChallenge);
+                console.log('   Code Verifier (前20字符):', codeVerifier.substring(0, 20) + '...');
+                
+                // 保存 code verifier 供后续使用
+                currentLoginCodeVerifier = codeVerifier;
+                isProcessingAuthCode = false;
+                
+                // 使用 Puppeteer 进行登录（异步执行，不阻塞响应）
+                loginWithPuppeteer(codeVerifier, codeChallenge, proxyConfig)
+                  .then(async (loginInfo) => {
+                    console.log('✅ Puppeteer 登录成功');
+                    
+                    // 清除 code verifier
+                    currentLoginCodeVerifier = null;
+                    isProcessingAuthCode = false;
+                    
+                    // 保存 token 到后端
+                    if (loginInfo && loginInfo.data && loginInfo.data.refreshToken) {
+                      await saveTokenToBackend(loginInfo.data.refreshToken);
+                    }
+                    
+                    // 通知主窗口登录成功
+                    // 使用标志位防止重复发送
+                    let eventSent = false;
+                    const sendLoginSuccessEvent = () => {
+                      // 如果事件已经发送成功，不再重复发送
+                      if (eventSent) {
+                        return;
+                      }
+                      
+                      if (mainWindow && !mainWindow.isDestroyed()) {
+                        const eventData = {
+                          accessToken: loginInfo.data.accessToken,
+                          refreshToken: loginInfo.data.refreshToken,
+                          expiresIn: loginInfo.data.expiresIn,
+                          user: loginInfo.data.user,
+                        };
+                        console.log('📤 发送 login-success 事件到主窗口:', {
+                          hasRefreshToken: !!eventData.refreshToken,
+                          hasAccessToken: !!eventData.accessToken,
+                          windowReady: !mainWindow.isDestroyed(),
+                        });
+                        try {
+                          mainWindow.webContents.send('login-success', eventData);
+                          console.log('✅ login-success 事件已发送');
+                          eventSent = true; // 标记为已发送
+                          
+                          setTimeout(() => {
+                            const currentUrl = mainWindow.webContents.getURL();
+                            console.log('🔍 当前页面 URL:', currentUrl);
+                            if (currentUrl && currentUrl.includes('/login')) {
+                              console.log('🔄 检测到仍在登录页面，尝试导航到 dashboard...');
+                              mainWindow.webContents.executeJavaScript(`
+                                if (window.location.pathname === '/login' || window.location.pathname.includes('/login')) {
+                                  window.location.href = '/dashboard';
+                                }
+                              `).catch(err => {
+                                console.error('❌ 执行导航脚本失败:', err.message);
+                              });
+                            }
+                          }, 2000);
+                        } catch (sendError) {
+                          console.error('❌ 发送 login-success 事件失败:', sendError.message);
+                          // 发送失败时不设置标志，允许重试
+                        }
+                      } else {
+                        console.error('❌ 主窗口不存在或已销毁，无法发送事件');
+                        // 窗口未准备好时不设置标志，允许重试
+                      }
+                    };
+                    
+                    // 立即尝试发送，如果页面未加载，延迟后重试（但只会发送一次）
+                    sendLoginSuccessEvent();
+                    setTimeout(sendLoginSuccessEvent, 500);
+                    setTimeout(sendLoginSuccessEvent, 1000);
+                  })
+                  .catch(async (puppeteerError) => {
+                    console.error('❌ Puppeteer 登录也失败:', puppeteerError);
+                    
+                    // 清除 code verifier
+                    currentLoginCodeVerifier = null;
+                    isProcessingAuthCode = false;
+                    
+                    // 通知主窗口登录失败
+                    if (mainWindow && !mainWindow.isDestroyed()) {
+                      mainWindow.webContents.send('login-error', {
+                        message: puppeteerError.message || 'Puppeteer 登录失败',
+                        code: puppeteerError.code || 'PUPPETEER_LOGIN_ERROR'
+                      });
+                    }
+                  });
+              } catch (fallbackError) {
+                console.error('❌ 回退到 Puppeteer 时出错:', fallbackError);
+                // 通知主窗口登录失败
+                if (mainWindow && !mainWindow.isDestroyed()) {
+                  mainWindow.webContents.send('login-error', {
+                    message: error.message || 'pixiv-token-getter 登录失败，且无法回退到 Puppeteer',
+                    code: error.code || 'TOKEN_GETTER_LOGIN_ERROR'
+                  });
+                }
+              }
+            } else {
+              // 如果 Puppeteer 不可用，通知主窗口登录失败
+              if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.webContents.send('login-error', {
+                  message: error.message || 'pixiv-token-getter 登录失败，且 Puppeteer 不可用',
+                  code: error.code || 'TOKEN_GETTER_LOGIN_ERROR'
+                });
+              }
+            }
+          });
+        
+        return { success: true, method: 'pixiv-token-getter' };
+      } else if (usePuppeteer) {
+        console.log('📞 收到打开登录窗口的请求（使用 Puppeteer）');
+        
+        // 生成 PKCE 参数
+        const codeVerifier = generateCodeVerifier();
+        const codeChallenge = generateCodeChallenge(codeVerifier);
+        console.log('✅ PKCE 参数已生成');
+        console.log('   Code Challenge:', codeChallenge);
+        console.log('   Code Verifier (前20字符):', codeVerifier.substring(0, 20) + '...');
+        
+        // 保存 code verifier 供后续使用
+        currentLoginCodeVerifier = codeVerifier;
+        isProcessingAuthCode = false;
+        
+        // 使用 Puppeteer 进行登录（异步执行，不阻塞响应）
+        loginWithPuppeteer(codeVerifier, codeChallenge, proxyConfig)
+          .then(async (loginInfo) => {
+            console.log('✅ Puppeteer 登录成功');
+            
+            // 清除 code verifier
+            currentLoginCodeVerifier = null;
+            isProcessingAuthCode = false;
+            
+            // 保存 token 到后端
+            if (loginInfo && loginInfo.data && loginInfo.data.refreshToken) {
+              await saveTokenToBackend(loginInfo.data.refreshToken);
+            }
+            
+            // 通知主窗口登录成功
+            // 使用标志位防止重复发送
+            let eventSent = false;
+            const sendLoginSuccessEvent = () => {
+              // 如果事件已经发送成功，不再重复发送
+              if (eventSent) {
+                return;
+              }
+              
+              if (mainWindow && !mainWindow.isDestroyed()) {
+                const eventData = {
+                  accessToken: loginInfo.data.accessToken,
+                  refreshToken: loginInfo.data.refreshToken,
+                  expiresIn: loginInfo.data.expiresIn,
+                  user: loginInfo.data.user,
+                };
+                console.log('📤 发送 login-success 事件到主窗口:', {
+                  hasRefreshToken: !!eventData.refreshToken,
+                  hasAccessToken: !!eventData.accessToken,
+                  windowReady: !mainWindow.isDestroyed(),
+                });
+                try {
+                  mainWindow.webContents.send('login-success', eventData);
+                  console.log('✅ login-success 事件已发送');
+                  eventSent = true; // 标记为已发送
+                  
+                  // 如果事件发送成功，也可以尝试重新加载页面或导航到 dashboard
+                  // 作为备选方案，等待 2 秒后检查是否需要手动导航
+                  setTimeout(() => {
+                    const currentUrl = mainWindow.webContents.getURL();
+                    console.log('🔍 当前页面 URL:', currentUrl);
+                    // 如果还在登录页面，尝试导航到 dashboard
+                    if (currentUrl && currentUrl.includes('/login')) {
+                      console.log('🔄 检测到仍在登录页面，尝试导航到 dashboard...');
+                      mainWindow.webContents.executeJavaScript(`
+                        if (window.location.pathname === '/login' || window.location.pathname.includes('/login')) {
+                          window.location.href = '/dashboard';
+                        }
+                      `).catch(err => {
+                        console.error('❌ 执行导航脚本失败:', err.message);
+                      });
+                    }
+                  }, 2000);
+                } catch (sendError) {
+                  console.error('❌ 发送 login-success 事件失败:', sendError.message);
+                  // 发送失败时不设置标志，允许重试
+                }
+              } else {
+                console.error('❌ 主窗口不存在或已销毁，无法发送事件');
+                // 窗口未准备好时不设置标志，允许重试
+              }
+            };
+            
+            // 立即尝试发送，如果页面未加载，延迟后重试（但只会发送一次）
+            sendLoginSuccessEvent();
+            setTimeout(sendLoginSuccessEvent, 500);
+            setTimeout(sendLoginSuccessEvent, 1000);
+          })
+          .catch(async (error) => {
+            console.error('❌ Puppeteer 登录失败:', error);
+            
+            // 清除 code verifier
+            currentLoginCodeVerifier = null;
+            isProcessingAuthCode = false;
+            
+            // 通知主窗口登录失败
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send('login-error', {
+                message: error.message || 'Puppeteer 登录失败',
+                code: error.code || 'PUPPETEER_LOGIN_ERROR'
+              });
+            }
+          });
+        
+        return { 
+          success: true, 
+          message: 'Puppeteer 登录窗口已打开，请完成登录。',
+          windowOpened: true,
+          method: 'puppeteer'
+        };
+      } else {
+        // 使用 BrowserWindow 方案（备选方案）
+        console.log('📞 收到打开登录窗口的请求（使用 BrowserWindow 备选方案）');
+        
+        // 生成 PKCE 参数
+        const codeVerifier = generateCodeVerifier();
+        const codeChallenge = generateCodeChallenge(codeVerifier);
+        console.log('✅ PKCE 参数已生成');
+        console.log('   Code Challenge:', codeChallenge);
+        console.log('   Code Verifier (前20字符):', codeVerifier.substring(0, 20) + '...');
+        
+        // 保存 code verifier 供后续使用
+        currentLoginCodeVerifier = codeVerifier;
+        isProcessingAuthCode = false;
+        
+        // 构建登录 URL
+        const loginParams = new URLSearchParams({
+          code_challenge: codeChallenge,
+          code_challenge_method: 'S256',
+          client: 'pixiv-android',
+        });
+        const loginUrl = `${PIXIV_LOGIN_URL}?${loginParams.toString()}`;
+        
+        console.log('🌐 登录URL:', loginUrl);
+        console.log('📱 将在Electron窗口中打开登录页面');
+        console.log('🔍 正在监听回调URL...');
+        console.log('   回调URL模式: https://app-api.pixiv.net/web/v1/users/auth/pixiv/callback?code=...');
+        
+        // 使用Electron窗口打开登录页面（会自动捕获回调URL）
+        createLoginWindow(codeVerifier, codeChallenge);
+        
+        // 返回成功，但实际登录会在回调URL被捕获时异步完成
+        // 主窗口会通过 'login-success' 或 'login-error' 事件收到通知
+        return { 
+          success: true, 
+          message: '登录窗口已打开，请完成登录。系统会自动捕获回调URL。',
+          windowOpened: true,
+          method: 'browserwindow'
+        };
+      }
+    } catch (error) {
+      console.error('❌ 打开登录窗口失败:', error);
+      console.error('错误堆栈:', error.stack);
+      
+      // 清除 code verifier
+      currentLoginCodeVerifier = null;
+      isProcessingAuthCode = false;
+      
+      // 通知主窗口登录失败
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('login-error', {
+          message: error.message || '打开登录窗口失败',
+          code: error.code || 'UNKNOWN_ERROR'
+        });
+      }
+      
+      return { success: false, error: error.message };
+    }
+  });
+
+  // 关闭登录窗口
+  ipcMain.handle('close-login-window', async () => {
+    // 关闭 BrowserWindow 登录窗口
+    if (loginWindow) {
+      closeLoginWindow();
+    }
+    
+    // 关闭 Puppeteer 浏览器
+    if (puppeteerBrowser) {
+      try {
+        await puppeteerBrowser.close();
+        puppeteerBrowser = null;
+        console.log('✅ Puppeteer 浏览器已关闭');
+      } catch (error) {
+        console.error('❌ 关闭 Puppeteer 浏览器时出错:', error);
+      }
+    }
+    
+    // 清除 code verifier
+    currentLoginCodeVerifier = null;
+    isProcessingAuthCode = false;
+    
+    if (loginWindow || puppeteerBrowser) {
+      return { success: true };
+    }
+    return { success: false, error: '登录窗口不存在' };
+  });
+
+  // 窗口控制 IPC 处理程序
+  ipcMain.handle('window-minimize', () => {
+    if (mainWindow) {
+      mainWindow.minimize();
+    }
+  });
+
+  ipcMain.handle('window-maximize', () => {
+    if (mainWindow) {
+      if (mainWindow.isMaximized()) {
+        mainWindow.unmaximize();
+      } else {
+        mainWindow.maximize();
+      }
+    }
+  });
+
+  ipcMain.handle('window-close', () => {
+    if (mainWindow) {
+      mainWindow.close();
     }
   });
 }
@@ -2881,46 +4728,6 @@ function createWindow() {
     mainWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(loadingHTML)}`);
   }
   
-  // 监听后端就绪事件
-  ipcMain.on('backend-ready', () => {
-    notifyBackendReady();
-  });
-
-  // 处理登录窗口请求
-  ipcMain.handle('open-login-window', async () => {
-    try {
-      console.log('📞 收到打开登录窗口的请求');
-      
-      // 生成 PKCE 参数
-      const codeVerifier = generateCodeVerifier();
-      const codeChallenge = generateCodeChallenge(codeVerifier);
-      console.log('✅ PKCE 参数已生成');
-      
-      // 创建登录窗口
-      const window = createLoginWindow(codeVerifier, codeChallenge);
-      
-      if (!window) {
-        throw new Error('创建登录窗口失败：返回值为 null');
-      }
-      
-      console.log('✅ 登录窗口创建成功，窗口ID:', window.id);
-      
-      return { success: true };
-    } catch (error) {
-      console.error('❌ 打开登录窗口失败:', error);
-      console.error('错误堆栈:', error.stack);
-      return { success: false, error: error.message };
-    }
-  });
-
-  // 关闭登录窗口
-  ipcMain.handle('close-login-window', async () => {
-    if (loginWindow) {
-      closeLoginWindow();
-      return { success: true };
-    }
-    return { success: false, error: '登录窗口不存在' };
-  });
 
   // 处理外部链接
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -3009,15 +4816,26 @@ app.whenReady().then(() => {
   console.log('🚀 Electron 应用准备就绪');
   console.log(`📦 运行模式: ${isDev ? '开发模式' : '生产模式'}`);
   console.log(`📁 __dirname: ${__dirname}`);
-  console.log(`📁 项目根目录: ${getProjectRoot()}`);
-  
-  // 初始化应用数据目录（生产模式下）
-  if (!isDev) {
-    appData = initializeAppData();
-    if (appData) {
-      console.log(`✅ 应用数据目录已初始化: ${appData.appDataDir}`);
-    }
+  if (isDev) {
+    console.log(`📁 项目根目录: ${getProjectRoot()}`);
+  } else {
+    console.log(`📁 resourcesPath: ${process.resourcesPath}`);
   }
+  
+  // 初始化应用数据目录（开发模式和生产模式都初始化，确保数据一致性）
+  // 这样可以确保开发和生产环境使用相同的数据目录，避免数据混乱
+  appData = initializeAppData();
+  if (appData) {
+    console.log(`✅ 应用数据目录已初始化: ${appData.appDataDir}`);
+    console.log(`📁 配置文件路径: ${appData.configPath}`);
+    console.log(`📁 数据目录: ${appData.dataDir}`);
+    console.log(`📁 下载目录: ${appData.downloadsDir}`);
+  } else {
+    console.error('❌ 无法初始化应用数据目录');
+  }
+  
+  // 初始化 IPC 处理程序（在创建窗口之前）
+  setupIpcHandlers();
   
   // 立即创建窗口，避免白屏
   createWindow();
@@ -3083,29 +4901,6 @@ function saveWindowState() {
     console.warn('无法保存窗口状态:', err.message);
   }
 }
-
-// IPC 处理器：窗口控制
-ipcMain.handle('window-minimize', () => {
-  if (mainWindow) {
-    mainWindow.minimize();
-  }
-});
-
-ipcMain.handle('window-maximize', () => {
-  if (mainWindow) {
-    if (mainWindow.isMaximized()) {
-      mainWindow.unmaximize();
-    } else {
-      mainWindow.maximize();
-    }
-  }
-});
-
-ipcMain.handle('window-close', () => {
-  if (mainWindow) {
-    mainWindow.close();
-  }
-});
 
 // 处理协议（可选：自定义协议如 pixivflow://）
 app.setAsDefaultProtocolClient('pixivflow');

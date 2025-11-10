@@ -1,15 +1,28 @@
 import { useQuery } from '@tanstack/react-query';
-import { Card, Row, Col, Statistic, Spin } from 'antd';
-import { DownloadOutlined, PictureOutlined, FileTextOutlined } from '@ant-design/icons';
+import { Card, Row, Col, Statistic, Spin, Button, message } from 'antd';
+import { DownloadOutlined, PictureOutlined, FileTextOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
+import { useCallback } from 'react';
 import { api } from '../services/api';
 
 export default function Dashboard() {
   const { t } = useTranslation();
-  const { data, isLoading } = useQuery({
+  
+  const { data, isLoading, refetch: refetchStats } = useQuery({
     queryKey: ['stats', 'overview'],
     queryFn: () => api.getStatsOverview(),
   });
+
+  // Handle refresh stats
+  const handleRefreshStats = useCallback(async () => {
+    message.loading({ content: t('dashboard.refreshingStats'), key: 'refresh-stats' });
+    try {
+      await refetchStats();
+      message.success({ content: t('dashboard.statsRefreshed'), key: 'refresh-stats', duration: 2 });
+    } catch (error) {
+      message.error({ content: t('dashboard.refreshStatsFailed'), key: 'refresh-stats', duration: 2 });
+    }
+  }, [refetchStats, t]);
 
   if (isLoading) {
     return <Spin size="large" style={{ display: 'block', textAlign: 'center', marginTop: 50 }} />;
@@ -17,7 +30,16 @@ export default function Dashboard() {
 
   return (
     <div>
-      <h2>{t('dashboard.title')}</h2>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <h2 style={{ margin: 0 }}>{t('dashboard.title')}</h2>
+        <Button 
+          icon={<ReloadOutlined />} 
+          onClick={handleRefreshStats}
+          loading={isLoading}
+        >
+          {t('dashboard.refreshStats')}
+        </Button>
+      </div>
       <Row gutter={16} style={{ marginTop: 24 }}>
         <Col span={8}>
           <Card>

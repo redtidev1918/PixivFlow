@@ -46,10 +46,19 @@ export class WebUICommand extends BaseCommand {
         }
       } else {
         context.logger.info('[WebUI] ⚠️  STATIC_PATH not found - frontend will not be served');
-        context.logger.info('[WebUI] 💡 To serve the frontend, either:');
-        context.logger.info('[WebUI]    1. Set STATIC_PATH environment variable');
-        context.logger.info('[WebUI]    2. Build the frontend: npm run webui:build');
-        context.logger.info('[WebUI]    3. Ensure webui-frontend/dist exists with index.html');
+        context.logger.info('[WebUI] 💡 To serve the frontend, you need to:');
+        context.logger.info('[WebUI]    1. Build the frontend first:');
+        context.logger.info('[WebUI]       cd /path/to/pixivflow');
+        context.logger.info('[WebUI]       npm run webui:build');
+        context.logger.info('[WebUI]    2. Then start WebUI with one of these methods:');
+        context.logger.info('[WebUI]       - Use --static-path option:');
+        context.logger.info('[WebUI]         pixivflow webui --static-path /path/to/pixivflow/webui-frontend/dist');
+        context.logger.info('[WebUI]       - Or set STATIC_PATH environment variable:');
+        context.logger.info('[WebUI]         STATIC_PATH=/path/to/pixivflow/webui-frontend/dist pixivflow webui');
+        context.logger.info('[WebUI]    3. Or run from the project directory (if webui-frontend/dist exists)');
+        context.logger.info('[WebUI]');
+        context.logger.info('[WebUI] 📝 Note: The frontend is not included in the npm package.');
+        context.logger.info('[WebUI]    You need to build it separately from the source repository.');
       }
 
       const actualPort = await startWebUI({
@@ -126,7 +135,52 @@ export class WebUICommand extends BaseCommand {
       // Ignore errors
     }
 
-    // 4. Check current working directory
+    // 4. Check npm global installation path
+    // When installed globally, try to find the package in node_modules
+    try {
+      // Try to resolve the package location
+      // __dirname is in dist/commands, so we need to go up to find the package root
+      let packageRoot = __dirname;
+      for (let i = 0; i < 5; i++) {
+        const packageJsonPath = path.join(packageRoot, 'package.json');
+        if (fs.existsSync(packageJsonPath)) {
+          // Found package.json, check for webui-frontend
+          const testPath = path.join(packageRoot, 'webui-frontend', 'dist');
+          if (fs.existsSync(testPath)) {
+            const indexPath = path.join(testPath, 'index.html');
+            if (fs.existsSync(indexPath)) {
+              return testPath;
+            }
+          }
+          break;
+        }
+        const parent = path.dirname(packageRoot);
+        if (parent === packageRoot) break;
+        packageRoot = parent;
+      }
+
+      // Also check if we're in a global node_modules
+      // Global packages are usually in: /usr/local/lib/node_modules or ~/.npm-global/lib/node_modules
+      // Or on Windows: %AppData%\npm\node_modules
+      if (__dirname.includes('node_modules')) {
+        // We're in node_modules, try to find the package root
+        const nodeModulesIndex = __dirname.indexOf('node_modules');
+        if (nodeModulesIndex !== -1) {
+          const nodeModulesPath = __dirname.substring(0, nodeModulesIndex + 'node_modules'.length);
+          const packagePath = path.join(nodeModulesPath, 'pixivflow', 'webui-frontend', 'dist');
+          if (fs.existsSync(packagePath)) {
+            const indexPath = path.join(packagePath, 'index.html');
+            if (fs.existsSync(indexPath)) {
+              return packagePath;
+            }
+          }
+        }
+      }
+    } catch (err) {
+      // Ignore errors
+    }
+
+    // 5. Check current working directory
     const cwdStaticPath = path.join(process.cwd(), 'webui-frontend', 'dist');
     if (fs.existsSync(cwdStaticPath)) {
       const indexPath = path.join(cwdStaticPath, 'index.html');

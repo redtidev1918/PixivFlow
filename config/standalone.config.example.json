@@ -1,17 +1,19 @@
 {
-  "_comment": "PixivBatchDownloader 配置文件示例",
-  "_note": "所有带下划线的字段（如 _comment）都是注释，不会影响程序运行",
+  "_comment": "PixivFlow 完整配置示例 - 包含所有可用选项和详细说明",
+  "_usage": "使用方法：复制此文件为 standalone.config.json 并修改 refreshToken",
   "logLevel": "info",
-  "_logLevel_comment": "日志级别: debug | info | warn | error",
+  "_logLevel_note": "日志级别: debug（详细）| info（信息）| warn（警告）| error（错误）",
+  
   "pixiv": {
-    "_comment": "Pixiv API 凭证配置（必需）",
+    "_comment": "Pixiv API 认证配置（必需）",
     "clientId": "MOBrBDS8blbauoSck0ZfDbtuzpyT",
     "clientSecret": "lsACyCD94FhDUtGTXi3QzcFE2uU1hqtDaKeqrdwj",
     "deviceToken": "pixiv",
     "refreshToken": "YOUR_REFRESH_TOKEN",
-    "_refreshToken_note": "请将 YOUR_REFRESH_TOKEN 替换为您的实际 refresh token。可以使用 npm run setup 来获取",
+    "_refreshToken_note": "重要：请将 YOUR_REFRESH_TOKEN 替换为您的实际 refresh token。运行 npm run login 可自动获取",
     "userAgent": "PixivAndroidApp/5.0.234 (Android 11; Pixel 6)"
   },
+  
   "network": {
     "_comment": "网络配置（可选，有默认值）",
     "timeoutMs": 30000,
@@ -21,7 +23,7 @@
     "retryDelay": 1000,
     "_retryDelay_note": "重试延迟（毫秒），默认 1000（1秒）",
     "proxy": {
-      "_comment": "代理配置（可选）",
+      "_comment": "代理配置（可选，如需使用代理请启用）",
       "enabled": false,
       "host": "127.0.0.1",
       "port": 7890,
@@ -31,23 +33,25 @@
       "password": ""
     }
   },
+  
   "storage": {
     "_comment": "存储配置（可选，有默认值）",
     "databasePath": "./data/pixiv-downloader.db",
-    "_databasePath_note": "SQLite 数据库文件路径，默认 ./data/pixiv-downloader.db",
+    "_databasePath_note": "SQLite 数据库文件路径，用于记录下载历史",
     "downloadDirectory": "./downloads",
-    "_downloadDirectory_note": "下载根目录，默认 ./downloads",
+    "_downloadDirectory_note": "下载根目录",
     "illustrationDirectory": "./downloads/illustrations",
-    "_illustrationDirectory_note": "插画保存目录（相对于 downloadDirectory 或绝对路径），默认 {downloadDirectory}/illustrations",
+    "_illustrationDirectory_note": "插画保存目录（相对于 downloadDirectory 或绝对路径）",
     "novelDirectory": "./downloads/novels",
-    "_novelDirectory_note": "小说保存目录（相对于 downloadDirectory 或绝对路径），默认 {downloadDirectory}/novels",
-    "illustrationOrganization": "flat",
-    "_illustrationOrganization_note": "插画目录组织方式: flat（扁平）| byAuthor（按作者）| byTag（按标签）| byDate（按作品创建日期-月份）| byDay（按作品创建日期-天）| byDownloadDate（按下载日期-月份，推荐）| byDownloadDay（按下载日期-天，推荐）| byAuthorAndTag（按作者和标签）| byDateAndAuthor（按作品创建日期和作者）| byDayAndAuthor（按作品创建日期和作者）| byDownloadDateAndAuthor（按下载日期和作者）| byDownloadDayAndAuthor（按下载日期和作者），默认 flat",
-    "novelOrganization": "flat",
-    "_novelOrganization_note": "小说目录组织方式: flat（扁平）| byAuthor（按作者）| byTag（按标签）| byDate（按作品创建日期-月份）| byDay（按作品创建日期-天）| byDownloadDate（按下载日期-月份，推荐）| byDownloadDay（按下载日期-天，推荐）| byAuthorAndTag（按作者和标签）| byDateAndAuthor（按作品创建日期和作者）| byDayAndAuthor（按作品创建日期和作者）| byDownloadDateAndAuthor（按下载日期和作者）| byDownloadDayAndAuthor（按下载日期和作者），默认 flat"
+    "_novelDirectory_note": "小说保存目录（相对于 downloadDirectory 或绝对路径）",
+    "illustrationOrganization": "byDownloadDate",
+    "_illustrationOrganization_note": "插画目录组织方式: flat（扁平）| byAuthor（按作者）| byTag（按标签）| byDate（按作品创建日期-月份）| byDay（按作品创建日期-天）| byDownloadDate（按下载日期-月份，推荐）| byDownloadDay（按下载日期-天）| byAuthorAndTag（按作者和标签）| byDateAndAuthor（按作品创建日期和作者）| byDownloadDateAndAuthor（按下载日期和作者）",
+    "novelOrganization": "byDownloadDate",
+    "_novelOrganization_note": "小说目录组织方式，选项同 illustrationOrganization"
   },
+  
   "scheduler": {
-    "_comment": "调度器配置（可选，有默认值）",
+    "_comment": "定时任务配置（可选）",
     "enabled": false,
     "_enabled_note": "是否启用定时任务，默认 false",
     "cron": "0 3 * * *",
@@ -65,14 +69,15 @@
     "failureRetryDelay": null,
     "_failureRetryDelay_note": "失败后重试延迟（毫秒），null 表示无延迟"
   },
+  
   "download": {
     "_comment": "下载配置（可选，有默认值）",
     "concurrency": 3,
-    "_concurrency_note": "最大并发下载数，默认 3，建议范围 1-10",
+    "_concurrency_note": "最大并发下载数，默认 3，建议范围 1-10。数值越大下载越快，但可能触发速率限制",
     "requestDelay": 500,
     "_requestDelay_note": "API 请求之间的最小延迟（毫秒），用于避免速率限制，默认 500（0.5秒）",
     "dynamicConcurrency": true,
-    "_dynamicConcurrency_note": "是否启用动态并发调整。当检测到速率限制（429错误）时，自动降低并发数，默认 true",
+    "_dynamicConcurrency_note": "是否启用动态并发调整。当检测到速率限制（429错误）时，自动降低并发数，默认 true（推荐）",
     "minConcurrency": 1,
     "_minConcurrency_note": "动态调整时的最小并发数，不会低于此值，默认 1",
     "maxRetries": 3,
@@ -82,33 +87,79 @@
     "timeout": 60000,
     "_timeout_note": "下载超时时间（毫秒），默认 60000（60秒）"
   },
+  
   "targets": [
     {
       "_comment": "下载目标配置（必需，至少一个）",
+      "_example1": "示例1: 搜索模式 - 下载包含指定标签的插画",
       "type": "illustration",
       "_type_note": "类型: illustration（插画）| novel（小说）",
-      "tag": "イラスト",
-      "_tag_note": "搜索标签，必填。多个标签用空格分隔",
+      "tag": "風景",
+      "_tag_note": "搜索标签，必填。多个标签用空格分隔，如：'原神 風景'",
       "tagRelation": "and",
       "_tagRelation_note": "标签关系: and（默认，必须同时包含所有标签）| or（包含任意一个标签即可）",
-      "limit": 10,
+      "limit": 20,
       "_limit_note": "每次运行下载数量限制，建议范围 1-1000",
       "searchTarget": "partial_match_for_tags",
-      "_searchTarget_note": "搜索模式: partial_match_for_tags（部分匹配）| exact_match_for_tags（精确匹配）| title_and_caption（标题和说明）",
+      "_searchTarget_note": "搜索模式: partial_match_for_tags（部分匹配，推荐）| exact_match_for_tags（精确匹配）| title_and_caption（标题和说明）",
+      "sort": "date_desc",
+      "_sort_note": "排序方式: date_desc（按日期降序，最新优先）| date_asc（按日期升序）| popular_desc（按收藏数降序，最热门优先）",
       "restrict": "public",
       "_restrict_note": "限制: public（公开）| private（私有）",
       "mode": "search",
-      "_mode_note": "下载模式: search（搜索）| ranking（排行榜）",
-      "rankingMode": "day",
-      "_rankingMode_note": "排行榜模式（仅当 mode=ranking 时有效）: day | week | month | day_male | day_female | day_ai | week_original | week_rookie | day_r18 | day_male_r18 | day_female_r18",
-      "rankingDate": "YESTERDAY",
-      "_rankingDate_note": "排行榜日期（YYYY-MM-DD 格式），或使用 'YESTERDAY' 占位符",
-      "filterTag": null,
-      "_filterTag_note": "过滤标签（仅当 mode=ranking 时有效），null 表示不过滤",
+      "_mode_note": "下载模式: search（搜索，默认）| ranking（排行榜）",
+      "minBookmarks": 100,
+      "_minBookmarks_note": "可选，最小收藏数过滤，只下载收藏数大于等于此值的作品",
+      "startDate": null,
+      "_startDate_note": "可选，开始日期过滤（YYYY-MM-DD 格式），只下载此日期之后的作品",
+      "endDate": null,
+      "_endDate_note": "可选，结束日期过滤（YYYY-MM-DD 格式），只下载此日期之前的作品",
       "random": false,
       "_random_note": "是否随机选择，true 表示从搜索结果中随机选择"
+    },
+    {
+      "_example2": "示例2: 排行榜模式 - 下载今日排行榜作品",
+      "type": "illustration",
+      "tag": "ranking",
+      "limit": 50,
+      "mode": "ranking",
+      "rankingMode": "day",
+      "_rankingMode_note": "排行榜模式: day（日榜）| week（周榜）| month（月榜）| day_male（男性向日榜）| day_female（女性向日榜）| day_ai（AI作品日榜）| week_original（原创周榜）| week_rookie（新人周榜）| day_r18（R18日榜）| day_male_r18（男性向R18日榜）| day_female_r18（女性向R18日榜）",
+      "rankingDate": null,
+      "_rankingDate_note": "排行榜日期（YYYY-MM-DD 格式），null 表示今天，也可使用 'YESTERDAY' 占位符",
+      "filterTag": null,
+      "_filterTag_note": "过滤标签（可选），从排名结果中筛选包含此标签的作品，null 表示不过滤"
+    },
+    {
+      "_example3": "示例3: 小说下载 - 下载指定标签的小说",
+      "type": "novel",
+      "tag": "オリジナル",
+      "limit": 10,
+      "searchTarget": "partial_match_for_tags",
+      "mode": "search",
+      "languageFilter": null,
+      "_languageFilter_note": "语言过滤: chinese（仅中文）| non-chinese（非中文）| null（不过滤）",
+      "detectLanguage": true,
+      "_detectLanguage_note": "是否启用语言检测和记录，默认 true"
+    },
+    {
+      "_example4": "示例4: 下载指定小说系列",
+      "type": "novel",
+      "tag": "series",
+      "seriesId": 14690617,
+      "_seriesId_note": "小说系列ID，从URL https://www.pixiv.net/novel/series/14690617 中获取",
+      "limit": null,
+      "_limit_note": "系列下载时 limit 通常设为 null（下载全部）"
+    },
+    {
+      "_example5": "示例5: 下载单个小说",
+      "type": "novel",
+      "tag": "single",
+      "novelId": 26132156,
+      "_novelId_note": "小说ID，从URL https://www.pixiv.net/novel/show.php?id=26132156 中获取"
     }
   ],
+  
   "initialDelay": 0,
   "_initialDelay_note": "启动延迟（毫秒），用于测试或延迟启动，默认 0"
 }

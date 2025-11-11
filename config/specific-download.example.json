@@ -1,17 +1,19 @@
 {
-  "_comment": "特定下载任务示例配置：原神图片 + 明日方舟小说",
-  "_note": "此配置文件展示了如何通过通用 download 命令实现特定下载任务",
+  "_comment": "PixivFlow 特定下载任务配置示例",
+  "_note": "此配置文件展示了各种实际使用场景的配置方法",
   "_usage": "使用方法：",
   "_usage1": "  1. 复制此文件: cp config/specific-download.example.json config/standalone.config.json",
   "_usage2": "  2. 修改 refreshToken（如果还没有登录，先运行: npm run login）",
-  "_usage3": "  3. 运行下载: pixivflow download 或 npm run download",
+  "_usage3": "  3. 根据需要修改 targets 数组中的配置",
+  "_usage4": "  4. 运行下载: npm run download 或 pixivflow download",
   "_principle": "核心理念：所有任务都通过配置文件实现，无需修改源代码！",
+  
   "logLevel": "info",
   "pixiv": {
     "clientId": "MOBrBDS8blbauoSck0ZfDbtuzpyT",
     "clientSecret": "lsACyCD94FhDUtGTXi3QzcFE2uU1hqtDaKeqrdwj",
     "deviceToken": "pixiv",
-    "refreshToken": "REDACTED_TOKEN",
+    "refreshToken": "YOUR_REFRESH_TOKEN",
     "userAgent": "PixivAndroidApp/5.0.234 (Android 11; Pixel 6)"
   },
   "network": {
@@ -31,20 +33,25 @@
     "databasePath": "./data/pixiv-downloader.db",
     "downloadDirectory": "./downloads",
     "illustrationDirectory": "./downloads/illustrations",
-    "novelDirectory": "./downloads/novels"
+    "novelDirectory": "./downloads/novels",
+    "illustrationOrganization": "byDownloadDate",
+    "novelOrganization": "byDownloadDate"
   },
   "scheduler": {
     "enabled": false
   },
   "download": {
     "concurrency": 3,
+    "requestDelay": 500,
+    "dynamicConcurrency": true,
+    "minConcurrency": 1,
     "maxRetries": 3,
     "retryDelay": 2000,
     "timeout": 60000
   },
   "targets": [
     {
-      "_comment": "目标1: 下载一张随机的原神图片",
+      "_comment": "场景1: 下载一张随机的原神图片",
       "type": "illustration",
       "tag": "原神",
       "limit": 1,
@@ -54,15 +61,97 @@
       "random": true
     },
     {
-      "_comment": "目标2: 下载昨天排名最高的明日方舟小说",
-      "type": "novel",
+      "_comment": "场景2: 下载昨天排名最高的明日方舟相关作品",
+      "type": "illustration",
       "tag": "アークナイツ",
-      "limit": 1,
+      "limit": 10,
       "mode": "ranking",
       "rankingMode": "day",
       "rankingDate": "YESTERDAY",
       "filterTag": "アークナイツ"
+    },
+    {
+      "_comment": "场景3: 下载收藏数超过500的風景插画，按热门程度排序",
+      "type": "illustration",
+      "tag": "風景",
+      "limit": 30,
+      "searchTarget": "partial_match_for_tags",
+      "sort": "popular_desc",
+      "minBookmarks": 500,
+      "mode": "search"
+    },
+    {
+      "_comment": "场景4: 下载2024年1月发布的原神插画",
+      "type": "illustration",
+      "tag": "原神",
+      "limit": 50,
+      "searchTarget": "partial_match_for_tags",
+      "mode": "search",
+      "startDate": "2024-01-01",
+      "endDate": "2024-01-31"
+    },
+    {
+      "_comment": "场景5: 下载包含'原神'或'Genshin'标签的插画（OR关系）",
+      "type": "illustration",
+      "tag": "原神 Genshin",
+      "tagRelation": "or",
+      "limit": 20,
+      "searchTarget": "partial_match_for_tags",
+      "mode": "search"
+    },
+    {
+      "_comment": "场景6: 下载指定小说系列的所有作品",
+      "type": "novel",
+      "tag": "series",
+      "seriesId": 14690617,
+      "_seriesId_note": "从URL https://www.pixiv.net/novel/series/14690617 中获取系列ID",
+      "limit": null
+    },
+    {
+      "_comment": "场景7: 下载单个小说",
+      "type": "novel",
+      "tag": "single",
+      "novelId": 26132156,
+      "_novelId_note": "从URL https://www.pixiv.net/novel/show.php?id=26132156 中获取小说ID"
+    },
+    {
+      "_comment": "场景8: 下载中文小说",
+      "type": "novel",
+      "tag": "オリジナル",
+      "limit": 20,
+      "searchTarget": "partial_match_for_tags",
+      "mode": "search",
+      "languageFilter": "chinese",
+      "detectLanguage": true
+    },
+    {
+      "_comment": "场景9: 下载本周原创周榜前50名",
+      "type": "illustration",
+      "tag": "week-original",
+      "limit": 50,
+      "mode": "ranking",
+      "rankingMode": "week_original"
+    },
+    {
+      "_comment": "场景10: 下载新人周榜前30名",
+      "type": "illustration",
+      "tag": "week-rookie",
+      "limit": 30,
+      "mode": "ranking",
+      "rankingMode": "week_rookie"
     }
   ],
-  "initialDelay": 0
+  "initialDelay": 0,
+  "_场景说明": {
+    "场景1": "随机下载 - 适合测试或获取随机作品",
+    "场景2": "排行榜筛选 - 从排行榜中筛选特定标签",
+    "场景3": "质量过滤 - 只下载高收藏数作品",
+    "场景4": "时间范围 - 下载指定时间段的作品",
+    "场景5": "多标签OR - 包含任意一个标签即可",
+    "场景6": "系列下载 - 下载整个小说系列",
+    "场景7": "单作品下载 - 下载指定ID的小说",
+    "场景8": "语言过滤 - 只下载中文小说",
+    "场景9": "特殊排行榜 - 原创周榜",
+    "场景10": "特殊排行榜 - 新人周榜"
+  }
 }

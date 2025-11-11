@@ -1,10 +1,17 @@
 {
+  "_comment": "PixivFlow 排行榜下载配置示例",
+  "_usage": "使用方法：",
+  "_usage1": "  1. 复制此文件: cp config/standalone.config.ranking.json config/standalone.config.json",
+  "_usage2": "  2. 修改 refreshToken（运行 npm run login 获取）",
+  "_usage3": "  3. 根据需要修改 targets 数组中的配置",
+  "_usage4": "  4. 运行下载: npm run download",
+  
   "logLevel": "info",
   "pixiv": {
     "clientId": "MOBrBDS8blbauoSck0ZfDbtuzpyT",
     "clientSecret": "lsACyCD94FhDUtGTXi3QzcFE2uU1hqtDaKeqrdwj",
     "deviceToken": "pixiv",
-    "refreshToken": "YOUR_REFRESH_TOKEN_HERE",
+    "refreshToken": "YOUR_REFRESH_TOKEN",
     "userAgent": "PixivAndroidApp/5.0.234 (Android 11; Pixel 6)"
   },
   "network": {
@@ -15,54 +22,105 @@
     "databasePath": "./data/pixiv-downloader.db",
     "downloadDirectory": "./downloads",
     "illustrationDirectory": "./downloads/illustrations",
-    "novelDirectory": "./downloads/novels"
+    "novelDirectory": "./downloads/novels",
+    "illustrationOrganization": "byDownloadDate",
+    "novelOrganization": "byDownloadDate"
   },
   "scheduler": {
-    "enabled": false,
-    "cron": "0 3 * * *",
-    "timezone": "Asia/Shanghai"
+    "enabled": false
+  },
+  "download": {
+    "concurrency": 3,
+    "requestDelay": 500,
+    "dynamicConcurrency": true,
+    "minConcurrency": 1,
+    "maxRetries": 3,
+    "retryDelay": 2000,
+    "timeout": 60000
   },
   "targets": [
     {
+      "_comment": "示例1: 下载今日日榜前50名（不筛选标签）",
       "type": "illustration",
-      "tag": "ranking",
-      "limit": 10,
+      "tag": "ranking-day",
+      "limit": 50,
       "mode": "ranking",
-      "rankingMode": "day",
-      "_comment": "示例1: 下载今日排名前10的图片（不筛选标签）"
+      "rankingMode": "day"
     },
     {
+      "_comment": "示例2: 从今日日榜中筛选包含'風景'标签的作品，下载前20个",
       "type": "illustration",
       "tag": "風景",
-      "limit": 10,
+      "limit": 20,
       "mode": "ranking",
       "rankingMode": "day",
-      "filterTag": "風景",
-      "_comment": "示例2: 从今日排名中筛选包含'風景'标签的作品，下载前10个"
+      "filterTag": "風景"
     },
     {
+      "_comment": "示例3: 下载昨日日榜前30名",
+      "type": "illustration",
+      "tag": "ranking-yesterday",
+      "limit": 30,
+      "mode": "ranking",
+      "rankingMode": "day",
+      "rankingDate": "YESTERDAY"
+    },
+    {
+      "_comment": "示例4: 下载本周周榜前100名",
+      "type": "illustration",
+      "tag": "ranking-week",
+      "limit": 100,
+      "mode": "ranking",
+      "rankingMode": "week"
+    },
+    {
+      "_comment": "示例5: 下载男性向日榜前30名",
+      "type": "illustration",
+      "tag": "ranking-male",
+      "limit": 30,
+      "mode": "ranking",
+      "rankingMode": "day_male"
+    },
+    {
+      "_comment": "示例6: 下载女性向日榜前30名",
+      "type": "illustration",
+      "tag": "ranking-female",
+      "limit": 30,
+      "mode": "ranking",
+      "rankingMode": "day_female"
+    },
+    {
+      "_comment": "示例7: 下载AI作品日榜前50名",
+      "type": "illustration",
+      "tag": "ranking-ai",
+      "limit": 50,
+      "mode": "ranking",
+      "rankingMode": "day_ai"
+    },
+    {
+      "_comment": "示例8: 从本周周榜中筛选包含'オリジナル'标签的小说，下载前10个",
       "type": "novel",
       "tag": "オリジナル",
       "limit": 10,
       "mode": "ranking",
       "rankingMode": "week",
-      "filterTag": "オリジナル",
-      "_comment": "示例3: 从本周排名中筛选包含'オリジナル'标签的小说，下载前10个"
+      "filterTag": "オリジナル"
     }
   ],
   "_说明": {
-    "mode": "ranking - 使用排名模式下载（可选：search - 搜索模式，默认）",
-    "rankingMode": "day - 每日排名（可选：week-周榜, month-月榜, day_male-男性向日榜, day_female-女性向日榜, day_ai-AI作品日榜等）",
-    "rankingDate": "可选，格式：YYYY-MM-DD，不填则使用今天",
+    "mode": "ranking - 使用排行榜模式下载（可选：search - 搜索模式，默认）",
+    "rankingMode": "排行榜类型: day（日榜）| week（周榜）| month（月榜）| day_male（男性向日榜）| day_female（女性向日榜）| day_ai（AI作品日榜）| week_original（原创周榜）| week_rookie（新人周榜）| day_r18（R18日榜）| day_male_r18（男性向R18日榜）| day_female_r18（女性向R18日榜）",
+    "rankingDate": "排行榜日期，格式：YYYY-MM-DD（如 '2024-01-15'），或使用 'YESTERDAY' 占位符表示昨天，不填则使用今天",
     "filterTag": "可选，从排名结果中筛选包含此标签的作品。不填则下载排名中的所有作品",
     "limit": "最终下载的数量限制",
-    "tag": "用于日志记录和文件组织的标签名称"
+    "tag": "用于日志记录和文件组织的标签名称，可以自定义"
   },
   "_使用提示": [
     "1. 复制此文件并重命名为 standalone.config.json",
-    "2. 修改 refreshToken 为你的 Pixiv 刷新令牌",
+    "2. 修改 refreshToken 为你的 Pixiv 刷新令牌（运行 npm run login）",
     "3. 根据需要修改 targets 数组中的配置",
     "4. 可以添加多个 target 来同时下载不同类型的排名作品",
-    "5. 如果不需要筛选标签，删除 filterTag 字段即可下载排名中的所有作品"
+    "5. 如果不需要筛选标签，删除 filterTag 字段即可下载排名中的所有作品",
+    "6. 使用 rankingDate 可以下载指定日期的排行榜（格式：YYYY-MM-DD）"
   ]
 }

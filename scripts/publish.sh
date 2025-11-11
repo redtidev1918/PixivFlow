@@ -104,7 +104,13 @@ log_success "新版本: $NEW_VERSION"
 
 # 提交版本更改
 log_info "提交版本更改..."
-git add package.json package-lock.json
+git add package.json
+# 如果 package-lock.json 存在且未被忽略，则添加它
+if git check-ignore package-lock.json >/dev/null 2>&1; then
+    log_info "package-lock.json 被 .gitignore 忽略，跳过"
+else
+    git add package-lock.json 2>/dev/null || log_warn "package-lock.json 可能不存在"
+fi
 git commit -m "chore: bump version to $NEW_VERSION" || log_warn "版本更改可能已提交或无需提交"
 
 # 检查并处理已存在的标签

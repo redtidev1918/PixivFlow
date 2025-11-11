@@ -62,7 +62,6 @@
     "publish:patch": "./scripts/publish.sh patch",
     "publish:minor": "./scripts/publish.sh minor",
     "publish:major": "./scripts/publish.sh major",
-    "publish": "./scripts/publish.sh",
     "check:version": "./scripts/check-version-sync.sh",
     "versions:list": "./scripts/manage-versions.sh list",
     "versions:deprecate": "./scripts/manage-versions.sh deprecate",

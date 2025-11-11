@@ -97,6 +97,24 @@ npm run download
 
 ## 🎯 常用命令
 
+### 全局安装方式（npm 安装）
+
+```bash
+# 登录账号
+pixivflow login
+
+# 执行一次下载
+pixivflow download
+
+# 随机下载一个作品（快速体验）
+pixivflow random
+
+# 启动定时任务
+pixivflow scheduler
+```
+
+### 源码安装方式
+
 ```bash
 # 登录账号
 npm run login

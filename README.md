@@ -233,13 +233,22 @@ npm install && npm run build && npm install -g .
 npm install -g git+https://github.com/zoidberg-xgd/pixivflow.git
 ```
 
-**使用命令**：
+**使用命令**（全局安装后）：
 
 ```bash
 pixivflow login      # 登录
 pixivflow download   # 下载
 pixivflow scheduler  # 定时任务
 pixivflow random     # 随机下载
+```
+
+**使用命令**（源码安装，未全局安装）：
+
+```bash
+npm run login        # 登录
+npm run download     # 下载
+npm run scheduler    # 定时任务
+npm run random       # 随机下载
 ```
 
 > 💡 **提示**：
@@ -254,6 +263,24 @@ pixivflow random     # 随机下载
 PixivFlow 还提供了现代化的 Web 管理界面，支持图形化操作：
 
 **启动方式**：
+
+#### 全局安装后使用
+
+```bash
+# 方式 1：仅启动后端 API（需要单独构建前端）
+pixivflow webui                    # 访问 http://localhost:3000（仅 API）
+
+# 方式 2：指定前端静态文件路径（推荐）
+# 首先需要构建前端（在项目目录中）
+cd /path/to/pixivflow
+npm run webui:build
+# 然后使用全局命令启动，指定静态文件路径
+pixivflow webui --static-path /path/to/pixivflow/webui-frontend/dist
+# 或使用环境变量
+STATIC_PATH=/path/to/pixivflow/webui-frontend/dist pixivflow webui
+```
+
+#### 源码安装使用
 
 ```bash
 # 开发模式（前后端分离）

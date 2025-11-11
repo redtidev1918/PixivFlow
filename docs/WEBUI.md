@@ -6,7 +6,38 @@ PixivFlow 提供了现代化的 Web 管理界面，支持图形化操作。
 
 ## 🚀 快速开始
 
-### 开发模式（前后端分离）
+> 💡 **提示**：如果通过 `npm install -g pixivflow` 全局安装，可以直接使用 `pixivflow webui` 命令。如果从源码安装，请使用 `npm run` 命令。
+
+### 全局安装后使用
+
+#### 方式 1：仅启动后端 API
+
+```bash
+# 仅启动后端 API（无前端界面）
+pixivflow webui
+```
+
+访问 http://localhost:3000 可以访问 API，但需要单独构建和部署前端。
+
+#### 方式 2：完整启动（推荐）
+
+```bash
+# 1. 首先在项目目录中构建前端
+cd /path/to/pixivflow
+npm run webui:build
+
+# 2. 使用全局命令启动，指定静态文件路径
+pixivflow webui --static-path /path/to/pixivflow/webui-frontend/dist
+
+# 或使用环境变量
+STATIC_PATH=/path/to/pixivflow/webui-frontend/dist pixivflow webui
+```
+
+然后访问 http://localhost:3000 即可使用完整的 WebUI。
+
+### 源码安装使用
+
+#### 开发模式（前后端分离）
 
 ```bash
 # 1. 启动 WebUI 后端
@@ -18,7 +49,7 @@ npm run webui:frontend
 
 然后访问 http://localhost:5173 即可使用 WebUI（前端开发服务器）。
 
-### 生产模式（单服务器）
+#### 生产模式（单服务器）
 
 ```bash
 # 1. 构建前端

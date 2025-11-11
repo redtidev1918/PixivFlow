@@ -73,6 +73,21 @@ PixivFlow 是一个**完全独立运行**的 Pixiv 作品批量下载工具，�
 
 ### 3 步开始使用
 
+**方式 1：从 npm 安装（推荐 ⭐）**
+
+```bash
+# 1. 全局安装
+npm install -g pixivflow
+
+# 2. 登录账号
+pixivflow login
+
+# 3. 开始下载
+pixivflow download
+```
+
+**方式 2：从源码安装**
+
 ```bash
 # 1. 安装依赖
 npm install

@@ -19,7 +19,22 @@ export async function updateConfigWithToken(
   refreshToken: string
 ): Promise<void> {
   try {
-    const configData = JSON.parse(await fs.readFile(configPath, 'utf-8')) as StandaloneConfig;
+    let configData: any;
+    try {
+      const fileContent = await fs.readFile(configPath, 'utf-8');
+      configData = JSON.parse(fileContent);
+    } catch (parseError) {
+      // If file doesn't exist or is invalid JSON, create a new config
+      logger.warn('Config file is invalid or missing, creating new config with token');
+      const { generateDefaultConfig } = await import('../config/defaults');
+      configData = generateDefaultConfig();
+    }
+    
+    // Ensure pixiv section exists
+    if (!configData.pixiv) {
+      configData.pixiv = {};
+    }
+    
     configData.pixiv.refreshToken = refreshToken;
     await fs.writeFile(configPath, JSON.stringify(configData, null, 2), 'utf-8');
     logger.info('Configuration updated with new refresh token');
@@ -27,7 +42,7 @@ export async function updateConfigWithToken(
     // Also save to unified storage for cross-config-file persistence
     saveTokenToStorage(refreshToken, configData.storage?.databasePath);
   } catch (error) {
-    throw new Error(`Failed to update config file: ${error}`);
+    throw new Error(`Failed to update config file: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 

@@ -12,6 +12,10 @@ import { CommandRegistry } from './commands/CommandRegistry';
 import { registerAllCommands } from './commands';
 import { ArgumentParser } from './cli/ArgumentParser';
 import { getConfigPath as getConfigPathUtil } from './config';
+import { updateConfigWithToken } from './utils/login-helper';
+import { generateDefaultConfig } from './config/defaults';
+import * as fs from 'fs/promises';
+import * as path from 'path';
 
 // Use ArgumentParser from CLI module
 const parseArgs = ArgumentParser.parse;
@@ -37,6 +41,39 @@ async function bootstrap() {
 
   // Prepare command context
   const configPath = getConfigPathUtil((parsedArgs.options.config as string) || undefined);
+  
+  // Special handling for refresh command: update config file with token before loading
+  // This allows refresh command to work even when config file has placeholder token
+  if (commandName === 'refresh' || commandName === 'r') {
+    const refreshToken = parsedArgs.positional[0] || (parsedArgs.options.token as string);
+    if (refreshToken) {
+      try {
+        // Check if config file exists
+        try {
+          await fs.access(configPath);
+          // Config file exists, update it with the token
+          await updateConfigWithToken(configPath, refreshToken);
+          logger.info('Updated config file with refresh token before validation');
+        } catch {
+          // Config file doesn't exist, create it with default structure
+          const defaultConfig = generateDefaultConfig();
+          defaultConfig.pixiv.refreshToken = refreshToken;
+          // Ensure directory exists
+          const configDir = path.dirname(configPath);
+          await fs.mkdir(configDir, { recursive: true });
+          await fs.writeFile(configPath, JSON.stringify(defaultConfig, null, 2), 'utf-8');
+          logger.info('Created config file with refresh token');
+        }
+      } catch (error) {
+        // If updating config fails, log warning but continue
+        // The refresh command will still work with the provided token
+        logger.warn('Failed to update config file with refresh token, continuing anyway', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+  }
+  
   const config = loadConfig(configPath);
   const context = {
     config,

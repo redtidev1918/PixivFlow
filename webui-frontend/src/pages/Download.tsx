@@ -200,6 +200,7 @@ export default function Download() {
       stopped: { color: 'default', icon: <StopOutlined />, text: t('download.statusStopped') },
     };
     const statusInfo = statusMap[status] || statusMap.running;
+    if (!statusInfo) return null;
     return (
       <Tag color={statusInfo.color} icon={statusInfo.icon}>
         {statusInfo.text}

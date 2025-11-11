@@ -193,7 +193,7 @@ export function useConfigValidation() {
   });
 
   const repairMutation = useMutation({
-    mutationFn: (createBackup = true) => configService.repairConfig(createBackup),
+    mutationFn: (createBackup: boolean = true) => configService.repairConfig(createBackup),
     onError: (error) => handleError(error),
   });
 

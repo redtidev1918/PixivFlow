@@ -380,6 +380,30 @@ That's it! 🎉
 
 PixivFlow also provides a modern web management interface with graphical operations:
 
+**After Global Installation:**
+
+```bash
+# Method 1: Auto-build and start (Recommended ⭐)
+# First, clone the source repository (if not already done)
+git clone https://github.com/zoidberg-xgd/pixivflow.git
+cd pixivflow
+pixivflow webui                    # Auto-builds frontend and starts, visit http://localhost:3000
+
+# Method 2: Manually specify frontend static file path
+# If frontend is already built, you can directly specify the path
+pixivflow webui --static-path /path/to/pixivflow/webui-frontend/dist
+# Or use environment variable
+STATIC_PATH=/path/to/pixivflow/webui-frontend/dist pixivflow webui
+
+# Method 3: API-only mode
+# If frontend is not found, the server will provide API service only
+pixivflow webui                    # Visit http://localhost:3000 (API only)
+```
+
+> 💡 **Note**: After global installation, the package installed via `npm install -g pixivflow` typically does not include frontend source code. To use the full WebUI, you need to clone the source repository separately, then run the command from the project directory.
+
+**From Source Installation:**
+
 **Development Mode (Frontend-Backend Separation):**
 ```bash
 # 1. Start WebUI backend

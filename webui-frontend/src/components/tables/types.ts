@@ -1,10 +1,14 @@
-import { TableColumnsType, TableProps, ColumnType } from 'antd';
+import { TableColumnsType, TableProps } from 'antd';
 import React from 'react';
 
 /**
  * Column definition for DataTable
  */
-export interface DataTableColumn<T = any> extends ColumnType<T> {
+export interface DataTableColumn<T = any> extends Omit<TableColumnsType<T>[number], 'dataIndex'> {
+  /**
+   * Data index for the column
+   */
+  dataIndex?: string | string[] | keyof T;
   /**
    * Whether the column is sortable
    */
@@ -34,7 +38,7 @@ export interface DataTableColumn<T = any> extends ColumnType<T> {
 /**
  * Props for DataTable component
  */
-export interface DataTableProps<T = any> extends Omit<TableProps<T>, 'columns' | 'dataSource'> {
+export interface DataTableProps<T = any> extends Omit<TableProps<T>, 'columns' | 'dataSource' | 'pagination'> {
   /**
    * Table data
    */

@@ -115,7 +115,8 @@ export default function Logs() {
         setSocket(null);
       }
     }
-  }, [autoRefresh, queryClient]);
+    return undefined;
+  }, [autoRefresh, queryClient, socket]);
 
   // Auto scroll to bottom when new logs arrive
   useEffect(() => {
@@ -145,8 +146,8 @@ export default function Logs() {
     return {
       line,
       originalLine: line,
-      level: levelMatch ? levelMatch[1].toUpperCase() : undefined,
-      timestamp: timestampMatch ? timestampMatch[1] : undefined,
+      level: levelMatch?.[1] ? levelMatch[1].toUpperCase() : undefined,
+      timestamp: timestampMatch?.[1] || undefined,
     };
   };
 

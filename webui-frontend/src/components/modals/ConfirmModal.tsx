@@ -124,7 +124,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
  */
 export const showConfirmModal = (props: Omit<ConfirmModalProps, 'open'>) => {
   return new Promise<boolean>((resolve) => {
-    const modal = Modal.confirm({
+    Modal.confirm({
       title: props.title || 'Confirm',
       content: props.content,
       okText: props.okText || 'OK',

@@ -1,8 +1,6 @@
 import React from 'react';
-import { Modal, ModalProps, Image, Typography, Spin } from 'antd';
+import { Modal, ModalProps, Image, Spin } from 'antd';
 import { LoadingOutlined } from '@ant-design/icons';
-
-const { Text, Paragraph } = Typography;
 
 export interface PreviewModalProps extends Omit<ModalProps, 'children'> {
   /**

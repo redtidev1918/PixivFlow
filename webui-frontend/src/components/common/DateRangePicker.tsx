@@ -1,10 +1,11 @@
 import React from 'react';
-import { DatePicker, DatePickerProps } from 'antd';
-import dayjs, { Dayjs } from 'dayjs';
+import { DatePicker } from 'antd';
+import type { RangePickerProps as AntRangePickerProps } from 'antd/es/date-picker';
+import { Dayjs } from 'dayjs';
 
 const { RangePicker } = DatePicker;
 
-export interface DateRangePickerProps extends Omit<DatePickerProps, 'onChange' | 'value'> {
+export interface DateRangePickerProps extends Omit<AntRangePickerProps, 'onChange' | 'value' | 'placeholder' | 'mode'> {
   /**
    * Selected date range
    */
@@ -71,7 +72,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
       disabled={disabled}
       style={{ width: '100%', ...style }}
       className={className}
-      {...datePickerProps}
+      {...(datePickerProps as any)}
     />
   );
 };

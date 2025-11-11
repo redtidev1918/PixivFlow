@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Modal, Form, FormProps, Button, Space } from 'antd';
+import { Modal, Form, FormProps, Button, Space, ModalProps } from 'antd';
 
 export interface FormModalProps extends Omit<ModalProps, 'onOk' | 'onCancel'> {
   /**

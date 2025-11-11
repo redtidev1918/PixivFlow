@@ -7,6 +7,7 @@ import { CommandContext, CommandArgs, CommandResult } from './types';
 import { startWebUI } from '../webui/server/server';
 import path from 'path';
 import fs from 'fs';
+import { spawn } from 'child_process';
 
 /**
  * WebUI command - Start WebUI server
@@ -24,8 +25,39 @@ export class WebUICommand extends BaseCommand {
       
       const host = (args.options.host as string) || process.env.HOST || 'localhost';
       
-      // Find static path
-      const staticPath = this.findStaticPath(args);
+      // Find static path, with auto-build if needed
+      let staticPath = this.findStaticPath(args);
+
+      // If static path not found, try to auto-build
+      if (!staticPath) {
+        const projectRoot = this.findProjectRoot();
+        if (projectRoot) {
+          const frontendSourcePath = path.join(projectRoot, 'webui-frontend');
+          const frontendDistPath = path.join(frontendSourcePath, 'dist');
+          
+          // Check if source exists but dist doesn't
+          if (fs.existsSync(frontendSourcePath) && !fs.existsSync(frontendDistPath)) {
+            context.logger.info('[WebUI] 🔨 Frontend source found but not built. Building now...');
+            const buildResult = await this.buildFrontend(projectRoot, context);
+            if (buildResult) {
+              staticPath = frontendDistPath;
+              context.logger.info('[WebUI] ✅ Frontend built successfully!');
+            } else {
+              context.logger.warn('[WebUI] ⚠️  Frontend build failed. Starting server without frontend.');
+            }
+          } else if (fs.existsSync(frontendDistPath)) {
+            // Dist exists, use it
+            const indexPath = path.join(frontendDistPath, 'index.html');
+            if (fs.existsSync(indexPath)) {
+              staticPath = frontendDistPath;
+            }
+          }
+        } else {
+          // Project root not found, show help
+          context.logger.warn('[WebUI] ⚠️  Project root not found. Cannot auto-build frontend.');
+          this.printProjectRootHelp(context);
+        }
+      }
 
       // Debug logging
       context.logger.info('[WebUI] Starting server...');
@@ -46,16 +78,11 @@ export class WebUICommand extends BaseCommand {
         }
       } else {
         context.logger.info('[WebUI] ⚠️  STATIC_PATH not found - frontend will not be served');
-        context.logger.info('[WebUI] 💡 To serve the frontend, you need to:');
-        context.logger.info('[WebUI]    1. Build the frontend first:');
-        context.logger.info('[WebUI]       cd /path/to/pixivflow');
-        context.logger.info('[WebUI]       npm run webui:build');
-        context.logger.info('[WebUI]    2. Then start WebUI with one of these methods:');
-        context.logger.info('[WebUI]       - Use --static-path option:');
-        context.logger.info('[WebUI]         pixivflow webui --static-path /path/to/pixivflow/webui-frontend/dist');
-        context.logger.info('[WebUI]       - Or set STATIC_PATH environment variable:');
-        context.logger.info('[WebUI]         STATIC_PATH=/path/to/pixivflow/webui-frontend/dist pixivflow webui');
-        context.logger.info('[WebUI]    3. Or run from the project directory (if webui-frontend/dist exists)');
+        context.logger.info('[WebUI] 💡 To serve the frontend, you can:');
+        context.logger.info('[WebUI]    1. Run from the project source directory (auto-build will be attempted)');
+        context.logger.info('[WebUI]    2. Build manually: cd /path/to/pixivflow && npm run webui:build');
+        context.logger.info('[WebUI]    3. Use --static-path option: pixivflow webui --static-path /path/to/dist');
+        context.logger.info('[WebUI]    4. Set STATIC_PATH environment variable');
         context.logger.info('[WebUI]');
         context.logger.info('[WebUI] 📝 Note: The frontend is not included in the npm package.');
         context.logger.info('[WebUI]    You need to build it separately from the source repository.');
@@ -192,6 +219,140 @@ export class WebUICommand extends BaseCommand {
     return undefined;
   }
 
+  /**
+   * Find project root directory (containing webui-frontend)
+   */
+  private findProjectRoot(): string | undefined {
+    // Try to find project root by looking for webui-frontend directory
+    let currentDir = __dirname;
+    
+    // First, try to find from current command location
+    for (let i = 0; i < 10; i++) {
+      const testPath = path.join(currentDir, 'webui-frontend');
+      if (fs.existsSync(testPath)) {
+        const packageJsonPath = path.join(currentDir, 'package.json');
+        if (fs.existsSync(packageJsonPath)) {
+          return currentDir;
+        }
+      }
+      const parent = path.dirname(currentDir);
+      if (parent === currentDir) break;
+      currentDir = parent;
+    }
+
+    // If in node_modules (global install), try to find source repo
+    if (__dirname.includes('node_modules')) {
+      const nodeModulesIndex = __dirname.indexOf('node_modules');
+      if (nodeModulesIndex !== -1) {
+        // Try parent directories of node_modules
+        const nodeModulesPath = __dirname.substring(0, nodeModulesIndex);
+        let searchDir = nodeModulesPath;
+        for (let i = 0; i < 5; i++) {
+          const testPath = path.join(searchDir, 'webui-frontend');
+          if (fs.existsSync(testPath)) {
+            const packageJsonPath = path.join(searchDir, 'package.json');
+            if (fs.existsSync(packageJsonPath)) {
+              return searchDir;
+            }
+          }
+          const parent = path.dirname(searchDir);
+          if (parent === searchDir) break;
+          searchDir = parent;
+        }
+      }
+    }
+
+    // Try current working directory
+    const cwdFrontendPath = path.join(process.cwd(), 'webui-frontend');
+    if (fs.existsSync(cwdFrontendPath)) {
+      const packageJsonPath = path.join(process.cwd(), 'package.json');
+      if (fs.existsSync(packageJsonPath)) {
+        return process.cwd();
+      }
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Print help information about finding project root
+   */
+  private printProjectRootHelp(context: CommandContext): void {
+    context.logger.info('');
+    context.logger.info('💡 To use the full WebUI with frontend, you need to:');
+    context.logger.info('');
+    context.logger.info('Option 1: Clone the source code repository');
+    context.logger.info('  1. Clone the repository:');
+    context.logger.info('     git clone https://github.com/zoidberg-xgd/pixivflow.git');
+    context.logger.info('     cd pixivflow');
+    context.logger.info('  2. Run the command from the project directory:');
+    context.logger.info('     pixivflow webui');
+    context.logger.info('');
+    context.logger.info('Option 2: Find the global installation directory');
+    context.logger.info('  1. Find npm global root:');
+    context.logger.info('     npm root -g');
+    context.logger.info('  2. The package is usually at:');
+    context.logger.info('     $(npm root -g)/pixivflow');
+    context.logger.info('  3. However, global packages typically don\'t include source code.');
+    context.logger.info('     You need to clone the repository separately.');
+    context.logger.info('');
+    context.logger.info('Option 3: Use API-only mode');
+    context.logger.info('  The server will start in API-only mode.');
+    context.logger.info('  You can build and deploy the frontend separately.');
+    context.logger.info('');
+  }
+
+  /**
+   * Build frontend automatically
+   */
+  private async buildFrontend(projectRoot: string, context: CommandContext): Promise<boolean> {
+    return new Promise((resolve) => {
+      const frontendDir = path.join(projectRoot, 'webui-frontend');
+      const packageJsonPath = path.join(frontendDir, 'package.json');
+      
+      // Check if frontend directory exists and has package.json
+      if (!fs.existsSync(frontendDir) || !fs.existsSync(packageJsonPath)) {
+        context.logger.warn('[WebUI] Frontend source directory not found');
+        resolve(false);
+        return;
+      }
+
+      context.logger.info(`[WebUI] Building frontend in: ${frontendDir}`);
+      
+      // Use npm run build in the frontend directory
+      const isWindows = process.platform === 'win32';
+      const npmCommand = isWindows ? 'npm.cmd' : 'npm';
+      const buildProcess = spawn(npmCommand, ['run', 'build'], {
+        cwd: frontendDir,
+        stdio: 'inherit',
+        shell: false,
+      });
+
+      buildProcess.on('close', (code) => {
+        if (code === 0) {
+          const distPath = path.join(frontendDir, 'dist');
+          const indexPath = path.join(distPath, 'index.html');
+          if (fs.existsSync(indexPath)) {
+            resolve(true);
+          } else {
+            context.logger.warn('[WebUI] Build completed but index.html not found');
+            resolve(false);
+          }
+        } else {
+          context.logger.warn(`[WebUI] Build failed with exit code ${code}`);
+          resolve(false);
+        }
+      });
+
+      buildProcess.on('error', (error) => {
+        context.logger.error('[WebUI] Build process error:', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+        resolve(false);
+      });
+    });
+  }
+
   getUsage(): string {
     return `webui [options]
 
@@ -207,11 +368,15 @@ Environment Variables:
   HOST                Host to bind to
   STATIC_PATH         Path to frontend static files
 
+Auto-Build Feature:
+  If run from the project source directory and frontend is not built,
+  the command will automatically build the frontend before starting.
+
 Examples:
-  pixivflow webui
-  pixivflow webui --port 8080
-  pixivflow webui --host 0.0.0.0
-  pixivflow webui --static-path ./webui-frontend/dist`;
+  pixivflow webui                                    # Auto-build if in source directory
+  pixivflow webui --port 8080                        # Use custom port
+  pixivflow webui --host 0.0.0.0                     # Bind to all interfaces
+  pixivflow webui --static-path ./webui-frontend/dist # Use custom static path`;
   }
 }
 

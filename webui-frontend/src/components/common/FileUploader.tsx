@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Upload, Button, UploadProps, message, Space, Typography, List } from 'antd';
+import { Upload, Button, UploadProps, message, Typography, List, UploadFile } from 'antd';
+import type { RcFile } from 'antd/es/upload';
 import { UploadOutlined, DeleteOutlined, FileOutlined } from '@ant-design/icons';
 
 const { Text } = Typography;
@@ -153,11 +154,11 @@ export const FileUploader: React.FC<FileUploaderProps> = ({
       <Upload
         accept={accept}
         multiple={multiple}
-        fileList={fileList.map((file, index) => ({
+        fileList={fileList.map((file, index): UploadFile => ({
           uid: `${index}`,
           name: file.name,
           status: 'done' as const,
-          originFileObj: file,
+          originFileObj: file as RcFile,
         }))}
         onChange={handleChange}
         beforeUpload={beforeUpload}

@@ -267,29 +267,41 @@ PixivFlow 还提供了现代化的 Web 管理界面，支持图形化操作：
 #### 全局安装后使用
 
 ```bash
-# 方式 1：仅启动后端 API（需要单独构建前端）
-pixivflow webui                    # 访问 http://localhost:3000（仅 API）
+# 方式 1：自动构建并启动（推荐 ⭐）
+# 首先需要克隆源码仓库（如果还没有）
+git clone https://github.com/zoidberg-xgd/pixivflow.git
+cd pixivflow
+pixivflow webui                    # 自动构建前端并启动，访问 http://localhost:3000
 
-# 方式 2：指定前端静态文件路径（推荐）
-# 首先需要构建前端（在项目目录中）
-cd /path/to/pixivflow
-npm run webui:build
-# 然后使用全局命令启动，指定静态文件路径
+# 方式 2：手动指定前端静态文件路径
+# 如果前端已经构建，可以直接指定路径
 pixivflow webui --static-path /path/to/pixivflow/webui-frontend/dist
 # 或使用环境变量
 STATIC_PATH=/path/to/pixivflow/webui-frontend/dist pixivflow webui
+
+# 方式 3：仅启动后端 API
+# 如果找不到前端，服务器会仅提供 API 服务
+pixivflow webui                    # 访问 http://localhost:3000（仅 API）
 ```
+
+> 💡 **提示**：全局安装后，`npm install -g pixivflow` 安装的包通常不包含前端源码。要使用完整的 WebUI，需要单独克隆源码仓库到本地，然后在项目目录中运行命令。
 
 #### 源码安装使用
 
 ```bash
-# 开发模式（前后端分离）
+# 开发模式（推荐：一键启动）
+npm run dev                # 同时启动前端和后端，支持热重载
+
+# 开发模式（手动启动，前后端分离）
 npm run webui              # 后端
 npm run webui:frontend     # 前端（访问 http://localhost:5173）
 
-# 生产模式（单服务器）
-npm run webui:build
-STATIC_PATH=webui-frontend/dist npm run webui  # 访问 http://localhost:3000
+# 生产模式（推荐：一键启动）
+npm run webui:start        # 构建前端并启动后端服务器
+
+# 生产模式（手动启动）
+npm run webui:build        # 构建前端
+npm run webui              # 启动后端（访问 http://localhost:3000）
 
 # 桌面应用（Electron）
 cd webui-frontend

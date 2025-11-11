@@ -1,8 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Card, Typography, Space, Button, message } from 'antd';
+import React, { useRef, useState } from 'react';
+import { Space, Button, message } from 'antd';
 import { CopyOutlined, CheckOutlined } from '@ant-design/icons';
-
-const { Text } = Typography;
 
 export interface CodeEditorProps {
   /**
@@ -73,7 +71,6 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
   placeholder = 'Enter code...',
   minHeight = 200,
   maxHeight = 600,
-  showLineNumbers = false,
   showCopyButton = true,
   style,
   className,

@@ -10,7 +10,7 @@
   "bugs": {
     "url": "https://github.com/zoidberg-xgd/PixivFlow/issues"
   },
-  "author": "zoidberg-xgd <zoidberg-xgd@users.noreply.github.com>",
+  "author": "zoidberg-xgd",
   "license": "GPL-3.0-or-later",
   "main": "dist/index.js",
   "bin": {
@@ -59,6 +59,9 @@
     "webui:dev": "npm run build:watch & npm run webui",
     "webui:frontend": "cd webui-frontend && npm run dev",
     "webui:build": "cd webui-frontend && npm run build",
+    "dev": "npm run build && concurrently -n \"backend-build,backend,frontend\" -c \"yellow,blue,green\" \"npm run build:watch\" \"nodemon --watch dist dist/webui/index.js\" \"npm run webui:frontend\"",
+    "webui:start": "npm run webui:build && npm run webui",
+    "webui:dev:full": "npm run build && concurrently -n \"backend-build,backend,frontend\" -c \"yellow,blue,green\" \"npm run build:watch\" \"nodemon --watch dist dist/webui/index.js\" \"npm run webui:frontend\"",
     "publish:patch": "./scripts/publish.sh patch",
     "publish:minor": "./scripts/publish.sh minor",
     "publish:major": "./scripts/publish.sh major",
@@ -76,7 +79,9 @@
     "@types/jest": "^30.0.0",
     "@types/node": "^22.7.4",
     "@types/node-cron": "^3.0.11",
+    "concurrently": "^9.2.1",
     "jest": "^29.7.0",
+    "nodemon": "^3.1.11",
     "puppeteer": "^24.29.1",
     "ts-jest": "^29.4.5",
     "typescript": "^5.6.2"

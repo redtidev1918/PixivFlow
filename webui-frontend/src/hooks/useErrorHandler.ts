@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { message } from 'antd';
-import { normalizeError, AppError, ErrorCode } from '../types/errors';
+import { normalizeError, ErrorCode } from '../types/errors';
 import { translateErrorCode } from '../utils/errorCodeTranslator';
 
 /**

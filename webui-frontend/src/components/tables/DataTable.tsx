@@ -1,6 +1,6 @@
-import React, { useMemo } from 'react';
-import { Table, Empty } from 'antd';
-import { DataTableProps, DataTableColumn } from './types';
+import { useMemo } from 'react';
+import { Table } from 'antd';
+import { DataTableProps } from './types';
 import { EmptyState } from '../common/EmptyState';
 
 /**
@@ -39,8 +39,10 @@ export function DataTable<T extends Record<string, any> = any>({
       // Handle sortable columns
       if (col.sortable && !col.sorter) {
         processedCol.sorter = (a: T, b: T) => {
-          const aVal = a[col.dataIndex as string];
-          const bVal = b[col.dataIndex as string];
+          const dataIndex = (col as any).dataIndex as string | string[];
+          const key = Array.isArray(dataIndex) ? dataIndex[0] : dataIndex;
+          const aVal = key ? a[key] : undefined;
+          const bVal = key ? b[key] : undefined;
           
           if (aVal === bVal) return 0;
           if (aVal == null) return 1;
@@ -65,7 +67,9 @@ export function DataTable<T extends Record<string, any> = any>({
           value: opt.value,
         }));
         processedCol.onFilter = col.onFilter || ((value: any, record: T) => {
-          const recordValue = record[col.dataIndex as string];
+          const dataIndex = (col as any).dataIndex as string | string[];
+          const key = Array.isArray(dataIndex) ? dataIndex[0] : dataIndex;
+          const recordValue = key ? record[key] : undefined;
           return recordValue === value;
         });
       }
@@ -106,8 +110,7 @@ export function DataTable<T extends Record<string, any> = any>({
     
     return (
       <EmptyState
-        title={emptyText || 'No data'}
-        description="There are no items to display"
+        description={emptyText || 'No data'}
       />
     );
   };

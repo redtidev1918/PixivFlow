@@ -34,7 +34,8 @@ export class PixivClient implements IPixivClient {
     // Keeping it for potential future use or backward compatibility
     const proxy = this.config.network?.proxy;
     if (proxy?.enabled && proxy.host && proxy.port) {
-      const protocol: string = proxy.protocol || 'http';
+      // Normalize protocol to lowercase for consistent comparison
+      const protocol: string = (proxy.protocol || 'http').toLowerCase();
       
       const auth = proxy.username && proxy.password 
         ? `${proxy.username}:${proxy.password}@` 
@@ -70,7 +71,8 @@ export class PixivClient implements IPixivClient {
     const proxyUrlStr = (() => {
       const p = this.config.network?.proxy;
       if (p?.enabled && p.host && p.port) {
-        const protocol = p.protocol || 'http';
+        // Normalize protocol to lowercase for consistent comparison
+        const protocol = (p.protocol || 'http').toLowerCase();
         const auth = p.username && p.password ? `${p.username}:${p.password}@` : '';
         return `${protocol}://${auth}${p.host}:${p.port}`;
       }

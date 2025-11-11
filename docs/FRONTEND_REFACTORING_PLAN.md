@@ -1005,7 +1005,7 @@ Component Update
 
 - [x] Phase 1: 基础设施完善 (100%) ✅
 - [x] Phase 2: 通用组件库建设 (100%) ✅
-- [ ] Phase 3: 业务逻辑提取 (0%)
+- [x] Phase 3: 业务逻辑提取 (100%) ✅
 - [ ] Phase 4: 页面组件重构 (0%)
 - [ ] Phase 5: 状态管理优化 (0%)
 - [ ] Phase 6: 测试完善 (0%)
@@ -1046,12 +1046,34 @@ Component Update
   - [x] FileUploader（文件上传）
   - [x] DateRangePicker（日期范围选择）
 
-#### Phase 3: 业务逻辑提取
+#### Phase 3: 业务逻辑提取 ✅
 
-- [ ] 创建自定义 Hooks
-- [ ] 创建业务服务层
-- [ ] 统一错误处理
-- [ ] 统一加载状态
+- [x] 创建自定义 Hooks
+  - [x] useConfig（配置管理）
+  - [x] useConfigFiles（配置文件管理）
+  - [x] useConfigHistory（配置历史管理）
+  - [x] useConfigValidation（配置验证）
+  - [x] useDownload（下载管理）
+  - [x] useDownloadStatus（下载状态）
+  - [x] useDownloadLogs（下载日志）
+  - [x] useDownloadHistory（下载历史）
+  - [x] useIncompleteTasks（未完成任务）
+  - [x] useFiles（文件管理）
+  - [x] useRecentFiles（最近文件）
+  - [x] useFilePreview（文件预览）
+  - [x] useFileNormalize（文件规范化）
+  - [x] useAuth（认证管理）
+  - [x] useStats（统计信息）
+  - [x] useLogs（日志管理）
+- [x] 创建业务服务层
+  - [x] configService（配置服务）
+  - [x] downloadService（下载服务）
+  - [x] fileService（文件服务）
+  - [x] authService（认证服务）
+  - [x] statsService（统计服务）
+  - [x] logsService（日志服务）
+- [x] 统一错误处理（已在 Phase 1 完成，所有 Hooks 已集成）
+- [x] 统一加载状态（已在 Phase 1 完成，所有 Hooks 已集成）
 
 #### Phase 4: 页面组件重构
 
@@ -1116,6 +1138,17 @@ Component Update
 - ✅ 创建通用模态框组件（ConfirmModal, FormModal, PreviewModal）
 - ✅ 创建通用状态组件（ErrorBoundary）
 - ✅ 创建通用工具组件（CodeEditor, FileUploader, DateRangePicker）
+
+### 2025-01-XX (Phase 3 完成)
+- ✅ 创建业务服务层（configService, downloadService, fileService, authService, statsService, logsService）
+- ✅ 创建配置管理 Hooks（useConfig, useConfigFiles, useConfigHistory, useConfigValidation）
+- ✅ 创建下载管理 Hooks（useDownload, useDownloadStatus, useDownloadLogs, useDownloadHistory, useIncompleteTasks）
+- ✅ 创建文件管理 Hooks（useFiles, useRecentFiles, useFilePreview, useFileNormalize）
+- ✅ 创建认证管理 Hook（useAuth）
+- ✅ 创建统计信息 Hooks（useStatsOverview, useDownloadStats, useTagStats, useAuthorStats）
+- ✅ 创建日志管理 Hook（useLogs）
+- ✅ 所有 Hooks 集成统一错误处理和加载状态管理
+- ✅ 更新 hooks/index.ts 导出所有新创建的 Hooks
 
 ---
 

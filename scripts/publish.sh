@@ -204,8 +204,9 @@ if [[ ! $REPLY =~ ^[Yy]$ ]]; then
 fi
 
 # 发布到 npm
+# 使用 --ignore-scripts 跳过 prepublishOnly 钩子，因为我们已经构建过了
 log_info "发布到 npm..."
-if npm publish --access public; then
+if npm publish --access public --ignore-scripts; then
     log_success "✅ 成功发布 pixivflow@$NEW_VERSION 到 npm"
 else
     log_error "发布失败"

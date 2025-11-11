@@ -169,8 +169,8 @@ async function bootstrap() {
         }
         process.exit(1);
       } else {
-        // For scheduler command, don't exit (it runs indefinitely)
-        if (commandName !== 'scheduler') {
+        // For scheduler and webui commands, don't exit (they run indefinitely)
+        if (commandName !== 'scheduler' && commandName !== 'webui' && commandName !== 'w') {
           process.exit(0);
         }
       }

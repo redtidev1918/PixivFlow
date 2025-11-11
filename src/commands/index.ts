@@ -12,6 +12,7 @@ import { RandomDownloadCommand } from './RandomDownloadCommand';
 import { SchedulerCommand } from './SchedulerCommand';
 import { MigrateConfigCommand } from './MigrateConfigCommand';
 import { NormalizeCommand } from './NormalizeCommand';
+import { WebUICommand } from './WebUICommand';
 
 /**
  * Create and register all commands
@@ -26,6 +27,7 @@ export function registerAllCommands(registry: CommandRegistry): void {
   registry.register(new SchedulerCommand());
   registry.register(new MigrateConfigCommand());
   registry.register(new NormalizeCommand());
+  registry.register(new WebUICommand());
 }
 
 /**
@@ -41,7 +43,9 @@ export {
   SchedulerCommand,
   MigrateConfigCommand,
   NormalizeCommand,
+  WebUICommand,
 };
+
 
 
 

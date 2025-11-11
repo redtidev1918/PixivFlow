@@ -63,7 +63,12 @@
     "publish:minor": "./scripts/publish.sh minor",
     "publish:major": "./scripts/publish.sh major",
     "publish": "./scripts/publish.sh",
-    "check:version": "./scripts/check-version-sync.sh"
+    "check:version": "./scripts/check-version-sync.sh",
+    "versions:list": "./scripts/manage-versions.sh list",
+    "versions:deprecate": "./scripts/manage-versions.sh deprecate",
+    "versions:deprecate-old": "./scripts/manage-versions.sh deprecate-old",
+    "versions:deprecate-all-but-latest": "./scripts/manage-versions.sh deprecate-old 1",
+    "versions:unpublish": "./scripts/manage-versions.sh unpublish"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",

@@ -134,6 +134,21 @@ SECURITY_CLEANUP_REPORT.md
 *SECURITY*.md
 !docs/SECURITY.md
 
+# Temporary work documents (refactoring plans, progress reports, etc.)
+REFACTORING_PLAN.md
+*REFACTORING*.md
+!docs/**/*REFACTORING*.md
+*MIGRATION*.md
+!docs/**/*MIGRATION*.md
+*PROGRESS*.md
+!docs/**/*PROGRESS*.md
+*STATUS*.md
+!docs/**/*STATUS*.md
+*PERFORMANCE*.md
+!docs/**/*PERFORMANCE*.md
+*COMPLETE*.md
+!docs/**/*COMPLETE*.md
+
 # Token storage files (never commit these!)
 .pixiv-refresh-token
 *.pixiv-refresh-token

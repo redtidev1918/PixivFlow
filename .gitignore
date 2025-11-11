@@ -84,5 +84,16 @@ TEST_*.md
 /tmp/
 
 # Security reports (may contain sensitive information)
+# Note: docs/SECURITY.md is allowed (it's documentation, not a report)
 SECURITY_CLEANUP_REPORT.md
 *SECURITY*.md
+!docs/SECURITY.md
+
+# Token storage files (never commit these!)
+.pixiv-refresh-token
+*.pixiv-refresh-token
+**/.pixiv-refresh-token
+**/*.pixiv-refresh-token
+
+# Any file containing actual tokens (not placeholders)
+# Note: config/standalone.config.json should use YOUR_REFRESH_TOKEN placeholder

@@ -294,7 +294,21 @@ export const api = {
 
   /**
    * Refresh authentication token
+   * 
+   * Refreshes the Pixiv authentication token using the refresh token.
+   * If no refresh token is provided, uses the one from the current configuration.
+   * 
    * @param refreshToken - Optional refresh token (uses config if not provided)
+   * @returns Promise resolving to API response with new refresh token
+   * 
+   * @example
+   * ```typescript
+   * // Refresh using token from config
+   * const response = await api.refreshToken();
+   * 
+   * // Refresh using specific token
+   * const response = await api.refreshToken('your-refresh-token');
+   * ```
    */
   refreshToken: (refreshToken?: string): Promise<AxiosResponse<ApiResponse<{ refreshToken: string }>>> =>
     apiClient.post('/auth/refresh', { refreshToken }),
@@ -652,6 +666,25 @@ export const api = {
 
   /**
    * Get recently downloaded files
+   * 
+   * Retrieves a list of recently downloaded files with optional filtering.
+   * 
+   * @param params - Query parameters
+   * @param params.limit - Maximum number of files to return (default: 50)
+   * @param params.type - File type filter: 'illustration' | 'novel' | undefined (all types)
+   * @param params.filter - Time filter: 'today' | 'yesterday' | 'last7days' | 'last30days'
+   * @returns Promise resolving to API response containing array of file items
+   * 
+   * @example
+   * ```typescript
+   * // Get last 10 illustrations downloaded today
+   * const response = await api.getRecentFiles({ 
+   *   limit: 10, 
+   *   type: 'illustration', 
+   *   filter: 'today' 
+   * });
+   * const files = response.data.data.files;
+   * ```
    */
   getRecentFiles: (params?: {
     limit?: number;

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { startWebUI } from './server';
+import { startWebUI } from './server/server';
 import path from 'path';
 import fs from 'fs';
 

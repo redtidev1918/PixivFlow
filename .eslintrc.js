@@ -19,5 +19,8 @@ module.exports = {
   rules: {
     'no-console': 'off',
     'no-useless-catch': 'off',
+    'complexity': ['warn', { max: 10 }],
+    'max-lines-per-function': ['warn', { max: 80, skipBlankLines: true, skipComments: true }],
+    'max-lines': ['warn', { max: 500, skipBlankLines: true, skipComments: true }],
   },
 }

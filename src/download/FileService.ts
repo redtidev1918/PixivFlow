@@ -1,7 +1,9 @@
 import { ensureDir } from '../utils/fs';
 import { StorageConfig, OrganizationMode } from '../config';
 import { promises as fs } from 'node:fs';
-import { join, dirname, basename, resolve } from 'node:path';
+import { join, dirname, basename, resolve, extname } from 'node:path';
+import { IFileService } from '../interfaces/IFileService';
+import { logger } from '../logger';
 
 export interface FileMetadata {
   author?: string;
@@ -36,7 +38,7 @@ export interface PixivMetadata {
   };
 }
 
-export class FileService {
+export class FileService implements IFileService {
   constructor(private readonly storage: StorageConfig) {}
 
   public async initialise() {
@@ -181,7 +183,7 @@ export class FileService {
     return parts.length > 0 ? join(baseDirectory, ...parts) : baseDirectory;
   }
 
-  private async findUniquePath(directory: string, fileName: string): Promise<string> {
+  public async findUniquePath(directory: string, fileName: string): Promise<string> {
     await ensureDir(directory);
     const { ext, baseName } = this.splitExtension(fileName);
     let attempt = 0;
@@ -272,6 +274,87 @@ export class FileService {
       }
       throw new Error(`Unexpected error saving metadata: ${String(error)}`);
     }
+  }
+
+  /**
+   * Check if file exists
+   */
+  public async fileExists(filePath: string): Promise<boolean> {
+    try {
+      await fs.access(filePath);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Read file metadata from JSON file
+   * Tries to find metadata file by extracting pixiv_id from filename or searching in metadata directory
+   */
+  public async readMetadata(filePath: string): Promise<PixivMetadata | null> {
+    try {
+      const fileName = basename(filePath, extname(filePath));
+      
+      // Try to extract pixiv_id from filename
+      // Common patterns: {pixiv_id}_p{page}.jpg, {pixiv_id}.jpg, etc.
+      const pixivIdMatch = fileName.match(/^(\d+)/);
+      if (!pixivIdMatch) {
+        logger.debug(`Could not extract pixiv_id from filename: ${fileName}`);
+        return null;
+      }
+      
+      const pixivId = pixivIdMatch[1];
+      
+      // Get metadata directory path
+      const databasePath = this.storage.databasePath || './data/pixiv-downloader.db';
+      const dataDir = dirname(resolve(databasePath));
+      const metadataDir = join(dataDir, 'metadata');
+      
+      // Try to find metadata file with page number suffix
+      const pageMatch = fileName.match(/_(\d+)$/);
+      const pageSuffix = pageMatch ? `_p${pageMatch[1]}` : '';
+      
+      // Try illustration first, then novel
+      for (const fileType of ['illustration', 'novel'] as const) {
+        const metadataFileName = `${pixivId}_${fileType}${pageSuffix}.json`;
+        const metadataPath = join(metadataDir, metadataFileName);
+        
+        if (await this.fileExists(metadataPath)) {
+          const content = await fs.readFile(metadataPath, 'utf-8');
+          const metadata = JSON.parse(content) as PixivMetadata;
+          if (metadata.pixiv_id && String(metadata.pixiv_id) === pixivId) {
+            return metadata;
+          }
+        }
+        
+        // If not found with page suffix, try without
+        if (pageSuffix) {
+          const metadataFileNameNoPage = `${pixivId}_${fileType}.json`;
+          const metadataPathNoPage = join(metadataDir, metadataFileNameNoPage);
+          
+          if (await this.fileExists(metadataPathNoPage)) {
+            const content = await fs.readFile(metadataPathNoPage, 'utf-8');
+            const metadata = JSON.parse(content) as PixivMetadata;
+            if (metadata.pixiv_id && String(metadata.pixiv_id) === pixivId) {
+              return metadata;
+            }
+          }
+        }
+      }
+      
+      return null;
+    } catch (error) {
+      logger.warn(`Failed to read metadata from ${filePath}: ${error instanceof Error ? error.message : String(error)}`);
+      return null;
+    }
+  }
+
+  /**
+   * Write metadata to JSON file
+   */
+  public async writeMetadata(filePath: string, metadata: PixivMetadata): Promise<void> {
+    await this.saveMetadata(filePath, metadata);
   }
 }
 

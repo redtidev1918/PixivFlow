@@ -178,3 +178,95 @@ export function getErrorStack(error: unknown): string | undefined {
   return undefined;
 }
 
+/**
+ * Error recovery strategies for operational flows
+ */
+export enum ErrorRecoveryStrategy {
+  SKIP = 'SKIP',
+  WAIT_AND_RETRY = 'WAIT_AND_RETRY',
+  RETRY = 'RETRY',
+  FAIL = 'FAIL',
+}
+
+/**
+ * Decide a recovery strategy based on error type and metadata
+ */
+export function getErrorRecoveryStrategy(error: unknown): ErrorRecoveryStrategy {
+  if (isSkipableError(error)) {
+    return ErrorRecoveryStrategy.SKIP;
+  }
+  if (error instanceof NetworkError) {
+    if (error.isRateLimit) {
+      return ErrorRecoveryStrategy.WAIT_AND_RETRY;
+    }
+    return ErrorRecoveryStrategy.RETRY;
+  }
+  if (error instanceof AuthenticationError) {
+    return ErrorRecoveryStrategy.FAIL;
+  }
+  if (error instanceof ConfigError) {
+    return ErrorRecoveryStrategy.FAIL;
+  }
+  return ErrorRecoveryStrategy.RETRY;
+}
+
+/**
+ * Safe async execution with retries
+ */
+export async function safeAsync<T>(
+  fn: () => Promise<T>,
+  options?: {
+    retries?: number;
+    retryDelay?: number;
+    shouldRetry?: (error: unknown) => boolean;
+    onError?: (error: unknown, attempt: number) => void;
+  }
+): Promise<T> {
+  const retries = options?.retries ?? 0;
+  const baseDelay = options?.retryDelay ?? 0;
+  const shouldRetry = options?.shouldRetry;
+  const onError = options?.onError;
+
+  let attempt = 0;
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    try {
+      return await fn();
+    } catch (error) {
+      attempt += 1;
+      onError?.(error, attempt);
+
+      const allowRetry =
+        attempt <= retries &&
+        (shouldRetry ? shouldRetry(error) : !(error instanceof ConfigError) && !(error instanceof AuthenticationError));
+
+      if (!allowRetry) {
+        throw error;
+      }
+
+      // Respect NetworkError.waitTime if present; otherwise use configured delay
+      const waitMs =
+        error instanceof NetworkError && typeof error.waitTime === 'number' && error.waitTime > 0
+          ? error.waitTime
+          : baseDelay;
+
+      if (waitMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, waitMs));
+      }
+    }
+  }
+}
+
+export type Result<T> =
+  | { success: true; value: T }
+  | { success: false; error: Error };
+
+export async function toResult<T>(fn: () => Promise<T>): Promise<Result<T>> {
+  try {
+    const value = await fn();
+    return { success: true, value };
+  } catch (e) {
+    const err = e instanceof Error ? e : new Error(getErrorMessage(e));
+    return { success: false, error: err };
+  }
+}

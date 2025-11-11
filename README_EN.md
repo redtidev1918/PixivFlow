@@ -18,7 +18,7 @@ Make Pixiv artwork collection elegant and efficient | 让 Pixiv 作品收集变�
 
 [Quick Start](#-quick-start) • [Features](#-features) • [Documentation](#-documentation) • [Scripts](#-script-tools) • [Use Cases](#-use-cases)
 
-[English](#) | [中文](README.md)
+[English](README_EN.md) | [中文](README.md)
 
 </div>
 
@@ -159,33 +159,31 @@ Compared to other Pixiv downloaders, PixivFlow focuses on **automation** and **s
 
 ### 📋 Requirements
 
-**Required Environment**:
-- Node.js 18+ and npm 9+
-- A Pixiv account
+- **Node.js 18+** and **npm 9+**
+- **Pixiv account**
+- **Windows users**: Recommended to use WSL (`wsl --install`) or Git Bash
 
-**Login Functionality (Only needed for first-time login)**:
-- Python 3.9+ and `gppt` package (`pip install gppt`)
-  - ⚠️ **Note**: Python is only used for first-time login to obtain refresh token, not a required dependency for running the project
-  - If already logged in (have refresh token), Python is not needed
-  - If refresh token expires, Python is needed only when re-logging in
+> 💡 **Login Note**: The project uses Node.js library for login by default, **Python is not required**. Python gppt is only used as a fallback option (optional).  
+> 📖 **Detailed Guide**: See [Quick Start Guide](docs/QUICKSTART.md)
 
-### 🎬 Quick Start (Recommended)
-
-**The simplest way - one-click setup**:
+### 🎬 3 Steps to Get Started
 
 ```bash
 # 1. Install dependencies
 npm install
 
-# 2. Run quick start script (auto completes login, config, test)
-./scripts/quick-start.sh
+# 2. Login to account
+npm run login
+
+# 3. Start downloading
+npm run download
 ```
 
-That's it! The quick start script will automatically guide you through:
-- ✅ Environment check and dependency installation
-- ✅ Pixiv account login
-- ✅ Download configuration setup
-- ✅ Test download verification
+**Or use one-click script** (automatically completes all setup):
+
+```bash
+./scripts/quick-start.sh
+```
 
 ---
 
@@ -308,27 +306,10 @@ npm run setup
 ```
 
 **Login Notes**:
-- ✅ **Interactive login mode** (default): Opens browser window, manual login in browser
-  - Uses Python gppt library, which internally uses Selenium to open browser window
-  - Suitable for: Cases requiring manual CAPTCHA or security verification
-- ✅ **Headless login mode**: Runs browser in background, automatically enters username and password
-  - Uses Python gppt library, which internally uses Selenium to run browser in background
-  - Requires `-u` and `-p` parameters (username and password)
-  - Suitable for: Server environments or automation scenarios
+- ✅ **Default login mode**: Uses Node.js library for login (no Python required)
+- ✅ **Python fallback option**: Python gppt can be used as a fallback option (optional)
 - ✅ Auto update config: Automatically updates refresh token in config after successful login
 - ✅ Setup wizard: Use `npm run setup` for interactive configuration
-
-**About Python Dependency**:
-- 🔐 **Only for login**: Python and gppt are only used for first-time login to obtain refresh token
-  - Both login modes use Python gppt library
-  - gppt internally uses Selenium to automate browser (interactive mode opens window, headless mode runs in background)
-- ✅ **Not needed after login**: If already logged in (have refresh token), Python is not needed
-- 🔄 **When token expires**: If refresh token expires, Python is needed only when re-logging in
-- 💡 **Alternative**: You can complete first-time login on a machine with Python installed, then copy the refresh token to the config file
-
-**Login Mode Details**:
-- **Default mode** (`npm run login`): Opens browser window, manual login in browser
-- **Headless mode** (`npm run login -- -u username -p password`): No browser window, automatic login with provided credentials
 
 #### 3️⃣ Configure Download Options (Optional)
 
@@ -362,7 +343,6 @@ That's it! 🎉
 
 > **💡 Tip**: For first use, it's recommended to run `test` to download 1-2 artworks first, confirm the configuration is correct before formal use.
 > 
-> ✅ **Verified**: Test scripts have been verified and can download artworks normally. See [TEST_GUIDE.md](docs/guides/TEST_GUIDE.md) for detailed test results.
 
 ---
 
@@ -395,7 +375,7 @@ Then visit http://localhost:3000 to use the WebUI (backend server).
 > **Note**:
 > - Development mode uses Vite dev server (port 5173), production mode uses Express server (port 3000)
 > - Docker deployment uses production mode, frontend static files are built into the image, access port is 3000
-> - For detailed Docker deployment instructions, see [Docker Usage Guide](docs/docker/DOCKER.md) and [WebUI Usage Guide](docs/webui/WEBUI_README.md)
+> 📖 **Detailed Instructions**: See [WebUI Usage Guide](docs/WEBUI.md)
 
 **WebUI API Endpoints**:
 - Root path `GET /` - Returns API info (when static files not configured)
@@ -415,7 +395,7 @@ Then visit http://localhost:3000 to use the WebUI (backend server).
 - 🎯 Task management (start/stop downloads)
 - 📈 Download history viewing
 
-For detailed instructions, see [WebUI Usage Guide](docs/webui/WEBUI_README.md).
+> 📖 **Detailed Instructions**: See [WebUI Usage Guide](docs/WEBUI.md)
 
 ---
 
@@ -512,10 +492,7 @@ docker-compose build
 - `docker login` - Login to account in container
 - `docker random` - Random download artwork (for testing)
 
-For detailed instructions, see [Docker Usage Guide](docs/docker/DOCKER.md).
-
-**Related Documentation**:
-- [Docker Usage Guide](docs/docker/DOCKER.md) - Complete Docker deployment and usage instructions
+> 📖 **Detailed Instructions**: See [Docker Usage Guide](docs/DOCKER.md)
 
 ---
 
@@ -651,10 +628,7 @@ npm run start migrate-config --dry-run # Preview changes
 - `docker login` - Login to account
 - `docker test` - Test download
 
-For detailed instructions, see [Docker Usage Guide](docs/docker/DOCKER.md).
-
-**Related Documentation**:
-- [Docker Usage Guide](docs/docker/DOCKER.md) - Complete Docker deployment and usage instructions (includes solutions for network issues and random download problems)
+> 📖 **Detailed Instructions**: See [Docker Usage Guide](docs/DOCKER.md)
 
 ### 🎨 Advanced CLI Tool
 
@@ -677,47 +651,42 @@ For detailed instructions, see [Docker Usage Guide](docs/docker/DOCKER.md).
 - Scripts directly call built-in CLI (`dist/index.js`), no need to go through npm, better performance
 - Recommend using `./scripts/pixiv.sh` as main entry point
 
-Detailed guide: [Script Usage Guide](docs/scripts/SCRIPTS_GUIDE.md)
+> 📖 **Detailed Instructions**: See [Script Usage Guide](docs/SCRIPTS.md)
 
 ---
 
 ## 📚 Documentation
 
-### 🌟 Must Read for Beginners
+> 📖 **Complete Documentation Index**: See [Documentation Navigation](docs/README.md) for a complete list and classification of all documents
 
-| Document | Description |
-|----------|-------------|
-| [📚 TUTORIAL](docs/getting-started/TUTORIAL.md) | **Complete Tutorial**: From login to download to scheduled tasks, detailed teaching |
-| [📖 START_HERE](docs/getting-started/START_HERE.md) | Complete beginner guide, from scratch |
-| [⚡ QUICKSTART](docs/getting-started/QUICKSTART.md) | 3-minute quick start |
-| [🔐 LOGIN_GUIDE](docs/guides/LOGIN_GUIDE.md) | Login process details |
-| [🧪 TEST_GUIDE](docs/guides/TEST_GUIDE.md) | Testing and troubleshooting |
+### 🌟 Must Read for Beginners (Read in Order)
 
-### 📘 Advanced Documentation
+| Document | Description | Rating |
+|----------|-------------|--------|
+| [⚡ QUICKSTART](docs/QUICKSTART.md) | **3-minute quick start** - Fastest way to get started | ⭐⭐⭐⭐⭐ |
+| [🔐 LOGIN](docs/LOGIN.md) | **Login process details** - Login problem solutions | ⭐⭐⭐⭐ |
+| [📖 USAGE](docs/USAGE.md) | **Usage guide** - Feature usage instructions | ⭐⭐⭐⭐ |
 
-| Document | Description |
-|----------|-------------|
-| [📋 CONFIG_GUIDE](docs/guides/CONFIG_GUIDE.md) | Configuration file usage guide |
-| [⚙️ STANDALONE-SETUP-GUIDE](docs/guides/STANDALONE-SETUP-GUIDE.md) | Complete configuration options |
-| [📊 RANKING_DOWNLOAD_GUIDE](docs/guides/RANKING_DOWNLOAD_GUIDE.md) | Ranking download guide |
-| [🔄 CONFIG-PATH-MIGRATION](docs/guides/CONFIG-PATH-MIGRATION.md) | Configuration path migration guide |
-| [🛠️ SCRIPTS_GUIDE](docs/scripts/SCRIPTS_GUIDE.md) | All scripts detailed guide |
-| [🌐 WEBUI_README](docs/webui/WEBUI_README.md) | WebUI usage guide and setup instructions |
+### 📘 Feature Guides
 
-### 🐳 Docker Documentation
+| Document | Description | Rating |
+|----------|-------------|--------|
+| [📋 CONFIG](docs/CONFIG.md) | **Configuration file usage guide** - All configuration options explained | ⭐⭐⭐⭐⭐ |
+| [🛠️ SCRIPTS](docs/SCRIPTS.md) | **Script usage guide** - All scripts detailed instructions | ⭐⭐⭐⭐⭐ |
 
-| Document | Description |
-|----------|-------------|
-| [🐳 DOCKER](docs/docker/DOCKER.md) | Docker usage guide (includes solutions for common issues) |
+### 🌐 WebUI and Docker
+
+| Document | Description | Rating |
+|----------|-------------|--------|
+| [🌐 WEBUI](docs/WEBUI.md) | **WebUI usage guide** - Web management interface and deployment configuration | ⭐⭐⭐⭐ |
+| [🐳 DOCKER](docs/DOCKER.md) | **Docker usage guide** - Docker deployment and usage (includes solutions for common issues) | ⭐⭐⭐⭐ |
 
 ### 📄 Project Documentation
 
 | Document | Description |
 |----------|-------------|
-| [📝 CHANGELOG](docs/project/CHANGELOG_EN.md) | Version changelog |
-| [📝 CHANGELOG (中文)](docs/project/CHANGELOG.md) | 版本更新日志 |
-| [🤝 CONTRIBUTING](docs/project/CONTRIBUTING_EN.md) | Contributing guide |
-| [🤝 CONTRIBUTING (中文)](docs/project/CONTRIBUTING.md) | 贡献指南 |
+| [📝 CHANGELOG](docs/project/CHANGELOG.md) | Version changelog |
+| [🤝 CONTRIBUTING](docs/project/CONTRIBUTING.md) | Contributing guide |
 
 ---
 
@@ -861,7 +830,7 @@ npm run download
 pixivflow download
 ```
 
-> **💡 Tip**: All download tasks are implemented through configuration files, no need to modify source code. See [Configuration File Usage Guide](docs/guides/CONFIG_GUIDE.md) for details.
+> 💡 **Tip**: All download tasks are implemented through configuration files, no need to modify source code. See [Configuration File Usage Guide](docs/CONFIG.md) for details.
 
 ---
 
@@ -1024,7 +993,8 @@ Configuration file is located at `config/standalone.config.json`. Below are key 
 
 > 💡 **Tip**: Using organization modes can make downloaded files more organized, easier to manage and find.
 
-**Complete Configuration Guide**: See [Configuration Guide](docs/guides/STANDALONE-SETUP-GUIDE.md) and [Configuration File Usage Guide](docs/guides/CONFIG_GUIDE.md)
+> 💡 **Tip**: Paths support auto-fix, the project will automatically detect and fix path issues on startup. Use `pixivflow migrate-config` to manually migrate configuration paths.  
+> 📚 **Complete Configuration Guide**: See [Configuration Guide](docs/CONFIG.md)
 
 ---
 
@@ -1391,12 +1361,11 @@ Having issues? Here are multiple ways to get help:
 |------|---------|-------------|
 | 🐛 **Bug Report** | [GitHub Issues](https://github.com/zoidberg-xgd/pixivflow/issues) | Report issues and bugs |
 | 💡 **Feature Suggestion** | [GitHub Discussions](https://github.com/zoidberg-xgd/pixivflow/discussions) | Propose new feature ideas |
-| 📖 **Usage Questions** | [View Documentation](docs/getting-started/START_HERE.md) | Read complete documentation |
+| 📖 **Usage Questions** | [View Documentation](docs/README.md) | Read complete documentation |
 | 🔧 **Auto-Fix Issues** | `./scripts/pixiv.sh check --fix` | Auto-fix environment issues ⭐ New |
 | 🔄 **Update & Fix** | `./scripts/pixiv.sh update` | One-click update and fix ⭐ New |
 | ✅ **Environment Check** | `./scripts/pixiv.sh health` | Run health check |
 | 💬 **Community Discussion** | [Discussions](https://github.com/zoidberg-xgd/pixivflow/discussions) | Discuss with other users |
-| 📚 **Complete Tutorial** | [TUTORIAL.md](docs/getting-started/TUTORIAL.md) | Detailed usage tutorial |
 | 🔍 **FAQ** | [FAQ](#-faq) | View FAQ |
 
 ### Search Keywords
@@ -1458,7 +1427,7 @@ We welcome all forms of contributions! Whether it's reporting bugs, proposing fe
 
 ### Contributing Guide
 
-See [CONTRIBUTING_EN.md](docs/project/CONTRIBUTING_EN.md) for detailed contributing guide, including:
+See [CONTRIBUTING.md](docs/project/CONTRIBUTING.md) for detailed contributing guide, including:
 - Code of Conduct
 - Development environment setup
 - Code standards
@@ -1469,7 +1438,7 @@ See [CONTRIBUTING_EN.md](docs/project/CONTRIBUTING_EN.md) for detailed contribut
 
 ## 📝 Changelog
 
-See [CHANGELOG_EN.md](docs/project/CHANGELOG_EN.md) for detailed version update records.
+See [CHANGELOG.md](docs/project/CHANGELOG.md) for detailed version update records.
 
 ---
 

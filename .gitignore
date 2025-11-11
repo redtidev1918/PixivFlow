@@ -85,10 +85,6 @@ logs/
 tmp/
 temp/
 
-# Analysis reports (local only, not for repository)
-PIXIV_API_CLIENT_ANALYSIS.md
-TEST_REPORT.md
-
 # WebUI
 webui-frontend/node_modules
 webui-frontend/dist
@@ -103,14 +99,13 @@ dist/
 coverage/
 *.lcov
 
-# Test files
+# Test files (non-MD files)
 test-*.js
 test-*.ts
 test-*.sh
 **/test-*.ts
 **/test-*.js
-TEST_*.md
-**/TEST_*.md
+# Note: TEST*.md files are handled in "Internal work documents" section below
 
 # Temporary files
 *.backup
@@ -130,11 +125,11 @@ $RECYCLE.BIN/
 
 # Security reports (may contain sensitive information)
 # Note: docs/SECURITY.md is allowed (it's documentation, not a report)
-SECURITY_CLEANUP_REPORT.md
 *SECURITY*.md
 !docs/SECURITY.md
 
-# Temporary work documents (refactoring plans, progress reports, etc.)
+# Internal work documents (refactoring plans, progress reports, analysis, etc.)
+# These are temporary development documents and should not be committed
 REFACTORING_PLAN.md
 *REFACTORING*.md
 !docs/**/*REFACTORING*.md
@@ -148,6 +143,38 @@ REFACTORING_PLAN.md
 !docs/**/*PERFORMANCE*.md
 *COMPLETE*.md
 !docs/**/*COMPLETE*.md
+
+# Test and analysis reports (internal only)
+*TEST*.md
+!docs/**/*TEST*.md
+*REPORT*.md
+!docs/**/*REPORT*.md
+*ANALYSIS*.md
+!docs/**/*ANALYSIS*.md
+*BENCHMARK*.md
+!docs/**/*BENCHMARK*.md
+*VERIFICATION*.md
+!docs/**/*VERIFICATION*.md
+*SUMMARY*.md
+!docs/**/*SUMMARY*.md
+*CLEANUP*.md
+!docs/**/*CLEANUP*.md
+# Note: SECURITY_CLEANUP*.md is already covered by *SECURITY*.md above
+
+# Documentation rewrite and planning documents (internal only)
+*REWRITE*.md
+!docs/**/*REWRITE*.md
+*PLAN*.md
+!docs/**/*PLAN*.md
+!docs/project/*PLAN*.md
+*INDEX*.md
+!docs/**/*INDEX*.md
+
+# Quality and performance analysis (internal only)
+*QUALITY*.md
+!docs/**/*QUALITY*.md
+*SETUP*.md
+!docs/**/*SETUP*.md
 
 # Token storage files (never commit these!)
 .pixiv-refresh-token

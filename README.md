@@ -166,16 +166,38 @@
 > 💡 **登录说明**：项目默认使用 Node.js 库进行登录，**无需 Python**。Python gppt 仅作为后备方案（可选）。  
 > 📖 **详细指南**：查看 [快速开始指南](docs/QUICKSTART.md)
 
-### 🎬 3 步开始使用
+### 🎬 快速安装（推荐 ⭐）
+
+#### 方式 1：从 npm 安装（最简单）
 
 ```bash
-# 1. 安装依赖
+# 全局安装
+npm install -g pixivflow
+
+# 验证安装
+pixivflow --help
+
+# 登录账号
+pixivflow login
+
+# 开始下载
+pixivflow download
+```
+
+#### 方式 2：从源码安装
+
+```bash
+# 1. 克隆仓库
+git clone https://github.com/zoidberg-xgd/pixivflow.git
+cd pixivflow
+
+# 2. 安装依赖
 npm install
 
-# 2. 登录账号
+# 3. 登录账号
 npm run login
 
-# 3. 开始下载
+# 4. 开始下载
 npm run download
 ```
 
@@ -187,24 +209,43 @@ npm run download
 
 ---
 
-### 🌍 全局安装（可选）
+### 📦 安装方式说明
 
-全局安装后可在任何目录使用 `pixivflow` 命令：
+#### 从 npm 安装（推荐 ⭐）
+
+最简单的方式，直接使用 npm 全局安装：
+
+```bash
+npm install -g pixivflow
+```
+
+安装后即可在任何目录使用 `pixivflow` 命令。
+
+#### 从源码安装
+
+适合需要自定义或开发的情况：
 
 ```bash
 # 从本地目录全局安装
 npm install && npm run build && npm install -g .
 
-# 验证安装
-pixivflow --help
+# 或从 GitHub 安装
+npm install -g git+https://github.com/zoidberg-xgd/pixivflow.git
+```
 
-# 使用命令
+**使用命令**：
+
+```bash
 pixivflow login      # 登录
 pixivflow download   # 下载
 pixivflow scheduler  # 定时任务
+pixivflow random     # 随机下载
 ```
 
-> 💡 **提示**：配置文件位于 `~/.pixivflow/config/standalone.config.json`，或使用 `--config` 指定路径
+> 💡 **提示**：
+> - 配置文件位于 `~/.pixivflow/config/standalone.config.json`，或使用 `--config` 指定路径
+> - 首次使用需要运行 `pixivflow login` 进行登录
+> - npm 包地址：https://www.npmjs.com/package/pixivflow
 
 ---
 

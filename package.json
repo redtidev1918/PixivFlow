@@ -4,7 +4,7 @@
   "description": "🎨 智能的 Pixiv 自动化下载工具 | Intelligent Pixiv Automation Downloader",
   "repository": {
     "type": "git",
-    "url": "https://github.com/zoidberg-xgd/pixivflow.git"
+    "url": "git+https://github.com/zoidberg-xgd/pixivflow.git"
   },
   "homepage": "https://github.com/zoidberg-xgd/pixivflow#readme",
   "bugs": {
@@ -14,9 +14,10 @@
   "license": "GPL-3.0-or-later",
   "main": "dist/index.js",
   "bin": {
-    "pixivflow": "./dist/index.js"
+    "pixivflow": "dist/index.js"
   },
   "scripts": {
+    "prepublishOnly": "npm run build",
     "build": "tsc && node scripts/create-webui-package-json.js",
     "build:watch": "tsc --watch",
     "start": "npm run build && node dist/index.js",
@@ -88,6 +89,13 @@
     "node": ">=18.0.0",
     "npm": ">=9.0.0"
   },
+  "files": [
+    "dist/",
+    "config/standalone.config.example.json",
+    "README.md",
+    "README_EN.md",
+    "LICENSE"
+  ],
   "keywords": [
     "pixiv",
     "pixiv-downloader",

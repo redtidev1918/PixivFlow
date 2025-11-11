@@ -166,16 +166,38 @@ Compared to other Pixiv downloaders, PixivFlow focuses on **automation** and **s
 > 💡 **Login Note**: The project uses Node.js library for login by default, **Python is not required**. Python gppt is only used as a fallback option (optional).  
 > 📖 **Detailed Guide**: See [Quick Start Guide](docs/QUICKSTART.md)
 
-### 🎬 3 Steps to Get Started
+### 🎬 Quick Installation (Recommended ⭐)
+
+#### Method 1: Install from npm (Easiest)
 
 ```bash
-# 1. Install dependencies
+# Install globally from npm
+npm install -g pixivflow
+
+# Verify installation
+pixivflow --help
+
+# Login to account
+pixivflow login
+
+# Start downloading
+pixivflow download
+```
+
+#### Method 2: Install from Source
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/zoidberg-xgd/pixivflow.git
+cd pixivflow
+
+# 2. Install dependencies
 npm install
 
-# 2. Login to account
+# 3. Login to account
 npm run login
 
-# 3. Start downloading
+# 4. Start downloading
 npm run download
 ```
 
@@ -187,11 +209,18 @@ npm run download
 
 ---
 
-### 🌐 Global Installation (Recommended ⭐)
+### 🌐 Global Installation (Optional)
 
 If you want to use `pixivflow` command from any directory, you can install it globally:
 
-#### Method 1: Install from Local Directory
+#### Method 1: Install from npm (Recommended ⭐)
+
+```bash
+# Install globally from npm
+npm install -g pixivflow
+```
+
+#### Method 2: Install from Local Directory
 
 ```bash
 # 1. Clone the repository
@@ -208,7 +237,7 @@ npm run build
 npm install -g .
 ```
 
-#### Method 2: Install Directly from GitHub Repository
+#### Method 3: Install Directly from GitHub Repository
 
 ```bash
 # Install globally from GitHub repository
@@ -280,6 +309,7 @@ npm install -g git+https://github.com/zoidberg-xgd/pixivflow.git
 > - After global installation, you can use the `pixivflow` command directly from any directory
 > - First use requires running `pixivflow login` to login
 > - Configuration file will be automatically created in user home directory or project directory
+> - npm package: https://www.npmjs.com/package/pixivflow
 
 ---
 

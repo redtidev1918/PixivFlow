@@ -89,18 +89,61 @@ log_info "构建项目..."
 npm run build
 log_success "构建完成"
 
-# 更新版本号
+# 更新版本号（使用 --no-git-tag-version 避免自动创建标签）
 if [[ -n "$NEW_VERSION" ]]; then
     log_info "更新版本号到: $NEW_VERSION"
-    npm version $NEW_VERSION --no-git-tag-commit
+    npm version $NEW_VERSION --no-git-tag-version
 else
     log_info "更新版本号 ($VERSION_TYPE)..."
-    npm version $VERSION_TYPE
+    npm version $VERSION_TYPE --no-git-tag-version
 fi
 
 # 获取新版本号
 NEW_VERSION=$(node -p "require('./package.json').version")
 log_success "新版本: $NEW_VERSION"
+
+# 提交版本更改
+log_info "提交版本更改..."
+git add package.json package-lock.json
+git commit -m "chore: bump version to $NEW_VERSION" || log_warn "版本更改可能已提交或无需提交"
+
+# 检查并处理已存在的标签
+TAG_NAME="v$NEW_VERSION"
+if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
+    log_warn "标签 $TAG_NAME 已存在"
+    
+    # 检查该版本是否已在 npm 上发布
+    NPM_VERSION=$(npm view pixivflow@$NEW_VERSION version 2>/dev/null || echo "")
+    if [[ -n "$NPM_VERSION" ]]; then
+        log_error "版本 $NEW_VERSION 已在 npm 上发布"
+        log_info "请使用下一个版本号或删除已存在的标签"
+        # 恢复版本号
+        git checkout package.json package-lock.json 2>/dev/null || true
+        exit 1
+    else
+        log_warn "版本 $NEW_VERSION 未在 npm 上发布，但标签已存在"
+        read -p "是否删除旧标签并重新创建？(y/N) " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            log_info "删除本地标签 $TAG_NAME..."
+            git tag -d "$TAG_NAME" 2>/dev/null || true
+            log_info "删除远程标签 $TAG_NAME..."
+            git push origin ":refs/tags/$TAG_NAME" 2>/dev/null || true
+            log_success "已删除旧标签"
+            # 重新创建标签
+            log_info "创建新标签 $TAG_NAME..."
+            git tag -a "$TAG_NAME" -m "v$NEW_VERSION"
+            log_success "已创建新标签 $TAG_NAME"
+        else
+            log_info "跳过标签创建，使用现有标签"
+        fi
+    fi
+else
+    # 标签不存在，创建新标签
+    log_info "创建新标签 $TAG_NAME..."
+    git tag -a "$TAG_NAME" -m "v$NEW_VERSION"
+    log_success "已创建标签 $TAG_NAME"
+fi
 
 # 确认发布
 log_warn "准备发布 pixivflow@$NEW_VERSION 到 npm"
@@ -108,8 +151,13 @@ read -p "确认发布？(y/N) " -n 1 -r
 echo
 if [[ ! $REPLY =~ ^[Yy]$ ]]; then
     log_info "已取消发布"
-    # 恢复版本号
+    # 恢复版本号和提交
+    git reset --soft HEAD~1 2>/dev/null || true
     git checkout package.json package-lock.json 2>/dev/null || true
+    # 删除可能创建的标签
+    if git rev-parse "$TAG_NAME" >/dev/null 2>&1 && [[ "$TAG_NAME" == "v$NEW_VERSION" ]]; then
+        git tag -d "$TAG_NAME" 2>/dev/null || true
+    fi
     exit 1
 fi
 

@@ -425,8 +425,9 @@ validate_configuration() {
 run_health_check() {
     print_subheader "运行健康检查"
     
-    if [[ -f "$SCRIPT_DIR/health-check.sh" ]]; then
-        if bash "$SCRIPT_DIR/health-check.sh" 2>&1; then
+    # 使用 CLI 命令进行健康检查
+    if command -v pixivflow &> /dev/null; then
+        if pixivflow health 2>&1; then
             log_success "健康检查通过"
         else
             local exit_code=$?
@@ -439,7 +440,20 @@ run_health_check() {
             fi
         fi
     else
-        log_warn "健康检查脚本不存在，跳过"
+        # 使用本地构建版本
+        cd "$PROJECT_ROOT" || exit 1
+        if npm run build > /dev/null 2>&1 && node dist/index.js health 2>&1; then
+            log_success "健康检查通过"
+        else
+            local exit_code=$?
+            if [[ $exit_code -eq 1 ]]; then
+                log_warn "健康检查发现一些问题"
+                ((WARNINGS++))
+            else
+                log_error "健康检查失败"
+                return 1
+            fi
+        fi
     fi
     
     echo

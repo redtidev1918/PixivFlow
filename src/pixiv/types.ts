@@ -72,3 +72,6 @@ export interface PixivNovelTextResponse {
 
 
 
+
+
+

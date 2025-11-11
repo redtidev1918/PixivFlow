@@ -10,7 +10,7 @@ const PIXIV_CLIENT_ID = 'MOBrBDS8blbauoSck0ZfDbtuzpyT';
 const PIXIV_CLIENT_SECRET = 'lsACyCD94FhDUtGTXi3QzcFE2uU1hqtDaKeqrdwj';
 const PIXIV_USER_AGENT = 'PixivAndroidApp/5.0.234 (Android 11; Pixel 6)';
 
-class SetupWizard {
+export class SetupWizard {
   private rl: readline.Interface;
 
   constructor() {
@@ -227,17 +227,26 @@ class SetupWizard {
       console.log('您可以随时编辑此文件来修改配置。\n');
 
       this.rl.close();
-      process.exit(0);
+      // Don't exit if called from command system
+      if (require.main === module) {
+        process.exit(0);
+      }
     } catch (error) {
       console.error('\n❌ 配置过程中发生错误:');
       console.error(error instanceof Error ? error.message : String(error));
       this.rl.close();
-      process.exit(1);
+      // Don't exit if called from command system
+      if (require.main === module) {
+        process.exit(1);
+      }
+      throw error;
     }
   }
 }
 
-// 运行向导
-const wizard = new SetupWizard();
-wizard.run();
+// 运行向导（仅在直接执行时）
+if (require.main === module) {
+  const wizard = new SetupWizard();
+  wizard.run();
+}
 

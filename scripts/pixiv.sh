@@ -500,42 +500,46 @@ cmd_clean() {
 # ============================================================================
 
 cmd_config() {
-    local tool="$SCRIPT_DIR/config-manager.sh"
-    if [[ -f "$tool" ]]; then
-        bash "$tool" "$@"
+    log_info "使用 CLI 命令: pixivflow config"
+    if command -v pixivflow &> /dev/null; then
+        pixivflow config "$@"
     else
-        log_error "配置管理工具未找到: $tool"
-        exit 1
+        log_info "pixivflow 未全局安装，使用本地构建版本"
+        ensure_build
+        node "$PROJECT_ROOT/dist/index.js" config "$@"
     fi
 }
 
 cmd_health() {
-    local tool="$SCRIPT_DIR/health-check.sh"
-    if [[ -f "$tool" ]]; then
-        bash "$tool" "$@"
+    log_info "使用 CLI 命令: pixivflow health"
+    if command -v pixivflow &> /dev/null; then
+        pixivflow health "$@"
     else
-        log_warn "健康检查工具未找到，使用基础检查"
-        cmd_check
+        log_info "pixivflow 未全局安装，使用本地构建版本"
+        ensure_build
+        node "$PROJECT_ROOT/dist/index.js" health "$@"
     fi
 }
 
 cmd_monitor() {
-    local tool="$SCRIPT_DIR/auto-monitor.sh"
-    if [[ -f "$tool" ]]; then
-        bash "$tool" "$@"
+    log_info "使用 CLI 命令: pixivflow monitor"
+    if command -v pixivflow &> /dev/null; then
+        pixivflow monitor "$@"
     else
-        log_error "监控工具未找到: $tool"
-        exit 1
+        log_info "pixivflow 未全局安装，使用本地构建版本"
+        ensure_build
+        node "$PROJECT_ROOT/dist/index.js" monitor "$@"
     fi
 }
 
 cmd_maintain() {
-    local tool="$SCRIPT_DIR/auto-maintain.sh"
-    if [[ -f "$tool" ]]; then
-        bash "$tool" "$@"
+    log_info "使用 CLI 命令: pixivflow maintain"
+    if command -v pixivflow &> /dev/null; then
+        pixivflow maintain "$@"
     else
-        log_error "运维工具未找到: $tool"
-        exit 1
+        log_info "pixivflow 未全局安装，使用本地构建版本"
+        ensure_build
+        node "$PROJECT_ROOT/dist/index.js" maintain "$@"
     fi
 }
 

@@ -146,12 +146,12 @@ step1_login() {
             echo_info "请在浏览器中登录您的 Pixiv 账号"
             echo ""
             
-            # 这里调用现有的登录逻辑
-            if [ -f "$PROJECT_ROOT/scripts/config-manager.sh" ]; then
-                bash "$PROJECT_ROOT/scripts/config-manager.sh" auth
+            # 使用 CLI 命令进行登录
+            cd "$PROJECT_ROOT" || exit 1
+            if command -v pixivflow &> /dev/null; then
+                pixivflow login
             else
                 # 使用 npm run login
-                cd "$PROJECT_ROOT"
                 npm run login
             fi
         fi

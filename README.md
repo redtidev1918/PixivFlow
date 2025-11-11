@@ -16,7 +16,7 @@
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg?style=flat-square)](https://github.com/zoidberg-xgd/pixivflow)
 [![Maintenance](https://img.shields.io/badge/Maintained-yes-green.svg?style=flat-square)](https://github.com/zoidberg-xgd/pixivflow/graphs/commit-activity)
 
-[快速开始](#-快速开始) • [功能特性](#-功能特性) • [文档](#-文档导航) • [脚本工具](#-脚本工具) • [使用场景](#-使用场景)
+[快速开始](#-快速开始) • [功能特性](#-功能特性) • [CLI 命令](#-cli-命令行工具) • [脚本工具](#-脚本工具) • [使用场景](#-使用场景)
 
 [English](README_EN.md) | [中文](README.md)
 
@@ -45,14 +45,14 @@
   - [🌐 使用 WebUI（可选）](#-使用-webui可选)
 
 **工具与文档**
+- [🎨 CLI 命令行工具](#-cli-命令行工具)
+  - [🚀 核心命令](#-核心命令)
+  - [⚙️ 配置管理](#️-配置管理-1)
+  - [📊 监控与维护](#-监控与维护-1)
 - [🛠️ 脚本工具](#️-脚本工具)
   - [🎯 主控制脚本（最常用）](#-主控制脚本最常用)
   - [🔐 登录管理](#-登录管理)
-  - [⚙️ 配置管理](#️-配置管理)
-  - [📊 监控与维护](#-监控与维护)
-  - [🚀 部署与备份](#-部署与备份)
   - [🐳 Docker 管理](#-docker-管理)
-  - [🎨 高级 CLI 工具](#-高级-cli-工具)
 - [📚 文档导航](#-文档导航)
   - [🌟 新手必读](#-新手必读)
   - [📘 进阶文档](#-进阶文档)
@@ -340,6 +340,49 @@ docker-compose down           # 停止服务
 
 ---
 
+## 🎨 CLI 命令行工具
+
+> 💡 **推荐使用**：全局安装后可直接使用 `pixivflow` 命令，无需依赖项目目录中的脚本。
+
+### 🚀 核心命令
+
+```bash
+# 全局安装后使用
+pixivflow login                      # 登录 Pixiv 账号
+pixivflow download                   # 执行下载
+pixivflow random                     # 随机下载
+pixivflow scheduler                  # 启动定时任务
+pixivflow normalize                  # 整理文件
+pixivflow migrate-config             # 迁移配置
+pixivflow health                     # 健康检查（推荐 ⭐）
+pixivflow status                     # 查看下载统计和最近记录
+pixivflow logs                       # 查看运行日志
+pixivflow setup                      # 交互式配置向导（首次使用）⭐
+```
+
+### ⚙️ 配置管理
+
+```bash
+pixivflow config                     # 配置管理（查看/编辑/备份/恢复）⭐
+pixivflow config show                # 查看配置
+pixivflow config backup              # 备份配置
+pixivflow config restore             # 恢复配置
+pixivflow config validate            # 验证配置
+pixivflow config edit                # 编辑配置
+```
+
+### 📊 监控与维护
+
+```bash
+pixivflow monitor                    # 实时监控进程状态和性能指标 ⭐
+pixivflow maintain                   # 自动维护（清理日志、优化数据库等）⭐
+pixivflow backup                     # 自动备份配置和数据 ⭐
+```
+
+> 📖 **详细说明**：查看 [脚本使用指南](docs/SCRIPTS.md)
+
+---
+
 ## 🛠️ 脚本工具
 
 PixivFlow 提供了丰富的脚本工具，所有脚本直接调用内置 CLI，性能更好、响应更快。
@@ -364,33 +407,21 @@ PixivFlow 提供了丰富的脚本工具，所有脚本直接调用内置 CLI，
 | `status` | 查看当前运行状态 |
 | `check` | 环境检查（支持 `--fix` 自动修复） |
 | `update` | 一键更新和修复（更新代码、依赖、修复错误） |
-| `health` | 健康检查（检查配置、网络等） |
-| `logs` | 查看运行日志 |
+| `health` | 健康检查（检查配置、网络等）<br>**全局安装后使用**: `pixivflow health` |
+| `status` | 查看下载统计和最近记录<br>**全局安装后使用**: `pixivflow status`  |
+| `logs` | 查看运行日志<br>**全局安装后使用**: `pixivflow logs`  |
+| `config` | 配置管理工具（查看/编辑/备份/恢复）<br>**全局安装后使用**: `pixivflow config` ⭐ |
+| `backup` | 自动备份配置和数据<br>**全局安装后使用**: `pixivflow backup` ⭐ |
+| `maintain` | 自动维护（清理日志、优化数据库等）<br>**全局安装后使用**: `pixivflow maintain` ⭐ |
+| `monitor` | 实时监控进程状态和性能指标<br>**全局安装后使用**: `pixivflow monitor` ⭐ |
+| `setup` | 交互式配置向导（首次使用）<br>**全局安装后使用**: `pixivflow setup` ⭐ |
 
 ### ⚙️ 其他工具
 
 ```bash
-# 配置管理
-./scripts/easy-setup.sh              # 交互式配置向导
-./scripts/config-manager.sh backup    # 备份配置
-./scripts/config-manager.sh validate  # 验证配置
-
 # 环境检查和修复
 ./scripts/pixiv.sh check --fix       # 自动修复环境问题
 ./scripts/pixiv.sh update            # 一键更新和修复
-
-# 监控和维护
-./scripts/auto-monitor.sh            # 自动监控
-./scripts/auto-maintain.sh           # 自动维护
-./scripts/auto-backup.sh             # 自动备份
-
-# 内置 CLI 命令（全局安装后）
-pixivflow login                      # 登录
-pixivflow download                   # 下载
-pixivflow random                    # 随机下载
-pixivflow scheduler                 # 定时任务
-pixivflow normalize                 # 整理文件
-pixivflow migrate-config            # 迁移配置
 ```
 
 > 📖 **详细说明**：查看 [脚本使用指南](docs/SCRIPTS.md)
@@ -571,13 +602,15 @@ pixivflow/
 ├── 🛠️ 脚本工具
 │   ├── scripts/
 │   │   ├── pixiv.sh                 # 主控制脚本（推荐）
-│   │   ├── easy-setup.sh            # 配置向导（推荐）
-│   │   ├── config-manager.sh        # 配置管理
-│   │   ├── health-check.sh          # 健康检查
-│   │   ├── auto-monitor.sh          # 自动监控
-│   │   ├── auto-maintain.sh         # 自动维护
-│   │   ├── auto-backup.sh           # 自动备份
+│   │   ├── easy-setup.sh            # 配置向导（备用）
 │   │   └── auto-deploy.sh           # 自动部署
+│   │
+│   │   ⚠️ 注意：以下功能已迁移到 CLI 命令（全局安装后使用）：
+│   │   - 配置管理：`pixivflow config`
+│   │   - 健康检查：`pixivflow health`
+│   │   - 自动监控：`pixivflow monitor`
+│   │   - 自动维护：`pixivflow maintain`
+│   │   - 自动备份：`pixivflow backup`
 │
 ├── 📦 输出目录（自动创建）
 │   ├── dist/                        # 编译输出
@@ -895,7 +928,7 @@ tail -f data/pixiv-downloader.log
 |------|------|
 | ✅ **不要分享配置文件** | `config/standalone.config.json` 包含敏感认证信息 |
 | ✅ **不要提交到 Git** | 确保配置文件在 `.gitignore` 中（已默认排除） |
-| ✅ **定期备份** | 使用 `./scripts/auto-backup.sh` 备份配置和数据 |
+| ✅ **定期备份** | 使用 `pixivflow backup` 备份配置和数据 |
 | ✅ **使用强密码** | 保护你的 Pixiv 账号 |
 | ✅ **HTTPS 加密** | 所有 API 请求均通过 HTTPS 安全传输 |
 | ✅ **定期更新 Token** | 定期重新运行配置向导更新认证信息 |
@@ -933,8 +966,8 @@ sqlite3 data/pixiv-downloader.db "SELECT * FROM downloaded_artworks LIMIT 10;"
 ### 清理下载记录
 
 ```bash
-# 使用维护脚本（推荐）
-./scripts/auto-maintain.sh
+# 使用维护命令（推荐）
+pixivflow maintain
 
 # 或手动删除数据库（会重新下载所有作品）
 rm data/pixiv-downloader.db

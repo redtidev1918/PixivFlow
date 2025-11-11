@@ -16,7 +16,7 @@ Make Pixiv artwork collection elegant and efficient | 让 Pixiv 作品收集变�
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg?style=flat-square)](https://github.com/zoidberg-xgd/pixivflow)
 [![Maintenance](https://img.shields.io/badge/Maintained-yes-green.svg?style=flat-square)](https://github.com/zoidberg-xgd/pixivflow/graphs/commit-activity)
 
-[Quick Start](#-quick-start) • [Features](#-features) • [Documentation](#-documentation) • [Scripts](#-script-tools) • [Use Cases](#-use-cases)
+[Quick Start](#-quick-start) • [Features](#-features) • [CLI Commands](#-cli-commands) • [Scripts](#-script-tools) • [Use Cases](#-use-cases)
 
 [English](README_EN.md) | [中文](README.md)
 
@@ -45,14 +45,14 @@ Make Pixiv artwork collection elegant and efficient | 让 Pixiv 作品收集变�
   - [🌐 Using WebUI (Optional)](#-using-webui-optional)
 
 **Tools & Documentation**
+- [🎨 CLI Commands](#-cli-commands)
+  - [🚀 Core Commands](#-core-commands)
+  - [⚙️ Configuration Management](#️-configuration-management-1)
+  - [📊 Monitoring and Maintenance](#-monitoring-and-maintenance-1)
 - [🛠️ Script Tools](#️-script-tools)
   - [🎯 Main Control Script (Most Used)](#-main-control-script-most-used)
   - [🔐 Login Management](#-login-management)
-  - [⚙️ Configuration Management](#️-configuration-management)
-  - [📊 Monitoring and Maintenance](#-monitoring-and-maintenance)
-  - [🚀 Deployment and Backup](#-deployment-and-backup)
   - [🐳 Docker Management](#-docker-management)
-  - [🎨 Advanced CLI Tool](#-advanced-cli-tool)
 - [📚 Documentation](#-documentation)
   - [🌟 Must Read for Beginners](#-must-read-for-beginners)
   - [📘 Advanced Documentation](#-advanced-documentation)
@@ -526,6 +526,49 @@ docker-compose build
 
 ---
 
+## 🎨 CLI Commands
+
+> 💡 **Recommended**: After global installation, you can directly use the `pixivflow` command without relying on scripts in the project directory.
+
+### 🚀 Core Commands
+
+```bash
+# Use after global installation
+pixivflow login                      # Login to Pixiv account
+pixivflow download                   # Execute download
+pixivflow random                     # Random download
+pixivflow scheduler                  # Start scheduled task
+pixivflow normalize                  # Normalize files
+pixivflow migrate-config             # Migrate config
+pixivflow health                     # Health check (recommended ⭐)
+pixivflow status                     # View download statistics and recent records
+pixivflow logs                       # View run logs
+pixivflow setup                      # Interactive setup wizard (first time use) ⭐
+```
+
+### ⚙️ Configuration Management
+
+```bash
+pixivflow config                     # Config management (view/edit/backup/restore) ⭐
+pixivflow config show                # View config
+pixivflow config backup              # Backup config
+pixivflow config restore             # Restore config
+pixivflow config validate            # Validate config
+pixivflow config edit                # Edit config
+```
+
+### 📊 Monitoring and Maintenance
+
+```bash
+pixivflow monitor                    # Real-time monitoring of process status and performance metrics ⭐
+pixivflow maintain                   # Auto maintenance (clean logs, optimize database, etc.) ⭐
+pixivflow backup                     # Auto backup config and data ⭐
+```
+
+> 📖 **Detailed Instructions**: See [Script Usage Guide](docs/SCRIPTS.md)
+
+---
+
 ## 🛠️ Script Tools
 
 PixivFlow provides rich script tools so you don't need to remember complex npm commands. All scripts directly call built-in CLI functions for better performance and faster response.
@@ -577,12 +620,6 @@ npm run login
 # Interactive setup wizard
 ./scripts/easy-setup.sh
 
-# Configuration file management
-./scripts/config-manager.sh backup    # Backup config
-./scripts/config-manager.sh restore   # Restore config
-./scripts/config-manager.sh validate  # Validate config
-./scripts/config-manager.sh edit      # Edit config
-
 # Configuration path migration (auto-fix absolute paths, for project migration)
 pixivflow migrate-config              # Execute migration
 pixivflow migrate-config --dry-run     # Preview changes
@@ -614,27 +651,11 @@ npm run start migrate-config --dry-run # Preview changes
 - ✅ Smart detection: Automatically detect if build artifacts are outdated
 - ✅ Unified error handling: Provide clear error messages and fix suggestions
 
-### 📊 Monitoring and Maintenance
-
-```bash
-# Auto monitor (continuously monitor running status)
-./scripts/auto-monitor.sh
-
-# Auto maintenance (clean logs, optimize database)
-./scripts/auto-maintain.sh
-
-# Detailed health check
-./scripts/health-check.sh
-```
-
 ### 🚀 Deployment and Backup
 
 ```bash
 # Auto deploy to server
 ./scripts/auto-deploy.sh
-
-# Auto backup config and data
-./scripts/auto-backup.sh
 ```
 
 ### 🐳 Docker Management
@@ -659,29 +680,6 @@ npm run start migrate-config --dry-run # Preview changes
 - `docker test` - Test download
 
 > 📖 **Detailed Instructions**: See [Docker Usage Guide](docs/DOCKER.md)
-
-### 🎨 Advanced CLI Tool
-
-```bash
-# Use full CLI tool (directly calls built-in functions)
-./scripts/pixiv-cli.sh <command>
-
-# Available commands:
-./scripts/pixiv-cli.sh login [options]    # Login
-./scripts/pixiv-cli.sh refresh <token>     # Refresh token
-./scripts/pixiv-cli.sh download            # Execute download
-./scripts/pixiv-cli.sh random              # Random download
-./scripts/pixiv-cli.sh scheduler            # Start scheduled task
-./scripts/pixiv-cli.sh stats               # View statistics
-./scripts/pixiv-cli.sh export              # Export data
-```
-
-**💡 Tips**:
-- All scripts support `--help` to view detailed usage
-- Scripts directly call built-in CLI (`dist/index.js`), no need to go through npm, better performance
-- Recommend using `./scripts/pixiv.sh` as main entry point
-
-> 📖 **Detailed Instructions**: See [Script Usage Guide](docs/SCRIPTS.md)
 
 ---
 
@@ -893,13 +891,15 @@ pixivflow/
 ├── 🛠️ Script Tools
 │   ├── scripts/
 │   │   ├── pixiv.sh                 # Main control script (recommended)
-│   │   ├── easy-setup.sh            # Setup wizard (recommended)
-│   │   ├── config-manager.sh        # Config management
-│   │   ├── health-check.sh          # Health check
-│   │   ├── auto-monitor.sh          # Auto monitor
-│   │   ├── auto-maintain.sh         # Auto maintenance
-│   │   ├── auto-backup.sh           # Auto backup
+│   │   ├── easy-setup.sh            # Setup wizard (backup)
 │   │   └── auto-deploy.sh           # Auto deploy
+│   │
+│   │   ⚠️ Note: The following features have been migrated to CLI commands (use after global install):
+│   │   - Config management: `pixivflow config`
+│   │   - Health check: `pixivflow health`
+│   │   - Auto monitor: `pixivflow monitor`
+│   │   - Auto maintenance: `pixivflow maintain`
+│   │   - Auto backup: `pixivflow backup`
 │
 ├── 📦 Output Directories (auto created)
 │   ├── dist/                        # Compiled output
@@ -1090,7 +1090,7 @@ npm run setup
 ./scripts/pixiv.sh update
 
 # 3. Check configuration
-./scripts/config-manager.sh validate
+pixivflow config validate
 
 # 4. View running status
 ./scripts/pixiv.sh status
@@ -1168,7 +1168,7 @@ tail -f data/pixiv-downloader.log
 |----------------|-------------|
 | ✅ **Don't Share Config Files** | `config/standalone.config.json` contains sensitive authentication info |
 | ✅ **Don't Commit to Git** | Ensure config file is in `.gitignore` (excluded by default) |
-| ✅ **Regular Backups** | Use `./scripts/auto-backup.sh` to backup config and data |
+| ✅ **Regular Backups** | Use `pixivflow backup` to backup config and data |
 | ✅ **Use Strong Passwords** | Protect your Pixiv account |
 | ✅ **HTTPS Encryption** | All API requests use HTTPS secure transmission |
 | ✅ **Regular Token Updates** | Regularly re-run setup wizard to update authentication info |
@@ -1206,8 +1206,8 @@ sqlite3 data/pixiv-downloader.db "SELECT * FROM downloaded_artworks LIMIT 10;"
 ### Clean Download Records
 
 ```bash
-# Use maintenance script (recommended)
-./scripts/auto-maintain.sh
+# Use maintenance command (recommended)
+pixivflow maintain
 
 # Or manually delete database (will re-download all artworks)
 rm data/pixiv-downloader.db
@@ -1415,7 +1415,7 @@ If you're looking for similar tools, these keywords might help:
 
 1. 🔍 Check [FAQ](#-faq) section
 2. 📖 Read relevant documentation
-3. ✅ Run health check `./scripts/health-check.sh`
+3. ✅ Run health check `pixivflow health`
 4. 📋 View run logs `./scripts/pixiv.sh logs`
 
 ---

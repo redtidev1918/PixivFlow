@@ -105,10 +105,16 @@ npm run login
 
 ---
 
-## ⚙️ 配置管理脚本
+## ⚙️ 配置管理
+
+**⚠️ 已迁移到 CLI 命令（推荐使用）**：
 
 ```bash
-./scripts/config-manager.sh <command>
+# 全局安装后使用
+pixivflow config <command>
+
+# 或本地开发使用
+npm run build && node dist/index.js config <command>
 ```
 
 **命令**：
@@ -198,30 +204,48 @@ npm run login
 
 ---
 
-## 🔧 其他脚本
+## 🔧 其他工具
+
+**⚠️ 以下功能已迁移到 CLI 命令（推荐使用）**：
 
 ### 健康检查
 
 ```bash
-./scripts/health-check.sh
+# 全局安装后使用
+pixivflow health
+
+# 或本地开发使用
+npm run build && node dist/index.js health
 ```
 
 ### 自动监控
 
 ```bash
-./scripts/auto-monitor.sh
+# 全局安装后使用
+pixivflow monitor
+
+# 或本地开发使用
+npm run build && node dist/index.js monitor
 ```
 
 ### 自动维护
 
 ```bash
-./scripts/auto-maintain.sh
+# 全局安装后使用
+pixivflow maintain
+
+# 或本地开发使用
+npm run build && node dist/index.js maintain
 ```
 
 ### 自动备份
 
 ```bash
-./scripts/auto-backup.sh
+# 全局安装后使用
+pixivflow backup
+
+# 或本地开发使用
+npm run build && node dist/index.js backup
 ```
 
 ### 自动部署

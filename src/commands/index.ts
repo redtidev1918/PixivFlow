@@ -13,6 +13,14 @@ import { SchedulerCommand } from './SchedulerCommand';
 import { MigrateConfigCommand } from './MigrateConfigCommand';
 import { NormalizeCommand } from './NormalizeCommand';
 import { WebUICommand } from './WebUICommand';
+import { HealthCommand } from './HealthCommand';
+import { StatusCommand } from './StatusCommand';
+import { LogsCommand } from './LogsCommand';
+import { ConfigCommand } from './ConfigCommand';
+import { BackupCommand } from './BackupCommand';
+import { MaintainCommand } from './MaintainCommand';
+import { MonitorCommand } from './MonitorCommand';
+import { SetupCommand } from './SetupCommand';
 
 /**
  * Create and register all commands
@@ -28,6 +36,14 @@ export function registerAllCommands(registry: CommandRegistry): void {
   registry.register(new MigrateConfigCommand());
   registry.register(new NormalizeCommand());
   registry.register(new WebUICommand());
+  registry.register(new HealthCommand());
+  registry.register(new StatusCommand());
+  registry.register(new LogsCommand());
+  registry.register(new ConfigCommand());
+  registry.register(new BackupCommand());
+  registry.register(new MaintainCommand());
+  registry.register(new MonitorCommand());
+  registry.register(new SetupCommand());
 }
 
 /**
@@ -44,6 +60,14 @@ export {
   MigrateConfigCommand,
   NormalizeCommand,
   WebUICommand,
+  HealthCommand,
+  StatusCommand,
+  LogsCommand,
+  ConfigCommand,
+  BackupCommand,
+  MaintainCommand,
+  MonitorCommand,
+  SetupCommand,
 };
 
 

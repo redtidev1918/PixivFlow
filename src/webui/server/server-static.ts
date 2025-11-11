@@ -4,6 +4,66 @@ import fs from 'fs';
 import { logger } from '../../logger';
 
 /**
+ * Get package version dynamically
+ * Handles multiple scenarios:
+ * 1. Running from source (src/webui/server/)
+ * 2. Running from built dist (dist/webui/server/)
+ * 3. Running from global npm install
+ */
+function getPackageVersion(): string {
+  try {
+    // Strategy 1: Try to find package.json by traversing up from __dirname
+    // __dirname will be: dist/webui/server/ (built) or src/webui/server/ (source)
+    let currentDir = __dirname;
+    for (let i = 0; i < 10; i++) {
+      const packageJsonPath = path.join(currentDir, 'package.json');
+      if (fs.existsSync(packageJsonPath)) {
+        try {
+          const pkg = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
+          if (pkg.name === 'pixivflow' && pkg.version) {
+            return pkg.version;
+          }
+        } catch (err) {
+          // Continue searching
+        }
+      }
+      const parent = path.dirname(currentDir);
+      if (parent === currentDir) break;
+      currentDir = parent;
+    }
+    
+    // Strategy 2: Try to resolve from require (for npm packages)
+    try {
+      // When installed as npm package, try to resolve the package
+      const packagePath = require.resolve('pixivflow/package.json');
+      if (fs.existsSync(packagePath)) {
+        const pkg = JSON.parse(fs.readFileSync(packagePath, 'utf-8'));
+        return pkg.version || 'unknown';
+      }
+    } catch {
+      // Not installed as npm package, continue
+    }
+    
+    // Strategy 3: Try current working directory
+    const cwdPackageJson = path.join(process.cwd(), 'package.json');
+    if (fs.existsSync(cwdPackageJson)) {
+      try {
+        const pkg = JSON.parse(fs.readFileSync(cwdPackageJson, 'utf-8'));
+        if (pkg.name === 'pixivflow' && pkg.version) {
+          return pkg.version;
+        }
+      } catch {
+        // Ignore
+      }
+    }
+  } catch (error) {
+    logger.warn('Failed to read package version', { error });
+  }
+  
+  return 'unknown';
+}
+
+/**
  * Setup static file serving for SPA frontend
  */
 export function setupStaticFiles(app: Express, staticPath?: string): void {
@@ -12,7 +72,7 @@ export function setupStaticFiles(app: Express, staticPath?: string): void {
     app.get('/', (req: Request, res: Response) => {
       res.json({
         message: 'PixivFlow WebUI API Server',
-        version: '2.0.0',
+        version: getPackageVersion(),
         endpoints: {
           health: '/api/health',
           auth: '/api/auth',

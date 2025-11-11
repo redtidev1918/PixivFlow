@@ -225,11 +225,11 @@ else
     log_info "   实际版本: ${NPM_PUBLISHED_VERSION:-未找到}"
 fi
 
-# 推送代码和标签
+# 推送代码和标签（只推送当前版本的 tag，避免推送所有旧 tags）
 log_info "推送代码和标签到 GitHub..."
 git push
-git push --tags
-log_success "已推送到 GitHub"
+git push origin "$TAG_NAME"
+log_success "已推送到 GitHub（只推送了当前版本标签 $TAG_NAME）"
 
 # 验证 GitHub 标签
 log_info "验证 GitHub 标签..."

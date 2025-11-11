@@ -304,22 +304,80 @@ export class WebUICommand extends BaseCommand {
 
   /**
    * Build frontend automatically
+   * This will:
+   * 1. Check if dependencies are installed, install if needed
+   * 2. Build the frontend
    */
   private async buildFrontend(projectRoot: string, context: CommandContext): Promise<boolean> {
-    return new Promise((resolve) => {
-      const frontendDir = path.join(projectRoot, 'webui-frontend');
-      const packageJsonPath = path.join(frontendDir, 'package.json');
-      
-      // Check if frontend directory exists and has package.json
-      if (!fs.existsSync(frontendDir) || !fs.existsSync(packageJsonPath)) {
-        context.logger.warn('[WebUI] Frontend source directory not found');
-        resolve(false);
-        return;
-      }
+    const frontendDir = path.join(projectRoot, 'webui-frontend');
+    const packageJsonPath = path.join(frontendDir, 'package.json');
+    const nodeModulesPath = path.join(frontendDir, 'node_modules');
+    
+    // Check if frontend directory exists and has package.json
+    if (!fs.existsSync(frontendDir) || !fs.existsSync(packageJsonPath)) {
+      context.logger.warn('[WebUI] Frontend source directory not found');
+      return false;
+    }
 
-      context.logger.info(`[WebUI] Building frontend in: ${frontendDir}`);
-      
-      // Use npm run build in the frontend directory
+    // Step 1: Install dependencies if needed
+    if (!fs.existsSync(nodeModulesPath)) {
+      context.logger.info('[WebUI] 📦 Frontend dependencies not found. Installing...');
+      const installSuccess = await this.installFrontendDependencies(frontendDir, context);
+      if (!installSuccess) {
+        context.logger.warn('[WebUI] ⚠️  Failed to install frontend dependencies');
+        context.logger.info('[WebUI] 💡 Please run manually: cd webui-frontend && npm install');
+        return false;
+      }
+      context.logger.info('[WebUI] ✅ Frontend dependencies installed successfully');
+    }
+
+    // Step 2: Build frontend
+    context.logger.info(`[WebUI] 🔨 Building frontend in: ${frontendDir}`);
+    return await this.runFrontendBuild(frontendDir, context);
+  }
+
+  /**
+   * Install frontend dependencies
+   */
+  private async installFrontendDependencies(frontendDir: string, context: CommandContext): Promise<boolean> {
+    return new Promise((resolve) => {
+      const isWindows = process.platform === 'win32';
+      const npmCommand = isWindows ? 'npm.cmd' : 'npm';
+      const installProcess = spawn(npmCommand, ['install'], {
+        cwd: frontendDir,
+        stdio: 'inherit',
+        shell: false,
+      });
+
+      installProcess.on('close', (code) => {
+        if (code === 0) {
+          const nodeModulesPath = path.join(frontendDir, 'node_modules');
+          if (fs.existsSync(nodeModulesPath)) {
+            resolve(true);
+          } else {
+            context.logger.warn('[WebUI] Install completed but node_modules not found');
+            resolve(false);
+          }
+        } else {
+          context.logger.warn(`[WebUI] Install failed with exit code ${code}`);
+          resolve(false);
+        }
+      });
+
+      installProcess.on('error', (error) => {
+        context.logger.error('[WebUI] Install process error:', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+        resolve(false);
+      });
+    });
+  }
+
+  /**
+   * Run frontend build
+   */
+  private async runFrontendBuild(frontendDir: string, context: CommandContext): Promise<boolean> {
+    return new Promise((resolve) => {
       const isWindows = process.platform === 'win32';
       const npmCommand = isWindows ? 'npm.cmd' : 'npm';
       const buildProcess = spawn(npmCommand, ['run', 'build'], {

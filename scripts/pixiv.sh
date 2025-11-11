@@ -226,7 +226,7 @@ cmd_run() {
     
     log_info "下载器已启动（按 Ctrl+C 停止）"
     log_info "日志: data/pixiv-downloader.log"
-    log_info "提示: 这是完全独立的后端服务，无需前端支持"
+    log_info "Note: This is a fully standalone CLI tool that works independently of any frontend"
     echo
     
     call_cli scheduler

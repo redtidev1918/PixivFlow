@@ -40,8 +40,7 @@ services:
       # 临时方案：使用配置文件中的代理设置
       # - HTTP_PROXY=http://127.0.0.1:6152
       # - HTTPS_PROXY=http://127.0.0.1:6152
-      # 注意：undici ProxyAgent 可能不支持 SOCKS5，优先使用 HTTP/HTTPS 代理
-      # 如果必须使用 SOCKS5，需要在配置文件中设置，而不是通过环境变量
+      # 支持 HTTP/HTTPS/SOCKS5 代理（SOCKS5 通过 socks-proxy-agent 支持）
       # - ALL_PROXY=socks5://host.docker.internal:6153
       # 如果代理在局域网其他机器，直接使用 IP 地址：
       # - HTTP_PROXY=http://192.168.1.100:7890
@@ -117,8 +116,7 @@ services:
       # Linux: 可以使用 172.17.0.1 或 host.docker.internal
       - HTTP_PROXY=http://127.0.0.1:6152
       - HTTPS_PROXY=http://127.0.0.1:6152
-      # 注意：undici ProxyAgent 可能不支持 SOCKS5，优先使用 HTTP/HTTPS 代理
-      # 如果必须使用 SOCKS5，需要在配置文件中设置，而不是通过环境变量
+      # 支持 HTTP/HTTPS/SOCKS5 代理（SOCKS5 通过 socks-proxy-agent 支持）
       # - ALL_PROXY=socks5://host.docker.internal:6153
       # 如果代理在局域网其他机器，直接使用 IP 地址：
       # - HTTP_PROXY=http://192.168.1.100:7890

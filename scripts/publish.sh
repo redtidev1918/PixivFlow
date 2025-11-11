@@ -102,6 +102,27 @@ fi
 NEW_VERSION=$(node -p "require('./package.json').version")
 log_success "新版本: $NEW_VERSION"
 
+# 验证新版本号格式
+if [[ ! "$NEW_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    log_error "无效的版本号格式: $NEW_VERSION"
+    exit 1
+fi
+
+# 验证版本号是否递增
+if [[ "$(printf '%s\n' "$CURRENT_VERSION" "$NEW_VERSION" | sort -V | head -n1)" != "$CURRENT_VERSION" ]] && [[ "$CURRENT_VERSION" != "$NEW_VERSION" ]]; then
+    log_error "新版本 $NEW_VERSION 必须大于当前版本 $CURRENT_VERSION"
+    exit 1
+fi
+
+# 检查该版本是否已在 npm 上发布（提前检查）
+log_info "检查版本是否已在 npm 上发布..."
+if npm view pixivflow@$NEW_VERSION version &>/dev/null; then
+    log_error "版本 $NEW_VERSION 已在 npm 上发布，请使用下一个版本号"
+    # 恢复版本号
+    git checkout package.json package-lock.json 2>/dev/null || true
+    exit 1
+fi
+
 # 提交版本更改
 log_info "提交版本更改..."
 git add package.json
@@ -118,14 +139,23 @@ TAG_NAME="v$NEW_VERSION"
 if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
     log_warn "标签 $TAG_NAME 已存在"
     
-    # 检查该版本是否已在 npm 上发布
-    NPM_VERSION=$(npm view pixivflow@$NEW_VERSION version 2>/dev/null || echo "")
-    if [[ -n "$NPM_VERSION" ]]; then
-        log_error "版本 $NEW_VERSION 已在 npm 上发布"
-        log_info "请使用下一个版本号或删除已存在的标签"
-        # 恢复版本号
-        git checkout package.json package-lock.json 2>/dev/null || true
-        exit 1
+    # 验证标签指向的提交中的 package.json 版本是否匹配
+    TAG_PACKAGE_VERSION=$(git show $TAG_NAME:package.json 2>/dev/null | grep '"version"' | head -1 | sed 's/.*"version": *"\([^"]*\)".*/\1/' || echo "")
+    if [[ -n "$TAG_PACKAGE_VERSION" ]] && [[ "$TAG_PACKAGE_VERSION" != "$NEW_VERSION" ]]; then
+        log_error "标签 $TAG_NAME 指向的 package.json 版本 ($TAG_PACKAGE_VERSION) 与新版本 ($NEW_VERSION) 不匹配"
+        log_info "这是一个不一致的标签，必须删除并重新创建"
+        read -p "是否删除旧标签并重新创建？(y/N) " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            log_info "删除本地标签 $TAG_NAME..."
+            git tag -d "$TAG_NAME" 2>/dev/null || true
+            log_info "删除远程标签 $TAG_NAME..."
+            git push origin ":refs/tags/$TAG_NAME" 2>/dev/null || true
+            log_success "已删除旧标签"
+        else
+            log_error "无法继续：标签版本不一致"
+            exit 1
+        fi
     else
         log_warn "版本 $NEW_VERSION 未在 npm 上发布，但标签已存在"
         read -p "是否删除旧标签并重新创建？(y/N) " -n 1 -r
@@ -136,19 +166,25 @@ if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
             log_info "删除远程标签 $TAG_NAME..."
             git push origin ":refs/tags/$TAG_NAME" 2>/dev/null || true
             log_success "已删除旧标签"
-            # 重新创建标签
-            log_info "创建新标签 $TAG_NAME..."
-            git tag -a "$TAG_NAME" -m "v$NEW_VERSION"
-            log_success "已创建新标签 $TAG_NAME"
         else
             log_info "跳过标签创建，使用现有标签"
         fi
     fi
-else
-    # 标签不存在，创建新标签
+fi
+
+# 创建新标签（如果不存在或已删除）
+if ! git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
     log_info "创建新标签 $TAG_NAME..."
     git tag -a "$TAG_NAME" -m "v$NEW_VERSION"
     log_success "已创建标签 $TAG_NAME"
+    
+    # 验证标签创建后，package.json 版本与标签一致
+    TAG_PACKAGE_VERSION=$(git show $TAG_NAME:package.json 2>/dev/null | grep '"version"' | head -1 | sed 's/.*"version": *"\([^"]*\)".*/\1/' || echo "")
+    if [[ "$TAG_PACKAGE_VERSION" != "$NEW_VERSION" ]]; then
+        log_error "标签创建后验证失败：标签版本 ($TAG_NAME) 与 package.json ($TAG_PACKAGE_VERSION) 不匹配"
+        git tag -d "$TAG_NAME" 2>/dev/null || true
+        exit 1
+    fi
 fi
 
 # 确认发布
@@ -200,6 +236,15 @@ if git ls-remote --tags origin | grep -q "refs/tags/v$NEW_VERSION"; then
     log_success "✅ GitHub 标签验证通过: v$NEW_VERSION"
 else
     log_warn "⚠️  GitHub 标签验证失败，可能需要等待同步..."
+fi
+
+# 运行最终版本同步检查
+log_info "运行最终版本同步检查..."
+if ./scripts/check-version-sync.sh; then
+    log_success "✅ 版本同步检查通过"
+else
+    log_error "❌ 版本同步检查失败，请手动检查"
+    log_info "运行 ./scripts/check-version-sync.sh 查看详细信息"
 fi
 
 # 显示发布信息

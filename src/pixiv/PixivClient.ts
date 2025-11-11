@@ -30,22 +30,39 @@ export class PixivClient implements IPixivClient {
 
   constructor(private readonly auth: PixivAuth, private readonly config: StandaloneConfig) {
     // Setup proxy agent if configured
+    // Note: This proxyAgent is currently unused as all requests go through PixivApiCore
+    // Keeping it for potential future use or backward compatibility
     const proxy = this.config.network?.proxy;
     if (proxy?.enabled && proxy.host && proxy.port) {
-      const protocol = proxy.protocol || 'http';
+      const protocol: string = proxy.protocol || 'http';
+      
       const auth = proxy.username && proxy.password 
         ? `${proxy.username}:${proxy.password}@` 
         : '';
       const proxyUrl = `${protocol}://${auth}${proxy.host}:${proxy.port}`;
       
-      // undici ProxyAgent supports http, https, socks4, and socks5
-      this.proxyAgent = new ProxyAgent(proxyUrl);
-      
-      logger.info('Proxy enabled', { 
-        protocol, 
-        host: proxy.host, 
-        port: proxy.port 
-      });
+      // Only create ProxyAgent for HTTP/HTTPS protocols (SOCKS is handled by PixivApiCore)
+      if (protocol === 'http' || protocol === 'https') {
+        this.proxyAgent = new ProxyAgent(proxyUrl);
+        logger.info('Proxy enabled', { 
+          protocol, 
+          host: proxy.host, 
+          port: proxy.port 
+        });
+      } else if (protocol === 'socks4' || protocol === 'socks5' || protocol === 'socks') {
+        // SOCKS proxy will be handled by PixivApiCore using socks-proxy-agent
+        logger.info('SOCKS proxy configured (will be handled by PixivApiCore)', {
+          protocol,
+          host: proxy.host,
+          port: proxy.port,
+        });
+      } else {
+        logger.warn('Unknown proxy protocol, skipping ProxyAgent creation', {
+          protocol,
+          host: proxy.host,
+          port: proxy.port,
+        });
+      }
     }
 
     // Initialize PixivApiCore for HTTP concerns (retry/timeout/rate-limit/proxy)

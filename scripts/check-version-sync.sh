@@ -86,6 +86,33 @@ echo "   - GitHub 标签 ($GITHUB_TAG): $([ "$GITHUB_TAG_EXISTS" = true ] && ech
 echo "   - 本地标签 ($GITHUB_TAG): $([ "$LOCAL_TAG_EXISTS" = true ] && echo "✅ 存在" || echo "❌ 不存在")"
 echo ""
 
+# 检查额外的标签（不在 npm 上的版本）- 只检查最近 5 个版本
+log_info "检查额外的标签（最近 5 个版本）..."
+EXTRA_TAGS=()
+RECENT_TAGS=$(git tag -l "v2.*" | sort -V | tail -5)
+for tag in $RECENT_TAGS; do
+    # 提取版本号（去掉 v 前缀）
+    tag_version="${tag#v}"
+    # 检查这个版本是否在 npm 上
+    npm_tag_exists=$(npm view pixivflow@$tag_version version 2>/dev/null || echo "")
+    if [[ -z "$npm_tag_exists" ]]; then
+        EXTRA_TAGS+=("$tag (npm 上不存在)")
+    fi
+done
+
+# 检查是否有标签指向的版本与 package.json 不一致 - 只检查当前版本和最近 3 个版本
+log_info "检查标签版本一致性（当前版本和最近 3 个版本）..."
+INCONSISTENT_TAGS=()
+TAGS_TO_CHECK=$(echo -e "$GITHUB_TAG\n$(git tag -l "v2.*" | sort -V | tail -3)" | sort -u -V)
+for tag in $TAGS_TO_CHECK; do
+    tag_version="${tag#v}"
+    # 检查标签指向的提交中的 package.json 版本
+    tag_package_version=$(git show $tag:package.json 2>/dev/null | grep '"version"' | head -1 | sed 's/.*"version": *"\([^"]*\)".*/\1/' || echo "")
+    if [[ -n "$tag_package_version" ]] && [[ "$tag_package_version" != "$tag_version" ]]; then
+        INCONSISTENT_TAGS+=("$tag (标签版本: $tag_version, package.json: $tag_package_version)")
+    fi
+done
+
 # 同步状态检查
 SYNC_STATUS=true
 ISSUES=()
@@ -103,6 +130,22 @@ fi
 if [[ "$LOCAL_TAG_EXISTS" = false ]]; then
     SYNC_STATUS=false
     ISSUES+=("本地标签 $GITHUB_TAG 不存在")
+fi
+
+# 检查额外标签
+if [[ ${#EXTRA_TAGS[@]} -gt 0 ]]; then
+    SYNC_STATUS=false
+    for extra_tag in "${EXTRA_TAGS[@]}"; do
+        ISSUES+=("额外标签 $extra_tag")
+    done
+fi
+
+# 检查不一致标签
+if [[ ${#INCONSISTENT_TAGS[@]} -gt 0 ]]; then
+    SYNC_STATUS=false
+    for inconsistent_tag in "${INCONSISTENT_TAGS[@]}"; do
+        ISSUES+=("版本不一致: $inconsistent_tag")
+    done
 fi
 
 # 显示结果
@@ -124,6 +167,16 @@ else
     fi
     if [[ "$GITHUB_TAG_EXISTS" = false ]] || [[ "$LOCAL_TAG_EXISTS" = false ]]; then
         echo "   2. 创建并推送标签: git tag -a $GITHUB_TAG -m \"v$LOCAL_VERSION\" && git push --tags"
+    fi
+    if [[ ${#EXTRA_TAGS[@]} -gt 0 ]]; then
+        echo "   3. 删除额外标签:"
+        for extra_tag in "${EXTRA_TAGS[@]}"; do
+            tag_name=$(echo "$extra_tag" | cut -d' ' -f1)
+            echo "      - git tag -d $tag_name && git push origin :refs/tags/$tag_name"
+        done
+    fi
+    if [[ ${#INCONSISTENT_TAGS[@]} -gt 0 ]]; then
+        echo "   4. 修复不一致的标签（删除或重新创建）"
     fi
     exit 1
 fi

@@ -1,0 +1,183 @@
+name: Version Sync Check
+
+on:
+  push:
+    tags:
+      - 'v*'
+    branches:
+      - master
+      - main
+  pull_request:
+    branches:
+      - master
+      - main
+  schedule:
+    # 每天 UTC 时间 00:00 运行一次检查
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+jobs:
+  check-version-sync:
+    name: Check Version Synchronization
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 获取所有标签和提交历史
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          registry-url: 'https://registry.npmjs.org'
+      
+      - name: Get package.json version
+        id: package-version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "📦 package.json version: $VERSION"
+      
+      - name: Check npm version
+        id: npm-check
+        run: |
+          VERSION="${{ steps.package-version.outputs.version }}"
+          if npm view pixivflow@$VERSION version &>/dev/null; then
+            NPM_VERSION=$(npm view pixivflow@$VERSION version)
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "version=$NPM_VERSION" >> $GITHUB_OUTPUT
+            echo "✅ Version $VERSION exists on npm"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "⚠️  Version $VERSION not found on npm"
+          fi
+      
+      - name: Check GitHub tags
+        id: github-tags
+        run: |
+          VERSION="${{ steps.package-version.outputs.version }}"
+          TAG_NAME="v$VERSION"
+          
+          if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "✅ Tag $TAG_NAME exists"
+            
+            # 验证标签指向的 package.json 版本
+            TAG_PACKAGE_VERSION=$(git show $TAG_NAME:package.json 2>/dev/null | grep '"version"' | head -1 | sed 's/.*"version": *"\([^"]*\)".*/\1/' || echo "")
+            if [[ -n "$TAG_PACKAGE_VERSION" ]] && [[ "$TAG_PACKAGE_VERSION" != "$VERSION" ]]; then
+              echo "inconsistent=true" >> $GITHUB_OUTPUT
+              echo "❌ Tag $TAG_NAME points to package.json version $TAG_PACKAGE_VERSION (expected $VERSION)"
+            else
+              echo "inconsistent=false" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "⚠️  Tag $TAG_NAME not found"
+          fi
+      
+      - name: Check for extra tags
+        id: extra-tags
+        run: |
+          echo "Checking for extra tags (tags not on npm)..."
+          EXTRA_TAGS=""
+          RECENT_TAGS=$(git tag -l "v2.*" | sort -V | tail -5)
+          
+          for tag in $RECENT_TAGS; do
+            tag_version="${tag#v}"
+            if ! npm view pixivflow@$tag_version version &>/dev/null 2>&1; then
+              EXTRA_TAGS="$EXTRA_TAGS $tag"
+            fi
+          done
+          
+          if [[ -n "$EXTRA_TAGS" ]]; then
+            echo "extra_tags=$EXTRA_TAGS" >> $GITHUB_OUTPUT
+            echo "⚠️  Found extra tags not on npm:$EXTRA_TAGS"
+          else
+            echo "extra_tags=" >> $GITHUB_OUTPUT
+            echo "✅ No extra tags found"
+          fi
+      
+      - name: Report status
+        run: |
+          VERSION="${{ steps.package-version.outputs.version }}"
+          NPM_EXISTS="${{ steps.npm-check.outputs.exists }}"
+          TAG_EXISTS="${{ steps.github-tags.outputs.exists }}"
+          TAG_INCONSISTENT="${{ steps.github-tags.outputs.inconsistent }}"
+          EXTRA_TAGS="${{ steps.extra-tags.outputs.extra_tags }}"
+          
+          echo "## 📊 Version Sync Status Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Package Version:** \`$VERSION\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          
+          if [[ "$NPM_EXISTS" == "true" ]]; then
+            echo "| npm | ✅ Published |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| npm | ❌ Not published |" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [[ "$TAG_EXISTS" == "true" ]]; then
+            if [[ "$TAG_INCONSISTENT" == "true" ]]; then
+              echo "| GitHub Tag | ⚠️  Inconsistent |" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "| GitHub Tag | ✅ Exists |" >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "| GitHub Tag | ❌ Missing |" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [[ -n "$EXTRA_TAGS" ]]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### ⚠️  Extra Tags Found" >> $GITHUB_STEP_SUMMARY
+            echo "The following tags exist but are not published to npm:" >> $GITHUB_STEP_SUMMARY
+            for tag in $EXTRA_TAGS; do
+              echo "- \`$tag\`" >> $GITHUB_STEP_SUMMARY
+            done
+          fi
+          
+          # 判断是否失败
+          FAILED=false
+          if [[ "$NPM_EXISTS" != "true" ]] && [[ "$TAG_EXISTS" == "true" ]]; then
+            FAILED=true
+            echo "❌ Version $VERSION has a tag but is not published to npm"
+          fi
+          
+          if [[ "$TAG_INCONSISTENT" == "true" ]]; then
+            FAILED=true
+            echo "❌ Tag version is inconsistent with package.json"
+          fi
+          
+          if [[ "$FAILED" == "true" ]]; then
+            echo "::error::Version synchronization check failed"
+            exit 1
+          fi
+      
+      - name: Comment on PR (if applicable)
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const version = '${{ steps.package-version.outputs.version }}';
+            const npmExists = '${{ steps.npm-check.outputs.exists }}' === 'true';
+            const tagExists = '${{ steps.github-tags.outputs.exists }}' === 'true';
+            
+            let comment = `## 🔍 Version Sync Check\n\n`;
+            comment += `**Current version:** \`${version}\`\n\n`;
+            comment += `- npm: ${npmExists ? '✅' : '❌'}\n`;
+            comment += `- GitHub tag: ${tagExists ? '✅' : '❌'}\n\n`;
+            
+            if (!npmExists || !tagExists) {
+              comment += `⚠️  Version synchronization issues detected. Please ensure version is synced before merging.`;
+            }
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+

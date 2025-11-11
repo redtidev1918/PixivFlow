@@ -1,6 +1,8 @@
 import { URL } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 import { ProxyAgent } from 'undici';
+import { SocksProxyAgent } from 'socks-proxy-agent';
+import axios, { AxiosInstance } from 'axios';
 import { logger } from '../../logger';
 import { NetworkError, is404Error } from '../../utils/errors';
 
@@ -34,6 +36,9 @@ export class PixivApiCore {
   private readonly proxyUrl: URL | undefined;
   private readonly getAccessToken?: () => Promise<string> | string;
   private readonly proxyAgent?: ProxyAgent;
+  private readonly socksAgent?: SocksProxyAgent;
+  private readonly useAxiosForProxy: boolean;
+  private readonly axiosInstance?: AxiosInstance;
 
   constructor(options: PixivApiCoreOptions = {}) {
     this.baseUrl = options.baseUrl ?? 'https://app-api.pixiv.net';
@@ -43,8 +48,59 @@ export class PixivApiCore {
     this.rateLimitPerSecond = options.rateLimitPerSecond;
     this.proxyUrl = options.proxyUrl ? new URL(options.proxyUrl) : undefined;
     this.getAccessToken = options.getAccessToken;
+    
+    // Determine if we need to use axios for SOCKS proxy
+    let useAxios = false;
     if (this.proxyUrl) {
-      this.proxyAgent = new ProxyAgent(this.proxyUrl.toString());
+      const protocol = this.proxyUrl.protocol.replace(':', '').toLowerCase();
+      
+      // Check if it's a SOCKS protocol
+      if (protocol === 'socks4' || protocol === 'socks5' || protocol === 'socks') {
+        // Use socks-proxy-agent for SOCKS protocols
+        this.socksAgent = new SocksProxyAgent(this.proxyUrl.toString());
+        useAxios = true;
+        logger.info('SOCKS proxy enabled', {
+          protocol,
+          host: this.proxyUrl.hostname,
+          port: this.proxyUrl.port,
+        });
+      } else if (protocol === 'http' || protocol === 'https') {
+        // Use undici ProxyAgent for HTTP/HTTPS protocols
+        this.proxyAgent = new ProxyAgent(this.proxyUrl.toString());
+        logger.info('HTTP/HTTPS proxy enabled', {
+          protocol,
+          host: this.proxyUrl.hostname,
+          port: this.proxyUrl.port,
+        });
+      } else {
+        logger.warn('Unknown proxy protocol, attempting to use with undici ProxyAgent', {
+          protocol,
+          proxyUrl: this.proxyUrl.toString(),
+        });
+        try {
+          this.proxyAgent = new ProxyAgent(this.proxyUrl.toString());
+        } catch (error) {
+          const errorMessage = `Failed to create ProxyAgent with protocol '${protocol}'. ` +
+            `Supported protocols: 'http', 'https', 'socks4', 'socks5'.`;
+          logger.error(errorMessage, {
+            protocol,
+            proxyUrl: this.proxyUrl.toString(),
+            error: error instanceof Error ? error.message : String(error),
+          });
+          throw new Error(errorMessage);
+        }
+      }
+    }
+    
+    this.useAxiosForProxy = useAxios;
+    
+    // Create axios instance for SOCKS proxy support
+    if (useAxios && this.socksAgent) {
+      this.axiosInstance = axios.create({
+        httpAgent: this.socksAgent,
+        httpsAgent: this.socksAgent,
+        timeout: this.defaultTimeoutMs,
+      });
     }
   }
 
@@ -74,23 +130,43 @@ export class PixivApiCore {
             }
           }
 
-          const fetchOptions: RequestInit = {
-            ...init,
-            headers,
-            signal: controller.signal,
-          };
-          if (this.proxyAgent) {
-            (fetchOptions as any).dispatcher = this.proxyAgent;
-          }
-
           // Basic client-side rate limiting
           const waitMs = this.calculateRateLimitWaitTime();
           if (waitMs > 0) {
             await delay(waitMs);
           }
 
-          const res = await fetch(url, fetchOptions);
-          return await this.processResponse<T>(res as unknown as Response, url, attempt);
+          let res: Response;
+          if (this.useAxiosForProxy && this.axiosInstance) {
+            // Use axios for SOCKS proxy
+            const axiosResponse = await this.axiosInstance.request({
+              url,
+              method: (init?.method as any) || 'GET',
+              headers,
+              data: init?.body,
+              signal: controller.signal,
+              responseType: 'json',
+            });
+            // Convert axios response to fetch-like Response
+            res = new Response(JSON.stringify(axiosResponse.data), {
+              status: axiosResponse.status,
+              statusText: axiosResponse.statusText,
+              headers: axiosResponse.headers as any,
+            }) as unknown as Response;
+          } else {
+            // Use undici fetch for HTTP/HTTPS proxy or no proxy
+            const fetchOptions: RequestInit = {
+              ...init,
+              headers,
+              signal: controller.signal,
+            };
+            if (this.proxyAgent) {
+              (fetchOptions as any).dispatcher = this.proxyAgent;
+            }
+            res = await fetch(url, fetchOptions) as unknown as Response;
+          }
+
+          return await this.processResponse<T>(res, url, attempt);
         } finally {
           clearTimeout(timeout);
         }
@@ -108,13 +184,35 @@ export class PixivApiCore {
         }
 
         const wait = this.backoffWaitMs(error, attempt);
-        logger.warn('PixivApiCore request failed, will retry', {
+        
+        // Extract detailed error information
+        const errorInfo: Record<string, unknown> = {
           url,
           attempt: attempt + 1,
           maxAttempts,
           waitSec: Math.round(wait / 1000),
-          error: error instanceof Error ? error.message : String(error),
-        });
+        };
+        
+        if (error instanceof Error) {
+          errorInfo.error = error.message;
+          errorInfo.errorType = error.name;
+          errorInfo.errorCode = (error as any).code;
+          // Include cause if available
+          if (error.cause instanceof Error) {
+            errorInfo.cause = error.cause.message;
+            errorInfo.causeType = error.cause.name;
+            errorInfo.causeCode = (error.cause as any).code;
+          }
+          // For AbortError (timeout), add timeout info
+          if (error.name === 'AbortError') {
+            errorInfo.reason = 'Request timeout';
+            errorInfo.timeoutMs = this.defaultTimeoutMs;
+          }
+        } else {
+          errorInfo.error = String(error);
+        }
+        
+        logger.warn('PixivApiCore request failed, will retry', errorInfo);
         await delay(wait);
       }
     }
@@ -146,30 +244,56 @@ export class PixivApiCore {
               headers.Authorization = `Bearer ${token}`;
             }
           }
-          const fetchOptions: RequestInit = {
-            method: 'GET',
-            ...init,
-            headers,
-            signal: controller.signal,
-          };
-          if (this.proxyAgent) {
-            (fetchOptions as any).dispatcher = this.proxyAgent;
-          }
 
           const waitMs = this.calculateRateLimitWaitTime();
           if (waitMs > 0) {
             await delay(waitMs);
           }
 
-          const res = await fetch(url, fetchOptions);
-          if (!res.ok) {
-            const body = await this.tryReadText(res);
-            throw new NetworkError(
-              `Pixiv API binary error: ${res.status} ${res.statusText}${body ? ` - ${body}` : ''}`,
-              url
-            );
+          if (this.useAxiosForProxy && this.axiosInstance) {
+            // Use axios for SOCKS proxy
+            const axiosResponse = await this.axiosInstance.request({
+              url,
+              method: (init?.method as any) || 'GET',
+              headers,
+              data: init?.body,
+              signal: controller.signal,
+              responseType: 'arraybuffer',
+            });
+            
+            if (axiosResponse.status < 200 || axiosResponse.status >= 300) {
+              const body = typeof axiosResponse.data === 'string' 
+                ? axiosResponse.data 
+                : Buffer.from(axiosResponse.data).toString('utf-8');
+              throw new NetworkError(
+                `Pixiv API binary error: ${axiosResponse.status} ${axiosResponse.statusText}${body ? ` - ${body}` : ''}`,
+                url
+              );
+            }
+            
+            return axiosResponse.data as ArrayBuffer;
+          } else {
+            // Use undici fetch for HTTP/HTTPS proxy or no proxy
+            const fetchOptions: RequestInit = {
+              method: 'GET',
+              ...init,
+              headers,
+              signal: controller.signal,
+            };
+            if (this.proxyAgent) {
+              (fetchOptions as any).dispatcher = this.proxyAgent;
+            }
+
+            const res = await fetch(url, fetchOptions) as unknown as Response;
+            if (!res.ok) {
+              const body = await this.tryReadText(res);
+              throw new NetworkError(
+                `Pixiv API binary error: ${res.status} ${res.statusText}${body ? ` - ${body}` : ''}`,
+                url
+              );
+            }
+            return await res.arrayBuffer();
           }
-          return await res.arrayBuffer();
         } finally {
           clearTimeout(timeout);
         }
@@ -182,19 +306,54 @@ export class PixivApiCore {
           throw error;
         }
         const wait = this.backoffWaitMs(error, attempt);
-        logger.warn('PixivApiCore binary download failed, will retry', {
+        
+        // Extract detailed error information
+        const errorInfo: Record<string, unknown> = {
           url,
           attempt: attempt + 1,
           maxAttempts,
           waitSec: Math.round(wait / 1000),
-          error: error instanceof Error ? error.message : String(error),
-        });
+        };
+        
+        if (error instanceof Error) {
+          errorInfo.error = error.message;
+          errorInfo.errorType = error.name;
+          errorInfo.errorCode = (error as any).code;
+          // Include cause if available
+          if (error.cause instanceof Error) {
+            errorInfo.cause = error.cause.message;
+            errorInfo.causeType = error.cause.name;
+            errorInfo.causeCode = (error.cause as any).code;
+          }
+          // For AbortError (timeout), add timeout info
+          if (error.name === 'AbortError') {
+            errorInfo.reason = 'Request timeout';
+            errorInfo.timeoutMs = this.defaultTimeoutMs;
+          }
+        } else {
+          errorInfo.error = String(error);
+        }
+        
+        logger.warn('PixivApiCore binary download failed, will retry', errorInfo);
         await delay(wait);
       }
     }
 
-    const message = lastError instanceof Error ? lastError.message : String(lastError);
-    throw new NetworkError(`Binary download from ${url} failed: ${message}`, url, lastError instanceof Error ? lastError : undefined);
+    // Provide detailed error message for final failure
+    let errorMessage = `Binary download from ${url} failed after ${maxAttempts} attempts`;
+    if (lastError instanceof Error) {
+      errorMessage += `: ${lastError.message}`;
+      if (lastError.name === 'AbortError') {
+        errorMessage += ` (timeout after ${this.defaultTimeoutMs}ms)`;
+      }
+      const errorCode = (lastError as any).code;
+      if (errorCode) {
+        errorMessage += ` [${errorCode}]`;
+      }
+    } else {
+      errorMessage += `: ${String(lastError)}`;
+    }
+    throw new NetworkError(errorMessage, url, lastError instanceof Error ? lastError : undefined);
   }
 
   calculateRateLimitWaitTime(): number {

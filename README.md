@@ -400,6 +400,7 @@ pixivflow migrate-config            # 迁移配置
 
 | 文档 | 说明 |
 |------|------|
+| [版本同步保护机制](docs/VERSION_SYNC_PROTECTION.md) | 版本同步保护机制说明，确保 package.json、npm 和 GitHub 标签同步 |
 | [📝 CHANGELOG](docs/project/CHANGELOG.md) | 版本更新日志 |
 | [🤝 CONTRIBUTING](docs/project/CONTRIBUTING.md) | 贡献指南 |
 

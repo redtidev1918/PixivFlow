@@ -140,6 +140,9 @@ export function applyEnvironmentOverrides(config: Partial<StandaloneConfig>): Pa
         protocol: mappedProtocol,
         host: url.hostname,
         port: overridden.network.proxy.port,
+        note: mappedProtocol === 'socks4' || mappedProtocol === 'socks5' 
+          ? 'SOCKS proxy is supported via socks-proxy-agent'
+          : undefined,
       });
     } catch (error) {
       logger.warn('Failed to parse proxy URL from environment variable', {

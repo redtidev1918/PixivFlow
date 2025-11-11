@@ -5,6 +5,7 @@
 import { BaseCommand } from './Command';
 import { CommandArgs, CommandContext, CommandResult } from './types';
 import { CommandRegistry } from './CommandRegistry';
+import { registerAllCommands } from './index';
 
 /**
  * Help command implementation
@@ -19,11 +20,95 @@ export class HelpCommand extends BaseCommand {
   }
 
   async execute(context: CommandContext, args: CommandArgs): Promise<CommandResult> {
-    this.showHelp();
+    // Get command name from positional arguments
+    const commandName = args.positional[0];
+    
+    if (commandName) {
+      // Show specific command help
+      this.showCommandHelp(commandName);
+    } else {
+      // Show general help
+      this.showGeneralHelp();
+    }
+    
     return this.success('Help message displayed');
   }
 
-  private showHelp(): void {
+  private getRegistry(): CommandRegistry {
+    if (!this.registry) {
+      this.registry = new CommandRegistry();
+      registerAllCommands(this.registry);
+    }
+    return this.registry;
+  }
+
+  private showCommandHelp(commandName: string): void {
+    const registry = this.getRegistry();
+    const command = registry.find(commandName);
+
+    if (!command) {
+      console.error(`[!]: Unknown command: ${commandName}`);
+      console.log('');
+      console.log('Available commands:');
+      const allCommands = registry.getAll();
+      allCommands.forEach(cmd => {
+        const aliases = cmd.aliases && cmd.aliases.length > 0 
+          ? ` (${cmd.aliases.join(', ')})` 
+          : '';
+        console.log(`  ${cmd.name}${aliases} - ${cmd.description}`);
+      });
+      console.log('');
+      console.log(`Run 'pixivflow help' for general help`);
+      console.log(`Run 'pixivflow help <command>' for command-specific help`);
+      return;
+    }
+
+    // Show detailed help for specific command
+    console.log(`\n${'='.repeat(70)}`);
+    console.log(`Command: ${command.name}`);
+    if (command.aliases && command.aliases.length > 0) {
+      console.log(`Aliases: ${command.aliases.join(', ')}`);
+    }
+    console.log(`Description: ${command.description}`);
+    console.log(`${'='.repeat(70)}\n`);
+
+    if (command.getUsage) {
+      const usage = command.getUsage();
+      console.log(usage);
+    } else {
+      console.log(`Usage: pixivflow ${command.name}`);
+      console.log(`\n${command.description}`);
+    }
+
+    console.log('');
+  }
+
+  private showGeneralHelp(): void {
+    const registry = this.getRegistry();
+    const allCommands = registry.getAll();
+
+    // Group commands by category
+    const categories: Record<string, import('./Command').Command[]> = {
+      'Authentication': [],
+      'Download': [],
+      'Management': [],
+      'Utility': [],
+    };
+
+    allCommands.forEach(cmd => {
+      if (cmd.name === 'help') {
+        categories['Utility'].push(cmd);
+      } else if (['login', 'login-headless', 'refresh'].includes(cmd.name)) {
+        categories['Authentication'].push(cmd);
+      } else if (['download', 'random', 'scheduler'].includes(cmd.name)) {
+        categories['Download'].push(cmd);
+      } else if (['normalize', 'migrate-config'].includes(cmd.name)) {
+        categories['Management'].push(cmd);
+      } else {
+        categories['Utility'].push(cmd);
+      }
+    });
+
     console.log(`
 Usage: pixivflow [command] [options]
 
@@ -32,44 +117,57 @@ Usage: pixivflow [command] [options]
 ║              所有功能都可以在无前端环境下完美运行               ║
 ╚════════════════════════════════════════════════════════════════╝
 
-Commands:
-  login, l                    Login interactively (using Python gppt)
-  login-interactive, li       Login interactively (explicit)
-  login-headless, lh          Login in headless mode (requires -u and -p)
-  refresh, r <token>          Refresh access token using refresh token
-  download                    Run download job once
-  random, rd                  Login (if needed) and download a random image
-  scheduler                   Start scheduler (default if enabled in config)
-  migrate-config, mc          Migrate configuration paths (convert absolute to relative)
-  normalize, nf               Normalize and reorganize downloaded files
-  help, -h, --help            Show this help message
+${this.formatCommandsByCategory(categories)}
 
-Options:
+Global Options:
   -u, --username <id>         Pixiv ID (email, username, or account name)
   -p, --password <password>   Your Pixiv password
   -j, --json                  Output response as JSON
-  --once                      Run download job once and exit
   --config <path>             Path to config file (default: config/standalone.config.json)
   --targets <json>            Custom targets JSON (overrides config file targets)
+  -h, --help                  Show help message
 
-Examples:
-  pixivflow login                    # Interactive login (prompts for username/password in terminal)
-  pixivflow login -u user@example.com -p password  # Login with credentials (no browser window)
-  pixivflow lh -u user@example.com -p password  # Headless login (no browser window)
-  pixivflow refresh <refresh_token>  # Refresh token
+Quick Examples:
+  pixivflow login                    # Interactive login (opens browser)
+  pixivflow login -u user@example.com -p password  # Headless login
   pixivflow download                 # Run download once
-  pixivflow download --targets '[{"type":"novel","tag":"アークナイツ","limit":5,"mode":"ranking","rankingMode":"day","rankingDate":"YESTERDAY","filterTag":"アークナイツ"}]'  # Download with custom targets
-  pixivflow random                   # Login (if needed) and download a random image
+  pixivflow download --targets '[{"type":"novel","tag":"アークナイツ","limit":5}]'
+  pixivflow random                   # Download a random image
   pixivflow scheduler                # Start scheduler
-  pixivflow normalize                # Normalize and reorganize downloaded files
-  pixivflow normalize --dry-run      # Preview changes without applying them
-  pixivflow normalize --type novel   # Only normalize novel files
+  pixivflow normalize                # Normalize downloaded files
+  pixivflow help <command>           # Show detailed help for a command
+
+For more information:
+  - Run 'pixivflow help <command>' for detailed help on a specific command
+  - Config file: config/standalone.config.json
+  - Login requires Python 3.9+ and gppt package (pip install gppt)
 
 Note: 
-  - Login requires Python 3.9+ and gppt package (pip install gppt or pip3 install gppt)
   - This is a standalone CLI tool that works independently of any frontend
-  - All core features (download, login, scheduler) work perfectly without WebUI
+  - All core features work perfectly without WebUI
 `);
+  }
+
+  private formatCommandsByCategory(categories: Record<string, import('./Command').Command[]>): string {
+    let output = '';
+    
+    for (const [category, commands] of Object.entries(categories)) {
+      if (commands.length === 0) continue;
+      
+      output += `${category}:\n`;
+      commands.forEach((cmd: import('./Command').Command) => {
+        const aliases = cmd.aliases && cmd.aliases.length > 0 
+          ? `, ${cmd.aliases.join(', ')}` 
+          : '';
+        const fullName = `${cmd.name}${aliases}`;
+        // Calculate padding to align descriptions (target width: 30)
+        const padding = ' '.repeat(Math.max(1, 30 - fullName.length));
+        output += `  ${fullName}${padding}${cmd.description}\n`;
+      });
+      output += '\n';
+    }
+    
+    return output.trimEnd();
   }
 }
 

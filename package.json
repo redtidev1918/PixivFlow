@@ -58,7 +58,11 @@
     "webui": "npm run build && node dist/webui/index.js",
     "webui:dev": "npm run build:watch & npm run webui",
     "webui:frontend": "cd webui-frontend && npm run dev",
-    "webui:build": "cd webui-frontend && npm run build"
+    "webui:build": "cd webui-frontend && npm run build",
+    "publish:patch": "./scripts/publish.sh patch",
+    "publish:minor": "./scripts/publish.sh minor",
+    "publish:major": "./scripts/publish.sh major",
+    "publish": "./scripts/publish.sh"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",

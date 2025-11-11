@@ -51,14 +51,43 @@ async function bootstrap() {
   };
 
   // Handle help
-  if (
-    !commandName ||
-    commandName === 'help' ||
-    commandName === '-h' ||
-    commandName === '--help' ||
-    parsedArgs.options.help ||
-    parsedArgs.options.h
-  ) {
+  // Case 1: help command explicitly called (pixivflow help or pixivflow help <command>)
+  if (commandName === 'help' || commandName === '-h' || commandName === '--help') {
+    const helpCommand = registry.find('help');
+    if (helpCommand) {
+      const result = await helpCommand.execute(context, commandArgs);
+      process.exit(result.success ? 0 : 1);
+    }
+    return;
+  }
+
+  // Case 2: --help or -h option used with a command (pixivflow <command> --help)
+  if (parsedArgs.options.help || parsedArgs.options.h) {
+    if (commandName) {
+      // Show help for specific command
+      const helpCommand = registry.find('help');
+      if (helpCommand) {
+        // Pass the command name as positional argument
+        const helpArgs: import('./commands/types').CommandArgs = {
+          options: {},
+          positional: [commandName],
+        };
+        const result = await helpCommand.execute(context, helpArgs);
+        process.exit(result.success ? 0 : 1);
+      }
+    } else {
+      // No command specified, show general help
+      const helpCommand = registry.find('help');
+      if (helpCommand) {
+        const result = await helpCommand.execute(context, commandArgs);
+        process.exit(result.success ? 0 : 1);
+      }
+    }
+    return;
+  }
+
+  // Case 3: No command specified, show general help
+  if (!commandName) {
     const helpCommand = registry.find('help');
     if (helpCommand) {
       const result = await helpCommand.execute(context, commandArgs);

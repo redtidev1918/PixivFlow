@@ -82,3 +82,7 @@ TEST_*.md
 *.bak
 *.log
 /tmp/
+
+# Security reports (may contain sensitive information)
+SECURITY_CLEANUP_REPORT.md
+*SECURITY*.md

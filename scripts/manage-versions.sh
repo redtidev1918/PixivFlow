@@ -240,6 +240,99 @@ unpublish_versions() {
     log_success "🎉 删除操作完成！"
 }
 
+# 批量删除旧版本（保留最新的 N 个版本）
+unpublish_old_versions() {
+    check_npm_login
+    
+    # 从命令行参数获取保留数量，如果没有则交互式询问
+    KEEP_COUNT=$1
+    
+    log_warn "⚠️  警告: npm unpublish 有严格的政策限制"
+    echo ""
+    log_info "npm unpublish 政策:"
+    echo "  1. 发布后 72 小时内可以删除任何版本"
+    echo "  2. 超过 72 小时，只有在以下条件下才能删除:"
+    echo "     - 没有其他包依赖此版本"
+    echo "     - 过去一周下载量 < 300 次"
+    echo "     - 只有一个所有者"
+    echo ""
+    log_warn "⚠️  删除操作不可逆，且删除后版本号无法再次使用"
+    echo ""
+    
+    list_versions
+    
+    CURRENT_VERSION=$(node -p "require('./package.json').version")
+    LATEST_VERSION=$(npm view $PACKAGE_NAME version 2>/dev/null)
+    
+    if [ -z "$KEEP_COUNT" ]; then
+        log_question "要保留最新的几个版本？（默认: 1，只保留最新版本）:"
+        read -r KEEP_COUNT
+        
+        if [ -z "$KEEP_COUNT" ]; then
+            KEEP_COUNT=1
+        fi
+    else
+        log_info "将保留最新的 $KEEP_COUNT 个版本"
+    fi
+    
+    # 获取所有版本并排序
+    VERSIONS=$(npm view $PACKAGE_NAME versions --json 2>/dev/null | tr -d '[],"' | tr ',' '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | sort -Vr)
+    
+    # 计算要删除的版本
+    VERSIONS_ARRAY=($VERSIONS)
+    TOTAL=${#VERSIONS_ARRAY[@]}
+    UNPUBLISH_COUNT=$((TOTAL - KEEP_COUNT))
+    
+    if [ $UNPUBLISH_COUNT -le 0 ]; then
+        log_info "版本数量 ($TOTAL) 不超过保留数量 ($KEEP_COUNT)，无需删除"
+        exit 0
+    fi
+    
+    log_info "将删除 $UNPUBLISH_COUNT 个旧版本，保留最新的 $KEEP_COUNT 个版本"
+    echo ""
+    log_warn "将被删除的版本:"
+    for ((i=KEEP_COUNT; i<TOTAL; i++)); do
+        echo "  - ${VERSIONS_ARRAY[$i]}"
+    done
+    echo ""
+    
+    log_error "⚠️  此操作不可逆！删除后版本号无法再次使用！"
+    read -p "确认删除？(yes/N) " -r
+    if [[ ! $REPLY == "yes" ]]; then
+        log_info "已取消"
+        exit 1
+    fi
+    
+    # 删除旧版本
+    SUCCESS_COUNT=0
+    FAIL_COUNT=0
+    
+    for ((i=KEEP_COUNT; i<TOTAL; i++)); do
+        version=${VERSIONS_ARRAY[$i]}
+        log_info "删除版本: $version"
+        
+        if npm unpublish "$PACKAGE_NAME@$version" 2>/dev/null; then
+            log_success "✅ 成功删除: $version"
+            SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
+            # 等待一小段时间，避免请求过快
+            sleep 1
+        else
+            log_error "❌ 删除失败: $version（可能不满足 npm 政策）"
+            FAIL_COUNT=$((FAIL_COUNT + 1))
+        fi
+    done
+    
+    echo ""
+    if [ $SUCCESS_COUNT -gt 0 ]; then
+        log_success "🎉 批量删除完成！"
+        log_info "成功: $SUCCESS_COUNT, 失败: $FAIL_COUNT"
+        log_info "注意: 删除的版本号无法再次使用"
+    else
+        log_error "所有删除操作都失败了，可能不满足 npm 政策"
+        log_info "建议使用 'deprecate' 而不是 'unpublish'"
+    fi
+}
+
 # 批量废弃旧版本（保留最新的 N 个版本）
 deprecate_old_versions() {
     check_npm_login
@@ -338,22 +431,32 @@ main() {
         unpublish)
             unpublish_versions
             ;;
+        unpublish-old)
+            unpublish_old_versions "$2"
+            ;;
         *)
-            echo "使用方法: $0 [list|deprecate|deprecate-old|unpublish]"
+            echo "使用方法: $0 [list|deprecate|deprecate-old|unpublish|unpublish-old]"
             echo ""
             echo "命令说明:"
             echo "  list          - 列出所有已发布的版本（默认）"
-            echo "  deprecate     - 废弃指定版本（推荐）"
+            echo "  deprecate     - 废弃指定版本（推荐，安全）"
             echo "  deprecate-old [N] - 批量废弃旧版本，保留最新的 N 个版本（默认: 3）"
-            echo "  unpublish     - 删除指定版本（需满足 npm 政策）"
+            echo "  unpublish     - 删除指定版本（需满足 npm 政策，不可逆）"
+            echo "  unpublish-old [N] - 批量删除旧版本，保留最新的 N 个版本（默认: 1，不可逆）"
             echo ""
             echo "示例:"
             echo "  $0 list                    # 列出所有版本"
             echo "  $0 deprecate               # 交互式废弃版本"
             echo "  $0 deprecate-old           # 批量废弃旧版本（交互式，默认保留3个）"
             echo "  $0 deprecate-old 1         # 批量废弃旧版本，只保留最新1个"
-            echo "  $0 deprecate-old 5         # 批量废弃旧版本，保留最新5个"
             echo "  $0 unpublish               # 交互式删除版本"
+            echo "  $0 unpublish-old           # 批量删除旧版本，只保留最新1个（危险！）"
+            echo "  $0 unpublish-old 3         # 批量删除旧版本，保留最新3个（危险！）"
+            echo ""
+            echo "⚠️  注意:"
+            echo "  - deprecate: 安全，版本仍可安装但会显示警告"
+            echo "  - unpublish: 危险，版本彻底删除且版本号无法再次使用"
+            echo "  - npm 政策: 72 小时内可删除，超过 72 小时需满足严格条件"
             exit 1
             ;;
     esac

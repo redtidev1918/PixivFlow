@@ -35,22 +35,28 @@ export class WebUICommand extends BaseCommand {
           const frontendSourcePath = path.join(projectRoot, 'webui-frontend');
           const frontendDistPath = path.join(frontendSourcePath, 'dist');
           
-          // Check if source exists but dist doesn't
-          if (fs.existsSync(frontendSourcePath) && !fs.existsSync(frontendDistPath)) {
-            context.logger.info('[WebUI] 🔨 Frontend source found but not built. Building now...');
-            const buildResult = await this.buildFrontend(projectRoot, context);
-            if (buildResult) {
-              staticPath = frontendDistPath;
-              context.logger.info('[WebUI] ✅ Frontend built successfully!');
-            } else {
-              context.logger.warn('[WebUI] ⚠️  Frontend build failed. Starting server without frontend.');
-            }
-          } else if (fs.existsSync(frontendDistPath)) {
-            // Dist exists, use it
+          // Check if source exists
+          if (fs.existsSync(frontendSourcePath)) {
             const indexPath = path.join(frontendDistPath, 'index.html');
-            if (fs.existsSync(indexPath)) {
+            const distExists = fs.existsSync(indexPath);
+            
+            if (!distExists) {
+              // Source exists but dist doesn't, build it
+              context.logger.info('[WebUI] 🔨 Frontend source found but not built. Building now...');
+              const buildResult = await this.buildFrontend(projectRoot, context);
+              if (buildResult) {
+                staticPath = frontendDistPath;
+                context.logger.info('[WebUI] ✅ Frontend built successfully!');
+              } else {
+                context.logger.warn('[WebUI] ⚠️  Frontend build failed. Starting server without frontend.');
+              }
+            } else {
+              // Dist exists, use it
               staticPath = frontendDistPath;
+              context.logger.info('[WebUI] ✅ Found frontend build, using it.');
             }
+          } else {
+            context.logger.warn('[WebUI] ⚠️  Frontend source directory not found in project root.');
           }
         } else {
           // Project root not found, show help
@@ -116,9 +122,15 @@ export class WebUICommand extends BaseCommand {
 
   /**
    * Find static file path for frontend
+   * Priority:
+   * 1. Command line option (--static-path)
+   * 2. Environment variable (STATIC_PATH)
+   * 3. Current working directory (most common case)
+   * 4. Command location and parent directories
+   * 5. Global install location
    */
   private findStaticPath(args: CommandArgs): string | undefined {
-    // 1. Check command line option
+    // 1. Check command line option (highest priority)
     if (args.options.staticPath) {
       const optionPath = path.resolve(String(args.options.staticPath));
       if (fs.existsSync(optionPath)) {
@@ -140,7 +152,17 @@ export class WebUICommand extends BaseCommand {
       }
     }
 
-    // 3. Check project root directory (relative to dist/)
+    // 3. Check current working directory first (most common case)
+    // This allows users to run `pixivflow webui` from the project root
+    const cwdStaticPath = path.join(process.cwd(), 'webui-frontend', 'dist');
+    if (fs.existsSync(cwdStaticPath)) {
+      const indexPath = path.join(cwdStaticPath, 'index.html');
+      if (fs.existsSync(indexPath)) {
+        return cwdStaticPath;
+      }
+    }
+
+    // 4. Check project root directory (relative to dist/)
     // When running from global install, __dirname will be in node_modules
     // Try to find the project root by looking for webui-frontend
     try {
@@ -162,7 +184,7 @@ export class WebUICommand extends BaseCommand {
       // Ignore errors
     }
 
-    // 4. Check npm global installation path
+    // 5. Check npm global installation path
     // When installed globally, try to find the package in node_modules
     try {
       // Try to resolve the package location
@@ -207,26 +229,29 @@ export class WebUICommand extends BaseCommand {
       // Ignore errors
     }
 
-    // 5. Check current working directory
-    const cwdStaticPath = path.join(process.cwd(), 'webui-frontend', 'dist');
-    if (fs.existsSync(cwdStaticPath)) {
-      const indexPath = path.join(cwdStaticPath, 'index.html');
-      if (fs.existsSync(indexPath)) {
-        return cwdStaticPath;
-      }
-    }
-
     return undefined;
   }
 
   /**
    * Find project root directory (containing webui-frontend)
+   * Priority:
+   * 1. Current working directory (most common case when running from project root)
+   * 2. Command location and parent directories
+   * 3. Global install location and parent directories
    */
   private findProjectRoot(): string | undefined {
-    // Try to find project root by looking for webui-frontend directory
+    // Priority 1: Check current working directory first (most common case)
+    // This allows users to run `pixivflow webui` from the project root
+    const cwdFrontendPath = path.join(process.cwd(), 'webui-frontend');
+    if (fs.existsSync(cwdFrontendPath)) {
+      const packageJsonPath = path.join(process.cwd(), 'package.json');
+      if (fs.existsSync(packageJsonPath)) {
+        return process.cwd();
+      }
+    }
+
+    // Priority 2: Try to find from current command location
     let currentDir = __dirname;
-    
-    // First, try to find from current command location
     for (let i = 0; i < 10; i++) {
       const testPath = path.join(currentDir, 'webui-frontend');
       if (fs.existsSync(testPath)) {
@@ -240,7 +265,7 @@ export class WebUICommand extends BaseCommand {
       currentDir = parent;
     }
 
-    // If in node_modules (global install), try to find source repo
+    // Priority 3: If in node_modules (global install), try to find source repo
     if (__dirname.includes('node_modules')) {
       const nodeModulesIndex = __dirname.indexOf('node_modules');
       if (nodeModulesIndex !== -1) {
@@ -259,15 +284,6 @@ export class WebUICommand extends BaseCommand {
           if (parent === searchDir) break;
           searchDir = parent;
         }
-      }
-    }
-
-    // Try current working directory
-    const cwdFrontendPath = path.join(process.cwd(), 'webui-frontend');
-    if (fs.existsSync(cwdFrontendPath)) {
-      const packageJsonPath = path.join(process.cwd(), 'package.json');
-      if (fs.existsSync(packageJsonPath)) {
-        return process.cwd();
       }
     }
 

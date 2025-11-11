@@ -71,6 +71,8 @@
     "versions:deprecate-old": "./scripts/manage-versions.sh deprecate-old",
     "versions:deprecate-all-but-latest": "./scripts/manage-versions.sh deprecate-old 1",
     "versions:unpublish": "./scripts/manage-versions.sh unpublish",
+    "versions:unpublish-old": "./scripts/manage-versions.sh unpublish-old",
+    "versions:unpublish-all-but-latest": "./scripts/manage-versions.sh unpublish-old 1",
     "tags:cleanup": "./scripts/cleanup-github-tags.sh",
     "tags:cleanup:dry-run": "./scripts/cleanup-github-tags.sh --dry-run"
   },
@@ -78,7 +80,7 @@
     "@types/better-sqlite3": "^7.6.13",
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
-    "@types/jest": "^30.0.0",
+    "@types/jest": "^29.5.0",
     "@types/node": "^22.7.4",
     "@types/node-cron": "^3.0.11",
     "concurrently": "^9.2.1",

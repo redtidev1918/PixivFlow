@@ -44,9 +44,9 @@ LATEST_TAG="v$CURRENT_VERSION"
 log_info "当前版本: $CURRENT_VERSION"
 log_info "要保留的标签: $LATEST_TAG"
 
-# 获取所有远程 tags
+# 获取所有远程 tags（过滤掉 git 内部引用如 ^{}）
 log_info "获取远程 tags..."
-REMOTE_TAGS=$(git ls-remote --tags origin | grep -oP 'refs/tags/v\d+\.\d+\.\d+' | sed 's|refs/tags/||' | sort -V)
+REMOTE_TAGS=$(git ls-remote --tags origin | grep -E 'refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$' | sed 's|.*refs/tags/||' | sed 's|[[:space:]].*||' | sort -V)
 
 if [ -z "$REMOTE_TAGS" ]; then
     log_warn "未找到远程 tags"

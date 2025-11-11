@@ -275,7 +275,7 @@ cd pixivflow
 # 首次使用需要安装后端依赖（如果还没有安装）
 npm install
 
-# 启动 WebUI（会自动检测并安装前端依赖、构建前端）
+# 从项目根目录启动 WebUI（会自动检测并安装前端依赖、构建前端）
 pixivflow webui                    # 访问 http://localhost:3000
 
 # 方式 2：手动构建前端（可选）
@@ -287,20 +287,21 @@ cd ..
 pixivflow webui                    # 启动 WebUI
 
 # 方式 3：手动指定前端静态文件路径
-# 如果前端已经构建，可以直接指定路径
-pixivflow webui --static-path /path/to/pixivflow/webui-frontend/dist
+# 如果前端已经构建在其他位置，可以直接指定路径
+pixivflow webui --static-path /path/to/webui-frontend/dist
 # 或使用环境变量
-STATIC_PATH=/path/to/pixivflow/webui-frontend/dist pixivflow webui
+STATIC_PATH=/path/to/webui-frontend/dist pixivflow webui
 
-# 方式 4：仅启动后端 API
-# 如果找不到前端，服务器会仅提供 API 服务
-pixivflow webui                    # 访问 http://localhost:3000（仅 API）
+# 方式 4：仅启动后端 API（自动回退）
+# 如果找不到前端或构建失败，服务器会自动仅提供 API 服务
+pixivflow webui                    # 访问 http://localhost:3000（仅 API，无前端界面）
 ```
 
 > 💡 **提示**：
 > - 全局安装后，`npm install -g pixivflow` 安装的包通常不包含前端源码。要使用完整的 WebUI，需要单独克隆源码仓库到本地。
-> - 首次运行 `pixivflow webui` 时，如果检测到前端未构建，会自动安装前端依赖并构建前端（需要一些时间）。
+> - **推荐从项目根目录运行**：`pixivflow webui` 会优先从当前工作目录查找项目，如果检测到前端未构建，会自动安装前端依赖并构建前端（首次构建需要一些时间）。
 > - 如果自动构建失败，请手动执行：`cd webui-frontend && npm install && npm run build`
+> - 即使找不到前端，服务器仍会启动并提供 API 服务，可以通过 API 接口进行管理。
 
 #### 源码安装使用
 

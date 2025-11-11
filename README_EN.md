@@ -387,20 +387,37 @@ PixivFlow also provides a modern web management interface with graphical operati
 # First, clone the source repository (if not already done)
 git clone https://github.com/zoidberg-xgd/pixivflow.git
 cd pixivflow
-pixivflow webui                    # Auto-builds frontend and starts, visit http://localhost:3000
 
-# Method 2: Manually specify frontend static file path
-# If frontend is already built, you can directly specify the path
-pixivflow webui --static-path /path/to/pixivflow/webui-frontend/dist
+# Install backend dependencies (if not already installed)
+npm install
+
+# Start WebUI from project root (auto-detects and installs frontend dependencies, builds frontend)
+pixivflow webui                    # Visit http://localhost:3000
+
+# Method 2: Manually build frontend (Optional)
+# If auto-build fails, you can build manually
+cd webui-frontend
+npm install                        # Install frontend dependencies
+npm run build                      # Build frontend
+cd ..
+pixivflow webui                    # Start WebUI
+
+# Method 3: Manually specify frontend static file path
+# If frontend is already built in another location, you can directly specify the path
+pixivflow webui --static-path /path/to/webui-frontend/dist
 # Or use environment variable
-STATIC_PATH=/path/to/pixivflow/webui-frontend/dist pixivflow webui
+STATIC_PATH=/path/to/webui-frontend/dist pixivflow webui
 
-# Method 3: API-only mode
-# If frontend is not found, the server will provide API service only
-pixivflow webui                    # Visit http://localhost:3000 (API only)
+# Method 4: API-only mode (Automatic fallback)
+# If frontend is not found or build fails, the server will automatically provide API service only
+pixivflow webui                    # Visit http://localhost:3000 (API only, no frontend UI)
 ```
 
-> 💡 **Note**: After global installation, the package installed via `npm install -g pixivflow` typically does not include frontend source code. To use the full WebUI, you need to clone the source repository separately, then run the command from the project directory.
+> 💡 **Tips**:
+> - After global installation, the package installed via `npm install -g pixivflow` typically does not include frontend source code. To use the full WebUI, you need to clone the source repository separately to your local machine.
+> - **Recommended to run from project root**: `pixivflow webui` will prioritize searching for the project from the current working directory. If it detects the frontend is not built, it will automatically install frontend dependencies and build the frontend (first build may take some time).
+> - If auto-build fails, please manually execute: `cd webui-frontend && npm install && npm run build`
+> - Even if the frontend is not found, the server will still start and provide API service, allowing management through API endpoints.
 
 **From Source Installation:**
 

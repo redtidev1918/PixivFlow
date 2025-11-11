@@ -1,10 +1,10 @@
-import { TableColumnsType, TableProps } from 'antd';
+import { TableColumnsType, TableProps, ColumnType } from 'antd';
 import React from 'react';
 
 /**
  * Column definition for DataTable
  */
-export interface DataTableColumn<T = any> extends TableColumnsType<T>[number] {
+export interface DataTableColumn<T = any> extends ColumnType<T> {
   /**
    * Whether the column is sortable
    */

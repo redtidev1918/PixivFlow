@@ -176,11 +176,31 @@ else
     exit 1
 fi
 
+# 验证 npm 发布
+log_info "验证 npm 发布..."
+sleep 2  # 等待 npm 索引更新
+NPM_PUBLISHED_VERSION=$(npm view pixivflow@$NEW_VERSION version 2>/dev/null || echo "")
+if [[ "$NPM_PUBLISHED_VERSION" == "$NEW_VERSION" ]]; then
+    log_success "✅ npm 版本验证通过: $NPM_PUBLISHED_VERSION"
+else
+    log_warn "⚠️  npm 版本验证失败，可能还在索引中..."
+    log_info "   期望版本: $NEW_VERSION"
+    log_info "   实际版本: ${NPM_PUBLISHED_VERSION:-未找到}"
+fi
+
 # 推送代码和标签
 log_info "推送代码和标签到 GitHub..."
 git push
 git push --tags
 log_success "已推送到 GitHub"
+
+# 验证 GitHub 标签
+log_info "验证 GitHub 标签..."
+if git ls-remote --tags origin | grep -q "refs/tags/v$NEW_VERSION"; then
+    log_success "✅ GitHub 标签验证通过: v$NEW_VERSION"
+else
+    log_warn "⚠️  GitHub 标签验证失败，可能需要等待同步..."
+fi
 
 # 显示发布信息
 echo ""
@@ -189,10 +209,16 @@ echo ""
 echo "📦 包信息:"
 echo "   - 名称: pixivflow"
 echo "   - 版本: $NEW_VERSION"
-echo "   - 地址: https://www.npmjs.com/package/pixivflow"
+echo "   - npm: https://www.npmjs.com/package/pixivflow"
+echo "   - GitHub: https://github.com/zoidberg-xgd/PixivFlow"
+echo ""
+echo "✅ 同步状态:"
+echo "   - package.json: $NEW_VERSION"
+echo "   - npm: ${NPM_PUBLISHED_VERSION:-验证中...}"
+echo "   - GitHub tag: v$NEW_VERSION"
 echo ""
 echo "📝 下一步:"
-echo "   1. 在 GitHub 创建 Release: https://github.com/zoidberg-xgd/pixivflow/releases/new"
+echo "   1. 在 GitHub 创建 Release: https://github.com/zoidberg-xgd/PixivFlow/releases/new"
 echo "   2. 标签: v$NEW_VERSION"
 echo "   3. 标题: v$NEW_VERSION"
 echo "   4. 描述: 从 CHANGELOG.md 复制更新内容"

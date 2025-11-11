@@ -61,7 +61,16 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Publishing version: $VERSION"
 
+      - name: Check current package.json version
+        id: current_version
+        run: |
+          CURRENT_VERSION=$(node -p "require('./package.json').version")
+          echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          echo "Current package.json version: $CURRENT_VERSION"
+          echo "Target version: ${{ steps.version.outputs.version }}"
+
       - name: Update package.json version
+        if: steps.current_version.outputs.current_version != steps.version.outputs.version
         run: |
           npm version ${{ steps.version.outputs.version }} --no-git-tag-commit
           cat package.json | grep '"version"'
@@ -69,7 +78,20 @@ jobs:
       - name: Publish to npm
         run: npm publish --access public
 
-      - name: Create Git tag
+      - name: Commit version update back to GitHub
+        if: steps.current_version.outputs.current_version != steps.version.outputs.version && (github.event_name == 'release' || github.event_name == 'push')
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add package.json
+          if [ -f package-lock.json ]; then
+            git add package-lock.json
+          fi
+          git commit -m "chore: sync version to ${{ steps.version.outputs.version }} [skip ci]" || echo "No changes to commit"
+          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
+          git push origin HEAD:${{ github.ref_name }} || echo "Failed to push version update"
+
+      - name: Create Git tag (workflow_dispatch only)
         if: github.event_name == 'workflow_dispatch'
         run: |
           git config user.name "github-actions[bot]"
@@ -78,6 +100,19 @@ jobs:
           git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
           git push origin "v${{ steps.version.outputs.version }}"
 
+      - name: Verify npm publication
+        run: |
+          echo "Verifying npm publication..."
+          sleep 5  # Wait for npm index to update
+          PUBLISHED_VERSION=$(npm view pixivflow@${{ steps.version.outputs.version }} version 2>/dev/null || echo "")
+          if [ "$PUBLISHED_VERSION" == "${{ steps.version.outputs.version }}" ]; then
+            echo "✅ Version ${{ steps.version.outputs.version }} verified on npm"
+          else
+            echo "⚠️  Version verification pending (may take a few minutes for npm index to update)"
+            echo "Expected: ${{ steps.version.outputs.version }}"
+            echo "Found: ${PUBLISHED_VERSION:-not found}"
+          fi
+
       - name: Summary
         run: |
           echo "## ✅ Published to npm" >> $GITHUB_STEP_SUMMARY
@@ -85,4 +120,10 @@ jobs:
           echo "- **Version**: ${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Package**: pixivflow" >> $GITHUB_STEP_SUMMARY
           echo "- **Registry**: https://www.npmjs.com/package/pixivflow" >> $GITHUB_STEP_SUMMARY
+          echo "- **GitHub**: https://github.com/zoidberg-xgd/PixivFlow" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📊 Sync Status" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ package.json: ${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ npm: ${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ GitHub tag: v${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
 

@@ -4,11 +4,11 @@
   "description": "🎨 智能的 Pixiv 自动化下载工具 | Intelligent Pixiv Automation Downloader",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/zoidberg-xgd/pixivflow.git"
+    "url": "git+https://github.com/zoidberg-xgd/PixivFlow.git"
   },
-  "homepage": "https://github.com/zoidberg-xgd/pixivflow#readme",
+  "homepage": "https://github.com/zoidberg-xgd/PixivFlow#readme",
   "bugs": {
-    "url": "https://github.com/zoidberg-xgd/pixivflow/issues"
+    "url": "https://github.com/zoidberg-xgd/PixivFlow/issues"
   },
   "author": "zoidberg-xgd <zoidberg-xgd@users.noreply.github.com>",
   "license": "GPL-3.0-or-later",
@@ -62,7 +62,8 @@
     "publish:patch": "./scripts/publish.sh patch",
     "publish:minor": "./scripts/publish.sh minor",
     "publish:major": "./scripts/publish.sh major",
-    "publish": "./scripts/publish.sh"
+    "publish": "./scripts/publish.sh",
+    "check:version": "./scripts/check-version-sync.sh"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",

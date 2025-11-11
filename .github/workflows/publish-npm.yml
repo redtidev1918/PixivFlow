@@ -1,6 +1,9 @@
 name: Publish to npm
 
 on:
+  push:
+    tags:
+      - 'v*.*.*'  # 匹配版本号格式的 tag，如 v2.0.6
   release:
     types: [created]
   workflow_dispatch:
@@ -47,6 +50,11 @@ jobs:
             VERSION="${{ github.event.release.tag_name }}"
             # 移除 'v' 前缀（如果有）
             VERSION=${VERSION#v}
+          elif [ "${{ github.event_name }}" == "push" ]; then
+            # 从 tag ref 中提取版本号，格式：refs/tags/v2.0.6
+            VERSION="${{ github.ref }}"
+            VERSION=${VERSION#refs/tags/v}
+            VERSION=${VERSION#refs/tags/}
           else
             VERSION="${{ github.event.inputs.version }}"
           fi

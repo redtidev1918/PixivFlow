@@ -1,0 +1,70 @@
+# Auto detect text files and perform LF normalization
+* text=auto
+
+# Explicitly declare text files you want to always be normalized and converted
+# to native line endings on checkout.
+*.json text eol=lf
+*.js text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.jsx text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.sh text eol=lf
+*.bash text eol=lf
+*.zsh text eol=lf
+*.css text eol=lf
+*.html text eol=lf
+*.xml text eol=lf
+*.svg text eol=lf
+*.json5 text eol=lf
+*.toml text eol=lf
+*.ini text eol=lf
+*.conf text eol=lf
+*.config text eol=lf
+
+# Denote all files that are truly binary and should not be modified.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.mov binary
+*.mp4 binary
+*.mp3 binary
+*.flv binary
+*.fla binary
+*.swf binary
+*.gz binary
+*.zip binary
+*.7z binary
+*.ttf binary
+*.eot binary
+*.woff binary
+*.woff2 binary
+*.pyc binary
+*.db binary
+*.sqlite binary
+*.sqlite3 binary
+
+# Prevent sensitive files from being committed
+config/standalone.config.json linguist-generated=true
+config/standalone.config.simple.json linguist-generated=true
+*.pixiv-refresh-token linguist-generated=true
+*.token linguist-generated=true
+.env linguist-generated=true
+.env.* linguist-generated=true
+data/* linguist-generated=true
+downloads/* linguist-generated=true
+
+# Mark build outputs as generated
+dist/** linguist-generated=true
+coverage/** linguist-generated=true
+*.map linguist-generated=true
+
+# Mark lock files as generated
+package-lock.json linguist-generated=true
+yarn.lock linguist-generated=true
+

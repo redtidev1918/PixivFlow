@@ -6,6 +6,9 @@ node_modules
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+*.log
+logs/
+**/*.log
 
 # Editor directories and files
 .idea
@@ -15,6 +18,20 @@ yarn-error.log*
 *.njsproj
 *.sln
 *.sw?
+*.swp
+*.swo
+*~
+
+# Xcode (iOS/macOS development)
+*.xcworkspace
+!*.xcworkspace/contents.xcworkspacedata
+*.xcuserdata
+*.xcuserstate
+*.xccheckout
+*.xcscmblueprint
+xcshareddata/
+xcuserdata/
+.swiftpm/
 
 # lock
 yarn.lock
@@ -34,19 +51,39 @@ _metadata
 
 .eslintcache
 
-# Standalone mode
+# Standalone mode - User config files (NEVER commit these!)
 config/standalone.config.json
 config/standalone.config.simple.json
+# Allow example files but block any that might contain real tokens
 config/standalone.config.*.json
 !config/standalone.config.example.json
 !config/standalone.config.*example*.json
+!config/standalone.config.novel-chinese.json
+!config/standalone.config.ranking.json
+
+# User data directories (NEVER commit these!)
 data/
 downloads/
+logs/
+*.db
+*.db-shm
+*.db-wal
 
-# Temporary token files
+# Environment variables (NEVER commit these!)
+.env
+.env.local
+.env.*.local
+.env.production
+.env.development
+*.env
+!.env.example
+
+# Temporary token files (NEVER commit these!)
 .refresh_token
 *.token
 .tmp/
+tmp/
+temp/
 
 # Analysis reports (local only, not for repository)
 PIXIV_API_CLIENT_ANALYSIS.md
@@ -80,8 +117,16 @@ TEST_*.md
 *.tmp
 *.temp
 *.bak
-*.log
 /tmp/
+
+# OS generated files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.Spotlight-V100
+.Trashes
+._*
 
 # Security reports (may contain sensitive information)
 # Note: docs/SECURITY.md is allowed (it's documentation, not a report)
@@ -97,3 +142,88 @@ SECURITY_CLEANUP_REPORT.md
 
 # Any file containing actual tokens (not placeholders)
 # Note: config/standalone.config.json should use YOUR_REFRESH_TOKEN placeholder
+
+# Build artifacts and generated files
+*.map
+*.d.ts.map
+*.js.map
+*.tsbuildinfo
+.cache/
+.parcel-cache/
+.next/
+.nuxt/
+.output/
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
+
+# dotenv environment variable files (already covered above, but explicit)
+.env.test
+.env.production.local
+.env.development.local
+.env.local
+
+# Stores VSCode versions used for testing VSCode extensions
+.vscode-test
+
+# yarn v2
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+.pnp.*
+
+# Python (if any Python scripts are used)
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+
+# IDE - JetBrains
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+# IDE - VSCode (keep settings but ignore workspace state)
+.vscode/settings.json
+.vscode/launch.json
+.vscode/extensions.json
+.vscode/*.code-workspace
+
+# macOS
+.AppleDouble
+.LSOverride
+Icon
+.DocumentRevisions-V100
+.fseventsd
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk

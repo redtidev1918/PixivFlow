@@ -8,4 +8,6 @@ export * from './useLocalStorage';
 export * from './useLogin';
 export * from './usePagination';
 export * from './useTableSort';
+export * from './useErrorHandler';
+export * from './useLoading';
 

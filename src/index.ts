@@ -74,7 +74,14 @@ async function bootstrap() {
     }
   }
   
-  const config = loadConfig(configPath);
+  // Skip config validation for login commands - they will create/update the config
+  const isLoginCommand = commandName === 'login' || 
+                         commandName === 'l' || 
+                         commandName === 'login-interactive' || 
+                         commandName === 'li' ||
+                         commandName === 'login-headless';
+  
+  const config = loadConfig(configPath, isLoginCommand);
   const context = {
     config,
     logger,

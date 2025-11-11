@@ -47,8 +47,10 @@ export function getConfigPath(configPath?: string): string {
 
 /**
  * Load configuration from file with environment variable support
+ * @param configPath - Path to config file
+ * @param skipValidation - If true, skip configuration validation (useful for login commands)
  */
-export function loadConfig(configPath?: string): StandaloneConfig {
+export function loadConfig(configPath?: string, skipValidation: boolean = false): StandaloneConfig {
   let resolvedPath = getConfigPath(configPath);
 
   // If config file doesn't exist, try to find or create one
@@ -200,7 +202,10 @@ export function loadConfig(configPath?: string): StandaloneConfig {
 
   // Validate configuration AFTER token has been potentially filled from unified storage
   // Pass the database path to validation so it can check unified storage if needed
-  validateConfig(config, resolvedPath, config.storage?.databasePath);
+  // Skip validation for login commands (they will create/update the config)
+  if (!skipValidation) {
+    validateConfig(config, resolvedPath, config.storage?.databasePath);
+  }
 
   // Process placeholders (e.g., YESTERDAY)
   return processConfigPlaceholders(config);

@@ -6,8 +6,8 @@ const MAX_POLLING_DURATION = 10 * 60 * 1000; // 10 minutes
 interface UseLoginPollingOptions {
   enabled: boolean;
   onAuthenticated: () => void;
-  refetchAuthStatus: () => Promise<any>;
-  isAuthenticated: (response: any) => boolean;
+  refetchAuthStatus: () => Promise<unknown>;
+  isAuthenticated: (response: unknown) => boolean;
 }
 
 /**

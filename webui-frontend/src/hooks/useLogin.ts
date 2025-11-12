@@ -4,6 +4,7 @@ import { message } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { api } from '../services/api';
 import { QUERY_KEYS } from '../constants';
+import type { ElectronLoginSuccessData, ElectronLoginError } from '../types/electron';
 
 export function useLogin() {
   const { t } = useTranslation();
@@ -11,15 +12,28 @@ export function useLogin() {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   // Helper to check if authenticated from API response
-  const isAuthenticated = useCallback((response: any): boolean => {
-    const responseData = response?.data?.data || response?.data;
+  const isAuthenticated = useCallback((response: unknown): boolean => {
+    if (!response) return false;
+    let responseData: Record<string, unknown> | undefined;
+    if (typeof response === 'object' && response !== null) {
+      if ('data' in response && response.data) {
+        const data = response.data as Record<string, unknown>;
+        if ('data' in data && data.data) {
+          responseData = data.data as Record<string, unknown>;
+        } else {
+          responseData = data;
+        }
+      } else {
+        responseData = response as Record<string, unknown>;
+      }
+    }
     return responseData?.authenticated === true 
       || responseData?.isAuthenticated === true 
       || responseData?.hasToken === true;
   }, []);
 
   // Handle login success from Electron
-  const handleElectronLoginSuccess = useCallback(async (data: any) => {
+  const handleElectronLoginSuccess = useCallback(async (data: ElectronLoginSuccessData) => {
     console.log('[useLogin] Received login-success event from Electron:', data);
     
     try {
@@ -57,16 +71,17 @@ export function useLogin() {
         message.destroy('login-progress');
         message.success(t('dashboard.tokenRefreshed'));
       }
-    } catch (error: any) {
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : t('common.unknown');
       console.error('[useLogin] Error handling login-success event:', error);
       message.destroy('login-progress');
-      message.error(t('dashboard.loginSuccessEventError', { error: error.message || t('common.unknown') }));
+      message.error(t('dashboard.loginSuccessEventError', { error: errorMessage }));
       setIsLoggingIn(false);
     }
   }, [queryClient, isAuthenticated, t]);
 
   // Handle login error from Electron
-  const handleElectronLoginError = useCallback((error: any) => {
+  const handleElectronLoginError = useCallback((error: ElectronLoginError) => {
     console.error('[useLogin] Received login-error event from Electron:', error);
     setIsLoggingIn(false);
     message.error(t('dashboard.loginFailed', { error: error.message || t('common.unknown') }));
@@ -75,16 +90,16 @@ export function useLogin() {
   // Register IPC event listeners for Electron login
   useEffect(() => {
     // Check if we're in Electron
-    const isElectron = typeof window !== 'undefined' && (window as any).electron;
-    if (!isElectron || !(window as any).electron.onLoginSuccess) {
+    const isElectron = typeof window !== 'undefined' && window.electron;
+    if (!isElectron || !window.electron?.onLoginSuccess) {
       return;
     }
 
     console.log('[useLogin] Registering IPC event listeners for Electron login...');
 
     // Register event listeners and get cleanup functions
-    const cleanupLoginSuccess = (window as any).electron.onLoginSuccess(handleElectronLoginSuccess);
-    const cleanupLoginError = (window as any).electron.onLoginError(handleElectronLoginError);
+    const cleanupLoginSuccess = window.electron.onLoginSuccess(handleElectronLoginSuccess);
+    const cleanupLoginError = window.electron.onLoginError(handleElectronLoginError);
 
     // Cleanup: Remove event listeners on unmount
     return () => {
@@ -101,9 +116,9 @@ export function useLogin() {
   // Handle login button click
   const handleLogin = useCallback(async () => {
     // Check if we're in Electron
-    const isElectron = typeof window !== 'undefined' && (window as any).electron;
+    const isElectron = typeof window !== 'undefined' && window.electron;
     
-    if (isElectron && (window as any).electron.openLoginWindow) {
+    if (isElectron && window.electron?.openLoginWindow) {
       // Use Electron system browser login
       console.log('[useLogin] Using Electron system browser login...');
       
@@ -112,7 +127,7 @@ export function useLogin() {
         message.info(t('dashboard.openingBrowser'), 3);
         
         // Open login window
-        const result = await (window as any).electron.openLoginWindow();
+        const result = await window.electron.openLoginWindow();
         if (!result.success) {
           if (result.cancelled) {
             // User cancelled, don't show error
@@ -124,9 +139,10 @@ export function useLogin() {
         
         // The login-success or login-error event will be handled by the listeners
         console.log('[useLogin] Login window opened, waiting for login-success or login-error event...');
-      } catch (error: any) {
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : t('common.unknown');
         console.error('[useLogin] Failed to open Electron login window:', error);
-        message.error(t('dashboard.cannotOpenLoginWindowError', { error: error.message || t('common.unknown') }));
+        message.error(t('dashboard.cannotOpenLoginWindowError', { error: errorMessage }));
         setIsLoggingIn(false);
       }
     } else {

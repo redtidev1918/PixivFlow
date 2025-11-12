@@ -42,11 +42,23 @@ export function useLoginFlow() {
   } = useAuth();
 
   // Helper to check if authenticated from API response
-  const isAuthenticated = useCallback((response: any): boolean => {
+  const isAuthenticated = useCallback((response: unknown): boolean => {
     if (!response) return false;
-    const data = response?.data?.data || response?.data;
-    const authenticated = data?.authenticated === true || data?.isAuthenticated === true || data?.hasToken === true;
-    console.log('[Login] Auth check:', { authenticated, data });
+    let responseData: Record<string, unknown> | undefined;
+    if (typeof response === 'object' && response !== null) {
+      if ('data' in response && response.data) {
+        const data = response.data as Record<string, unknown>;
+        if ('data' in data && data.data) {
+          responseData = data.data as Record<string, unknown>;
+        } else {
+          responseData = data;
+        }
+      } else {
+        responseData = response as Record<string, unknown>;
+      }
+    }
+    const authenticated = responseData?.authenticated === true || responseData?.isAuthenticated === true || responseData?.hasToken === true;
+    console.log('[Login] Auth check:', { authenticated, data: responseData });
     return authenticated;
   }, []);
 
@@ -98,20 +110,26 @@ export function useLoginFlow() {
     setPollingEnabled(false);
   }, []);
 
+  // Wrapper for refetchAuthStatus to match expected type
+  const refetchAuthStatusWrapper = useCallback(async (): Promise<unknown> => {
+    const result = await refetchAuthStatus();
+    return result;
+  }, [refetchAuthStatus]);
+
   // Use login polling hook
   useLoginPolling({
     enabled: pollingEnabled,
     onAuthenticated: () => {
       handleLoginSuccess();
     },
-    refetchAuthStatus,
+    refetchAuthStatus: refetchAuthStatusWrapper,
     isAuthenticated,
   });
 
   // Use interactive login hook
   const { handleInteractiveLogin, handleCheckStatus } = useInteractiveLogin({
     onLoginSuccess: () => setLoginStep(2),
-    refetchAuthStatus,
+    refetchAuthStatus: refetchAuthStatusWrapper,
     isAuthenticated,
     startPolling,
     stopPolling,

@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { authService } from '../services/authService';
 import { useErrorHandler } from './useErrorHandler';
 import { QUERY_KEYS } from '../constants';
+import type { ConfigData } from '../services/api/types';
 
 /**
  * Hook for managing authentication
@@ -30,7 +31,7 @@ export function useAuth() {
       username: string;
       password: string;
       headless?: boolean;
-      proxy?: any;
+      proxy?: NonNullable<ConfigData['network']>['proxy'];
     }) => authService.login(username, password, headless, proxy),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.AUTH });

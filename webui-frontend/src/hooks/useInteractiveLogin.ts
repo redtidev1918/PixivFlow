@@ -3,11 +3,12 @@ import { useQueryClient } from '@tanstack/react-query';
 import { message } from 'antd';
 import { api } from '../services/api';
 import { QUERY_KEYS } from '../constants';
+import type { ElectronLoginSuccessData, ElectronLoginError } from '../types/electron';
 
 interface UseInteractiveLoginOptions {
   onLoginSuccess?: () => void;
-  refetchAuthStatus: () => Promise<any>;
-  isAuthenticated: (response: any) => boolean;
+  refetchAuthStatus: () => Promise<unknown>;
+  isAuthenticated: (response: unknown) => boolean;
   startPolling: () => void;
   stopPolling: () => void;
 }
@@ -74,15 +75,15 @@ export function useInteractiveLogin({
 
   // Register IPC event listeners for Electron login
   useEffect(() => {
-    const isElectron = typeof window !== 'undefined' && (window as any).electron;
-    if (!isElectron || !(window as any).electron.onLoginSuccess) {
+    const isElectron = typeof window !== 'undefined' && window.electron;
+    if (!isElectron || !window.electron?.onLoginSuccess) {
       return;
     }
 
     console.log('[InteractiveLogin] Registering IPC event listeners for Electron login...');
 
     // Handle login success from Electron
-    const handleElectronLoginSuccess = async (data: any) => {
+    const handleElectronLoginSuccess = async (data: ElectronLoginSuccessData) => {
       console.log('[InteractiveLogin] Received login-success event from Electron:', data);
       
       try {
@@ -145,23 +146,24 @@ export function useInteractiveLogin({
           console.error('[InteractiveLogin] Authentication not confirmed after multiple attempts');
           message.warning('登录成功，但状态验证失败。请手动刷新页面或点击"检查登录状态"按钮。');
         }
-      } catch (error: any) {
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : '未知错误';
         console.error('[InteractiveLogin] Error handling login-success event:', error);
         message.destroy('login-progress');
-        message.error('处理登录成功事件时出错: ' + (error.message || '未知错误'));
+        message.error('处理登录成功事件时出错: ' + errorMessage);
       }
     };
 
     // Handle login error from Electron
-    const handleElectronLoginError = (error: any) => {
+    const handleElectronLoginError = (error: ElectronLoginError) => {
       console.error('[InteractiveLogin] Received login-error event from Electron:', error);
       stopPolling();
       message.error('登录失败: ' + (error.message || '未知错误'));
     };
 
     // Register event listeners
-    const cleanupLoginSuccess = (window as any).electron.onLoginSuccess(handleElectronLoginSuccess);
-    const cleanupLoginError = (window as any).electron.onLoginError(handleElectronLoginError);
+    const cleanupLoginSuccess = window.electron.onLoginSuccess(handleElectronLoginSuccess);
+    const cleanupLoginError = window.electron.onLoginError(handleElectronLoginError);
 
     // Cleanup
     return () => {
@@ -176,10 +178,10 @@ export function useInteractiveLogin({
   }, [queryClient, refetchAuthStatus, isAuthenticated, stopPolling]);
 
   // Handle interactive login
-  const handleInteractiveLogin = useCallback(async (configData?: any) => {
-    const isElectron = typeof window !== 'undefined' && (window as any).electron;
+  const handleInteractiveLogin = useCallback(async (configData?: { data?: { data?: { network?: { proxy?: { enabled?: boolean; [key: string]: unknown } } } } }) => {
+    const isElectron = typeof window !== 'undefined' && window.electron;
     
-    if (isElectron && (window as any).electron.openLoginWindow) {
+    if (isElectron && window.electron?.openLoginWindow) {
       // Use Electron system browser login
       console.log('[InteractiveLogin] Using Electron system browser login...');
       
@@ -189,7 +191,7 @@ export function useInteractiveLogin({
         isInteractiveLoginActiveRef.current = true;
         startPolling();
         
-        const result = await (window as any).electron.openLoginWindow();
+        const result = await window.electron.openLoginWindow();
         if (!result.success) {
           if (result.cancelled) {
             stopPolling();
@@ -200,9 +202,10 @@ export function useInteractiveLogin({
         }
         
         console.log('[InteractiveLogin] Login window opened, waiting for login-success or login-error event...');
-      } catch (error: any) {
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : '未知错误';
         console.error('[InteractiveLogin] Failed to open Electron login window:', error);
-        message.error('无法打开登录窗口: ' + (error.message || '未知错误'));
+        message.error('无法打开登录窗口: ' + errorMessage);
         stopPolling();
         isInteractiveLoginActiveRef.current = false;
       }
@@ -225,8 +228,9 @@ export function useInteractiveLogin({
     
     try {
       await api.login(username, password, false, proxy);
-    } catch (error: any) {
-      const isTimeout = error?.code === 'ECONNABORTED' || error?.message?.includes('timeout');
+    } catch (error) {
+      const apiError = error as { code?: string; message?: string };
+      const isTimeout = apiError?.code === 'ECONNABORTED' || apiError?.message?.includes('timeout');
       
       if (isTimeout) {
         console.log('[InteractiveLogin] Interactive login API timeout, but continuing to poll for status...');

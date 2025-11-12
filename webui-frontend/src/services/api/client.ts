@@ -14,8 +14,9 @@ declare global {
  */
 function getEnvVar(key: string): string | undefined {
   // In Jest/test environment, use process.env or global mock
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const nodeProcess = typeof (globalThis as any).process !== 'undefined' ? (globalThis as any).process : undefined;
+  const nodeProcess = typeof globalThis !== 'undefined' && 'process' in globalThis 
+    ? (globalThis as { process?: NodeJS.Process }).process 
+    : undefined;
   if (nodeProcess?.env?.[key]) {
     return nodeProcess.env[key];
   }

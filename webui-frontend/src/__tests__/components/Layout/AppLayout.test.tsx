@@ -1,18 +1,18 @@
-import { describe, it, expect, vi } from 'vitest';
+import React from 'react';
 import { render, screen } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import AppLayout from '../../../components/Layout/AppLayout';
 
 // Mock the hooks
-vi.mock('../../../components/Layout/hooks', () => ({
+jest.mock('../../../components/Layout/hooks', () => ({
   useLayoutAuth: () => ({
     isAuthenticated: true,
     isLoggingOut: false,
     isRefreshingToken: false,
-    handleLogin: vi.fn(),
-    handleLogout: vi.fn(),
-    handleRefreshToken: vi.fn(),
+    handleLogin: jest.fn(),
+    handleLogout: jest.fn(),
+    handleRefreshToken: jest.fn(),
   }),
 }));
 

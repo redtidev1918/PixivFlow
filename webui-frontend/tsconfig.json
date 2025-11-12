@@ -5,6 +5,7 @@
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "skipLibCheck": true,
+    "types": ["@testing-library/jest-dom"],
 
     /* Bundler mode */
     "moduleResolution": "bundler",
@@ -36,8 +37,8 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src", "src/vite-env.d.ts"],
-  "exclude": ["src/__tests__", "**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx"],
+  "include": ["src", "src/vite-env.d.ts", "src/jest-dom.d.ts"],
+  "exclude": ["src/__tests__/**/*.test.ts", "src/__tests__/**/*.test.tsx", "src/__tests__/**/*.spec.ts", "src/__tests__/**/*.spec.tsx"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }
 

@@ -167,6 +167,7 @@ export function loadConfig(configPath?: string, skipValidation: boolean = false)
   // 1. Unified storage is the primary source of truth for tokens
   // 2. Config file is automatically synced from unified storage if it has a placeholder
   // 3. When a valid token exists in config file, it's synced to unified storage
+  // 4. If unified storage token file doesn't exist, don't auto-sync (prevents re-syncing after logout)
   // This allows users to switch between config files without losing authentication
   
   // Check if config file has a placeholder token
@@ -181,6 +182,7 @@ export function loadConfig(configPath?: string, skipValidation: boolean = false)
       
       // Automatically sync token to config file (synchronous update)
       // This ensures config file always has the real token after loading
+      // Only sync if we actually found a token (prevents re-syncing after logout)
       try {
         const configData = JSON.parse(raw);
         configData.pixiv = configData.pixiv || {};
@@ -195,7 +197,8 @@ export function loadConfig(configPath?: string, skipValidation: boolean = false)
       }
     } else {
       // No token in unified storage either - user needs to login
-      logger.warn('No valid token found in config file or unified storage - login required');
+      // This is expected after logout, so don't log as warning
+      logger.debug('No valid token found in config file or unified storage - login required');
     }
   } else if (config.pixiv?.refreshToken) {
     // Config file has a valid token - sync it to unified storage

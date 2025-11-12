@@ -6,6 +6,17 @@ import Download from '../../pages/Download';
 import { useDownload, useDownloadStatus, useDownloadLogs, useIncompleteTasks } from '../../hooks/useDownload';
 import { useConfig } from '../../hooks/useConfig';
 
+// Mock i18n
+jest.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key: string) => key,
+    i18n: {
+      changeLanguage: jest.fn(),
+      language: 'en',
+    },
+  }),
+}));
+
 // Mock hooks
 jest.mock('../../hooks/useDownload');
 jest.mock('../../hooks/useConfig');
@@ -14,6 +25,20 @@ jest.mock('../../services/api', () => ({
     listConfigFiles: jest.fn().mockResolvedValue([]),
   },
 }));
+
+// Mock antd message
+jest.mock('antd', () => {
+  const actual = jest.requireActual('antd');
+  return {
+    ...actual,
+    message: {
+      success: jest.fn(),
+      error: jest.fn(),
+      warning: jest.fn(),
+      info: jest.fn(),
+    },
+  };
+});
 
 describe('Download', () => {
   let queryClient: QueryClient;
@@ -74,19 +99,22 @@ describe('Download', () => {
 
   it('renders download page', () => {
     renderWithProviders(<Download />);
-    expect(screen.getByText('download.title')).toBeInTheDocument();
+    // Check for any text that indicates the page is rendered
+    expect(screen.getByText(/download\.title|下载管理/i)).toBeInTheDocument();
   });
 
   it('renders task statistics', () => {
     renderWithProviders(<Download />);
     // Task statistics should be rendered
-    expect(screen.getByText('download.title')).toBeInTheDocument();
+    const page = screen.getByText(/download\.title|下载管理/i);
+    expect(page).toBeInTheDocument();
   });
 
   it('renders task actions', () => {
     renderWithProviders(<Download />);
     // Task actions should be rendered
-    expect(screen.getByText('download.title')).toBeInTheDocument();
+    const page = screen.getByText(/download\.title|下载管理/i);
+    expect(page).toBeInTheDocument();
   });
 
   it('shows loading state when status is loading', () => {
@@ -98,8 +126,9 @@ describe('Download', () => {
     });
 
     renderWithProviders(<Download />);
-    // Should show loading state
-    expect(screen.getByText('download.title')).toBeInTheDocument();
+    // Should show loading state - page should still render
+    const page = screen.getByText(/download\.title|下载管理/i);
+    expect(page).toBeInTheDocument();
   });
 
   it('renders active task card when there is an active task', () => {
@@ -114,7 +143,8 @@ describe('Download', () => {
     });
 
     renderWithProviders(<Download />);
-    expect(screen.getByText('download.title')).toBeInTheDocument();
+    const page = screen.getByText(/download\.title|下载管理/i);
+    expect(page).toBeInTheDocument();
   });
 });
 

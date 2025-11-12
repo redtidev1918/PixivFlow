@@ -1,13 +1,17 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
+import { lazy, Suspense } from 'react';
 import AppLayout from './components/Layout/AppLayout';
 import ProtectedRoute from './components/ProtectedRoute';
-import Dashboard from './pages/Dashboard';
-import Config from './pages/Config';
-import Download from './pages/Download';
-import History from './pages/History';
-import Logs from './pages/Logs';
-import Files from './pages/Files';
-import Login from './pages/Login';
+import { LoadingSpinner } from './components/common/LoadingSpinner';
+
+// Lazy load page components for code splitting
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Config = lazy(() => import('./pages/Config'));
+const Download = lazy(() => import('./pages/Download'));
+const History = lazy(() => import('./pages/History'));
+const Logs = lazy(() => import('./pages/Logs'));
+const Files = lazy(() => import('./pages/Files'));
+const Login = lazy(() => import('./pages/Login'));
 
 /**
  * AppRoutes component - contains all route definitions
@@ -15,25 +19,69 @@ import Login from './pages/Login';
  */
 export function AppRoutes() {
   return (
-    <Routes>
-      <Route path="/login" element={<Login />} />
-      <Route
-        path="/"
-        element={
-          <ProtectedRoute>
-            <AppLayout />
-          </ProtectedRoute>
-        }
-      >
-        <Route index element={<Navigate to="/dashboard" replace />} />
-        <Route path="dashboard" element={<Dashboard />} />
-        <Route path="config" element={<Config />} />
-        <Route path="download" element={<Download />} />
-        <Route path="history" element={<History />} />
-        <Route path="logs" element={<Logs />} />
-        <Route path="files" element={<Files />} />
-      </Route>
-    </Routes>
+    <Suspense fallback={<LoadingSpinner />}>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route
+          path="/"
+          element={
+            <ProtectedRoute>
+              <AppLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<Navigate to="/dashboard" replace />} />
+          <Route
+            path="dashboard"
+            element={
+              <Suspense fallback={<LoadingSpinner />}>
+                <Dashboard />
+              </Suspense>
+            }
+          />
+          <Route
+            path="config"
+            element={
+              <Suspense fallback={<LoadingSpinner />}>
+                <Config />
+              </Suspense>
+            }
+          />
+          <Route
+            path="download"
+            element={
+              <Suspense fallback={<LoadingSpinner />}>
+                <Download />
+              </Suspense>
+            }
+          />
+          <Route
+            path="history"
+            element={
+              <Suspense fallback={<LoadingSpinner />}>
+                <History />
+              </Suspense>
+            }
+          />
+          <Route
+            path="logs"
+            element={
+              <Suspense fallback={<LoadingSpinner />}>
+                <Logs />
+              </Suspense>
+            }
+          />
+          <Route
+            path="files"
+            element={
+              <Suspense fallback={<LoadingSpinner />}>
+                <Files />
+              </Suspense>
+            }
+          />
+        </Route>
+      </Routes>
+    </Suspense>
   );
 }
 

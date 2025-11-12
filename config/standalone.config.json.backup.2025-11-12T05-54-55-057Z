@@ -1,0 +1,33 @@
+{
+  "logLevel": "info",
+  "pixiv": {
+    "clientId": "MOBrBDS8blbauoSck0ZfDbtuzpyT",
+    "clientSecret": "lsACyCD94FhDUtGTXi3QzcFE2uU1hqtDaKeqrdwj",
+    "deviceToken": "",
+    "refreshToken": "YOUR_REFRESH_TOKEN",
+    "userAgent": "PixivAndroidApp/5.0.234 (Android 11; Pixel 6)"
+  },
+  "network": {
+    "timeoutMs": 15000,
+    "retries": 3
+  },
+  "storage": {
+    "databasePath": "./data/pixiv-downloader.db",
+    "downloadDirectory": "./downloads",
+    "illustrationDirectory": "./downloads/illustrations",
+    "novelDirectory": "./downloads/novels"
+  },
+  "scheduler": {
+    "enabled": false,
+    "cron": "0 3 * * *",
+    "timezone": "Asia/Shanghai"
+  },
+  "targets": [
+    {
+      "type": "illustration",
+      "tag": "テーマ甲関連",
+      "limit": 3,
+      "searchTarget": "partial_match_for_tags"
+    }
+  ]
+}

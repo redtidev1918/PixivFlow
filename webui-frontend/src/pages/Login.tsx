@@ -387,6 +387,13 @@ export default function Login() {
   };
 
   const handleLogin = async (values?: { username?: string; password?: string; refreshToken?: string }) => {
+    // Prevent duplicate login attempts
+    if (loginMutation.isPending || loginWithTokenMutation.isPending || isInteractiveLoginActiveRef.current) {
+      console.log('[Login] Login already in progress, ignoring duplicate request');
+      message.warning('登录正在进行中，请勿重复点击');
+      return;
+    }
+    
     setLoginStep(1);
     
     // Handle token login mode
@@ -425,6 +432,12 @@ export default function Login() {
             // User cancelled, don't show error
             setLoginStep(0);
             isInteractiveLoginActiveRef.current = false;
+            return;
+          }
+          if (result.alreadyOpening) {
+            // Login window is already opening, show info instead of error
+            message.info('登录窗口正在打开中，请稍候...');
+            setLoginStep(1); // Keep on step 1 to show progress
             return;
           }
           throw new Error(result.error || '无法打开登录窗口');
@@ -727,6 +740,7 @@ export default function Login() {
                 block
                 icon={<LoginOutlined />}
                 loading={loginMutation.isPending || loginWithTokenMutation.isPending}
+                disabled={loginMutation.isPending || loginWithTokenMutation.isPending || loginStep === 1}
                 size="large"
                 onClick={loginMode === 'interactive' || loginMode === 'token' ? () => handleLogin() : undefined}
                 style={{

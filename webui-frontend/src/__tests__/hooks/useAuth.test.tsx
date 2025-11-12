@@ -269,7 +269,9 @@ describe('useAuth', () => {
         password: 'password123',
       });
 
-      expect(result.current.isLoggingIn).toBe(true);
+      await waitFor(() => {
+        expect(result.current.isLoggingIn).toBe(true);
+      });
 
       await loginPromise;
 
@@ -297,7 +299,9 @@ describe('useAuth', () => {
 
       const refreshPromise = result.current.refreshTokenAsync();
 
-      expect(result.current.isRefreshing).toBe(true);
+      await waitFor(() => {
+        expect(result.current.isRefreshing).toBe(true);
+      });
 
       await refreshPromise;
 

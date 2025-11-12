@@ -6,7 +6,7 @@
  * (based on database path) so they persist when switching between config files.
  */
 
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, mkdirSync, unlinkSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { logger } from '../logger';
 
@@ -108,20 +108,29 @@ export function loadTokenFromStorage(databasePath?: string): string | null {
 
 /**
  * Clear token from unified storage
+ * Deletes the token file to ensure complete removal
  * @param databasePath Optional database path to determine storage location
  */
 export function clearTokenFromStorage(databasePath?: string): void {
   try {
     const tokenPath = getTokenFilePath(databasePath);
+    logger.info('Attempting to clear token from unified storage', { 
+      tokenPath, 
+      databasePath: databasePath || 'not provided (using default)' 
+    });
     
     if (existsSync(tokenPath)) {
-      writeFileSync(tokenPath, PLACEHOLDER_TOKEN, 'utf-8');
-      logger.debug('Token cleared from unified storage', { tokenPath });
+      unlinkSync(tokenPath);
+      logger.info('Token file deleted from unified storage', { tokenPath });
+    } else {
+      logger.info('Token file does not exist in unified storage (may have been already cleared)', { tokenPath });
     }
   } catch (error) {
-    logger.warn('Failed to clear token from unified storage', {
+    logger.error('Failed to clear token from unified storage', {
       error: error instanceof Error ? error.message : String(error),
+      databasePath: databasePath || 'not provided',
     });
+    // Don't throw - clearing unified storage is best effort, but log as error for visibility
   }
 }
 

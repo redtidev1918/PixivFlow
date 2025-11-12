@@ -61,6 +61,7 @@ let puppeteerBrowser = null; // Puppeteer 浏览器实例
 let currentLoginCodeVerifier = null; // 当前登录流程的 code verifier
 let loginUrlCheckInterval = null; // 登录窗口 URL 检查定时器
 let currentLoadTimeout = null; // 当前登录窗口加载的超时计时器
+let isOpeningLoginWindow = false; // 是否正在打开登录窗口（防止重复调用）
 const BACKEND_PORT = 3000; // 默认端口，如果被占用会自动寻找可用端口
 let actualBackendPort = BACKEND_PORT; // 实际使用的端口（可能因端口占用而改变）
 let isAppClosing = false;
@@ -3551,6 +3552,7 @@ async function handleAuthCode(code, sourceUrl) {
             mainWindow.webContents.send('login-success', eventData);
             console.log('✅ login-success 事件已发送 (BrowserWindow)');
             eventSent = true; // 标记为已发送
+            resetLoginWindowFlag(); // 重置标志位
             
             // 备选方案：如果 3 秒后还在登录页面，强制导航到 dashboard
             // 前端应该已经处理了导航，但这是最后的保障
@@ -3634,6 +3636,7 @@ async function handleAuthCode(code, sourceUrl) {
           console.error('❌ 发送登录失败事件失败:', sendError.message);
         }
       }
+      resetLoginWindowFlag(); // 重置标志位
     })
     .finally(() => {
       // 最终确保窗口已关闭并清理资源
@@ -3676,6 +3679,7 @@ function handleAuthError(error, errorDescription, sourceUrl) {
       console.error('❌ 发送登录错误事件失败:', sendError.message);
     }
   }
+  resetLoginWindowFlag(); // 重置标志位
   
   return true; // 表示已处理错误
 }
@@ -4038,6 +4042,14 @@ function showAuthCodeInputDialog() {
 }
 
 /**
+ * 重置登录窗口打开标志位
+ */
+function resetLoginWindowFlag() {
+  isOpeningLoginWindow = false;
+  console.log('✅ 已重置登录窗口打开标志位');
+}
+
+/**
  * 保存token到后端（带重试机制）
  */
 async function saveTokenToBackend(refreshToken, maxRetries = 3) {
@@ -4198,6 +4210,38 @@ function setupIpcHandlers() {
   // 处理登录窗口请求 - 优先使用 pixiv-token-getter，然后是 Puppeteer，最后是 BrowserWindow
   ipcMain.handle('open-login-window', async (event, options = {}) => {
     try {
+      // 防止重复打开登录窗口
+      if (isOpeningLoginWindow) {
+        console.log('⚠️  登录窗口正在打开中，忽略重复请求');
+        return { 
+          success: false, 
+          error: '登录窗口正在打开中，请勿重复点击',
+          alreadyOpening: true 
+        };
+      }
+      
+      // 检查是否已有登录窗口或浏览器实例
+      const hasExistingWindow = loginWindow && !loginWindow.isDestroyed();
+      const hasExistingBrowser = puppeteerBrowser !== null;
+      
+      if (hasExistingWindow || hasExistingBrowser) {
+        console.log('⚠️  检测到已有登录窗口或浏览器实例，先关闭旧的');
+        if (hasExistingWindow) {
+          closeLoginWindow();
+        }
+        if (hasExistingBrowser) {
+          try {
+            await puppeteerBrowser.close();
+            puppeteerBrowser = null;
+          } catch (error) {
+            console.error('关闭 Puppeteer 浏览器时出错:', error);
+          }
+        }
+      }
+      
+      // 设置标志位，防止重复调用
+      isOpeningLoginWindow = true;
+      
       const useTokenGetter = options.useTokenGetter !== false && pixivTokenGetter !== null; // 默认优先使用 pixiv-token-getter（如果可用）
       const usePuppeteer = options.usePuppeteer !== false && puppeteer !== null; // 默认使用 Puppeteer（如果可用）
       const proxyConfig = options.proxy || null;
@@ -4343,6 +4387,7 @@ function setupIpcHandlers() {
                           mainWindow.webContents.send('login-success', eventData);
                           console.log('✅ login-success 事件已发送');
                           eventSent = true; // 标记为已发送
+                          resetLoginWindowFlag(); // 重置标志位
                           
                           setTimeout(() => {
                             const currentUrl = mainWindow.webContents.getURL();
@@ -4387,6 +4432,7 @@ function setupIpcHandlers() {
                         code: puppeteerError.code || 'PUPPETEER_LOGIN_ERROR'
                       });
                     }
+                    resetLoginWindowFlag(); // 重置标志位
                   });
               } catch (fallbackError) {
                 console.error('❌ 回退到 Puppeteer 时出错:', fallbackError);
@@ -4397,6 +4443,7 @@ function setupIpcHandlers() {
                     code: error.code || 'TOKEN_GETTER_LOGIN_ERROR'
                   });
                 }
+                resetLoginWindowFlag(); // 重置标志位
               }
             } else {
               // 如果 Puppeteer 不可用，通知主窗口登录失败
@@ -4406,6 +4453,7 @@ function setupIpcHandlers() {
                   code: error.code || 'TOKEN_GETTER_LOGIN_ERROR'
                 });
               }
+              resetLoginWindowFlag(); // 重置标志位
             }
           });
         
@@ -4510,6 +4558,7 @@ function setupIpcHandlers() {
                 code: error.code || 'PUPPETEER_LOGIN_ERROR'
               });
             }
+            resetLoginWindowFlag(); // 重置标志位
           });
         
         return { 
@@ -4519,43 +4568,14 @@ function setupIpcHandlers() {
           method: 'puppeteer'
         };
       } else {
-        // 使用 BrowserWindow 方案（备选方案）
-        console.log('📞 收到打开登录窗口的请求（使用 BrowserWindow 备选方案）');
+        // pixiv-token-getter 和 Puppeteer 都不可用，返回错误
+        console.error('❌ pixiv-token-getter 和 Puppeteer 都不可用，无法进行登录');
+        resetLoginWindowFlag(); // 重置标志位
         
-        // 生成 PKCE 参数
-        const codeVerifier = generateCodeVerifier();
-        const codeChallenge = generateCodeChallenge(codeVerifier);
-        console.log('✅ PKCE 参数已生成');
-        console.log('   Code Challenge:', codeChallenge);
-        console.log('   Code Verifier (前20字符):', codeVerifier.substring(0, 20) + '...');
-        
-        // 保存 code verifier 供后续使用
-        currentLoginCodeVerifier = codeVerifier;
-        isProcessingAuthCode = false;
-        
-        // 构建登录 URL
-        const loginParams = new URLSearchParams({
-          code_challenge: codeChallenge,
-          code_challenge_method: 'S256',
-          client: 'pixiv-android',
-        });
-        const loginUrl = `${PIXIV_LOGIN_URL}?${loginParams.toString()}`;
-        
-        console.log('🌐 登录URL:', loginUrl);
-        console.log('📱 将在Electron窗口中打开登录页面');
-        console.log('🔍 正在监听回调URL...');
-        console.log('   回调URL模式: https://app-api.pixiv.net/web/v1/users/auth/pixiv/callback?code=...');
-        
-        // 使用Electron窗口打开登录页面（会自动捕获回调URL）
-        createLoginWindow(codeVerifier, codeChallenge);
-        
-        // 返回成功，但实际登录会在回调URL被捕获时异步完成
-        // 主窗口会通过 'login-success' 或 'login-error' 事件收到通知
-        return { 
-          success: true, 
-          message: '登录窗口已打开，请完成登录。系统会自动捕获回调URL。',
-          windowOpened: true,
-          method: 'browserwindow'
+        return {
+          success: false,
+          error: 'pixiv-token-getter 和 Puppeteer 都不可用。请确保已安装 pixiv-token-getter 或 puppeteer-core。',
+          code: 'NO_LOGIN_METHOD_AVAILABLE'
         };
       }
     } catch (error) {
@@ -4574,6 +4594,7 @@ function setupIpcHandlers() {
         });
       }
       
+      resetLoginWindowFlag(); // 重置标志位
       return { success: false, error: error.message };
     }
   });

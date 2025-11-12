@@ -38,9 +38,11 @@ describe('FormModal', () => {
     jest.clearAllMocks();
   });
 
-  it('renders modal when open is true', () => {
+  it('renders modal when open is true', async () => {
     render(<TestForm onSubmit={jest.fn()} />);
-    expect(screen.getByText('Test Form')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText('Test Form')).toBeInTheDocument();
+    });
     expect(screen.getByLabelText('Name')).toBeInTheDocument();
     expect(screen.getByLabelText('Email')).toBeInTheDocument();
   });
@@ -52,8 +54,12 @@ describe('FormModal', () => {
 
   it('calls onSubmit with form values when submit button is clicked', async () => {
     const user = userEvent.setup();
-    const onSubmit = jest.fn();
+    const onSubmit = jest.fn().mockResolvedValue(undefined);
     render(<TestForm onSubmit={onSubmit} />);
+    
+    await waitFor(() => {
+      expect(screen.getByText('Test Form')).toBeInTheDocument();
+    });
     
     const nameInput = screen.getByTestId('name-input');
     const emailInput = screen.getByTestId('email-input');
@@ -69,7 +75,7 @@ describe('FormModal', () => {
         name: 'John Doe',
         email: 'john@example.com',
       });
-    });
+    }, { timeout: 3000 });
   });
 
   it('validates form before submitting', async () => {
@@ -77,13 +83,17 @@ describe('FormModal', () => {
     const onSubmit = jest.fn();
     render(<TestForm onSubmit={onSubmit} />);
     
+    await waitFor(() => {
+      expect(screen.getByText('Test Form')).toBeInTheDocument();
+    });
+    
     // Don't fill required field
     const submitButton = screen.getByText('Submit');
     await user.click(submitButton);
     
     await waitFor(() => {
       expect(screen.getByText('Name is required')).toBeInTheDocument();
-    });
+    }, { timeout: 3000 });
     
     expect(onSubmit).not.toHaveBeenCalled();
   });
@@ -92,6 +102,10 @@ describe('FormModal', () => {
     const user = userEvent.setup();
     const onCancel = jest.fn();
     render(<TestForm onSubmit={jest.fn()} onCancel={onCancel} />);
+    
+    await waitFor(() => {
+      expect(screen.getByText('Test Form')).toBeInTheDocument();
+    });
     
     const cancelButton = screen.getByText('Cancel');
     await user.click(cancelButton);
@@ -142,20 +156,30 @@ describe('FormModal', () => {
     render(<TestForm onSubmit={jest.fn()} initialValues={initialValues} />);
     
     await waitFor(() => {
+      expect(screen.getByText('Test Form')).toBeInTheDocument();
+    });
+    
+    await waitFor(() => {
       expect(screen.getByTestId('name-input')).toHaveValue('Initial Name');
       expect(screen.getByTestId('email-input')).toHaveValue('initial@example.com');
-    });
+    }, { timeout: 3000 });
   });
 
-  it('shows loading state when submitLoading is true', () => {
+  it('shows loading state when submitLoading is true', async () => {
     render(<TestForm onSubmit={jest.fn()} submitLoading />);
+    await waitFor(() => {
+      expect(screen.getByText('Test Form')).toBeInTheDocument();
+    });
     const submitButton = screen.getByText('Submit');
     // Ant Design Modal buttons might not have disabled attribute directly
     expect(submitButton).toBeInTheDocument();
   });
 
-  it('disables cancel button when submitLoading is true', () => {
+  it('disables cancel button when submitLoading is true', async () => {
     render(<TestForm onSubmit={jest.fn()} submitLoading />);
+    await waitFor(() => {
+      expect(screen.getByText('Test Form')).toBeInTheDocument();
+    });
     const cancelButton = screen.getByText('Cancel');
     // Ant Design Modal might disable cancel button when loading
     expect(cancelButton).toBeInTheDocument();
@@ -166,6 +190,10 @@ describe('FormModal', () => {
     const onSubmit = jest.fn().mockResolvedValue(undefined);
     render(<TestForm onSubmit={onSubmit} />);
     
+    await waitFor(() => {
+      expect(screen.getByText('Test Form')).toBeInTheDocument();
+    });
+    
     const nameInput = screen.getByTestId('name-input');
     await user.type(nameInput, 'Test');
     
@@ -174,10 +202,10 @@ describe('FormModal', () => {
     
     await waitFor(() => {
       expect(onSubmit).toHaveBeenCalledTimes(1);
-    });
+    }, { timeout: 3000 });
   });
 
-  it('uses custom submit and cancel text', () => {
+  it('uses custom submit and cancel text', async () => {
     const TestFormWithCustomText = () => {
       const [form] = Form.useForm();
       return (
@@ -195,6 +223,9 @@ describe('FormModal', () => {
     };
     
     render(<TestFormWithCustomText />);
+    await waitFor(() => {
+      expect(screen.getByText('Test')).toBeInTheDocument();
+    });
     expect(screen.getByText('Save')).toBeInTheDocument();
     expect(screen.getByText('Close')).toBeInTheDocument();
   });

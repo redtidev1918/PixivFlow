@@ -53,17 +53,66 @@ export async function updateConfigWithToken(
 export async function clearConfigToken(
   configPath: string
 ): Promise<void> {
+  let databasePath: string | undefined = undefined;
+  let configCleared = false;
+  
+  // FIRST: Read config to get databasePath BEFORE clearing
+  // This ensures we know where the token is stored
   try {
     const configData = JSON.parse(await fs.readFile(configPath, 'utf-8')) as StandaloneConfig;
+    databasePath = configData.storage?.databasePath;
+  } catch (error) {
+    // Config file might not exist or be invalid - try to get databasePath from raw read
+    logger.warn('Failed to read config file for logout, attempting raw read', { error });
+    try {
+      const fileContent = await fs.readFile(configPath, 'utf-8');
+      const rawConfig = JSON.parse(fileContent) as any;
+      databasePath = rawConfig?.storage?.databasePath;
+    } catch (rawReadError) {
+      // If raw read also fails, we'll still try to clear unified storage without databasePath
+      logger.warn('Failed to read config file even for raw read', { error: rawReadError });
+    }
+  }
+  
+  // SECOND: Clear from unified storage FIRST (before clearing config file)
+  // This prevents loadConfig from reloading the token immediately after we clear the config
+  try {
+    if (databasePath) {
+      logger.info('Clearing token from unified storage', { databasePath });
+      clearTokenFromStorage(databasePath);
+    } else {
+      // Try default location
+      logger.info('Clearing token from unified storage (default location)');
+      clearTokenFromStorage();
+    }
+    logger.info('Unified storage token clear completed', { databasePath: databasePath || 'default location' });
+  } catch (error) {
+    logger.error('Failed to clear token from unified storage', { 
+      error: error instanceof Error ? error.message : String(error),
+      databasePath: databasePath || 'default location',
+    });
+    // Don't throw - clearing unified storage is best effort, but log as error
+  }
+  
+  // THIRD: Clear config file AFTER clearing unified storage
+  // This ensures that even if loadConfig is called immediately after, it won't find the token
+  try {
+    const configData = JSON.parse(await fs.readFile(configPath, 'utf-8')) as StandaloneConfig;
+    
     // Clear the refresh token by setting it to placeholder
     configData.pixiv.refreshToken = 'YOUR_REFRESH_TOKEN';
     await fs.writeFile(configPath, JSON.stringify(configData, null, 2), 'utf-8');
-    logger.info('Configuration updated: refresh token cleared');
-    
-    // Also clear from unified storage
-    clearTokenFromStorage(configData.storage?.databasePath);
+    logger.info('Configuration updated: refresh token cleared from config file');
+    configCleared = true;
   } catch (error) {
-    throw new Error(`Failed to clear token from config file: ${error}`);
+    logger.warn('Failed to clear config file token', { 
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+  
+  // If we couldn't clear config file, that's okay - we at least cleared unified storage
+  if (!configCleared) {
+    logger.warn('Config file token not cleared (file may not exist), but unified storage was cleared');
   }
 }
 

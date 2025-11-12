@@ -1,6 +1,6 @@
 /// <reference types="@testing-library/jest-dom" />
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import { AppRoutes } from '../AppRoutes';
@@ -87,7 +87,7 @@ describe('App', () => {
     expect(screen.getByText('Login Page')).toBeInTheDocument();
   });
 
-  it('redirects root path to dashboard', () => {
+  it('redirects root path to dashboard', async () => {
     render(
       <QueryClientProvider client={queryClient}>
         <MemoryRouter initialEntries={['/']}>
@@ -95,8 +95,10 @@ describe('App', () => {
         </MemoryRouter>
       </QueryClientProvider>
     );
-    // Should render AppLayout with Dashboard
-    expect(screen.getByTestId('app-layout')).toBeInTheDocument();
+    // Should render AppLayout with Dashboard - wait for lazy loading
+    await waitFor(() => {
+      expect(screen.getByTestId('app-layout')).toBeInTheDocument();
+    });
   });
 
   it('renders dashboard at /dashboard', () => {

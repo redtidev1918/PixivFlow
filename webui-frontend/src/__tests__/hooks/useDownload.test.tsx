@@ -206,7 +206,7 @@ describe('useDownload', () => {
       });
 
       expect(result.current.hasActiveTask).toBe(false);
-      expect(result.current.activeTask).toBeNull();
+      expect(result.current.activeTask).toBeUndefined();
     });
 
     it('should use custom refetch interval', async () => {

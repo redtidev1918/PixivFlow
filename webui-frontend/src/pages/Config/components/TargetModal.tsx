@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Modal, Form, Input, InputNumber, Select, Steps, Collapse, Card, Button, Space, Tooltip, Typography } from 'antd';
 import { QuestionCircleOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
-import { TargetConfig } from './TargetsConfigForm';
+import { TargetConfig } from './targets/types';
 
 const { Option } = Select;
 const { Panel } = Collapse;

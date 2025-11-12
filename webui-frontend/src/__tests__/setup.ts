@@ -10,8 +10,8 @@ if (typeof globalThis !== 'undefined') {
   globalThis.__VITE_ENV__ = {
     VITE_API_BASE_URL: '',
     MODE: 'test',
-    DEV: false,
-    PROD: false,
+    DEV: 'false',
+    PROD: 'false',
   };
 }
 
@@ -52,8 +52,8 @@ Object.defineProperty(global, 'import', {
       env: {
         VITE_API_BASE_URL: '',
         MODE: 'test',
-        DEV: false,
-        PROD: false,
+        DEV: 'false',
+        PROD: 'false',
       },
     },
   },

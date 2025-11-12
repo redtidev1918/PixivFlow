@@ -1,10 +1,11 @@
 import { useEffect } from 'react';
-import { Form, message } from 'antd';
+import { Form } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
 import { useConfig } from '../../../hooks/useConfig';
 import { extractErrorInfo, translateErrorCode } from '../../../utils/errorCodeTranslator';
 import { QUERY_KEYS } from '../../../constants';
+import { useErrorHandler } from '../../../hooks/useErrorHandler';
 
 /**
  * Hook for managing configuration form
@@ -14,6 +15,7 @@ export function useConfigForm() {
   const queryClient = useQueryClient();
   const [form] = Form.useForm();
   const { config, isLoading, updateAsync, validate, isUpdating, isValidating } = useConfig();
+  const { handleError, handleSuccess } = useErrorHandler();
 
   // Load config into form when it's available
   useEffect(() => {
@@ -31,9 +33,11 @@ export function useConfigForm() {
     try {
       const values = form.getFieldsValue();
       await updateAsync(values);
-      message.success(t('config.saveSuccess'));
+      handleSuccess(t('config.saveSuccess'));
     } catch (error: any) {
       const { errorCode, message: errorMessage, details } = extractErrorInfo(error);
+      let formattedMessage: string | undefined;
+      
       if (errorCode === 'CONFIG_INVALID' && details && Array.isArray(details)) {
         const errorMessages = details.map((err: any) => {
           if (typeof err === 'object' && err.code) {
@@ -41,10 +45,11 @@ export function useConfigForm() {
           }
           return String(err);
         });
-        message.error(`${translateErrorCode(errorCode, t)}: ${errorMessages.join(', ')}`);
+        formattedMessage = `${translateErrorCode(errorCode, t)}: ${errorMessages.join(', ')}`;
       } else {
-        message.error(errorMessage || t('config.saveFailed'));
+        formattedMessage = errorMessage || t('config.saveFailed');
       }
+      handleError(error, formattedMessage);
     }
   };
 
@@ -67,7 +72,8 @@ export function useConfigForm() {
       };
       await updateAsync(payload);
     } catch (error) {
-      console.error('Failed to auto-save targets:', error);
+      const autoSaveFailedMessage = t('config.autoSaveFailed', { defaultValue: t('config.saveFailed') });
+      handleError(error, autoSaveFailedMessage);
     }
   };
 

@@ -1,20 +1,25 @@
-import { useState } from 'react';
-import { Modal, Button, message } from 'antd';
-import { CopyOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useConfigFiles } from '../../hooks/useConfig';
-import { useConfigForm, useConfigOperations } from './hooks';
+import { useConfigForm, useConfigOperations, useConfigModals, useConfigTabs } from './hooks';
 import { ConfigHeader } from './components/ConfigHeader';
 import { ConfigActions } from './components/ConfigActions';
 import { ConfigTabs } from './components/ConfigTabs';
-import { CodeEditor } from '../../components/common/CodeEditor';
+import { ConfigPreviewModal } from './components/ConfigPreviewModal';
+import { ConfigJsonEditor } from './components/ConfigJsonEditor';
+import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 
 export default function Config() {
   const { t } = useTranslation();
-  const [activeTab, setActiveTab] = useState('files');
-  const [previewVisible, setPreviewVisible] = useState(false);
-  const [jsonEditorVisible, setJsonEditorVisible] = useState(false);
-  const [editingConfigFile, setEditingConfigFile] = useState<string | null>(null);
+  const { activeTab, setActiveTab } = useConfigTabs();
+  const {
+    previewVisible,
+    jsonEditorVisible,
+    editingConfigFile,
+    openPreview,
+    closePreview,
+    openJsonEditor,
+    closeJsonEditor,
+  } = useConfigModals();
 
   const {
     form,
@@ -41,7 +46,11 @@ export default function Config() {
 
 
   if (isLoading) {
-    return <div>{t('common.loading')}</div>;
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', padding: '48px 0' }}>
+        <LoadingSpinner />
+      </div>
+    );
   }
 
   const currentConfigPath = (config as any)?._meta?.configPathRelative || (config as any)?._meta?.configPath || t('config.unknown');
@@ -57,7 +66,7 @@ export default function Config() {
         />
         <ConfigActions
           onRefresh={refreshConfig}
-          onPreview={() => setPreviewVisible(true)}
+          onPreview={openPreview}
           onExport={handleExportConfig}
           onImport={handleImportConfig}
           onCopy={() => handleCopyConfig(getConfigPreview())}
@@ -73,46 +82,26 @@ export default function Config() {
         activeTab={activeTab}
         onTabChange={setActiveTab}
         onConfigFileSwitch={handleConfigFileSwitch}
-        onJsonEditorOpen={(filename) => {
-          setEditingConfigFile(filename);
-          setJsonEditorVisible(true);
-        }}
+        onJsonEditorOpen={openJsonEditor}
         onConfigApplied={handleConfigApplied}
         onTargetChange={handleTargetChange}
       />
 
       {/* Config Preview Modal */}
-      <Modal
-        title={t('config.previewConfig')}
-        open={previewVisible}
-        onCancel={() => setPreviewVisible(false)}
-        footer={[
-          <Button key="copy" icon={<CopyOutlined />} onClick={() => {
-            navigator.clipboard.writeText(getConfigPreview());
-            message.success(t('config.configCopied'));
-          }}>
-            {t('common.copy')}
-          </Button>,
-          <Button key="close" onClick={() => setPreviewVisible(false)}>
-            {t('common.close')}
-          </Button>,
-        ]}
-        width={800}
-      >
-        <CodeEditor
-          value={getConfigPreview()}
-          readOnly
-          language="json"
-          minHeight={400}
-          maxHeight={600}
-        />
-      </Modal>
+      <ConfigPreviewModal
+        visible={previewVisible}
+        configPreview={getConfigPreview()}
+        onClose={closePreview}
+      />
 
       {/* JSON Editor Modal - handled by ConfigFilesManager */}
       {jsonEditorVisible && editingConfigFile && (
-        <div>
-          {/* This will be handled by ConfigJsonEditor component */}
-        </div>
+        <ConfigJsonEditor
+          visible={jsonEditorVisible}
+          filename={editingConfigFile}
+          onClose={closeJsonEditor}
+          onConfigFileSwitch={handleConfigFileSwitch}
+        />
       )}
     </div>
   );

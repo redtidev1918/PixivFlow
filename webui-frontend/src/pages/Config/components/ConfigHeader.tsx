@@ -1,18 +1,21 @@
 import { Typography, Space, Select, Tag } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { message } from 'antd';
 import { useQueryClient } from '@tanstack/react-query';
+import { ConfigFileInfo } from '../../../services/api';
 import { api } from '../../../services/api';
+import { useErrorHandler } from '../../../hooks/useErrorHandler';
 import { QUERY_KEYS } from '../../../constants';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
 
+type MaybePromise<T = void> = T | Promise<T>;
+
 interface ConfigHeaderProps {
   currentConfigPath: string;
-  configFiles: any[];
-  onConfigFileSwitch: () => void;
-  refetchConfigFiles: () => void;
+  configFiles: ConfigFileInfo[];
+  onConfigFileSwitch: () => MaybePromise;
+  refetchConfigFiles: () => MaybePromise<unknown>;
 }
 
 /**
@@ -26,20 +29,21 @@ export function ConfigHeader({
 }: ConfigHeaderProps) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
-  const activeConfigFile = configFiles?.find((f: any) => f.isActive);
+  const { handleError, handleSuccess } = useErrorHandler();
+  const activeConfigFile = configFiles?.find((f) => f.isActive);
 
   const handleConfigFileChange = async (filename: string) => {
-    const file = configFiles.find((f: any) => f.filename === filename);
+    const file = configFiles.find((f) => f.filename === filename);
     if (file && !file.isActive) {
       try {
         await api.switchConfigFile(file.path);
-        message.success(t('config.configSwitched'));
-        await queryClient.invalidateQueries({ queryKey: ['config'] });
-        await queryClient.invalidateQueries({ queryKey: ['configFiles'] });
-        refetchConfigFiles();
-        onConfigFileSwitch();
+        handleSuccess(t('config.configSwitched'));
+        await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CONFIG });
+        await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CONFIG_FILES });
+        await Promise.resolve(refetchConfigFiles());
+        await Promise.resolve(onConfigFileSwitch());
       } catch (error: any) {
-        message.error(t('config.configSwitchFailed'));
+        handleError(error, t('config.configSwitchFailed'));
       }
     }
   };
@@ -61,7 +65,7 @@ export function ConfigHeader({
             placeholder={t('config.selectConfigFile')}
             size="small"
           >
-            {configFiles.map((file: any) => (
+            {configFiles.map((file) => (
               <Option key={file.filename} value={file.filename}>
                 {file.isActive && <Tag color="green" style={{ marginRight: 8 }}>{t('config.activeConfig')}</Tag>}
                 {file.filename}

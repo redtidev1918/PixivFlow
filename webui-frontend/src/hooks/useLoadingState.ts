@@ -81,14 +81,19 @@ export function useLoadingState(initialState: boolean = false) {
 export function useLoadingStates<T extends string>(
   initialStates?: Partial<Record<T, boolean>>
 ) {
-  const [loadingStates, setLoadingStates] = useState<Partial<Record<T, LoadingState>>>(
-    Object.fromEntries(
-      Object.entries(initialStates || {}).map(([key, value]) => [
-        key,
-        { loading: value as boolean },
-      ])
-    ) as Partial<Record<T, LoadingState>>
-  );
+  const [loadingStates, setLoadingStates] = useState<Partial<Record<T, LoadingState>>>(() => {
+    if (!initialStates) {
+      return {};
+    }
+
+    return Object.entries(initialStates).reduce<Partial<Record<T, LoadingState>>>(
+      (acc, [key, value]) => {
+        acc[key as T] = { loading: Boolean(value) };
+        return acc;
+      },
+      {}
+    );
+  });
 
   const setLoading = useCallback((key: T, value: boolean, message?: string) => {
     setLoadingStates((prev) => ({
@@ -144,10 +149,10 @@ export function useLoadingStates<T extends string>(
     [loadingStates]
   );
 
-  const isAnyLoading = useMemo(
-    () => Object.values(loadingStates).some((state) => state?.loading === true),
-    [loadingStates]
-  );
+  const isAnyLoading = useMemo(() => {
+    const stateValues = Object.values(loadingStates) as Array<LoadingState | undefined>;
+    return stateValues.some((state) => state?.loading === true);
+  }, [loadingStates]);
 
   return {
     loadingStates,

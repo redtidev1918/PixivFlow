@@ -9,7 +9,7 @@ const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Config = lazy(() => import('./pages/Config'));
 const Download = lazy(() => import('./pages/Download'));
 const History = lazy(() => import('./pages/History'));
-const Logs = lazy(() => import('./pages/Logs'));
+const Logs = lazy(() => import('./pages/Logs/Logs'));
 const Files = lazy(() => import('./pages/Files'));
 const Login = lazy(() => import('./pages/Login'));
 

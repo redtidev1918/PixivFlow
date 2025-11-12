@@ -35,14 +35,10 @@ describe('Dashboard', () => {
     jest.clearAllMocks();
     (useStatsOverview as jest.Mock).mockReturnValue({
       stats: {
-        data: {
-          data: {
-            totalDownloads: 100,
-            illustrations: 80,
-            novels: 20,
-            recentDownloads: 10,
-          },
-        },
+        totalDownloads: 100,
+        illustrations: 80,
+        novels: 20,
+        recentDownloads: 10,
       },
       isLoading: false,
       refetch: mockRefetch,

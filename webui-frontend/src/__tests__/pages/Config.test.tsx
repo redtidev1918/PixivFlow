@@ -76,8 +76,8 @@ describe('Config', () => {
       isValidating: false,
     });
 
-    renderWithProviders(<Config />);
-    expect(screen.getByRole('status')).toBeInTheDocument();
+    const { container } = renderWithProviders(<Config />);
+    expect(container.querySelector('.ant-spin')).toBeInTheDocument();
   });
 
   it('renders config files manager', () => {

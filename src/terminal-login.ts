@@ -27,7 +27,7 @@ export { PixivLoginFailedError } from './terminal-login/types';
 export type { ProxyConfig } from './terminal-login/adapter-selector';
 
 // Re-export main classes and functions
-export { TerminalLogin } from './terminal-login/terminal-login.js';
-export { PixivTerminalAuth } from './terminal-login/pixiv-terminal-auth.js';
-export { printAuthTokenResponse } from './terminal-login/output.js';
-export { refreshToken } from './terminal-login/token-refresh.js';
+export { TerminalLogin } from './terminal-login/terminal-login';
+export { PixivTerminalAuth } from './terminal-login/pixiv-terminal-auth';
+export { printAuthTokenResponse } from './terminal-login/output';
+export { refreshToken } from './terminal-login/token-refresh';

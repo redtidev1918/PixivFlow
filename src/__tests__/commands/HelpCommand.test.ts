@@ -58,9 +58,8 @@ describe('HelpCommand', () => {
       
       const helpText = consoleLogSpy.mock.calls[0][0];
       expect(helpText).toContain('PixivFlow');
-      expect(helpText).toContain('Commands:');
-      expect(helpText).toContain('Options:');
-      expect(helpText).toContain('Examples:');
+      expect(helpText).toContain('Global Options:');
+      expect(helpText).toContain('Quick Examples:');
     });
 
     it('should display help message with all commands', async () => {

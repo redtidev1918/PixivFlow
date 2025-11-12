@@ -3,6 +3,7 @@ import { DownloadOutlined, PictureOutlined, FileTextOutlined, ReloadOutlined } f
 import { useTranslation } from 'react-i18next';
 import { useCallback } from 'react';
 import { useStatsOverview } from '../hooks/useStats';
+import { StatsOverview } from '../services/api/types';
 
 export default function Dashboard() {
   const { t } = useTranslation();
@@ -23,10 +24,13 @@ export default function Dashboard() {
     return <Spin size="large" style={{ display: 'block', textAlign: 'center', marginTop: 50 }} />;
   }
 
-  // Extract stats data from API response structure
-  const statsData = stats && typeof stats === 'object' && 'data' in stats && stats.data && typeof stats.data === 'object' && 'data' in stats.data
-    ? (stats.data as { data?: Record<string, unknown> }).data || {}
-    : (stats as Record<string, unknown>) || {};
+  // Extract stats data - stats is already StatsOverview | undefined from the service
+  const statsData: StatsOverview = stats || {
+    totalDownloads: 0,
+    illustrations: 0,
+    novels: 0,
+    recentDownloads: 0,
+  };
 
   return (
     <div>
@@ -45,7 +49,7 @@ export default function Dashboard() {
           <Card>
             <Statistic
               title={t('dashboard.totalDownloads')}
-              value={statsData.totalDownloads || 0}
+              value={statsData.totalDownloads}
               prefix={<DownloadOutlined />}
             />
           </Card>
@@ -54,7 +58,7 @@ export default function Dashboard() {
           <Card>
             <Statistic
               title={t('dashboard.illustrations')}
-              value={statsData.illustrations || 0}
+              value={statsData.illustrations}
               prefix={<PictureOutlined />}
             />
           </Card>
@@ -63,7 +67,7 @@ export default function Dashboard() {
           <Card>
             <Statistic
               title={t('dashboard.novels')}
-              value={statsData.novels || 0}
+              value={statsData.novels}
               prefix={<FileTextOutlined />}
             />
           </Card>
@@ -72,7 +76,7 @@ export default function Dashboard() {
       <Row gutter={16} style={{ marginTop: 16 }}>
         <Col span={24}>
           <Card title={t('dashboard.recentDownloads')}>
-            <p>{t('dashboard.recentDownloadsDesc', { count: statsData.recentDownloads || 0 })}</p>
+            <p>{t('dashboard.recentDownloadsDesc', { count: statsData.recentDownloads })}</p>
           </Card>
         </Col>
       </Row>

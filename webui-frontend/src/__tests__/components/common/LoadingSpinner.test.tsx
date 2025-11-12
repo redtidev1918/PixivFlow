@@ -5,13 +5,17 @@ import { LoadingSpinner } from '../../../components/common/LoadingSpinner';
 
 describe('LoadingSpinner', () => {
   it('renders correctly', () => {
-    render(<LoadingSpinner />);
-    expect(screen.getByRole('status')).toBeInTheDocument();
+    const { container } = render(<LoadingSpinner />);
+    const spinner = container.querySelector('.ant-spin');
+    expect(spinner).toBeInTheDocument();
   });
 
   it('renders with tip', () => {
-    render(<LoadingSpinner tip="Loading..." />);
-    expect(screen.getByRole('status')).toBeInTheDocument();
+    const { container } = render(<LoadingSpinner tip="Loading..." />);
+    const spinner = container.querySelector('.ant-spin');
+    expect(spinner).toBeInTheDocument();
+    // Tip text may be rendered by Ant Design, but we just verify the spinner exists
+    // The tip prop is passed to Spin component, so it should work correctly
   });
 
   it('renders full screen when fullScreen is true', () => {

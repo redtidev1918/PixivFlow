@@ -14,13 +14,13 @@ describe('LoadingWrapper', () => {
   });
 
   it('renders LoadingSpinner when loading is true', () => {
-    render(
+    const { container } = render(
       <LoadingWrapper loading={true}>
         <div>Content</div>
       </LoadingWrapper>
     );
     expect(screen.queryByText('Content')).not.toBeInTheDocument();
-    expect(screen.getByRole('status')).toBeInTheDocument();
+    expect(container.querySelector('.ant-spin')).toBeInTheDocument();
   });
 
   it('renders custom fallback when loading is true', () => {
@@ -37,12 +37,12 @@ describe('LoadingWrapper', () => {
   });
 
   it('passes tip to LoadingSpinner', () => {
-    render(
+    const { container } = render(
       <LoadingWrapper loading={true} tip="Loading data...">
         <div>Content</div>
       </LoadingWrapper>
     );
-    expect(screen.getByRole('status')).toBeInTheDocument();
+    expect(container.querySelector('.ant-spin')).toBeInTheDocument();
   });
 
   it('passes size to LoadingSpinner', () => {

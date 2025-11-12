@@ -1,4 +1,12 @@
-import { api, ConfigData } from './api';
+import {
+  api,
+  ConfigData,
+  ConfigHistoryEntry,
+  ConfigFileInfo,
+  ConfigFileContent,
+  ConfigDiagnoseResult,
+  ConfigRepairResult,
+} from './api';
 
 /**
  * Configuration Service
@@ -48,7 +56,7 @@ export const configService = {
   /**
    * Get configuration history
    */
-  async getConfigHistory() {
+  async getConfigHistory(): Promise<ConfigHistoryEntry[]> {
     const response = await api.getConfigHistory();
     return response.data.data;
   },
@@ -56,7 +64,11 @@ export const configService = {
   /**
    * Save configuration to history
    */
-  async saveConfigHistory(name: string, config: Partial<ConfigData>, description?: string) {
+  async saveConfigHistory(
+    name: string,
+    config: Partial<ConfigData>,
+    description?: string
+  ): Promise<ConfigHistoryEntry> {
     const response = await api.saveConfigHistory(name, config, description);
     return response.data.data;
   },
@@ -78,7 +90,7 @@ export const configService = {
   /**
    * List all configuration files
    */
-  async listConfigFiles() {
+  async listConfigFiles(): Promise<ConfigFileInfo[]> {
     const response = await api.listConfigFiles();
     return response.data.data;
   },
@@ -93,7 +105,10 @@ export const configService = {
   /**
    * Import a configuration file
    */
-  async importConfigFile(config: Partial<ConfigData>, name?: string) {
+  async importConfigFile(
+    config: Partial<ConfigData>,
+    name?: string
+  ): Promise<ConfigFileInfo> {
     const response = await api.importConfigFile(config, name);
     return response.data.data;
   },
@@ -108,7 +123,7 @@ export const configService = {
   /**
    * Get configuration file content
    */
-  async getConfigFileContent(filename: string) {
+  async getConfigFileContent(filename: string): Promise<ConfigFileContent> {
     const response = await api.getConfigFileContent(filename);
     return response.data.data;
   },
@@ -123,7 +138,7 @@ export const configService = {
   /**
    * Diagnose configuration
    */
-  async diagnoseConfig() {
+  async diagnoseConfig(): Promise<ConfigDiagnoseResult> {
     const response = await api.diagnoseConfig();
     return response.data.data;
   },
@@ -131,7 +146,7 @@ export const configService = {
   /**
    * Repair configuration
    */
-  async repairConfig(createBackup = true) {
+  async repairConfig(createBackup = true): Promise<ConfigRepairResult> {
     const response = await api.repairConfig(createBackup);
     return response.data.data;
   },

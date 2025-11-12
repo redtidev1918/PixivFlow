@@ -1,4 +1,5 @@
 import { TFunction } from 'i18next';
+import { ApiError, handleApiError } from '../services/api';
 
 /**
  * Translate error code to localized message
@@ -11,7 +12,7 @@ import { TFunction } from 'i18next';
 export function translateErrorCode(
   errorCode: string | undefined,
   t: TFunction,
-  params?: Record<string, any>,
+  params?: Record<string, unknown>,
   fallbackMessage?: string
 ): string {
   if (!errorCode) {
@@ -35,30 +36,28 @@ export function translateErrorCode(
  * @param error - Error object from axios
  * @returns Object with errorCode, message, params, and details
  */
-export function extractErrorInfo(error: any): {
+export interface ExtractedErrorInfo {
   errorCode?: string;
   message?: string;
-  params?: Record<string, any>;
-  details?: any;
-} {
+  params?: Record<string, unknown>;
+  details?: unknown;
+  statusCode?: number;
+}
+
+export function extractErrorInfo(error: unknown): ExtractedErrorInfo {
   if (!error) {
     return {};
   }
 
-  // Check if error has response data
-  if (error.response?.data) {
-    const data = error.response.data;
-    return {
-      errorCode: data.errorCode || data.error,
-      message: data.message,
-      params: data.params,
-      details: data.details,
-    };
-  }
+  const apiError: ApiError = error instanceof ApiError ? error : handleApiError(error);
+  const { code, message, params, details, statusCode } = apiError;
 
-  // Fallback to error message
   return {
-    message: error.message || String(error),
+    errorCode: code,
+    message,
+    params,
+    details,
+    statusCode,
   };
 }
 

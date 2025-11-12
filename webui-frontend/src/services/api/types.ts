@@ -188,6 +188,7 @@ export interface ConfigData {
     configPath?: string;
     configPathRelative?: string;
   };
+  _validation?: Record<string, unknown>;
 }
 
 /**

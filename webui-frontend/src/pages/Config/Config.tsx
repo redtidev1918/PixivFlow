@@ -53,7 +53,10 @@ export default function Config() {
     );
   }
 
-  const currentConfigPath = (config as any)?._meta?.configPathRelative || (config as any)?._meta?.configPath || t('config.unknown');
+  const currentConfigPath =
+    config?._meta?.configPathRelative ??
+    config?._meta?.configPath ??
+    t('config.unknown');
 
   return (
     <div>

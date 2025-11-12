@@ -1,6 +1,12 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { configService } from '../services/configService';
-import { ConfigData } from '../services/api';
+import {
+  ConfigData,
+  ConfigFileInfo,
+  ConfigHistoryEntry,
+  ConfigDiagnoseResult,
+  ConfigRepairResult,
+} from '../services/api';
 import { useErrorHandler } from './useErrorHandler';
 import { QUERY_KEYS } from '../constants';
 
@@ -16,12 +22,12 @@ export function useConfig() {
     isLoading,
     error,
     refetch,
-  } = useQuery({
+  } = useQuery<ConfigData>({
     queryKey: QUERY_KEYS.CONFIG,
     queryFn: () => configService.getConfig(),
   });
 
-  const updateMutation = useMutation({
+  const updateMutation = useMutation<ConfigData, unknown, Partial<ConfigData>>({
     mutationFn: (config: Partial<ConfigData>) => configService.updateConfig(config),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CONFIG });
@@ -29,7 +35,7 @@ export function useConfig() {
     onError: (error) => handleError(error),
   });
 
-  const validateMutation = useMutation({
+  const validateMutation = useMutation<{ valid: boolean; errors?: string[] }, unknown, Partial<ConfigData>>({
     mutationFn: (config: Partial<ConfigData>) => configService.validateConfig(config),
     onError: (error) => handleError(error),
   });
@@ -61,12 +67,12 @@ export function useConfigFiles() {
     isLoading,
     error,
     refetch,
-  } = useQuery({
+  } = useQuery<ConfigFileInfo[]>({
     queryKey: QUERY_KEYS.CONFIG_FILES,
     queryFn: () => configService.listConfigFiles(),
   });
 
-  const switchMutation = useMutation({
+  const switchMutation = useMutation<void, unknown, string>({
     mutationFn: (path: string) => configService.switchConfigFile(path),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CONFIG_FILES });
@@ -75,7 +81,7 @@ export function useConfigFiles() {
     onError: (error) => handleError(error),
   });
 
-  const importMutation = useMutation({
+  const importMutation = useMutation<ConfigFileInfo, unknown, { config: Partial<ConfigData>; name?: string }>({
     mutationFn: ({ config, name }: { config: Partial<ConfigData>; name?: string }) =>
       configService.importConfigFile(config, name),
     onSuccess: () => {
@@ -84,7 +90,7 @@ export function useConfigFiles() {
     onError: (error) => handleError(error),
   });
 
-  const deleteMutation = useMutation({
+  const deleteMutation = useMutation<void, unknown, string>({
     mutationFn: (filename: string) => configService.deleteConfigFile(filename),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CONFIG_FILES });
@@ -121,12 +127,16 @@ export function useConfigHistory() {
     isLoading,
     error,
     refetch,
-  } = useQuery({
+  } = useQuery<ConfigHistoryEntry[]>({
     queryKey: QUERY_KEYS.CONFIG_HISTORY,
     queryFn: () => configService.getConfigHistory(),
   });
 
-  const saveMutation = useMutation({
+  const saveMutation = useMutation<
+    ConfigHistoryEntry,
+    unknown,
+    { name: string; config: Partial<ConfigData>; description?: string }
+  >({
     mutationFn: ({
       name,
       config,
@@ -142,7 +152,7 @@ export function useConfigHistory() {
     onError: (error) => handleError(error),
   });
 
-  const applyMutation = useMutation({
+  const applyMutation = useMutation<void, unknown, number>({
     mutationFn: (id: number) => configService.applyConfigHistory(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CONFIG_HISTORY });
@@ -151,7 +161,7 @@ export function useConfigHistory() {
     onError: (error) => handleError(error),
   });
 
-  const deleteMutation = useMutation({
+  const deleteMutation = useMutation<void, unknown, number>({
     mutationFn: (id: number) => configService.deleteConfigHistory(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CONFIG_HISTORY });
@@ -182,18 +192,18 @@ export function useConfigHistory() {
 export function useConfigValidation() {
   const { handleError } = useErrorHandler();
 
-  const validateMutation = useMutation({
+  const validateMutation = useMutation<{ valid: boolean; errors?: string[] }, unknown, Partial<ConfigData>>({
     mutationFn: (config: Partial<ConfigData>) => configService.validateConfig(config),
     onError: (error) => handleError(error),
   });
 
-  const diagnoseQuery = useQuery({
+  const diagnoseQuery = useQuery<ConfigDiagnoseResult>({
     queryKey: QUERY_KEYS.CONFIG_DIAGNOSE,
     queryFn: () => configService.diagnoseConfig(),
     enabled: false, // Only run when explicitly called
   });
 
-  const repairMutation = useMutation({
+  const repairMutation = useMutation<ConfigRepairResult, unknown, boolean | undefined>({
     mutationFn: (createBackup: boolean = true) => configService.repairConfig(createBackup),
     onError: (error) => handleError(error),
   });

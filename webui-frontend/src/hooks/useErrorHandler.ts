@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { message } from 'antd';
-import { normalizeError, ErrorCode } from '../types/errors';
+import { ApiError, handleApiError } from '../services/api';
 import { translateErrorCode } from '../utils/errorCodeTranslator';
 
 /**
@@ -10,24 +10,42 @@ import { translateErrorCode } from '../utils/errorCodeTranslator';
 export function useErrorHandler() {
   const { t } = useTranslation();
 
-  const handleError = useCallback(
-    (error: unknown, customMessage?: string) => {
-      const appError = normalizeError(error);
-      let errorMessage = customMessage;
-
-      if (!errorMessage) {
-        // Try to translate error code
-        if (appError.code !== ErrorCode.UNKNOWN_ERROR) {
-          errorMessage = translateErrorCode(appError.code, t, undefined, appError.message);
-        } else {
-          errorMessage = appError.message || t('common.error.unknown');
-        }
+  const resolveErrorMessage = useCallback(
+    (apiError: ApiError, customMessage?: string) => {
+      if (customMessage) {
+        return customMessage;
       }
 
-      message.error(errorMessage);
-      return appError;
+      const translatedMessage = translateErrorCode(
+        apiError.code,
+        t,
+        apiError.params,
+        apiError.message
+      );
+
+      if (translatedMessage) {
+        return translatedMessage;
+      }
+
+      return apiError.message || t('common.error.unknown');
     },
     [t]
+  );
+
+  const handleError = useCallback(
+    (error: unknown, customMessage?: string) => {
+      const apiError = error instanceof ApiError ? error : handleApiError(error);
+      const errorMessage = resolveErrorMessage(apiError, customMessage);
+
+      message.error(errorMessage);
+
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('[PixivFlow] API Error:', apiError);
+      }
+
+      return apiError;
+    },
+    [resolveErrorMessage]
   );
 
   const handleSuccess = useCallback((msg: string) => {

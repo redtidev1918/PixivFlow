@@ -1,10 +1,12 @@
 import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
 import { setupRequestInterceptor, setupResponseInterceptor } from './interceptors';
 
+/* eslint-disable no-var */
 // Declare global type for test environment
 declare global {
   var __VITE_ENV__: Record<string, string | undefined> | undefined;
 }
+/* eslint-enable no-var */
 
 /**
  * Get environment variable value

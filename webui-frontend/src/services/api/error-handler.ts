@@ -9,13 +9,15 @@ export class ApiError extends Error {
   public readonly statusCode?: number;
   public readonly details?: unknown;
   public readonly originalError?: unknown;
+  public readonly params?: Record<string, unknown>;
 
   constructor(
     code: string,
     message: string,
     statusCode?: number,
     details?: unknown,
-    originalError?: unknown
+    originalError?: unknown,
+    params?: Record<string, unknown>
   ) {
     super(message);
     this.name = 'ApiError';
@@ -23,6 +25,7 @@ export class ApiError extends Error {
     this.statusCode = statusCode;
     this.details = details;
     this.originalError = originalError;
+    this.params = params;
 
     // Maintains proper stack trace for where our error was thrown (only available on V8)
     if (Error.captureStackTrace) {
@@ -81,6 +84,8 @@ export class ApiError extends Error {
     return {
       code: this.code as ErrorCode,
       message: this.message,
+      statusCode: this.statusCode,
+      params: this.params,
       details: this.details,
       originalError: this.originalError,
     };
@@ -107,13 +112,15 @@ export function handleApiError(error: unknown): ApiError {
       const errorCode = response.data?.errorCode || getErrorCodeFromStatus(response.status);
       const message = response.data?.message || response.statusText || 'An error occurred';
       const details = response.data?.details;
+      const params = response.data?.params;
 
       return new ApiError(
         errorCode,
         message,
         response.status,
         details,
-        axiosError
+        axiosError,
+        params
       );
     }
 
@@ -150,9 +157,10 @@ export function handleApiError(error: unknown): ApiError {
   return new ApiError(
     appError.code,
     appError.message,
-    undefined,
+    appError.statusCode,
     appError.details,
-    appError.originalError
+    appError.originalError,
+    appError.params
   );
 }
 

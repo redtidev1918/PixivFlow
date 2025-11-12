@@ -10,8 +10,7 @@
  * 
  * 2. 运行通用下载命令：
  *    pixivflow download
- *    或
- *    npm run download
+ *    (如果有源码，也可以使用: npm run download)
  * 
  * 这样做的好处：
  * - 不需要单独的脚本

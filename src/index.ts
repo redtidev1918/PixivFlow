@@ -14,6 +14,7 @@ import { ArgumentParser } from './cli/ArgumentParser';
 import { getConfigPath as getConfigPathUtil } from './config';
 import { updateConfigWithToken } from './utils/login-helper';
 import { generateDefaultConfig } from './config/defaults';
+import { AuthenticationError } from './utils/errors';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
@@ -213,23 +214,45 @@ async function bootstrap() {
     }
 
     const runJob = async () => {
-      // Apply initial delay if configured
-      if (resolvedConfig.initialDelay && resolvedConfig.initialDelay > 0) {
-        logger.info(`Waiting ${resolvedConfig.initialDelay}ms before starting download...`);
-        await new Promise(resolve => setTimeout(resolve, resolvedConfig.initialDelay!));
+      try {
+        // Apply initial delay if configured
+        if (resolvedConfig.initialDelay && resolvedConfig.initialDelay > 0) {
+          logger.info(`Waiting ${resolvedConfig.initialDelay}ms before starting download...`);
+          await new Promise(resolve => setTimeout(resolve, resolvedConfig.initialDelay!));
+        }
+        
+        logger.info('='.repeat(60));
+        logger.info('Starting Pixiv download job');
+        logger.info('='.repeat(60));
+        
+        const startTime = Date.now();
+        await downloadManager.runAllTargets();
+        const duration = Math.round((Date.now() - startTime) / 1000);
+        
+        logger.info('='.repeat(60));
+        logger.info(`Pixiv download job finished (took ${duration}s)`);
+        logger.info('='.repeat(60));
+      } catch (error) {
+        // Handle authentication errors during download
+        if (error instanceof AuthenticationError) {
+          console.error('\n❌ Authentication Error During Download');
+          console.error('════════════════════════════════════════════════════════════════');
+          console.error(error.message);
+          console.error('');
+          console.error('💡 Your refresh token has expired or is invalid.');
+          console.error('   Please login again to get a new refresh token:');
+          console.error('');
+          console.error('   • Interactive login:  pixivflow login');
+          console.error('   • (If you have source code: npm run login)');
+          console.error('');
+          console.error('════════════════════════════════════════════════════════════════\n');
+          logger.error('Authentication failed during download', {
+            error: error.message,
+          });
+          throw error; // Re-throw to be handled by outer catch
+        }
+        throw error; // Re-throw other errors
       }
-      
-      logger.info('='.repeat(60));
-      logger.info('Starting Pixiv download job');
-      logger.info('='.repeat(60));
-      
-      const startTime = Date.now();
-      await downloadManager.runAllTargets();
-      const duration = Math.round((Date.now() - startTime) / 1000);
-      
-      logger.info('='.repeat(60));
-      logger.info(`Pixiv download job finished (took ${duration}s)`);
-      logger.info('='.repeat(60));
     };
 
     const runOnce = !!(parsedArgs.options.once || process.argv.includes('--once'));
@@ -262,6 +285,25 @@ async function bootstrap() {
     process.on('SIGINT', cleanup);
     process.on('SIGTERM', cleanup);
   } catch (error) {
+    // Handle authentication errors with friendly user guidance
+    if (error instanceof AuthenticationError) {
+      console.error('\n❌ Authentication Error');
+      console.error('════════════════════════════════════════════════════════════════');
+      console.error(error.message);
+      console.error('');
+      console.error('💡 Your refresh token has expired or is invalid.');
+      console.error('   Please login again to get a new refresh token:');
+      console.error('');
+      console.error('   • Interactive login:  pixivflow login');
+      console.error('   • (If you have source code: npm run login)');
+      console.error('');
+      console.error('════════════════════════════════════════════════════════════════\n');
+      logger.error('Authentication failed - refresh token expired or invalid', {
+        error: error.message,
+      });
+      process.exit(1);
+    }
+    
     logger.error('Fatal error while starting PixivFlow', {
       error: error instanceof Error ? error.stack ?? error.message : String(error),
     });

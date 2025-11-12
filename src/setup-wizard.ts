@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { resolve, join } from 'node:path';
 import * as readline from 'node:readline';
 
 import { StandaloneConfig } from './config';
 import { TerminalLogin, LoginInfo } from './terminal-login';
+import { getConfigManager } from './utils/config-manager';
+import { getConfigDirectory } from './utils/project-root';
 
 const PIXIV_CLIENT_ID = 'MOBrBDS8blbauoSck0ZfDbtuzpyT';
 const PIXIV_CLIENT_SECRET = 'lsACyCD94FhDUtGTXi3QzcFE2uU1hqtDaKeqrdwj';
@@ -213,8 +215,18 @@ export class SetupWizard {
       console.log('💾 Saving Configuration');
       console.log('════════════════════════════════════════════════════════════════\n');
 
-      const outputPath = resolve('config/standalone.config.json');
+      // Use ConfigManager to ensure we save to the correct location
+      // This ensures the config is saved to the same location that the program will read from
+      const configManager = getConfigManager();
+      const configDir = configManager.getConfigDir();
+      const outputPath = join(configDir, 'standalone.config.json');
+      
       this.saveConfig(config, outputPath);
+      
+      // Update .current-config to point to the newly saved config
+      // This ensures the program will read this config file
+      configManager.setCurrentConfigFile(outputPath);
+      console.log(`✓ Set as active configuration file`);
 
       console.log('\n════════════════════════════════════════════════════════════════');
       console.log('✅ Configuration Complete!');
@@ -226,11 +238,18 @@ export class SetupWizard {
       displayInitializationInfo(dirInfo);
       
       console.log('You can now use the following commands to start the downloader:\n');
-      console.log('  • Run once:     npm run download');
-      console.log('  • Scheduled:    npm run standalone:run');
-      console.log('  • View dirs:    pixivflow dirs\n');
-      console.log('Configuration file: config/standalone.config.json');
-      console.log('You can edit this file anytime to modify the configuration.\n');
+      console.log('  • Run once:     pixivflow download');
+      console.log('  • Scheduled:    pixivflow scheduler');
+      console.log('  • View dirs:    pixivflow dirs');
+      console.log('  • Login again:  pixivflow login  (if refresh token expires)\n');
+      console.log('💡 Tip: If you have the source code, you can also use:');
+      console.log('     npm run download  (for one-time download)');
+      console.log('     npm run standalone:run  (for scheduled tasks)\n');
+      console.log('   However, we recommend installing the global command:');
+      console.log('     npm install -g .  (from project root)\n');
+      console.log(`Configuration file: ${outputPath}`);
+      console.log('You can edit this file anytime to modify the configuration.');
+      console.log('\n💡 Note: If you see authentication errors, run "pixivflow login" to refresh your token.\n');
 
       this.rl.close();
       // Don't exit if called from command system

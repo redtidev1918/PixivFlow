@@ -80,7 +80,7 @@ export function loadConfig(configPath?: string, skipValidation: boolean = false)
       throw new ConfigError(
         `Configuration file not found at ${resolvedPath}\n` +
         `Please create a configuration file or set PIXIV_DOWNLOADER_CONFIG environment variable.\n` +
-        `You can use the setup wizard: npm run setup`
+        `You can use the setup wizard: pixivflow setup  (or: npm run setup if you have source code)`
       );
     }
   }

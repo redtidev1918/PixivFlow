@@ -9,6 +9,7 @@ import { join, resolve } from 'path';
 import { Database } from '../storage/Database';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { getConfigPath } from '../config';
 
 const execAsync = promisify(exec);
 
@@ -331,7 +332,8 @@ export class MaintainCommand extends BaseCommand {
     }
 
     // Check config file
-    const configPath = resolve('config/standalone.config.json');
+    // Use getConfigPath to ensure we use the same config path resolution logic
+    const configPath = getConfigPath();
     if (existsSync(configPath)) {
       try {
         chmodSync(configPath, 0o644);

@@ -7,6 +7,7 @@ import { BaseCommand } from './Command';
 import { CommandContext, CommandArgs, CommandResult } from './types';
 import { TerminalLogin, LoginInfo } from '../terminal-login';
 import { updateConfigWithToken } from '../utils/login-helper';
+import { getConfigPath } from '../config';
 
 /**
  * Output login result
@@ -71,9 +72,8 @@ export class LoginCommand extends BaseCommand {
       });
 
       // Try to update config file with refresh token
-      const finalConfigPath = configPath || 
-        process.env.PIXIV_DOWNLOADER_CONFIG || 
-        path.resolve('config/standalone.config.json');
+      // Use getConfigPath to ensure we use the same config path resolution logic
+      const finalConfigPath = configPath || getConfigPath();
       
       try {
         await updateConfigWithToken(finalConfigPath, loginInfo.refresh_token);
@@ -110,6 +110,8 @@ Examples:
   pixivflow login -u user@example.com -p password  # Headless login`;
   }
 }
+
+
 
 
 

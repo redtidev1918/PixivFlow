@@ -157,29 +157,52 @@ export function applyEnvironmentOverrides(config: Partial<StandaloneConfig>): Pa
 
 /**
  * Detect if running in Docker container
+ * Uses multiple detection methods for reliability
  */
 export function isRunningInDocker(): boolean {
-  // Method 1: Check for .dockerenv file (most reliable)
+  // Method 1: Check for .dockerenv file (most reliable, Docker standard)
   if (existsSync('/.dockerenv')) {
     return true;
   }
 
-  // Method 2: Check cgroup (Linux)
+  // Method 2: Check cgroup (Linux containers)
   try {
     if (existsSync('/proc/self/cgroup')) {
       const cgroup = readFileSync('/proc/self/cgroup', 'utf-8');
-      if (cgroup.includes('docker') || cgroup.includes('containerd')) {
+      if (cgroup.includes('docker') || 
+          cgroup.includes('containerd') || 
+          cgroup.includes('kubepods')) {
         return true;
       }
     }
   } catch {
-    // Ignore errors
+    // Ignore errors (file may not exist on non-Linux systems)
   }
 
-  // Method 3: Check environment variable (set by docker-compose.yml)
-  if (process.env.PIXIV_SKIP_AUTO_LOGIN === 'true' && process.env.NODE_ENV === 'production') {
-    // This is a hint but not definitive
-    // We'll use it as a secondary check
+  // Method 3: Check container environment variable
+  // Docker sets this automatically, but it's not always reliable
+  if (process.env.container === 'docker') {
+    return true;
+  }
+
+  // Method 4: Check for Docker-specific environment hints
+  // This is a hint but not definitive - used as secondary check
+  if (process.env.PIXIV_SKIP_AUTO_LOGIN === 'true' && 
+      process.env.NODE_ENV === 'production' &&
+      !process.env.CI) { // Exclude CI environments
+    // Additional check: verify we're in a container-like environment
+    // by checking if we have limited access to host filesystem
+    try {
+      // In Docker, /proc/1/sched typically shows container init process
+      if (existsSync('/proc/1/sched')) {
+        const sched = readFileSync('/proc/1/sched', 'utf-8');
+        if (sched.includes('docker-init') || sched.includes('containerd-shim')) {
+          return true;
+        }
+      }
+    } catch {
+      // Ignore errors
+    }
   }
 
   return false;

@@ -94,6 +94,8 @@ function fixStoragePath(
 
   // Fix path issues first (duplication, concatenation errors)
   let pathToCheck = currentPath;
+  
+  // Fix absolute paths
   if (isAbsolute(currentPath)) {
     const fixed = fixPathIssues(currentPath, resolvedProjectRoot);
     if (fixed !== currentPath) {
@@ -107,11 +109,38 @@ function fixStoragePath(
       });
       pathToCheck = fixed;
     }
+  } else {
+    // Fix relative path duplication (e.g., ./downloads/downloads)
+    const fixedRelative = fixRelativePathDuplication(currentPath);
+    if (fixedRelative !== currentPath) {
+      storage[fieldName] = fixedRelative;
+      result.fixed = true;
+      result.changes.push({
+        field: fieldName,
+        oldPath: currentPath,
+        newPath: fixedRelative,
+        reason: 'Fixed relative path duplication',
+      });
+      pathToCheck = fixedRelative;
+    }
   }
 
   const resolved = isAbsolute(pathToCheck)
     ? pathToCheck
     : resolve(resolvedProjectRoot, pathToCheck);
+  
+  // If absolute path exists but is outside project root, use default path
+  if (isAbsolute(pathToCheck) && !resolved.startsWith(resolvedProjectRoot)) {
+    storage[fieldName] = defaultRelativePath;
+    result.fixed = true;
+    result.changes.push({
+      field: fieldName,
+      oldPath: pathToCheck,
+      newPath: defaultRelativePath,
+      reason: 'Absolute path outside project root, using default path',
+    });
+    return;
+  }
   
   if (!existsSync(resolved)) {
     fixNonExistentPath(
@@ -149,6 +178,19 @@ function fixNonExistentPath(
   resolvedProjectRoot: string,
   result: { fixed: boolean; changes: PathMigrationResult['changes'] }
 ): void {
+  // If absolute path is outside project root, use default path
+  if (isAbsolute(currentPath) && !resolved.startsWith(resolvedProjectRoot)) {
+    storage[fieldName] = defaultRelativePath;
+    result.fixed = true;
+    result.changes.push({
+      field: fieldName,
+      oldPath: currentPath,
+      newPath: defaultRelativePath,
+      reason: 'Absolute path outside project root, using default path',
+    });
+    return;
+  }
+
   // Try default path
   const defaultPath = resolve(resolvedProjectRoot, defaultPathSegment);
   if (existsSync(defaultPath)) {
@@ -241,15 +283,28 @@ function fixDerivedStoragePath(
       });
       return;
     }
+  } else {
+    // Fix relative path duplication
+    fixedPath = fixRelativePathDuplication(currentPath);
+    if (fixedPath !== currentPath) {
+      storage[fieldName] = fixedPath;
+      result.fixed = true;
+      result.changes.push({
+        field: fieldName,
+        oldPath: currentPath,
+        newPath: fixedPath,
+        reason: 'Fixed relative path duplication',
+      });
+    }
   }
 
   // Check if path is outside download directory (should be relative to it)
-  const resolvedCurrent = isAbsolute(currentPath)
-    ? currentPath
-    : resolve(resolvedProjectRoot, currentPath);
+  const resolvedCurrent = isAbsolute(fixedPath)
+    ? fixedPath
+    : resolve(resolvedProjectRoot, fixedPath);
 
   // If absolute path is outside download directory, make it relative
-  if (isAbsolute(currentPath) && !resolvedCurrent.startsWith(resolvedDownloadDir)) {
+  if (isAbsolute(fixedPath) && !resolvedCurrent.startsWith(resolvedDownloadDir)) {
     // Try to make it relative to download directory
     try {
       const relativeToDownload = relative(resolvedDownloadDir, resolvedCurrent);
@@ -272,7 +327,7 @@ function fixDerivedStoragePath(
   }
 
   // If path doesn't exist and is absolute, try converting to relative
-  if (isAbsolute(currentPath) && !existsSync(resolvedCurrent)) {
+  if (isAbsolute(fixedPath) && !existsSync(resolvedCurrent)) {
     const relativePath = relative(resolvedProjectRoot, resolvedCurrent);
     if (relativePath.startsWith('..') || relativePath.includes('..')) {
       // Path is outside project root, use default
@@ -286,11 +341,45 @@ function fixDerivedStoragePath(
         reason: 'Path outside project root, using default',
       });
     } else {
-      fixAbsolutePathToRelative(storage, fieldName, currentPath, resolvedCurrent, resolvedProjectRoot, result);
+      fixAbsolutePathToRelative(storage, fieldName, fixedPath, resolvedCurrent, resolvedProjectRoot, result);
     }
-  } else if (isAbsolute(currentPath)) {
-    fixAbsolutePathToRelative(storage, fieldName, currentPath, resolvedCurrent, resolvedProjectRoot, result);
+  } else if (isAbsolute(fixedPath)) {
+    fixAbsolutePathToRelative(storage, fieldName, fixedPath, resolvedCurrent, resolvedProjectRoot, result);
   }
+}
+
+/**
+ * Fix relative path duplication (e.g., ./downloads/downloads, downloads/downloads)
+ */
+function fixRelativePathDuplication(relativePath: string): string {
+  // Remove leading './' for easier pattern matching
+  let normalized = relativePath.replace(/^\.\//, '');
+  
+  // Fix duplication patterns in relative paths
+  const duplicationPatterns = [
+    { pattern: /^downloads\/downloads(\/|$)/, replacement: 'downloads$1' },
+    { pattern: /^data\/data(\/|$)/, replacement: 'data$1' },
+    { pattern: /^illustrations\/illustrations(\/|$)/, replacement: 'illustrations$1' },
+    { pattern: /^novels\/novels(\/|$)/, replacement: 'novels$1' },
+    // Fix nested duplication (e.g., downloads/downloads/illustrations/illustrations)
+    { pattern: /\/downloads\/downloads(\/|$)/, replacement: '/downloads$1' },
+    { pattern: /\/data\/data(\/|$)/, replacement: '/data$1' },
+    { pattern: /\/illustrations\/illustrations(\/|$)/, replacement: '/illustrations$1' },
+    { pattern: /\/novels\/novels(\/|$)/, replacement: '/novels$1' },
+  ];
+  
+  for (const { pattern, replacement } of duplicationPatterns) {
+    if (pattern.test(normalized)) {
+      normalized = normalized.replace(pattern, replacement);
+    }
+  }
+  
+  // Restore leading './' if original had it
+  if (relativePath.startsWith('./') && !normalized.startsWith('./')) {
+    normalized = './' + normalized;
+  }
+  
+  return normalized;
 }
 
 /**

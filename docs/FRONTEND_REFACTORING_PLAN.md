@@ -1006,7 +1006,7 @@ Component Update
 - [x] Phase 1: 基础设施完善 (100%) ✅
 - [x] Phase 2: 通用组件库建设 (100%) ✅
 - [x] Phase 3: 业务逻辑提取 (100%) ✅
-- [ ] Phase 4: 页面组件重构 (0%)
+- [ ] Phase 4: 页面组件重构 (28% - Config 和 Download 页面已完成)
 - [ ] Phase 5: 状态管理优化 (0%)
 - [ ] Phase 6: 测试完善 (0%)
 - [ ] Phase 7: 文档和优化 (0%)
@@ -1077,8 +1077,15 @@ Component Update
 
 #### Phase 4: 页面组件重构
 
-- [ ] 重构 Config 页面
-- [ ] 重构 Download 页面
+- [x] 重构 Config 页面 ✅
+  - [x] 拆分为多个子组件（ConfigFilesManager, ConfigHistoryManager, ConfigJsonEditor, BasicConfigForm, NetworkConfigForm, StorageConfigForm, SchedulerConfigForm, DownloadConfigForm, TargetsConfigForm, TargetModal）
+  - [x] 使用通用组件（FormSection, CodeEditor）
+  - [x] 使用自定义 Hooks（useConfig, useConfigFiles, useConfigHistory）
+  - [x] 主组件从 1792 行减少到 400 行
+- [x] 重构 Download 页面 ✅
+  - [x] 拆分为多个子组件（TaskStatistics, TaskActions, ActiveTaskCard, TaskLogsViewer, IncompleteTasksTable, TaskHistoryTable, StartDownloadModal）
+  - [x] 使用自定义 Hooks（useDownload, useDownloadStatus, useDownloadLogs, useIncompleteTasks）
+  - [x] 主组件从 887 行减少到 260 行
 - [ ] 重构 Files 页面
 - [ ] 重构其他页面
 - [ ] 优化 Layout 组件

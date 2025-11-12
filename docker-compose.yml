@@ -1,4 +1,6 @@
+# ============================================================================
 # PixivFlow Docker Compose 配置
+# ============================================================================
 # 
 # 本文件定义了两个服务：
 # 1. pixivflow - 定时任务服务（自动执行下载任务）
@@ -11,58 +13,71 @@
 # - 查看日志：docker-compose logs -f pixivflow
 # - 停止服务：docker-compose down
 #
-# 详细文档：docs/docker/DOCKER.md
+# 详细文档：docs/DOCKER.md
+#
+# 环境变量配置：
+# 1. 复制 docker-env.example 为 .env: cp docker-env.example .env
+# 2. 编辑 .env 文件，配置代理等参数
+# 3. docker-compose 会自动读取 .env 文件
+# ============================================================================
+
+version: '3.8'
 
 services:
+  # ============================================================================
   # 定时任务服务
   # 功能：自动执行定时下载任务，后台持续运行
+  # ============================================================================
   pixivflow:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        - BUILDKIT_INLINE_CACHE=1
+    image: pixivflow:latest
     container_name: pixivflow
     restart: unless-stopped
     
     # 环境变量
+    env_file:
+      - .env
     environment:
       - NODE_ENV=production
-      - TZ=Asia/Shanghai
+      - TZ=${TZ:-Asia/Shanghai}
       # 跳过容器内自动登录（容器内无法进行交互式登录）
       - PIXIV_SKIP_AUTO_LOGIN=true
       # Docker 容器内路径配置
-      - PIXIV_DATABASE_PATH=/app/data/pixiv-downloader.db
-      - PIXIV_DOWNLOAD_DIR=/app/downloads
-      - PIXIV_ILLUSTRATION_DIR=/app/downloads/downloads/illustrations
-      - PIXIV_NOVEL_DIR=/app/downloads/downloads/novels
-      # 代理设置（使用本机代理）
-      # 注意：macOS 上的 Docker Desktop 不支持 host 网络模式
-      # 如果代理只监听在 127.0.0.1，需要使用其他方法（如端口转发或让代理监听在 0.0.0.0）
-      # 临时方案：使用配置文件中的代理设置
-      # - HTTP_PROXY=http://127.0.0.1:6152
-      # - HTTPS_PROXY=http://127.0.0.1:6152
-      # 支持 HTTP/HTTPS/SOCKS5 代理（SOCKS5 通过 socks-proxy-agent 支持）
-      # - ALL_PROXY=socks5://host.docker.internal:6153
-      # 如果代理在局域网其他机器，直接使用 IP 地址：
-      # - HTTP_PROXY=http://192.168.1.100:7890
+      - PIXIV_DATABASE_PATH=${PIXIV_DATABASE_PATH:-/app/data/pixiv-downloader.db}
+      - PIXIV_DOWNLOAD_DIR=${PIXIV_DOWNLOAD_DIR:-/app/downloads}
+      - PIXIV_ILLUSTRATION_DIR=${PIXIV_ILLUSTRATION_DIR:-/app/downloads/illustrations}
+      - PIXIV_NOVEL_DIR=${PIXIV_NOVEL_DIR:-/app/downloads/novels}
+      # 日志级别
+      - PIXIV_LOG_LEVEL=${PIXIV_LOG_LEVEL:-info}
+      # 调度器配置
+      - PIXIV_SCHEDULER_ENABLED=${PIXIV_SCHEDULER_ENABLED:-true}
+      # 代理配置（从环境变量或 .env 文件读取）
+      - HTTP_PROXY=${HTTP_PROXY:-}
+      - HTTPS_PROXY=${HTTPS_PROXY:-}
+      - ALL_PROXY=${ALL_PROXY:-}
+      - http_proxy=${http_proxy:-}
+      - https_proxy=${https_proxy:-}
+      - all_proxy=${all_proxy:-}
     
     # 数据持久化
     volumes:
       # 配置文件目录
-      - ./config:/app/config
+      - ./config:/app/config:ro
       # 数据目录（数据库和日志）
       - ./data:/app/data
       # 下载目录
       - ./downloads:/app/downloads
     
     # 网络配置
-    # 注意：macOS 上的 Docker Desktop 不支持 host 网络模式
-    # 如果代理只监听在 127.0.0.1，容器无法直接访问
-    # 解决方案：在配置文件中启用代理配置，或让代理监听在 0.0.0.0
     network_mode: bridge
     extra_hosts:
       - "host.docker.internal:host-gateway"
     
-    # 资源限制（可选）
+    # 资源限制（可选，根据需要取消注释）
     # deploy:
     #   resources:
     #     limits:
@@ -80,71 +95,95 @@ services:
       retries: 3
       start_period: 40s
 
+  # ============================================================================
   # WebUI 服务（可选）
   # 功能：提供现代化的 Web 管理界面
   # 访问地址：http://localhost:3000
   # 功能包括：文件浏览、统计查看、任务管理、实时日志等
-  # 
-  # 注意：
-  # - WebUI 服务与定时任务服务共享配置、数据和下载目录
-  # - 可以独立运行 WebUI 服务，不运行定时任务服务
-  # - 前端静态文件已内置在镜像中，无需单独构建
+  # ============================================================================
   pixivflow-webui:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        - BUILDKIT_INLINE_CACHE=1
+    image: pixivflow:latest
     container_name: pixivflow-webui
     restart: unless-stopped
+    
     # 启动 WebUI 服务器
     command: node dist/webui/index.js
     
+    # 环境变量
+    env_file:
+      - .env
     environment:
       - NODE_ENV=production
-      - TZ=Asia/Shanghai
+      - TZ=${TZ:-Asia/Shanghai}
       # WebUI 服务器配置
-      - PORT=3000                    # WebUI 端口（容器内）
-      - HOST=0.0.0.0                 # 监听所有网络接口
-      - STATIC_PATH=/app/webui-frontend/dist  # 前端静态文件路径
+      - PORT=${WEBUI_PORT:-3000}
+      - HOST=0.0.0.0
+      - STATIC_PATH=/app/webui-frontend/dist
       # Docker 容器内路径配置（必须使用容器内路径）
-      - PIXIV_DATABASE_PATH=/app/data/pixiv-downloader.db
-      - PIXIV_DOWNLOAD_DIR=/app/downloads
-      - PIXIV_ILLUSTRATION_DIR=/app/downloads/downloads/illustrations
-      - PIXIV_NOVEL_DIR=/app/downloads/downloads/novels
-      # 代理设置（使用本机代理）
-      # 注意：如果代理只监听在 127.0.0.1，需要使用 host.docker.internal
-      # macOS/Windows: 使用 host.docker.internal
-      # Linux: 可以使用 172.17.0.1 或 host.docker.internal
-      - HTTP_PROXY=http://127.0.0.1:6152
-      - HTTPS_PROXY=http://127.0.0.1:6152
-      # 支持 HTTP/HTTPS/SOCKS5 代理（SOCKS5 通过 socks-proxy-agent 支持）
-      # - ALL_PROXY=socks5://host.docker.internal:6153
-      # 如果代理在局域网其他机器，直接使用 IP 地址：
-      # - HTTP_PROXY=http://192.168.1.100:7890
-      # - HTTPS_PROXY=http://192.168.1.100:7890
+      - PIXIV_DATABASE_PATH=${PIXIV_DATABASE_PATH:-/app/data/pixiv-downloader.db}
+      - PIXIV_DOWNLOAD_DIR=${PIXIV_DOWNLOAD_DIR:-/app/downloads}
+      - PIXIV_ILLUSTRATION_DIR=${PIXIV_ILLUSTRATION_DIR:-/app/downloads/illustrations}
+      - PIXIV_NOVEL_DIR=${PIXIV_NOVEL_DIR:-/app/downloads/novels}
+      # 日志级别
+      - PIXIV_LOG_LEVEL=${PIXIV_LOG_LEVEL:-info}
+      # 代理配置（从环境变量或 .env 文件读取）
+      - HTTP_PROXY=${HTTP_PROXY:-}
+      - HTTPS_PROXY=${HTTPS_PROXY:-}
+      - ALL_PROXY=${ALL_PROXY:-}
+      - http_proxy=${http_proxy:-}
+      - https_proxy=${https_proxy:-}
+      - all_proxy=${all_proxy:-}
     
     # 数据持久化（与定时任务服务共享）
     volumes:
-      - ./config:/app/config          # 配置文件目录
-      - ./data:/app/data              # 数据库和日志文件
-      - ./downloads:/app/downloads    # 下载的作品文件
+      - ./config:/app/config:ro
+      - ./data:/app/data
+      - ./downloads:/app/downloads
     
     # 网络配置
-    # 注意：macOS 上的 Docker Desktop 不支持 host 网络模式
-    # 如果代理只监听在 127.0.0.1，容器无法直接访问
-    # 解决方案：使用 host.docker.internal 或让代理监听在 0.0.0.0
     network_mode: bridge
     extra_hosts:
-      - "host.docker.internal:host-gateway"  # 允许容器访问宿主机
+      - "host.docker.internal:host-gateway"
     
     # 端口映射
     # 格式：宿主机端口:容器内端口
     # 修改宿主机端口：将 "3000" 改为其他端口，如 "8080:3000"
     ports:
-      - "3000:3000"  # 访问地址：http://localhost:3000
+      - "${WEBUI_PORT:-3000}:3000"
     
     # 依赖关系
     # WebUI 服务依赖于定时任务服务（共享数据）
-    # 如果只需要 WebUI，可以注释掉这个依赖，并注释掉上面的 pixivflow 服务
+    # 如果只需要 WebUI，可以注释掉这个依赖
     depends_on:
-      - pixivflow
+      pixivflow:
+        condition: service_healthy
+    
+    # 健康检查
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/health", "||", "exit", "1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
+# ============================================================================
+# 网络配置（可选）
+# ============================================================================
+# networks:
+#   default:
+#     name: pixivflow-network
+#     driver: bridge
+
+# ============================================================================
+# 卷配置（可选，用于数据持久化）
+# ============================================================================
+# volumes:
+#   pixivflow_data:
+#     driver: local
+#   pixivflow_downloads:
+#     driver: local

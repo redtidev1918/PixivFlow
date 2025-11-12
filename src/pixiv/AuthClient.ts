@@ -6,6 +6,7 @@ import { logger } from '../logger';
 import { AccessTokenStore, Database } from '../storage/Database';
 import { updateConfigWithToken } from '../utils/login-helper';
 import { saveTokenToStorage } from '../utils/token-manager';
+import { AuthenticationError } from '../utils/errors';
 
 interface RefreshTokenResponse {
   access_token: string;
@@ -77,6 +78,11 @@ export class PixivAuth {
           });
 
           if (!response.ok) {
+            // Check for authentication errors (401, 403) which indicate refresh token is invalid/expired
+            if (response.status === 401 || response.status === 403) {
+              const errorMessage = `Refresh token is invalid or expired (HTTP ${response.status}). Please login again.`;
+              throw new AuthenticationError(errorMessage);
+            }
             throw new Error(`Failed to refresh token: ${response.status} ${response.statusText}`);
           }
 
@@ -127,9 +133,18 @@ export class PixivAuth {
         }
       } catch (error) {
         lastError = error;
+        // If it's an authentication error, don't retry - the token is definitely invalid
+        if (error instanceof AuthenticationError) {
+          throw error;
+        }
         logger.warn('Refresh token attempt failed', { attempt: attempt + 1, error: `${error}` });
         await delay(Math.min(1000 * (attempt + 1), 5000));
       }
+    }
+
+    // Check if the last error was an authentication error
+    if (lastError instanceof AuthenticationError) {
+      throw lastError;
     }
 
     throw new Error(`Unable to refresh Pixiv token after ${this.network.retries} attempts: ${lastError}`);

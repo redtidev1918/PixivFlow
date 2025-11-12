@@ -6,7 +6,7 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { TerminalLogin, LoginInfo } from '../terminal-login';
-import { loadConfig, StandaloneConfig } from '../config';
+import { loadConfig, StandaloneConfig, getConfigPath } from '../config';
 import { logger } from '../logger';
 import { saveTokenToStorage, clearTokenFromStorage } from './token-manager';
 
@@ -78,9 +78,8 @@ export async function loginAndUpdateConfig(options: {
   username?: string;
   password?: string;
 } = {}): Promise<LoginInfo> {
-  const configPath = options.configPath || 
-    process.env.PIXIV_DOWNLOADER_CONFIG || 
-    path.resolve('config/standalone.config.json');
+  // Use getConfigPath to ensure we use the same config path resolution logic
+  const configPath = options.configPath || getConfigPath();
 
   logger.info('Starting Pixiv login...');
   
@@ -125,9 +124,8 @@ export async function ensureValidToken(options: {
   password?: string;
   autoLogin?: boolean;
 } = {}): Promise<string> {
-  const configPath = options.configPath || 
-    process.env.PIXIV_DOWNLOADER_CONFIG || 
-    path.resolve('config/standalone.config.json');
+  // Use getConfigPath to ensure we use the same config path resolution logic
+  const configPath = options.configPath || getConfigPath();
 
   try {
     const config = loadConfig(configPath);

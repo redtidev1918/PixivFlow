@@ -6,7 +6,7 @@ import { ErrorCode } from '../../utils/error-codes';
 
 /**
  * POST /api/download/run-all
- * Run all targets (equivalent to npm run download)
+ * Run all targets (equivalent to pixivflow download)
  * Body: { configPaths?: string[] } - Optional array of config file paths
  */
 export async function runAllDownloads(req: Request, res: Response): Promise<void> {
@@ -118,6 +118,8 @@ export async function randomDownload(req: Request, res: Response): Promise<void>
     });
   }
 }
+
+
 
 
 

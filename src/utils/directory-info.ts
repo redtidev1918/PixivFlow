@@ -111,9 +111,15 @@ export function displayDirectoryInfo(info: DirectoryInfo, options?: { verbose?: 
   
   const illustrationStatus = checkDirectoryExists(info.illustrationDirectory);
   console.log(`   ${illustrationStatus.exists ? '✓' : '○'} Illustration Directory: ${formatPath(info.illustrationDirectory)}`);
+  if (!illustrationStatus.exists && !verbose) {
+    console.log('     ℹ Directory does not exist, will be created on first download');
+  }
   
   const novelStatus = checkDirectoryExists(info.novelDirectory);
   console.log(`   ${novelStatus.exists ? '✓' : '○'} Novel Directory: ${formatPath(info.novelDirectory)}`);
+  if (!novelStatus.exists && !verbose) {
+    console.log('     ℹ Directory does not exist, will be created on first download');
+  }
   console.log('');
 
   // Database

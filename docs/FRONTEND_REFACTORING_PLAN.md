@@ -1007,8 +1007,8 @@ Component Update
 - [x] Phase 2: 通用组件库建设 (100%) ✅
 - [x] Phase 3: 业务逻辑提取 (100%) ✅
 - [x] Phase 4: 页面组件重构 (100% - 所有页面已完成) ✅
-- [ ] Phase 5: 状态管理优化 (0%)
-- [ ] Phase 6: 测试完善 (0%)
+- [x] Phase 5: 状态管理优化 (100%) ✅
+- [x] Phase 6: 测试完善 (90% - 基础测试和单元测试完成，集成测试和 E2E 测试待完成)
 - [ ] Phase 7: 文档和优化 (0%)
 
 ### 详细进度
@@ -1116,8 +1116,16 @@ Component Update
   - [x] 统一使用 QUERY_KEYS 常量
   - [x] 更新所有 hooks 使用标准 query keys
   - [x] 更新页面组件使用标准 query keys
-- [ ] 合理使用 Zustand
-- [ ] 优化性能
+- [x] 合理使用 Zustand ✅
+  - [x] 创建 authStore（认证状态管理）
+  - [x] 创建 uiStore（UI 状态管理，包括主题、侧边栏、语言等）
+  - [x] 使用 persist 中间件持久化状态到 localStorage
+- [x] 优化性能 ✅
+  - [x] 使用 React.memo 优化 TableFilters 组件
+  - [x] 使用 React.memo 优化 FormModal 组件
+  - [x] 使用 useCallback 优化事件处理函数
+  - [x] 使用 useMemo 优化计算值
+  - [x] 重构 App 组件，提取 AppRoutes 组件以便测试
 
 #### Phase 6: 测试完善
 
@@ -1330,6 +1338,20 @@ Component Update
   - ✅ App 路由测试（App.test.tsx）- 覆盖路由配置和页面导航
   - ✅ 修复 CodeEditor 测试中的类型错误（clipboardData 空值检查）
   - ✅ 所有页面组件测试文件创建完成，测试覆盖主要功能
+  - ✅ 重构 App 组件，提取 AppRoutes 组件以便测试（修复 Router 嵌套问题）
+
+### 2025-01-XX (Phase 5 - 状态管理优化完成)
+- ✅ 创建 Zustand stores
+  - ✅ authStore（认证状态管理）- 支持认证状态、Token 管理、Token 过期检查
+  - ✅ uiStore（UI 状态管理）- 支持主题、侧边栏状态、语言、紧凑模式、表格分页大小
+  - ✅ 使用 persist 中间件持久化状态到 localStorage
+  - ✅ 创建 stores/index.ts 统一导出
+- ✅ 性能优化
+  - ✅ 使用 React.memo 优化 TableFilters 组件
+  - ✅ 使用 React.memo 优化 FormModal 组件
+  - ✅ 使用 useCallback 优化事件处理函数（handleFilterChange, handleReset, handleSubmit, handleCancel）
+  - ✅ 使用 useMemo 优化计算值（filterElements, footer）
+  - ✅ 重构 App 组件，提取 AppRoutes 组件以便测试和优化
 
 ---
 

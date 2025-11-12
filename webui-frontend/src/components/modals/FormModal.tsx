@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import { useEffect, useCallback, useMemo, memo } from 'react';
 import { Modal, Form, FormProps, Button, Space, ModalProps } from 'antd';
 
 export interface FormModalProps extends Omit<ModalProps, 'onOk' | 'onCancel'> {
@@ -72,7 +72,7 @@ export interface FormModalProps extends Omit<ModalProps, 'onOk' | 'onCancel'> {
  * Form modal component that provides consistent form dialogs.
  * Handles form validation, submission, and reset automatically.
  */
-export const FormModal: React.FC<FormModalProps> = ({
+export const FormModal: React.FC<FormModalProps> = memo(({
   form,
   title,
   children,
@@ -103,7 +103,7 @@ export const FormModal: React.FC<FormModalProps> = ({
     }
   }, [open, resetOnCancel, form]);
 
-  const handleSubmit = async () => {
+  const handleSubmit = useCallback(async () => {
     try {
       const values = await form.validateFields();
       await onSubmit(values);
@@ -119,36 +119,38 @@ export const FormModal: React.FC<FormModalProps> = ({
       // Other errors should be handled by the caller
       throw error;
     }
-  };
+  }, [form, onSubmit, resetOnSubmit]);
 
-  const handleCancel = () => {
+  const handleCancel = useCallback(() => {
     if (resetOnCancel) {
       form.resetFields();
     }
     if (onCancel) {
       onCancel();
     }
-  };
+  }, [form, resetOnCancel, onCancel]);
+
+  const footer = useMemo(() => (
+    <Space>
+      <Button onClick={handleCancel} disabled={submitLoading}>
+        {cancelText}
+      </Button>
+      <Button
+        type="primary"
+        onClick={handleSubmit}
+        loading={submitLoading}
+      >
+        {submitText}
+      </Button>
+    </Space>
+  ), [handleCancel, handleSubmit, submitLoading, cancelText, submitText]);
 
   return (
     <Modal
       title={title}
       open={open}
       onCancel={handleCancel}
-      footer={
-        <Space>
-          <Button onClick={handleCancel} disabled={submitLoading}>
-            {cancelText}
-          </Button>
-          <Button
-            type="primary"
-            onClick={handleSubmit}
-            loading={submitLoading}
-          >
-            {submitText}
-          </Button>
-        </Space>
-      }
+      footer={footer}
       {...modalProps}
     >
       <Form
@@ -161,7 +163,9 @@ export const FormModal: React.FC<FormModalProps> = ({
       </Form>
     </Modal>
   );
-};
+});
+
+FormModal.displayName = 'FormModal';
 
 export default FormModal;
 

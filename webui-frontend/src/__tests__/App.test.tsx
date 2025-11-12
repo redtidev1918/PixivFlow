@@ -3,18 +3,7 @@ import React from 'react';
 import { render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
-import App from '../App';
-
-// Mock BrowserRouter to use MemoryRouter instead
-jest.mock('react-router-dom', () => {
-  const actual = jest.requireActual('react-router-dom');
-  return {
-    ...actual,
-    BrowserRouter: ({ children }: { children: React.ReactNode }) => (
-      <MemoryRouter>{children}</MemoryRouter>
-    ),
-  };
-});
+import { AppRoutes } from '../AppRoutes';
 
 // Mock all page components
 jest.mock('../pages/Dashboard', () => ({
@@ -88,11 +77,10 @@ describe('App', () => {
   };
 
   it('renders login page at /login', () => {
-    // Use MemoryRouter with initialEntries to set the route
     render(
       <QueryClientProvider client={queryClient}>
         <MemoryRouter initialEntries={['/login']}>
-          <App />
+          <AppRoutes />
         </MemoryRouter>
       </QueryClientProvider>
     );
@@ -103,7 +91,7 @@ describe('App', () => {
     render(
       <QueryClientProvider client={queryClient}>
         <MemoryRouter initialEntries={['/']}>
-          <App />
+          <AppRoutes />
         </MemoryRouter>
       </QueryClientProvider>
     );
@@ -115,7 +103,7 @@ describe('App', () => {
     render(
       <QueryClientProvider client={queryClient}>
         <MemoryRouter initialEntries={['/dashboard']}>
-          <App />
+          <AppRoutes />
         </MemoryRouter>
       </QueryClientProvider>
     );
@@ -126,7 +114,7 @@ describe('App', () => {
     render(
       <QueryClientProvider client={queryClient}>
         <MemoryRouter initialEntries={['/config']}>
-          <App />
+          <AppRoutes />
         </MemoryRouter>
       </QueryClientProvider>
     );
@@ -137,7 +125,7 @@ describe('App', () => {
     render(
       <QueryClientProvider client={queryClient}>
         <MemoryRouter initialEntries={['/download']}>
-          <App />
+          <AppRoutes />
         </MemoryRouter>
       </QueryClientProvider>
     );
@@ -148,7 +136,7 @@ describe('App', () => {
     render(
       <QueryClientProvider client={queryClient}>
         <MemoryRouter initialEntries={['/history']}>
-          <App />
+          <AppRoutes />
         </MemoryRouter>
       </QueryClientProvider>
     );
@@ -159,7 +147,7 @@ describe('App', () => {
     render(
       <QueryClientProvider client={queryClient}>
         <MemoryRouter initialEntries={['/logs']}>
-          <App />
+          <AppRoutes />
         </MemoryRouter>
       </QueryClientProvider>
     );
@@ -170,7 +158,7 @@ describe('App', () => {
     render(
       <QueryClientProvider client={queryClient}>
         <MemoryRouter initialEntries={['/files']}>
-          <App />
+          <AppRoutes />
         </MemoryRouter>
       </QueryClientProvider>
     );

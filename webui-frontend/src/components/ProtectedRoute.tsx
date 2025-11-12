@@ -1,6 +1,7 @@
-import { Navigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Spin } from 'antd';
+import { Spin, Alert } from 'antd';
+import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { api } from '../services/api';
 import { QUERY_KEYS } from '../constants';
 
@@ -10,11 +11,12 @@ interface ProtectedRouteProps {
 
 /**
  * ProtectedRoute component that checks authentication status
- * If user is not authenticated, redirects to /login
- * If user is authenticated, renders the children
+ * Allows access to all pages, but shows a login prompt if not authenticated
+ * This prevents white screen issues and provides better UX
  */
 export default function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const { data, isLoading } = useQuery({
+  const { t } = useTranslation();
+  const { data, isLoading, isError } = useQuery({
     queryKey: QUERY_KEYS.AUTH_STATUS,
     queryFn: () => api.getAuthStatus(),
     retry: false,
@@ -24,15 +26,31 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   });
 
   // Helper to check if authenticated from API response
+  // Returns false if response is invalid, undefined, or explicitly not authenticated
   const isAuthenticated = (response: any): boolean => {
+    // If response is null/undefined, not authenticated
+    if (!response) {
+      return false;
+    }
+    
     // API response structure: response.data.data.authenticated or response.data.authenticated
     const responseData = response?.data?.data || response?.data;
+    
+    // If responseData is null/undefined, not authenticated
+    if (!responseData) {
+      return false;
+    }
+    
+    // Only return true if explicitly authenticated
     // Check multiple possible fields: authenticated, isAuthenticated, hasToken
-    return res    return responseData?.authenticated === true 
+    return responseData?.authenticated === true 
       || responseData?.isAuthenticated === true;
   };
 
-  if (isLoading) {
+  const authenticated = !isError && isAuthenticated(data);
+
+  // Show loading spinner while checking authentication (only on initial load)
+  if (isLoading && !data) {
     return (
       <div
         style={{
@@ -47,12 +65,31 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
     );
   }
 
-  // If not authenticated, redirect to login
-  if (!isAuthenticated(data)) {
-    return <Navigate to="/login" replace />;
-  }
-
-  // If authenticated, render children
-  return <>{children}</>;
+  // Always render children, but show a login prompt if not authenticated
+  return (
+    <>
+      {!authenticated && (
+        <Alert
+          message={t('layout.needLogin')}
+          description={
+            <span>
+              {t('layout.notLoggedInDesc')}
+              <Link to="/login" style={{ marginLeft: 8 }}>
+                {t('layout.loginNow')}
+              </Link>
+            </span>
+          }
+          type="warning"
+          showIcon
+          closable
+          style={{
+            margin: 16,
+            marginBottom: 0,
+          }}
+        />
+      )}
+      {children}
+    </>
+  );
 }
 

@@ -1,4 +1,4 @@
-import { Button, Space } from 'antd';
+import { Button, Space, Tooltip } from 'antd';
 import {
   SaveOutlined,
   ReloadOutlined,
@@ -9,6 +9,7 @@ import {
   CopyOutlined,
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
+import { useAuth } from '../../../hooks/useAuth';
 
 interface ConfigActionsProps {
   onRefresh: () => void;
@@ -39,6 +40,11 @@ export function ConfigActions({
   isImporting = false,
 }: ConfigActionsProps) {
   const { t } = useTranslation();
+  const { authenticated } = useAuth();
+  
+  // Buttons that require authentication
+  const requiresAuth = !authenticated;
+  const loginTip = t('common.loginRequired');
 
   return (
     <Space wrap>
@@ -51,23 +57,33 @@ export function ConfigActions({
       <Button icon={<DownloadOutlined />} onClick={onExport}>
         {t('config.exportConfig')}
       </Button>
-      <Button icon={<UploadOutlined />} onClick={onImport} loading={isImporting} disabled={isImporting}>
-        {t('config.importConfig')}
-      </Button>
+      <Tooltip title={requiresAuth ? loginTip : undefined}>
+        <Button 
+          icon={<UploadOutlined />} 
+          onClick={onImport} 
+          loading={isImporting} 
+          disabled={isImporting || requiresAuth}
+        >
+          {t('config.importConfig')}
+        </Button>
+      </Tooltip>
       <Button icon={<CopyOutlined />} onClick={onCopy}>
         {t('config.copyConfig')}
       </Button>
       <Button icon={<CheckCircleOutlined />} onClick={onValidate} loading={isValidating}>
         {t('config.validateConfig')}
       </Button>
-      <Button
-        type="primary"
-        icon={<SaveOutlined />}
-        onClick={onSave}
-        loading={isUpdating}
-      >
-        {t('config.saveConfig')}
-      </Button>
+      <Tooltip title={requiresAuth ? loginTip : undefined}>
+        <Button
+          type="primary"
+          icon={<SaveOutlined />}
+          onClick={onSave}
+          loading={isUpdating}
+          disabled={requiresAuth}
+        >
+          {t('config.saveConfig')}
+        </Button>
+      </Tooltip>
     </Space>
   );
 }

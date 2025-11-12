@@ -45,7 +45,8 @@
     "all": "全部",
     "none": "无",
     "unknown": "未知",
-    "recommended": "推荐"
+    "recommended": "推荐",
+    "loginRequired": "请先登录才能使用此功能"
   },
   "layout": {
     "title": "PixivFlow WebUI",
@@ -65,7 +66,10 @@
     "refreshToken": "刷新Token",
     "refreshingToken": "正在刷新Token...",
     "tokenRefreshed": "Token已刷新",
-    "tokenRefreshFailed": "Token刷新失败"
+    "tokenRefreshFailed": "Token刷新失败",
+    "needLogin": "需要登录",
+    "notLoggedInDesc": "您尚未登录。某些功能可能需要登录后才能使用。",
+    "loginNow": "立即登录"
   },
   "dashboard": {
     "title": "仪表盘",

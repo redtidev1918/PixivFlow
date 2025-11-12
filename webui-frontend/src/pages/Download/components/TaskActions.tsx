@@ -1,5 +1,5 @@
 import React from 'react';
-import { Card, Button, Space, Alert, Typography } from 'antd';
+import { Card, Button, Space, Alert, Typography, Tooltip } from 'antd';
 import {
   PlayCircleOutlined,
   StopOutlined,
@@ -7,6 +7,7 @@ import {
   InfoCircleOutlined,
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
+import { useAuth } from '../../../hooks/useAuth';
 
 const { Text } = Typography;
 
@@ -38,6 +39,11 @@ export const TaskActions: React.FC<TaskActionsProps> = ({
   onRefreshConfig,
 }) => {
   const { t } = useTranslation();
+  const { authenticated } = useAuth();
+  
+  // Buttons that require authentication
+  const requiresAuth = !authenticated;
+  const loginTip = t('common.loginRequired');
 
   const illustrationPath =
     storage?.illustrationDirectory ||
@@ -61,25 +67,29 @@ export const TaskActions: React.FC<TaskActionsProps> = ({
       style={{ marginBottom: 16 }}
     >
       <Space wrap>
-        <Button
-          type="primary"
-          size="large"
-          icon={<PlayCircleOutlined />}
-          onClick={onStartClick}
-          disabled={hasActiveTask}
-          loading={isStarting}
-        >
-          {t('download.startDownload')}
-        </Button>
-        <Button
-          size="large"
-          icon={<ReloadOutlined />}
-          onClick={onRunAllClick}
-          disabled={hasActiveTask}
-          loading={isRunningAll}
-        >
-          {t('download.downloadAll')}
-        </Button>
+        <Tooltip title={requiresAuth ? loginTip : undefined}>
+          <Button
+            type="primary"
+            size="large"
+            icon={<PlayCircleOutlined />}
+            onClick={onStartClick}
+            disabled={hasActiveTask || requiresAuth}
+            loading={isStarting}
+          >
+            {t('download.startDownload')}
+          </Button>
+        </Tooltip>
+        <Tooltip title={requiresAuth ? loginTip : undefined}>
+          <Button
+            size="large"
+            icon={<ReloadOutlined />}
+            onClick={onRunAllClick}
+            disabled={hasActiveTask || requiresAuth}
+            loading={isRunningAll}
+          >
+            {t('download.downloadAll')}
+          </Button>
+        </Tooltip>
         <Button
           danger
           size="large"

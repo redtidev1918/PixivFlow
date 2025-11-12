@@ -1,90 +1,43 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { authService } from '../services/authService';
-import { useErrorHandler } from './useErrorHandler';
+import { useQuery } from '@tanstack/react-query';
+import { api } from '../services/api';
 import { QUERY_KEYS } from '../constants';
-import type { ConfigData } from '../services/api/types';
 
 /**
- * Hook for managing authentication
+ * Hook to check authentication status
+ * Returns authentication state and helper functions
  */
 export function useAuth() {
-  const queryClient = useQueryClient();
-  const { handleError } = useErrorHandler();
-
-  const {
-    data: authStatus,
-    isLoading,
-    error,
-    refetch,
-  } = useQuery({
-    queryKey: QUERY_KEYS.AUTH,
-    queryFn: () => authService.getAuthStatus(),
+  const { data, isLoading, isError } = useQuery({
+    queryKey: QUERY_KEYS.AUTH_STATUS,
+    queryFn: () => api.getAuthStatus(),
+    retry: false,
+    staleTime: 0,
+    refetchOnMount: true,
+    refetchOnWindowFocus: false,
   });
 
-  const loginMutation = useMutation({
-    mutationFn: ({
-      username,
-      password,
-      headless = true,
-      proxy,
-    }: {
-      username: string;
-      password: string;
-      headless?: boolean;
-      proxy?: NonNullable<ConfigData['network']>['proxy'];
-    }) => authService.login(username, password, headless, proxy),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.AUTH });
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CONFIG });
-    },
-    onError: (error) => handleError(error),
-  });
+  // Helper to check if authenticated from API response
+  const isAuthenticated = (response: any): boolean => {
+    if (!response) {
+      return false;
+    }
+    
+    const responseData = response?.data?.data || response?.data;
+    
+    if (!responseData) {
+      return false;
+    }
+    
+    return responseData?.authenticated === true 
+      || responseData?.isAuthenticated === true;
+  };
 
-  const loginWithTokenMutation = useMutation({
-    mutationFn: (refreshToken: string) => authService.loginWithToken(refreshToken),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.AUTH });
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CONFIG });
-    },
-    onError: (error) => handleError(error),
-  });
-
-  const refreshTokenMutation = useMutation({
-    mutationFn: (refreshToken?: string) => authService.refreshToken(refreshToken),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.AUTH });
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CONFIG });
-    },
-    onError: (error) => handleError(error),
-  });
-
-  const logoutMutation = useMutation({
-    mutationFn: () => authService.logout(),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.AUTH });
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CONFIG });
-    },
-    onError: (error) => handleError(error),
-  });
+  const authenticated = !isError && isAuthenticated(data);
 
   return {
-    isAuthenticated: authStatus?.isAuthenticated ?? false,
-    user: authStatus?.user,
+    authenticated,
     isLoading,
-    error,
-    refetch,
-    login: loginMutation.mutate,
-    loginAsync: loginMutation.mutateAsync,
-    isLoggingIn: loginMutation.isPending,
-    loginWithToken: loginWithTokenMutation.mutate,
-    loginWithTokenAsync: loginWithTokenMutation.mutateAsync,
-    isLoggingInWithToken: loginWithTokenMutation.isPending,
-    refreshToken: refreshTokenMutation.mutate,
-    refreshTokenAsync: refreshTokenMutation.mutateAsync,
-    isRefreshing: refreshTokenMutation.isPending,
-    logout: logoutMutation.mutate,
-    logoutAsync: logoutMutation.mutateAsync,
-    isLoggingOut: logoutMutation.isPending,
+    isError,
+    data,
   };
 }
-

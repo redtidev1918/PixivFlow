@@ -59,7 +59,10 @@
     "webui:dev": "npm run build:watch & npm run webui",
     "webui:frontend": "cd webui-frontend && npm run dev",
     "webui:build": "cd webui-frontend && npm run build",
-    "dev": "node scripts/dev-starter.js",
+    "dev:kill": "npx kill-port 3001 5173 3000",
+    "dev:backend": "cross-env PORT=3001 nodemon --watch dist dist/webui/index.js",
+    "dev:frontend": "cross-env VITE_DEV_API_PORT=3001 npm run webui:frontend",
+    "dev": "npm run build && npx kill-port 3001 5173 3000 && concurrently -n \"backend-build,backend,frontend\" -c \"yellow,blue,green\" \"npm run build:watch\" \"npm run dev:backend\" \"npm run dev:frontend\"", 
     "webui:start": "npm run webui:build && npm run webui",
     "webui:dev:full": "npm run build && concurrently -n \"backend-build,backend,frontend\" -c \"yellow,blue,green\" \"npm run build:watch\" \"nodemon --watch dist dist/webui/index.js\" \"npm run webui:frontend\"",
     "publish:patch": "./scripts/publish.sh patch",
@@ -90,7 +93,8 @@
     "puppeteer": "^24.29.1",
     "ts-jest": "^29.4.5",
     "typescript": "^5.6.2",
-    "kill-port": "^2.0.1"
+    "kill-port": "^2.0.1",
+    "npm-run-all": "^4.1.5"
   },
   "dependencies": {
     "axios": "^1.13.2",

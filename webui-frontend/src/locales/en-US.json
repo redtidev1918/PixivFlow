@@ -45,7 +45,8 @@
     "all": "All",
     "none": "None",
     "unknown": "Unknown",
-    "recommended": "Recommended"
+    "recommended": "Recommended",
+    "loginRequired": "Please login first to use this feature"
   },
   "layout": {
     "title": "PixivFlow WebUI",
@@ -65,7 +66,10 @@
     "refreshToken": "Refresh Token",
     "refreshingToken": "Refreshing token...",
     "tokenRefreshed": "Token refreshed",
-    "tokenRefreshFailed": "Token refresh failed"
+    "tokenRefreshFailed": "Token refresh failed",
+    "needLogin": "Login Required",
+    "notLoggedInDesc": "You are not logged in. Some features may require login to use.",
+    "loginNow": "Login Now"
   },
   "dashboard": {
     "title": "Dashboard",

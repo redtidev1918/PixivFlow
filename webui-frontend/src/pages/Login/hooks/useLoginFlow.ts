@@ -152,7 +152,7 @@ export function useLoginFlow() {
       try {
         await loginWithTokenAsync(refreshToken.trim());
         handleLoginSuccess();
-      } catch (error: any) {
+      } catch (error) {
         const { errorCode, message: errorMessage } = extractErrorInfo(error);
         setLoginStep(0);
         if (errorCode) {
@@ -167,7 +167,7 @@ export function useLoginFlow() {
     // Interactive mode
     try {
       await handleInteractiveLogin(configData);
-    } catch (error: any) {
+    } catch (error) {
       const { errorCode, message: errorMessage } = extractErrorInfo(error);
       setLoginStep(0);
       if (errorCode) {

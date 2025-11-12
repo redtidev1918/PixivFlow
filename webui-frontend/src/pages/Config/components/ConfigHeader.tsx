@@ -42,7 +42,7 @@ export function ConfigHeader({
         await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CONFIG_FILES });
         await Promise.resolve(refetchConfigFiles());
         await Promise.resolve(onConfigFileSwitch());
-      } catch (error: any) {
+      } catch (error) {
         handleError(error, t('config.configSwitchFailed'));
       }
     }

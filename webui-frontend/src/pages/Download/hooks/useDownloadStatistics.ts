@@ -1,12 +1,8 @@
 import { useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { DownloadTask } from '../../../services/api/types';
 
-export interface Task {
-  status: string;
-  startTime?: Date | string;
-  endTime?: Date | string;
-  [key: string]: any;
-}
+export type Task = DownloadTask;
 
 /**
  * Hook for calculating download statistics and duration

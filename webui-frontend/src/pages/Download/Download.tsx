@@ -75,13 +75,13 @@ export default function Download() {
     handleRunAll,
     handleResume,
     handleDelete,
-    handleDeleteAll,
+    handleDeleteAll
   } = useDownloadOperations(
-    startDownloadAsync as any,
-    stopDownloadAsync as any,
-    resumeDownloadAsync as any,
-    deleteIncompleteTaskAsync as any,
-    deleteAllIncompleteTasksAsync as any
+    startDownloadAsync,
+    stopDownloadAsync,
+    resumeDownloadAsync,
+    deleteIncompleteTaskAsync,
+    deleteAllIncompleteTasksAsync
   );
 
   // Statistics
@@ -153,4 +153,3 @@ export default function Download() {
     </div>
   );
 }
-

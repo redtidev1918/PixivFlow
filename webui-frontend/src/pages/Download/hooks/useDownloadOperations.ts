@@ -14,11 +14,11 @@ export function useDownloadOperations(
     targetId?: string;
     config?: Partial<ConfigData>;
     configPaths?: string[];
-  }) => Promise<any>,
-  stopDownloadAsync: (taskId: string) => Promise<any>,
-  resumeDownloadAsync: (params: { tag: string; type: 'illustration' | 'novel' }) => Promise<any>,
-  deleteIncompleteTaskAsync: (id: number) => Promise<any>,
-  deleteAllIncompleteTasksAsync: () => Promise<any>
+  }) => Promise<{ taskId: string }>,
+  stopDownloadAsync: (taskId: string) => Promise<void>,
+  resumeDownloadAsync: (params: { tag: string; type: 'illustration' | 'novel' }) => Promise<{ taskId: string }>,
+  deleteIncompleteTaskAsync: (id: number) => Promise<void>,
+  deleteAllIncompleteTasksAsync: () => Promise<{ deletedCount: number }>
 ) {
   const { t } = useTranslation();
   const [showStartModal, setShowStartModal] = useState(false);
@@ -32,7 +32,7 @@ export function useDownloadOperations(
         });
         message.success(t('download.taskStarted'));
         setShowStartModal(false);
-      } catch (error: any) {
+      } catch (error) {
         const { errorCode, message: errorMessage } = extractErrorInfo(error);
         message.error(
           translateErrorCode(errorCode, t, undefined, errorMessage || t('download.startFailed'))
@@ -47,7 +47,7 @@ export function useDownloadOperations(
       try {
         await stopDownloadAsync(taskId);
         message.success(t('download.taskStopped'));
-      } catch (error: any) {
+      } catch (error) {
         const { errorCode, message: errorMessage } = extractErrorInfo(error);
         message.error(
           translateErrorCode(errorCode, t, undefined, errorMessage || t('download.stopFailed'))
@@ -63,7 +63,7 @@ export function useDownloadOperations(
       .then(() => {
         message.success(t('download.allTargetsStarted'));
       })
-      .catch((error: any) => {
+      .catch((error) => {
         const { errorCode, message: errorMessage } = extractErrorInfo(error);
         message.error(
           translateErrorCode(errorCode, t, undefined, errorMessage || t('download.startFailed'))
@@ -81,7 +81,7 @@ export function useDownloadOperations(
             type: type === 'illustration' ? t('download.typeIllustration') : t('download.typeNovel'),
           })
         );
-      } catch (error: any) {
+      } catch (error) {
         const { errorCode, message: errorMessage, params } = extractErrorInfo(error);
         message.error(
           translateErrorCode(errorCode, t, params, errorMessage || t('download.resumeFailed'))
@@ -96,7 +96,7 @@ export function useDownloadOperations(
       try {
         await deleteIncompleteTaskAsync(id);
         message.success(t('download.incompleteTaskDeleted'));
-      } catch (error: any) {
+      } catch (error) {
         const { errorCode, message: errorMessage, params } = extractErrorInfo(error);
         message.error(
           translateErrorCode(errorCode, t, params, errorMessage || t('download.deleteFailed'))
@@ -115,7 +115,7 @@ export function useDownloadOperations(
       } else {
         message.success(t('download.allIncompleteTasksDeleted', { count: deletedCount }));
       }
-    } catch (error: any) {
+    } catch (error) {
       const { errorCode, message: errorMessage, params } = extractErrorInfo(error);
       if (errorCode) {
         message.error(

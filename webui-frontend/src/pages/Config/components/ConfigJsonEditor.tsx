@@ -112,10 +112,11 @@ export const ConfigJsonEditor: React.FC<ConfigJsonEditorProps> = ({
       lastReadContentRef.current = content;
       jsonContentRef.current = content;
       setHasExternalChanges(false);
-    } catch (error: any) {
+    } catch (error) {
       const { message: errorMessage } = extractErrorInfo(error);
+      const errorMsg = error instanceof Error ? error.message : undefined;
       message.error(
-        `${t('config.configFileReadFailed')}: ${errorMessage || error?.message || t('config.unknownError')}`
+        `${t('config.configFileReadFailed')}: ${errorMessage || errorMsg || t('config.unknownError')}`
       );
     } finally {
       setJsonEditorLoading(false);
@@ -157,7 +158,7 @@ export const ConfigJsonEditor: React.FC<ConfigJsonEditorProps> = ({
       
       // If this is the active config, reload the page
       const currentFile = configFiles?.find(
-        (f: any) => f.filename === filename && f.isActive
+        (f) => f.filename === filename && f.isActive
       );
       if (currentFile) {
         if (onConfigFileSwitch) {
@@ -170,12 +171,13 @@ export const ConfigJsonEditor: React.FC<ConfigJsonEditorProps> = ({
       } else {
         onClose();
       }
-    } catch (error: any) {
+    } catch (error) {
       const { errorCode, message: errorMessage, details } = extractErrorInfo(error);
       if (errorCode === 'CONFIG_INVALID' && details && Array.isArray(details)) {
-        const errorMessages = details.map((err: any) => {
-          if (typeof err === 'object' && err.code) {
-            return translateErrorCode(err.code, t, err.params);
+        const errorMessages = details.map((err: unknown) => {
+          if (typeof err === 'object' && err !== null && 'code' in err) {
+            const errObj = err as { code: string; params?: Record<string, unknown> };
+            return translateErrorCode(errObj.code, t, errObj.params);
           }
           return String(err);
         });

@@ -24,7 +24,9 @@ export default function Dashboard() {
   }
 
   // Extract stats data from API response structure
-  const statsData = (stats as any)?.data?.data || stats || {};
+  const statsData = stats && typeof stats === 'object' && 'data' in stats && stats.data && typeof stats.data === 'object' && 'data' in stats.data
+    ? (stats.data as { data?: Record<string, unknown> }).data || {}
+    : (stats as Record<string, unknown>) || {};
 
   return (
     <div>

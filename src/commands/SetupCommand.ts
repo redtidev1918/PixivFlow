@@ -34,5 +34,17 @@ export class SetupCommand extends BaseCommand {
       };
     }
   }
+
+  getUsage(): string {
+    return `setup [options]
+
+Interactive configuration wizard for first-time setup.
+
+This command guides you through the initial configuration process,
+including authentication setup and download target configuration.
+
+Examples:
+  pixivflow setup                              # Start setup wizard`;
+  }
 }
 

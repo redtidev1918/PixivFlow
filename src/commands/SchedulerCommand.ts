@@ -100,11 +100,15 @@ export class SchedulerCommand extends BaseCommand {
 
   getUsage(): string {
     return `scheduler
-  
+
 Start the scheduler to run download jobs periodically according to config.
 
+The scheduler will run download jobs based on the cron expression configured
+in the config file. If scheduler is not enabled in config, this command will
+still start but may not execute jobs.
+
 Examples:
-  pixivflow scheduler`;
+  pixivflow scheduler                          # Start scheduler`;
   }
 }
 

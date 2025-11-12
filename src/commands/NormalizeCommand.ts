@@ -108,20 +108,22 @@ export class NormalizeCommand extends BaseCommand {
 
   getUsage(): string {
     return `normalize [options]
-  
+
+Normalize and reorganize downloaded files.
+
 Options:
   --config <path>              Path to config file
   --dry-run                    Preview changes without applying them
   --type <type>                Type: illustration, novel, or all (default: all)
   --no-normalize-names         Skip name normalization
-  --no-reorganize               Skip file reorganization
-  --no-update-db                Skip database updates
+  --no-reorganize              Skip file reorganization
+  --no-update-db               Skip database updates
   -j, --json                   Output response as JSON
 
 Examples:
-  pixivflow normalize
-  pixivflow normalize --dry-run
-  pixivflow normalize --type novel`;
+  pixivflow normalize                          # Normalize all files
+  pixivflow normalize --dry-run                # Preview changes
+  pixivflow normalize --type illustration      # Normalize illustrations only`;
   }
 }
 

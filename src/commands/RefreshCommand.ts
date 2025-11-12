@@ -79,7 +79,9 @@ export class RefreshCommand extends BaseCommand {
 
   getUsage(): string {
     return `refresh <refresh_token> [options]
-  
+
+Refresh access token using refresh token.
+
 Arguments:
   <refresh_token>        Refresh token to use for refreshing access token [required]
 
@@ -87,7 +89,8 @@ Options:
   -j, --json             Output response as JSON
 
 Examples:
-  pixivflow refresh <refresh_token>`;
+  pixivflow refresh <refresh_token>
+  pixivflow refresh <refresh_token> --json`;
   }
 }
 

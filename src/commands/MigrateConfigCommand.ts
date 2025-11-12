@@ -74,15 +74,17 @@ export class MigrateConfigCommand extends BaseCommand {
 
   getUsage(): string {
     return `migrate-config [options]
-  
+
+Migrate configuration paths (convert absolute to relative).
+
 Options:
   --config <path>        Path to config file
   --dry-run              Preview changes without applying them
   -j, --json             Output response as JSON
 
 Examples:
-  pixivflow migrate-config
-  pixivflow migrate-config --dry-run`;
+  pixivflow migrate-config                    # Migrate paths
+  pixivflow migrate-config --dry-run          # Preview migration changes`;
   }
 }
 

@@ -78,7 +78,7 @@ export default function Config() {
           onSave={handleSave}
           isValidating={isValidating}
           isUpdating={isUpdating}
-        isImporting={isImporting}
+          isImporting={isImporting}
         />
       </div>
 

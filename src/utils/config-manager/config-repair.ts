@@ -79,6 +79,19 @@ export function repairConfigFile(
       config.targets = [];
       fixed = true;
       logger.info('Fixed missing targets array');
+    } else {
+      // Fix invalid limit values in targets
+      config.targets.forEach((target, index) => {
+        if (target.limit !== undefined && target.limit < 1) {
+          const oldLimit = target.limit;
+          target.limit = 10; // Default to 10 if limit is invalid
+          fixed = true;
+          logger.info(`Fixed invalid limit in targets[${index}]`, { 
+            oldLimit, 
+            newLimit: target.limit 
+          });
+        }
+      });
     }
 
     // Ensure pixiv section exists with minimal structure
@@ -159,6 +172,7 @@ export function repairConfigFile(
     return result;
   }
 }
+
 
 
 

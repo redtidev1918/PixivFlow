@@ -87,8 +87,12 @@ export function validateConfig(config: Partial<StandaloneConfig>, location: stri
       if (target.type && !['illustration', 'novel'].includes(target.type)) {
         errors.push(`targets[${index}].type: Must be "illustration" or "novel"`);
       }
-      if (target.limit !== undefined && (target.limit < 1 || target.limit > 1000)) {
-        warnings.push(`targets[${index}].limit: Should be between 1 and 1000 (got ${target.limit})`);
+      if (target.limit !== undefined) {
+        if (target.limit < 1) {
+          errors.push(`targets[${index}].limit: Must be greater than 0 (got ${target.limit})`);
+        } else if (target.limit > 1000) {
+          warnings.push(`targets[${index}].limit: Should be between 1 and 1000 (got ${target.limit})`);
+        }
       }
       if (target.searchTarget && !['partial_match_for_tags', 'exact_match_for_tags', 'title_and_caption'].includes(target.searchTarget)) {
         errors.push(`targets[${index}].searchTarget: Invalid value, must be one of: partial_match_for_tags, exact_match_for_tags, title_and_caption`);

@@ -23,7 +23,14 @@ export class ConfigManager {
   constructor(configDir?: string) {
     // If no configDir provided, use smart detection
     if (configDir) {
-      this.configDir = resolve(configDir);
+      // Special case: if configDir is 'config', use smart detection instead
+      // This handles the case where code calls getConfigManager('config')
+      // expecting it to use the smart detection logic
+      if (configDir === 'config') {
+        this.configDir = getConfigDirectory();
+      } else {
+        this.configDir = resolve(configDir);
+      }
     } else {
       // Use smart detection to find the best config directory
       this.configDir = getConfigDirectory();

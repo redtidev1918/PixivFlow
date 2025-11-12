@@ -204,7 +204,15 @@ export function applyDefaults(config: Partial<StandaloneConfig>, basePath?: stri
       ...config.download,
     },
     initialDelay: config.initialDelay ?? DEFAULT_CONFIG.initialDelay,
-    pixiv: config.pixiv!,
+    pixiv: {
+      clientId: config.pixiv?.clientId ?? 'MOBrBDS8blbauoSck0ZfDbtuzpyT',
+      clientSecret: config.pixiv?.clientSecret ?? 'lsACyCD94FhDUtGTXi3QzcFE2uU1hqtDaKeqrdwj',
+      deviceToken: (config.pixiv?.deviceToken && config.pixiv.deviceToken.trim() !== '') 
+        ? config.pixiv.deviceToken 
+        : 'pixiv',
+      refreshToken: config.pixiv?.refreshToken ?? 'YOUR_REFRESH_TOKEN',
+      userAgent: config.pixiv?.userAgent ?? 'PixivAndroidApp/5.0.234 (Android 11; Pixel 6)',
+    },
     targets: config.targets!,
   };
 

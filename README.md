@@ -162,6 +162,7 @@
 - **Node.js 18+** 和 **npm 9+**（推荐使用 LTS 版本：18.x, 20.x, 22.x 或 24.x）
 - **Pixiv 账号**
 - **Windows 用户**：推荐使用 WSL（`wsl --install`）或 Git Bash
+- **Android/Termux 用户**：需要安装构建工具，详见 [Termux 安装指南](docs/TERMUX_INSTALL.md)
 
 > ⚠️ **Node.js 版本说明**：
 > - 推荐使用 **LTS（长期支持）版本**：18.x, 20.x, 22.x 或 24.x
@@ -507,6 +508,7 @@ PixivFlow 提供了丰富的脚本工具，所有脚本直接调用内置 CLI，
 |------|------|--------|
 | [🌐 WEBUI](docs/WEBUI.md) | **WebUI 使用指南** - Web 管理界面和部署配置 | ⭐⭐⭐⭐ |
 | [🐳 DOCKER](docs/DOCKER.md) | **Docker 使用指南** - Docker 部署和使用（包含常见问题解决方案） | ⭐⭐⭐⭐ |
+| [📱 TERMUX](docs/TERMUX_INSTALL.md) | **Termux/Android 安装指南** - Android 设备上的安装和使用 | ⭐⭐⭐ |
 
 ### 📄 项目文档
 
@@ -959,6 +961,30 @@ pm2 save && pm2 startup
 ### ❓ 遇到已删除或私有的作品？
 
 **自动处理**：系统会自动跳过已删除、私有或无法访问的作品，不会中断下载流程。跳过的数量会在任务结束时显示。
+
+---
+
+### ❓ Android/Termux 安装失败？
+
+如果在 Android Termux 环境下安装时遇到 `better-sqlite3` 编译错误：
+
+**解决方案**：
+
+1. **安装构建工具**：
+   ```bash
+   pkg install python3 make clang
+   ```
+
+2. **使用本地安装**（推荐）：
+   ```bash
+   mkdir ~/pixivflow && cd ~/pixivflow
+   npm install pixivflow
+   npx pixivflow --help
+   ```
+
+3. **如果仍然失败**，查看详细的 [Termux 安装指南](docs/TERMUX_INSTALL.md)
+
+> 💡 **提示**：Termux 环境下推荐使用本地安装而不是全局安装，以避免权限和路径问题。
 
 ---
 

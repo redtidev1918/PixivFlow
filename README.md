@@ -398,6 +398,7 @@ pixivflow health                     # 健康检查（推荐 ⭐）
 pixivflow status                     # 查看下载统计和最近记录
 pixivflow logs                       # 查看运行日志
 pixivflow setup                      # 交互式配置向导（首次使用）⭐
+pixivflow dirs                       # 查看目录信息（文件保存位置）⭐
 ```
 
 ### ⚙️ 配置管理
@@ -405,10 +406,23 @@ pixivflow setup                      # 交互式配置向导（首次使用）�
 ```bash
 pixivflow config                     # 配置管理（查看/编辑/备份/恢复）⭐
 pixivflow config show                # 查看配置
+pixivflow config set <key> <value>   # 设置配置项（如：storage.downloadDirectory）⭐
 pixivflow config backup              # 备份配置
 pixivflow config restore             # 恢复配置
 pixivflow config validate            # 验证配置
 pixivflow config edit                # 编辑配置
+```
+
+**配置设置示例**：
+```bash
+# 设置下载目录
+pixivflow config set storage.downloadDirectory ./my-downloads
+
+# 设置插画目录
+pixivflow config set storage.illustrationDirectory ./my-illustrations
+
+# 设置小说目录
+pixivflow config set storage.novelDirectory ./my-novels
 ```
 
 ### 📊 监控与维护

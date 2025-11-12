@@ -140,6 +140,10 @@ export class NovelDownloader {
       userId: detail.user?.id,
     });
 
+    // Display download path to user
+    const { displayDownloadPath } = await import('../utils/directory-info');
+    displayDownloadPath(filePath, 'novel');
+
     logger.info(`Saved novel ${detail.id}`, {
       filePath,
       ...(detectedLang ? { language: detectedLang.name, isChinese: detectedLang.isChinese } : {}),

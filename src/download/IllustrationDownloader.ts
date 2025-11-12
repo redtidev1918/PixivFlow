@@ -145,6 +145,10 @@ export class IllustrationDownloader {
           author: detail.user?.name,
           userId: detail.user?.id,
         });
+        // Display download path to user
+        const { displayDownloadPath } = await import('../utils/directory-info');
+        displayDownloadPath(result.result.filePath, 'illustration');
+        
         logger.info(`Saved illustration ${detail.id} page ${result.result.index}`, { 
           filePath: result.result.filePath 
         });

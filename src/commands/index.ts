@@ -21,6 +21,7 @@ import { BackupCommand } from './BackupCommand';
 import { MaintainCommand } from './MaintainCommand';
 import { MonitorCommand } from './MonitorCommand';
 import { SetupCommand } from './SetupCommand';
+import { DirsCommand } from './DirsCommand';
 
 /**
  * Create and register all commands
@@ -44,6 +45,7 @@ export function registerAllCommands(registry: CommandRegistry): void {
   registry.register(new MaintainCommand());
   registry.register(new MonitorCommand());
   registry.register(new SetupCommand());
+  registry.register(new DirsCommand());
 }
 
 /**
@@ -68,6 +70,7 @@ export {
   MaintainCommand,
   MonitorCommand,
   SetupCommand,
+  DirsCommand,
 };
 
 

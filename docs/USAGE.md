@@ -310,6 +310,52 @@ npm run scheduler
 
 ## 💾 文件管理
 
+### 查看目录信息
+
+使用 `dirs` 命令可以快速查看所有文件保存目录：
+
+```bash
+# 查看目录信息
+pixivflow dirs
+
+# 查看详细目录信息（包括绝对路径、是否存在等）
+pixivflow dirs --verbose
+```
+
+**输出示例**：
+```
+📁 Directory Information
+
+  Download Directory:     ./downloads
+  Illustration Directory: ./downloads/illustrations
+  Novel Directory:        ./downloads/novels
+  Database Path:          ./data/pixiv-downloader.db
+```
+
+### 配置目录路径
+
+使用 `config set` 命令可以快速设置目录路径，无需手动编辑配置文件：
+
+```bash
+# 设置下载目录
+pixivflow config set storage.downloadDirectory ./my-downloads
+
+# 设置插画目录
+pixivflow config set storage.illustrationDirectory ./my-illustrations
+
+# 设置小说目录
+pixivflow config set storage.novelDirectory ./my-novels
+
+# 设置数据库路径
+pixivflow config set storage.databasePath ./data/my-db.db
+```
+
+**提示**：
+- 使用相对路径时，相对于项目根目录
+- 使用绝对路径时，直接指定完整路径
+- 设置后会自动备份原配置文件
+- 可以使用 `pixivflow config show` 查看所有配置（包括目录路径）
+
 ### 自动去重
 
 PixivFlow 使用 SQLite 数据库记录已下载的作品，自动跳过重复下载。

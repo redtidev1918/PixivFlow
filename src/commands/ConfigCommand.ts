@@ -36,6 +36,8 @@ export class ConfigCommand extends BaseCommand {
         return this.diffConfig(configPath, backupDir);
       case 'edit':
         return this.editConfig(configPath, backupDir);
+      case 'set':
+        return await this.setConfig(configPath, args.positional[1], args.positional[2], backupDir);
       default:
         return this.showHelp();
     }
@@ -430,6 +432,94 @@ export class ConfigCommand extends BaseCommand {
     }
   }
 
+  private async setConfig(configPath: string, key: string | undefined, value: string | undefined, backupDir: string): Promise<CommandResult> {
+    console.log('\n╔════════════════════════════════════════════════════════════════╗');
+    console.log('║              PixivFlow - Set Configuration                    ║');
+    console.log('╚════════════════════════════════════════════════════════════════╝\n');
+
+    if (!key || !value) {
+      console.log('  ✗ Usage: pixivflow config set <key> <value>');
+      console.log('');
+      console.log('  Available keys for directories:');
+      console.log('    storage.downloadDirectory      - Root download directory');
+      console.log('    storage.illustrationDirectory  - Illustration directory');
+      console.log('    storage.novelDirectory         - Novel directory');
+      console.log('    storage.databasePath           - Database file path');
+      console.log('');
+      console.log('  Examples:');
+      console.log('    pixivflow config set storage.downloadDirectory ./my-downloads');
+      console.log('    pixivflow config set storage.databasePath ./data/my-db.db');
+      console.log('');
+      return this.failure('Missing key or value');
+    }
+
+    if (!existsSync(configPath)) {
+      console.log('  ✗ Configuration file not found:', configPath);
+      console.log('  Run: pixivflow setup to create configuration\n');
+      return this.failure('Configuration file not found');
+    }
+
+    try {
+      // Backup first
+      this.backupConfig(configPath, backupDir);
+
+      // Read current config
+      const config = JSON.parse(readFileSync(configPath, 'utf-8'));
+
+      // Parse key path (e.g., "storage.downloadDirectory")
+      const keyParts = key.split('.');
+      if (keyParts.length < 2) {
+        console.log('  ✗ Invalid key format. Use dot notation (e.g., storage.downloadDirectory)');
+        return this.failure('Invalid key format');
+      }
+
+      // Navigate to the nested object
+      let current: any = config;
+      for (let i = 0; i < keyParts.length - 1; i++) {
+        const part = keyParts[i];
+        if (!current[part]) {
+          current[part] = {};
+        }
+        current = current[part];
+      }
+
+      // Set the value
+      const lastKey = keyParts[keyParts.length - 1];
+      const oldValue = current[lastKey];
+      current[lastKey] = value;
+
+      // Write back to file
+      writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf-8');
+
+      console.log('  ✓ Configuration updated successfully');
+      console.log(`  Key: ${key}`);
+      console.log(`  Old value: ${oldValue || '(not set)'}`);
+      console.log(`  New value: ${value}`);
+      console.log('');
+
+      // Validate the updated config
+      console.log('  Validating updated configuration...');
+      const validation = this.validateConfig(configPath);
+      if (!validation.success) {
+        console.log('  ⚠ Configuration updated but validation failed. Please check the config file.');
+      }
+
+      // Show directory info if it's a storage path
+      if (key.startsWith('storage.')) {
+        const { getDirectoryInfo, displayDirectoryInfo } = await import('../utils/directory-info');
+        const dirInfo = getDirectoryInfo(config as any, configPath);
+        displayDirectoryInfo(dirInfo, { verbose: false });
+      }
+
+      return this.success('Configuration updated');
+    } catch (error) {
+      return this.failure(
+        error instanceof Error ? error.message : String(error),
+        { configPath, key, value }
+      );
+    }
+  }
+
   private showHelp(): CommandResult {
     console.log('\n╔════════════════════════════════════════════════════════════════╗');
     console.log('║              PixivFlow - Configuration Manager                ║');
@@ -443,6 +533,7 @@ export class ConfigCommand extends BaseCommand {
     console.log('  list         List all backups');
     console.log('  diff         Compare current config with backup');
     console.log('  edit         Edit configuration file');
+    console.log('  set          Set a configuration value');
     console.log('');
 
     console.log('💡 Examples:');
@@ -453,6 +544,7 @@ export class ConfigCommand extends BaseCommand {
     console.log('  pixivflow config list               # List backups');
     console.log('  pixivflow config diff               # Compare with backup');
     console.log('  pixivflow config edit               # Edit configuration');
+    console.log('  pixivflow config set storage.downloadDirectory ./downloads  # Set directory');
     console.log('');
 
     return this.success('Help displayed');

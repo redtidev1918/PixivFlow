@@ -15,6 +15,38 @@ PixivFlow 的配置文件位于 `config/standalone.config.json`。本文档详�
 cp config/standalone.config.example.json config/standalone.config.json
 ```
 
+### 使用命令行管理配置
+
+除了手动编辑配置文件，还可以使用命令行工具快速管理配置：
+
+```bash
+# 查看配置
+pixivflow config show
+
+# 设置配置项（会自动备份原配置）
+pixivflow config set storage.downloadDirectory ./my-downloads
+pixivflow config set storage.illustrationDirectory ./my-illustrations
+
+# 验证配置
+pixivflow config validate
+
+# 备份配置
+pixivflow config backup
+
+# 恢复配置
+pixivflow config restore
+```
+
+**查看目录信息**：
+
+```bash
+# 查看所有目录路径
+pixivflow dirs
+
+# 查看详细目录信息
+pixivflow dirs --verbose
+```
+
 ---
 
 ## 🔐 认证配置
@@ -221,6 +253,34 @@ export all_proxy=socks5://127.0.0.1:6153
     "novelOrganization": "flat"
   }
 }
+```
+
+**快速设置目录路径**：
+
+可以使用命令行快速设置目录路径，无需手动编辑配置文件：
+
+```bash
+# 设置下载目录
+pixivflow config set storage.downloadDirectory ./my-downloads
+
+# 设置插画目录
+pixivflow config set storage.illustrationDirectory ./my-illustrations
+
+# 设置小说目录
+pixivflow config set storage.novelDirectory ./my-novels
+
+# 设置数据库路径
+pixivflow config set storage.databasePath ./data/my-db.db
+```
+
+**查看目录信息**：
+
+```bash
+# 查看所有目录路径
+pixivflow dirs
+
+# 查看详细目录信息（包括绝对路径、是否存在等）
+pixivflow dirs --verbose
 ```
 
 ### 目录组织方式

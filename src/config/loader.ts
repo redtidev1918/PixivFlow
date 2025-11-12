@@ -212,7 +212,24 @@ export function loadConfig(configPath?: string, skipValidation: boolean = false)
   }
 
   // Process placeholders (e.g., YESTERDAY)
-  return processConfigPlaceholders(config);
+  const finalConfig = processConfigPlaceholders(config);
+  
+  // Display directory information on first load (only if config was just created)
+  // This helps users know where files will be saved
+  if (existsSync(resolvedPath)) {
+    const configContent = readFileSync(resolvedPath, 'utf-8');
+    const configData = JSON.parse(configContent);
+    // Check if this is a newly created config (has minimal/default structure)
+    const isNewConfig = !configData.storage?.downloadDirectory || 
+                       configData.storage?.downloadDirectory === './downloads';
+    
+    if (isNewConfig) {
+      // Only show on first initialization, not on every load
+      // We'll show it in the download command instead to avoid spam
+    }
+  }
+  
+  return finalConfig;
 }
 
 

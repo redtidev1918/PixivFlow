@@ -590,6 +590,7 @@ pixivflow health                     # Health check (recommended ⭐)
 pixivflow status                     # View download statistics and recent records
 pixivflow logs                       # View run logs
 pixivflow setup                      # Interactive setup wizard (first time use) ⭐
+pixivflow dirs                       # View directory information (where files are saved) ⭐
 ```
 
 ### ⚙️ Configuration Management
@@ -597,10 +598,23 @@ pixivflow setup                      # Interactive setup wizard (first time use)
 ```bash
 pixivflow config                     # Config management (view/edit/backup/restore) ⭐
 pixivflow config show                # View config
+pixivflow config set <key> <value>   # Set config value (e.g., storage.downloadDirectory) ⭐
 pixivflow config backup              # Backup config
 pixivflow config restore             # Restore config
 pixivflow config validate            # Validate config
 pixivflow config edit                # Edit config
+```
+
+**Config Set Examples**:
+```bash
+# Set download directory
+pixivflow config set storage.downloadDirectory ./my-downloads
+
+# Set illustration directory
+pixivflow config set storage.illustrationDirectory ./my-illustrations
+
+# Set novel directory
+pixivflow config set storage.novelDirectory ./my-novels
 ```
 
 ### 📊 Monitoring and Maintenance

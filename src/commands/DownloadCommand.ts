@@ -79,6 +79,11 @@ export class DownloadCommand extends BaseCommand {
 
         await downloadManager.initialise();
         
+        // Display directory information at the start
+        const { getDirectoryInfo, displayInitializationInfo } = await import('../utils/directory-info');
+        const dirInfo = getDirectoryInfo(config, configPath);
+        displayInitializationInfo(dirInfo);
+        
         context.logger.info('='.repeat(60));
         context.logger.info('Starting Pixiv download job');
         context.logger.info('='.repeat(60));

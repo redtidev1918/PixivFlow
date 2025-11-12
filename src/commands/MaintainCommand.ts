@@ -379,5 +379,23 @@ export class MaintainCommand extends BaseCommand {
 
     console.log('');
   }
+
+  getUsage(): string {
+    return `maintain [options]
+
+Automatic maintenance (cleanup logs, optimize database, etc.).
+
+This command performs:
+  - Cleanup old logs (older than 30 days)
+  - Compress large log files (>100MB)
+  - Cleanup old backups (older than 7 days)
+  - Clean temporary files
+  - Optimize database (VACUUM, ANALYZE, REINDEX)
+  - Fix file permissions
+  - Check disk space
+
+Examples:
+  pixivflow maintain                 # Run maintenance tasks`;
+  }
 }
 

@@ -256,5 +256,20 @@ export class MonitorCommand extends BaseCommand {
   private sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
+
+  getUsage(): string {
+    return `monitor [options]
+
+Real-time monitoring of process status and performance metrics.
+
+Options:
+  --once, -o           Run once instead of continuous monitoring
+  --interval <seconds>, -i <seconds>  Refresh interval in seconds (default: 60)
+
+Examples:
+  pixivflow monitor                  # Start continuous monitoring
+  pixivflow monitor --once           # Run single check
+  pixivflow monitor --interval 30    # Monitor with 30-second refresh interval`;
+  }
 }
 

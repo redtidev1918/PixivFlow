@@ -172,5 +172,18 @@ export class BackupCommand extends BaseCommand {
       // Ignore errors
     }
   }
+
+  getUsage(): string {
+    return `backup [options]
+
+Automatic backup of configuration and data.
+
+Options:
+  -o, --output <path>    Output directory for backups (default: ./backups)
+
+Examples:
+  pixivflow backup                    # Create backup in ./backups
+  pixivflow backup --output /path/to/backups  # Custom backup location`;
+  }
 }
 

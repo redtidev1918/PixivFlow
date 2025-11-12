@@ -58,7 +58,9 @@ describe('DataTable', () => {
 
   it('shows empty state when data is empty', () => {
     render(<DataTable data={[]} columns={mockColumns} />);
-    expect(screen.getByText('No data')).toBeInTheDocument();
+    // There might be multiple "No data" texts (title and description), use getAllByText
+    const noDataElements = screen.getAllByText('No data');
+    expect(noDataElements.length).toBeGreaterThan(0);
   });
 
   it('shows custom empty text', () => {

@@ -10,7 +10,7 @@ import {
   useIncompleteTasks,
 } from '../../hooks/useDownload';
 import { downloadService } from '../../services/downloadService';
-import type { DownloadStatus, DownloadHistoryResponse, IncompleteTask } from '../../services/api';
+import type { ConfigData } from '../../services/api';
 
 // Mock the download service
 jest.mock('../../services/downloadService', () => ({
@@ -76,9 +76,13 @@ describe('useDownload', () => {
         status: 'running',
       };
 
-      const config = {
-        downloadDirectory: '/downloads',
-        maxConcurrentDownloads: 5,
+      const config: Partial<ConfigData> = {
+        storage: {
+          downloadDirectory: '/downloads',
+        },
+        download: {
+          concurrency: 5,
+        },
       };
 
       (downloadService.startDownload as jest.MockedFunction<typeof downloadService.startDownload>).mockResolvedValue(mockTask);
@@ -86,7 +90,7 @@ describe('useDownload', () => {
       const { result } = renderHook(() => useDownload(), { wrapper });
 
       await result.current.startAsync({
-        config: config as Partial<import('../../services/api').ConfigData>,
+        config,
       });
 
       expect(downloadService.startDownload).toHaveBeenCalledWith(undefined, config, undefined);
@@ -126,15 +130,9 @@ describe('useDownload', () => {
         targetId: 'target-1',
       });
 
-      // Wait for loading state to become true (may be immediate)
-      await waitFor(
-        () => {
-          expect(result.current.isStarting).toBe(true);
-        },
-        { timeout: 100 }
-      ).catch(() => {
-        // If it's already false, that's also acceptable
-        expect(result.current.isStarting).toBe(false);
+      // Wait for the mutation to start
+      await waitFor(() => {
+        expect(result.current.isStarting).toBe(true);
       });
 
       await startPromise;
@@ -147,11 +145,11 @@ describe('useDownload', () => {
 
   describe('useDownloadStatus', () => {
     it('should fetch download status successfully', async () => {
-      const mockStatus: DownloadStatus = {
+      const mockStatus = {
         hasActiveTask: true,
         activeTask: {
           taskId: 'task-123',
-          status: 'running',
+          status: 'running' as const,
           startTime: '2025-01-01T00:00:00Z',
         },
         allTasks: [],
@@ -171,11 +169,11 @@ describe('useDownload', () => {
     });
 
     it('should fetch status for specific task', async () => {
-      const mockStatus: DownloadStatus = {
+      const mockStatus = {
         hasActiveTask: true,
         activeTask: {
           taskId: 'task-123',
-          status: 'running',
+          status: 'running' as const,
           startTime: '2025-01-01T00:00:00Z',
         },
         allTasks: [],
@@ -193,7 +191,7 @@ describe('useDownload', () => {
     });
 
     it('should handle no active task', async () => {
-      const mockStatus: DownloadStatus = {
+      const mockStatus = {
         hasActiveTask: false,
         activeTask: undefined,
         allTasks: [],
@@ -208,11 +206,11 @@ describe('useDownload', () => {
       });
 
       expect(result.current.hasActiveTask).toBe(false);
-      expect(result.current.activeTask).toBeUndefined();
+      expect(result.current.activeTask).toBeNull();
     });
 
     it('should use custom refetch interval', async () => {
-      const mockStatus: DownloadStatus = {
+      const mockStatus = {
         hasActiveTask: false,
         activeTask: undefined,
         allTasks: [],
@@ -298,14 +296,14 @@ describe('useDownload', () => {
 
   describe('useDownloadHistory', () => {
     it('should fetch download history successfully', async () => {
-      const mockHistory: DownloadHistoryResponse = {
+      const mockHistory = {
         items: [
           {
             id: 1,
             pixivId: '12345',
             title: 'Test Illustration',
             author: 'Test Author',
-            type: 'illustration',
+            type: 'illustration' as const,
             tag: 'test-tag',
             filePath: '/downloads/test.jpg',
             downloadedAt: '2025-01-01T00:00:00Z',
@@ -364,7 +362,7 @@ describe('useDownload', () => {
 
   describe('useIncompleteTasks', () => {
     it('should fetch incomplete tasks successfully', async () => {
-      const mockTasks: { tasks: IncompleteTask[] } = {
+      const mockTasks = {
         tasks: [
           {
             id: 1,
@@ -389,7 +387,7 @@ describe('useDownload', () => {
     });
 
     it('should resume incomplete task successfully', async () => {
-      const mockTasks: { tasks: IncompleteTask[] } = {
+      const mockTasks = {
         tasks: [
           {
             id: 1,
@@ -420,7 +418,7 @@ describe('useDownload', () => {
     });
 
     it('should delete incomplete task successfully', async () => {
-      const mockTasks: { tasks: IncompleteTask[] } = {
+      const mockTasks = {
         tasks: [
           {
             id: 1,
@@ -448,7 +446,7 @@ describe('useDownload', () => {
     });
 
     it('should delete all incomplete tasks successfully', async () => {
-      const mockTasks: { tasks: IncompleteTask[] } = {
+      const mockTasks = {
         tasks: [
           {
             id: 1,
@@ -498,15 +496,9 @@ describe('useDownload', () => {
         type: 'illustration',
       });
 
-      // Wait for loading state to become true (may be immediate)
-      await waitFor(
-        () => {
-          expect(result.current.isResuming).toBe(true);
-        },
-        { timeout: 100 }
-      ).catch(() => {
-        // If it's already false, that's also acceptable
-        expect(result.current.isResuming).toBe(false);
+      // Wait for the mutation to start
+      await waitFor(() => {
+        expect(result.current.isResuming).toBe(true);
       });
 
       await resumePromise;

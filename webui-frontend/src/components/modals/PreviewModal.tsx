@@ -119,9 +119,16 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({
             }}
           >
             <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-              {typeof content === 'string'
-                ? JSON.stringify(JSON.parse(content), null, 2)
-                : JSON.stringify(content, null, 2)}
+              {(() => {
+                try {
+                  if (typeof content === 'string') {
+                    return JSON.stringify(JSON.parse(content), null, 2);
+                  }
+                  return JSON.stringify(content, null, 2);
+                } catch (error) {
+                  return typeof content === 'string' ? content : String(content);
+                }
+              })()}
             </pre>
           </div>
         );

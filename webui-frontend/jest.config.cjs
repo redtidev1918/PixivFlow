@@ -1,15 +1,11 @@
-import { pathsToModuleNameMapper } from 'ts-jest';
-import { readFileSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, resolve } from 'path';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const path = require('path');
+const { pathsToModuleNameMapper } = require('ts-jest');
+const { readFileSync } = require('fs');
 
 // Read tsconfig.json to get path mappings
 let tsconfig;
 try {
-  const tsconfigContent = readFileSync(resolve(__dirname, 'tsconfig.json'), 'utf-8');
+  const tsconfigContent = readFileSync(path.resolve(__dirname, 'tsconfig.json'), 'utf-8');
   // Remove comments from JSON (TypeScript config supports comments but JSON.parse doesn't)
   // Use a more sophisticated approach that handles strings correctly
   let cleanedContent = '';
@@ -72,16 +68,27 @@ try {
   tsconfig = { compilerOptions: { paths: {} } };
 }
 
-export default {
+module.exports = {
   preset: 'ts-jest',
   testEnvironment: 'jsdom',
   roots: ['<rootDir>/src'],
   testMatch: ['**/__tests__/**/*.{ts,tsx}', '**/*.{spec,test}.{ts,tsx}'],
+  globals: {
+    'import.meta': {
+      env: {
+        VITE_API_BASE_URL: '',
+        MODE: 'test',
+        DEV: false,
+        PROD: false,
+      },
+    },
+  },
   moduleNameMapper: {
     ...pathsToModuleNameMapper(tsconfig.compilerOptions?.paths || {}, {
       prefix: '<rootDir>/',
     }),
     '\\.(css|less|scss|sass)$': 'identity-obj-proxy',
+    '^dayjs$': require.resolve('dayjs'),
   },
   setupFilesAfterEnv: ['<rootDir>/src/__tests__/setup.ts'],
   collectCoverageFrom: [
@@ -104,6 +111,16 @@ export default {
     '^.+\\.(ts|tsx)$': ['ts-jest', {
       tsconfig: {
         jsx: 'react-jsx',
+      },
+      globals: {
+        'import.meta': {
+          env: {
+            VITE_API_BASE_URL: '',
+            MODE: 'test',
+            DEV: false,
+            PROD: false,
+          },
+        },
       },
     }],
   },

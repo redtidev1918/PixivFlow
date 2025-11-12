@@ -1129,8 +1129,34 @@ Component Update
   - [x] useAuth Hook 测试
   - [x] useConfig Hook 测试
   - [x] useDownload Hook 测试
-- [ ] 通用组件测试（FormField, FormSection, DataTable, ConfirmModal 等）
-- [ ] 集成测试
+- [x] 通用组件测试（基本完成）✅
+  - [x] FormField 组件测试
+  - [x] FormSection 组件测试
+  - [x] DataTable 组件测试
+  - [x] ConfirmModal 组件测试
+  - [x] FormModal 组件测试
+  - [x] PreviewModal 组件测试
+  - [x] LoadingSpinner 组件测试
+  - [x] ErrorBoundary 组件测试
+  - [x] EmptyState 组件测试
+  - [x] CodeEditor 组件测试
+  - [x] ErrorDisplay 组件测试
+  - [x] LoadingWrapper 组件测试
+  - [x] DateRangePicker 组件测试
+  - [x] FileUploader 组件测试
+  - [x] FormTabs 组件测试
+  - [x] TableFilters 组件测试
+  - [x] TablePagination 组件测试
+- [x] 页面组件测试（基本完成）✅
+  - [x] ProtectedRoute 组件测试
+  - [x] Dashboard 页面测试
+  - [x] Config 页面测试
+  - [x] Download 页面测试
+  - [x] History 页面测试
+  - [x] Logs 页面测试
+  - [x] Files 页面测试
+  - [x] App 路由测试
+- [ ] 集成测试（更深入的集成场景）
 - [ ] E2E 测试
 
 #### Phase 7: 文档和优化
@@ -1268,6 +1294,42 @@ Component Update
   - ✅ 所有测试用例总计 48 个，全部通过
   - ✅ 修复测试文件扩展名问题（.ts → .tsx）
   - ✅ 修复异步状态测试问题（使用 waitFor 等待状态更新）
+
+### 2025-01-XX (Phase 6 - 通用组件测试完成)
+- ✅ 创建通用组件单元测试
+  - ✅ FormField 组件测试（FormField.test.tsx）- 覆盖所有输入类型和功能
+  - ✅ FormSection 组件测试（FormSection.test.tsx）- 覆盖卡片、折叠、普通模式
+  - ✅ DataTable 组件测试（DataTable.test.tsx）- 覆盖排序、筛选、分页等功能
+  - ✅ ConfirmModal 组件测试（ConfirmModal.test.tsx）- 覆盖确认对话框功能
+  - ✅ FormModal 组件测试（FormModal.test.tsx）- 覆盖表单对话框功能
+  - ✅ PreviewModal 组件测试（PreviewModal.test.tsx）- 覆盖预览对话框功能
+  - ✅ LoadingSpinner 组件测试（LoadingSpinner.test.tsx）- 覆盖加载动画功能
+  - ✅ ErrorBoundary 组件测试（ErrorBoundary.test.tsx）- 覆盖错误捕获和恢复功能
+  - ✅ EmptyState 组件测试（EmptyState.test.tsx）- 覆盖空状态显示功能
+  - ✅ CodeEditor 组件测试（CodeEditor.test.tsx）- 覆盖代码编辑、复制、粘贴等功能
+  - ✅ ErrorDisplay 组件测试（ErrorDisplay.test.tsx）- 覆盖错误显示功能
+  - ✅ LoadingWrapper 组件测试（LoadingWrapper.test.tsx）- 覆盖加载包装器功能
+  - ✅ DateRangePicker 组件测试（DateRangePicker.test.tsx）- 覆盖日期范围选择功能
+  - ✅ FileUploader 组件测试（FileUploader.test.tsx）- 覆盖文件上传和验证功能
+  - ✅ FormTabs 组件测试（FormTabs.test.tsx）- 覆盖表单标签页功能
+  - ✅ TableFilters 组件测试（TableFilters.test.tsx）- 覆盖表格筛选功能
+  - ✅ TablePagination 组件测试（TablePagination.test.tsx）- 覆盖表格分页功能
+  - ✅ 修复 AppLayout 测试文件（从 vitest 迁移到 Jest）
+  - ✅ 修复测试中的类型错误和属性检查问题
+  - ✅ 所有通用组件测试文件创建完成，测试覆盖主要功能
+
+### 2025-01-XX (Phase 6 - 页面组件测试完成)
+- ✅ 创建页面组件单元测试
+  - ✅ ProtectedRoute 组件测试（ProtectedRoute.test.tsx）- 覆盖认证检查和路由保护功能
+  - ✅ Dashboard 页面测试（Dashboard.test.tsx）- 覆盖统计信息显示和刷新功能
+  - ✅ Config 页面测试（Config.test.tsx）- 覆盖配置页面渲染和标签页切换
+  - ✅ Download 页面测试（Download.test.tsx）- 覆盖下载任务管理功能
+  - ✅ History 页面测试（History.test.tsx）- 覆盖下载历史显示和筛选功能
+  - ✅ Logs 页面测试（Logs.test.tsx）- 覆盖日志显示和实时更新功能
+  - ✅ Files 页面测试（Files.test.tsx）- 覆盖文件浏览和预览功能
+  - ✅ App 路由测试（App.test.tsx）- 覆盖路由配置和页面导航
+  - ✅ 修复 CodeEditor 测试中的类型错误（clipboardData 空值检查）
+  - ✅ 所有页面组件测试文件创建完成，测试覆盖主要功能
 
 ---
 

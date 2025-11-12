@@ -102,8 +102,8 @@ describe('PreviewModal', () => {
   describe('Loading state', () => {
     it('shows loading spinner when loading is true', () => {
       render(<PreviewModal {...defaultProps} loading />);
-      // Ant Design Spin component
-      expect(screen.getByRole('status')).toBeInTheDocument();
+      // Ant Design Spin component - check for loading indicator
+      expect(screen.getByLabelText('loading')).toBeInTheDocument();
     });
 
     it('does not show content when loading', () => {

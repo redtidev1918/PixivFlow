@@ -269,16 +269,7 @@ describe('useAuth', () => {
         password: 'password123',
       });
 
-      // Wait for loading state to become true (may be immediate)
-      await waitFor(
-        () => {
-          expect(result.current.isLoggingIn).toBe(true);
-        },
-        { timeout: 100 }
-      ).catch(() => {
-        // If it's already false, that's also acceptable
-        expect(result.current.isLoggingIn).toBe(false);
-      });
+      expect(result.current.isLoggingIn).toBe(true);
 
       await loginPromise;
 
@@ -306,16 +297,7 @@ describe('useAuth', () => {
 
       const refreshPromise = result.current.refreshTokenAsync();
 
-      // Wait for loading state to become true (may be immediate)
-      await waitFor(
-        () => {
-          expect(result.current.isRefreshing).toBe(true);
-        },
-        { timeout: 100 }
-      ).catch(() => {
-        // If it's already false, that's also acceptable
-        expect(result.current.isRefreshing).toBe(false);
-      });
+      expect(result.current.isRefreshing).toBe(true);
 
       await refreshPromise;
 

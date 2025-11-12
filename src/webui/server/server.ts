@@ -57,7 +57,7 @@ export class WebUIServer {
   }
 
   constructor(options: WebUIServerOptions = {}) {
-    this.port = options.port || 3000;
+    this.port = options.port || (process.env.PORT ? parseInt(process.env.PORT, 10) : 3000);
     this.host = options.host || 'localhost';
 
     // Initialize Express app
@@ -100,53 +100,12 @@ export class WebUIServer {
         resolve(actualPort);
       });
 
-      this.server.on('error', async (err: NodeJS.ErrnoException) => {
+      this.server.on('error', (err: NodeJS.ErrnoException) => {
         if (err.code === 'EADDRINUSE') {
-          logger.warn(
-            `Port ${this.port} is already in use, trying to find an available port...`
-          );
-          console.log(
-            `[WebUI] Port ${this.port} is already in use, trying to find an available port...`
-          );
-
-          try {
-            // Try to find an available port
-            actualPort = await findAvailablePort(this.port, this.host, 10);
-            this.port = actualPort;
-
-            // Close the failed server and try again
-            this.server.removeAllListeners();
-            this.server.close();
-
-            // Create a new server instance with the available port
-            this.server = createServer(this.app);
-            this.io = new SocketServer(this.server, {
-              cors: {
-                origin: '*',
-                credentials: true,
-              },
-            });
-            setupLogStream(this.io);
-
-            // Try to start on the new port
-            this.server.listen(actualPort, this.host, () => {
-              logServerStart(this.host, actualPort);
-              resolve(actualPort);
-            });
-
-            this.server.on('error', (err2: NodeJS.ErrnoException) => {
-              logger.error('Server error after port change', {
-                error: err2.message,
-              });
-              logServerError(err2.message);
-              reject(err2);
-            });
-          } catch (findPortError) {
-            const errorMsg = `Could not find an available port starting from ${this.port}`;
-            logger.error(errorMsg, { error: findPortError });
-            logServerError(errorMsg);
-            reject(findPortError);
-          }
+          const errorMsg = `Port ${this.port} is already in use. Please free up the port or specify another one.`;
+          logger.error(errorMsg);
+          logServerError(errorMsg);
+          reject(new Error(errorMsg));
         } else {
           logServerError(err.message);
           reject(err);

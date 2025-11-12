@@ -319,11 +319,12 @@ npm install                # 安装前端依赖
 cd ..
 
 # 开发模式（推荐：一键启动）
-npm run dev                # 同时启动前端和后端，支持热重载
+npm run dev                # 同时启动前端 (http://localhost:5173) 和后端 (http://localhost:3001)，支持热重载
 
 # 开发模式（手动启动，前后端分离）
-npm run webui              # 后端
-npm run webui:frontend     # 前端（访问 http://localhost:5173）
+# 注意：此方式需要确保前后端端口匹配，不推荐
+npm run webui              # 启动后端（默认端口 3000，可能会自动切换）
+npm run webui:frontend     # 启动前端（默认访问 http://localhost:5173）
 
 # 生产模式（推荐：一键启动）
 npm run webui:start        # 构建前端并启动后端服务器

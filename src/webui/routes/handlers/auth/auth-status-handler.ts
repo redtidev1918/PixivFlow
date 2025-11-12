@@ -85,20 +85,25 @@ export async function getAuthStatus(req: Request, res: Response): Promise<void> 
         }
       }
       
+      const isTokenError = validationErrors.some(e => e.includes('refreshToken'));
+
+      // If the specific error is about the token, force authenticated to false
+      const finalAuthenticated = isTokenError ? false : authenticated;
+
       logger.warn('Configuration invalid when checking auth status', {
         errors: validationErrors,
         warnings: validationWarnings,
         hasToken,
-        authenticated,
+        authenticated: finalAuthenticated,
         tokenValid,
       });
       
       res.json({
         data: {
-          authenticated,
+          authenticated: finalAuthenticated,
           hasToken,
           tokenValid,
-          isAuthenticated: authenticated, // Alias for compatibility
+          isAuthenticated: finalAuthenticated, // Alias for compatibility
           configReady: false, // Config is not fully ready (validation failed)
           errors: validationErrors,
           warnings: validationWarnings,

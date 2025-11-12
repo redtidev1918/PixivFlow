@@ -13,8 +13,9 @@ interface ConfigFile {
 
 interface Target {
   type: 'illustration' | 'novel';
-  tag: string;
+  tag?: string;
   limit?: number;
+  [key: string]: any;
 }
 
 interface StartDownloadModalProps {
@@ -113,7 +114,7 @@ export const StartDownloadModal: React.FC<StartDownloadModalProps> = ({
                       ? t('download.typeIllustration')
                       : t('download.typeNovel')}
                   </Tag>
-                  <Text strong>{target.tag}</Text>
+                  <Text strong>{target.tag || `Target ${index + 1}`}</Text>
                   {target.limit && (
                     <Text type="secondary">
                       ({t('download.limit')}: {target.limit} {t('download.entries')})

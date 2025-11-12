@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fileService } from '../services/fileService';
 import { useErrorHandler } from './useErrorHandler';
+import { QUERY_KEYS } from '../constants';
 
 /**
  * Hook for managing files
@@ -21,7 +22,7 @@ export function useFiles(params?: {
     error,
     refetch,
   } = useQuery({
-    queryKey: ['files', params],
+    queryKey: QUERY_KEYS.FILES(params),
     queryFn: () => fileService.listFiles(params),
   });
 
@@ -29,7 +30,7 @@ export function useFiles(params?: {
     mutationFn: ({ id, path, type }: { id: string; path?: string; type?: string }) =>
       fileService.deleteFile(id, { path, type }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['files'] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.FILES() });
     },
     onError: (error) => handleError(error),
   });
@@ -61,7 +62,7 @@ export function useRecentFiles(params?: {
     error,
     refetch,
   } = useQuery({
-    queryKey: ['files', 'recent', params],
+    queryKey: QUERY_KEYS.FILES_RECENT(params),
     queryFn: () => fileService.getRecentFiles(params),
   });
 
@@ -83,7 +84,7 @@ export function useFilePreview(path: string | undefined, type?: string) {
     error,
     refetch,
   } = useQuery({
-    queryKey: ['files', 'preview', path, type],
+    queryKey: QUERY_KEYS.FILES_PREVIEW(path!, type),
     queryFn: () => fileService.getFilePreview(path!, type),
     enabled: !!path,
   });
@@ -114,9 +115,9 @@ export function useFileNormalize() {
       reorganize?: boolean;
       updateDatabase?: boolean;
       type?: 'illustration' | 'novel' | 'all';
-    }) => fileService.normalizeFiles(options),
+    }) =>       fileService.normalizeFiles(options),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['files'] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.FILES() });
     },
     onError: (error) => handleError(error),
   });

@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { configService } from '../services/configService';
 import { ConfigData } from '../services/api';
 import { useErrorHandler } from './useErrorHandler';
+import { QUERY_KEYS } from '../constants';
 
 /**
  * Hook for managing configuration
@@ -16,14 +17,14 @@ export function useConfig() {
     error,
     refetch,
   } = useQuery({
-    queryKey: ['config'],
+    queryKey: QUERY_KEYS.CONFIG,
     queryFn: () => configService.getConfig(),
   });
 
   const updateMutation = useMutation({
     mutationFn: (config: Partial<ConfigData>) => configService.updateConfig(config),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['config'] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CONFIG });
     },
     onError: (error) => handleError(error),
   });
@@ -61,15 +62,15 @@ export function useConfigFiles() {
     error,
     refetch,
   } = useQuery({
-    queryKey: ['configFiles'],
+    queryKey: QUERY_KEYS.CONFIG_FILES,
     queryFn: () => configService.listConfigFiles(),
   });
 
   const switchMutation = useMutation({
     mutationFn: (path: string) => configService.switchConfigFile(path),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['configFiles'] });
-      queryClient.invalidateQueries({ queryKey: ['config'] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CONFIG_FILES });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CONFIG });
     },
     onError: (error) => handleError(error),
   });
@@ -78,7 +79,7 @@ export function useConfigFiles() {
     mutationFn: ({ config, name }: { config: Partial<ConfigData>; name?: string }) =>
       configService.importConfigFile(config, name),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['configFiles'] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CONFIG_FILES });
     },
     onError: (error) => handleError(error),
   });
@@ -86,7 +87,7 @@ export function useConfigFiles() {
   const deleteMutation = useMutation({
     mutationFn: (filename: string) => configService.deleteConfigFile(filename),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['configFiles'] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CONFIG_FILES });
     },
     onError: (error) => handleError(error),
   });
@@ -121,7 +122,7 @@ export function useConfigHistory() {
     error,
     refetch,
   } = useQuery({
-    queryKey: ['configHistory'],
+    queryKey: QUERY_KEYS.CONFIG_HISTORY,
     queryFn: () => configService.getConfigHistory(),
   });
 
@@ -136,7 +137,7 @@ export function useConfigHistory() {
       description?: string;
     }) => configService.saveConfigHistory(name, config, description),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['configHistory'] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CONFIG_HISTORY });
     },
     onError: (error) => handleError(error),
   });
@@ -144,8 +145,8 @@ export function useConfigHistory() {
   const applyMutation = useMutation({
     mutationFn: (id: number) => configService.applyConfigHistory(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['configHistory'] });
-      queryClient.invalidateQueries({ queryKey: ['config'] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CONFIG_HISTORY });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CONFIG });
     },
     onError: (error) => handleError(error),
   });
@@ -153,7 +154,7 @@ export function useConfigHistory() {
   const deleteMutation = useMutation({
     mutationFn: (id: number) => configService.deleteConfigHistory(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['configHistory'] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CONFIG_HISTORY });
     },
     onError: (error) => handleError(error),
   });
@@ -187,7 +188,7 @@ export function useConfigValidation() {
   });
 
   const diagnoseQuery = useQuery({
-    queryKey: ['configDiagnose'],
+    queryKey: QUERY_KEYS.CONFIG_DIAGNOSE,
     queryFn: () => configService.diagnoseConfig(),
     enabled: false, // Only run when explicitly called
   });

@@ -62,16 +62,38 @@ export const LOG_LEVEL = {
 
 /**
  * Query keys for React Query
+ * Helper functions for creating query keys with parameters
  */
 export const QUERY_KEYS = {
-  AUTH_STATUS: ['auth', 'status'],
+  // Auth
+  AUTH_STATUS: ['authStatus'],
+  AUTH: ['auth', 'status'],
+  
+  // Config
   CONFIG: ['config'],
-  DOWNLOAD_STATUS: ['download', 'status'],
-  DOWNLOAD_HISTORY: ['download', 'history'],
+  CONFIG_FILES: ['configFiles'],
+  CONFIG_HISTORY: ['configHistory'],
+  CONFIG_DIAGNOSE: ['configDiagnose'],
+  
+  // Download
+  DOWNLOAD_STATUS: (taskId?: string) => taskId ? ['download', 'status', taskId] : ['download', 'status'],
+  DOWNLOAD_LOGS: (taskId: string) => ['download', 'logs', taskId],
+  DOWNLOAD_HISTORY: (params?: any) => params ? ['download', 'history', params] : ['download', 'history'],
   INCOMPLETE_TASKS: ['download', 'incomplete'],
+  
+  // Stats
   STATS_OVERVIEW: ['stats', 'overview'],
-  LOGS: ['logs'],
-  FILES: ['files'],
+  STATS_DOWNLOADS: (period?: string) => period ? ['stats', 'downloads', period] : ['stats', 'downloads'],
+  STATS_TAGS: (limit?: number) => limit ? ['stats', 'tags', limit] : ['stats', 'tags'],
+  STATS_AUTHORS: (limit?: number) => limit ? ['stats', 'authors', limit] : ['stats', 'authors'],
+  
+  // Logs
+  LOGS: (params?: any) => params ? ['logs', params] : ['logs'],
+  
+  // Files
+  FILES: (params?: any) => params ? ['files', params] : ['files'],
+  FILES_RECENT: (params?: any) => params ? ['files', 'recent', params] : ['files', 'recent'],
+  FILES_PREVIEW: (path: string, type?: string) => type ? ['files', 'preview', path, type] : ['files', 'preview', path],
 } as const;
 
 /**

@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { message } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { api } from '../services/api';
+import { QUERY_KEYS } from '../constants';
 
 export function useLogin() {
   const { t } = useTranslation();
@@ -34,9 +35,9 @@ export function useLogin() {
       }
       
       // Invalidate queries to refresh data
-      queryClient.invalidateQueries({ queryKey: ['authStatus'] });
-      queryClient.invalidateQueries({ queryKey: ['config'] });
-      queryClient.invalidateQueries({ queryKey: ['stats', 'overview'] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.AUTH_STATUS });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CONFIG });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.STATS_OVERVIEW });
       
       // Wait for backend config to refresh
       await new Promise(resolve => setTimeout(resolve, 1500));

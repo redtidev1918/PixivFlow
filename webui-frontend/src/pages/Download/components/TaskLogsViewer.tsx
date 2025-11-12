@@ -1,10 +1,8 @@
 import React, { useEffect, useRef } from 'react';
-import { Collapse, Space, Typography } from 'antd';
+import { Collapse, Space } from 'antd';
 import { InfoCircleOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { formatDate } from '../../../utils/dateUtils';
-
-const { Text } = Typography;
 
 interface LogEntry {
   timestamp: string;

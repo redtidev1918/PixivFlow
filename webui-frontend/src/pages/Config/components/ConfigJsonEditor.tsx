@@ -7,6 +7,7 @@ import { api } from '../../../services/api';
 import { CodeEditor } from '../../../components/common/CodeEditor';
 import { useConfigFiles } from '../../../hooks/useConfig';
 import { extractErrorInfo, translateErrorCode } from '../../../utils/errorCodeTranslator';
+import { QUERY_KEYS } from '../../../constants';
 
 interface ConfigJsonEditorProps {
   visible: boolean;
@@ -150,8 +151,8 @@ export const ConfigJsonEditor: React.FC<ConfigJsonEditorProps> = ({
       setHasExternalChanges(false);
       
       // Refresh config data
-      await queryClient.invalidateQueries({ queryKey: ['config'] });
-      await queryClient.invalidateQueries({ queryKey: ['configFiles'] });
+      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CONFIG });
+      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CONFIG_FILES });
       refetchConfigFiles();
       
       // If this is the active config, reload the page

@@ -1,17 +1,12 @@
-import { useQuery } from '@tanstack/react-query';
 import { Card, Row, Col, Statistic, Spin, Button, message } from 'antd';
 import { DownloadOutlined, PictureOutlined, FileTextOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useCallback } from 'react';
-import { api } from '../services/api';
+import { useStatsOverview } from '../hooks/useStats';
 
 export default function Dashboard() {
   const { t } = useTranslation();
-  
-  const { data, isLoading, refetch: refetchStats } = useQuery({
-    queryKey: ['stats', 'overview'],
-    queryFn: () => api.getStatsOverview(),
-  });
+  const { stats, isLoading, refetch: refetchStats } = useStatsOverview();
 
   // Handle refresh stats
   const handleRefreshStats = useCallback(async () => {
@@ -27,6 +22,9 @@ export default function Dashboard() {
   if (isLoading) {
     return <Spin size="large" style={{ display: 'block', textAlign: 'center', marginTop: 50 }} />;
   }
+
+  // Extract stats data from API response structure
+  const statsData = (stats as any)?.data?.data || stats || {};
 
   return (
     <div>
@@ -45,7 +43,7 @@ export default function Dashboard() {
           <Card>
             <Statistic
               title={t('dashboard.totalDownloads')}
-              value={data?.data?.data?.totalDownloads || 0}
+              value={statsData.totalDownloads || 0}
               prefix={<DownloadOutlined />}
             />
           </Card>
@@ -54,7 +52,7 @@ export default function Dashboard() {
           <Card>
             <Statistic
               title={t('dashboard.illustrations')}
-              value={data?.data?.data?.illustrations || 0}
+              value={statsData.illustrations || 0}
               prefix={<PictureOutlined />}
             />
           </Card>
@@ -63,7 +61,7 @@ export default function Dashboard() {
           <Card>
             <Statistic
               title={t('dashboard.novels')}
-              value={data?.data?.data?.novels || 0}
+              value={statsData.novels || 0}
               prefix={<FileTextOutlined />}
             />
           </Card>
@@ -72,7 +70,7 @@ export default function Dashboard() {
       <Row gutter={16} style={{ marginTop: 16 }}>
         <Col span={24}>
           <Card title={t('dashboard.recentDownloads')}>
-            <p>{t('dashboard.recentDownloadsDesc', { count: data?.data?.data?.recentDownloads || 0 })}</p>
+            <p>{t('dashboard.recentDownloadsDesc', { count: statsData.recentDownloads || 0 })}</p>
           </Card>
         </Col>
       </Row>

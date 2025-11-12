@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { statsService } from '../services/statsService';
+import { QUERY_KEYS } from '../constants';
 
 /**
  * Hook for getting overview statistics
@@ -11,7 +12,7 @@ export function useStatsOverview() {
     error,
     refetch,
   } = useQuery({
-    queryKey: ['stats', 'overview'],
+    queryKey: QUERY_KEYS.STATS_OVERVIEW,
     queryFn: () => statsService.getStatsOverview(),
   });
 
@@ -33,7 +34,7 @@ export function useDownloadStats(period?: string) {
     error,
     refetch,
   } = useQuery({
-    queryKey: ['stats', 'downloads', period],
+    queryKey: QUERY_KEYS.STATS_DOWNLOADS(period),
     queryFn: () => statsService.getDownloadStats(period),
   });
 
@@ -55,7 +56,7 @@ export function useTagStats(limit?: number) {
     error,
     refetch,
   } = useQuery({
-    queryKey: ['stats', 'tags', limit],
+    queryKey: QUERY_KEYS.STATS_TAGS(limit),
     queryFn: () => statsService.getTagStats(limit),
   });
 
@@ -77,7 +78,7 @@ export function useAuthorStats(limit?: number) {
     error,
     refetch,
   } = useQuery({
-    queryKey: ['stats', 'authors', limit],
+    queryKey: QUERY_KEYS.STATS_AUTHORS(limit),
     queryFn: () => statsService.getAuthorStats(limit),
   });
 

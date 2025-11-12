@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Form, Tabs, Button, Space, Typography, Select, Tag, Modal, message } from 'antd';
 import {
   SaveOutlined,
@@ -13,9 +13,9 @@ import {
 import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
 import { useConfig, useConfigFiles } from '../../hooks/useConfig';
-import { useErrorHandler } from '../../hooks/useErrorHandler';
 import { api } from '../../services/api';
 import { extractErrorInfo, translateErrorCode } from '../../utils/errorCodeTranslator';
+import { QUERY_KEYS } from '../../constants';
 import { BasicConfigForm } from './components/BasicConfigForm';
 import { NetworkConfigForm } from './components/NetworkConfigForm';
 import { StorageConfigForm } from './components/StorageConfigForm';
@@ -38,9 +38,8 @@ export default function Config() {
   const [jsonEditorVisible, setJsonEditorVisible] = useState(false);
   const [editingConfigFile, setEditingConfigFile] = useState<string | null>(null);
 
-  const { config, isLoading, update, updateAsync, validate, isUpdating, isValidating } = useConfig();
+  const { config, isLoading, updateAsync, validate, isUpdating, isValidating } = useConfig();
   const { configFiles, refetch: refetchConfigFiles } = useConfigFiles();
-  const { handleError } = useErrorHandler();
 
   // Load config into form when it's available
   useEffect(() => {
@@ -162,8 +161,8 @@ export default function Config() {
         }
       }
 
-      await queryClient.invalidateQueries({ queryKey: ['config'] });
-      await queryClient.invalidateQueries({ queryKey: ['configFiles'] });
+      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CONFIG });
+      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CONFIG_FILES });
       refetchConfigFiles();
 
       if (successCount > 0 && failCount === 0) {
@@ -282,7 +281,7 @@ export default function Config() {
           </Space>
         </div>
         <Space wrap>
-          <Button icon={<ReloadOutlined />} onClick={() => queryClient.invalidateQueries({ queryKey: ['config'] })}>
+          <Button icon={<ReloadOutlined />} onClick={() => queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CONFIG })}>
             {t('common.refresh')}
           </Button>
           <Button icon={<FileTextOutlined />} onClick={() => setPreviewVisible(true)}>

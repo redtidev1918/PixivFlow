@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { authService } from '../services/authService';
 import { useErrorHandler } from './useErrorHandler';
+import { QUERY_KEYS } from '../constants';
 
 /**
  * Hook for managing authentication
@@ -15,7 +16,7 @@ export function useAuth() {
     error,
     refetch,
   } = useQuery({
-    queryKey: ['auth', 'status'],
+    queryKey: QUERY_KEYS.AUTH,
     queryFn: () => authService.getAuthStatus(),
   });
 
@@ -32,8 +33,8 @@ export function useAuth() {
       proxy?: any;
     }) => authService.login(username, password, headless, proxy),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['auth', 'status'] });
-      queryClient.invalidateQueries({ queryKey: ['config'] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.AUTH });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CONFIG });
     },
     onError: (error) => handleError(error),
   });
@@ -41,8 +42,8 @@ export function useAuth() {
   const loginWithTokenMutation = useMutation({
     mutationFn: (refreshToken: string) => authService.loginWithToken(refreshToken),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['auth', 'status'] });
-      queryClient.invalidateQueries({ queryKey: ['config'] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.AUTH });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CONFIG });
     },
     onError: (error) => handleError(error),
   });
@@ -50,8 +51,8 @@ export function useAuth() {
   const refreshTokenMutation = useMutation({
     mutationFn: (refreshToken?: string) => authService.refreshToken(refreshToken),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['auth', 'status'] });
-      queryClient.invalidateQueries({ queryKey: ['config'] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.AUTH });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CONFIG });
     },
     onError: (error) => handleError(error),
   });
@@ -59,8 +60,8 @@ export function useAuth() {
   const logoutMutation = useMutation({
     mutationFn: () => authService.logout(),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['auth', 'status'] });
-      queryClient.invalidateQueries({ queryKey: ['config'] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.AUTH });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CONFIG });
     },
     onError: (error) => handleError(error),
   });

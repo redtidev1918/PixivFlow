@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { logsService } from '../services/logsService';
 import { useErrorHandler } from './useErrorHandler';
+import { QUERY_KEYS } from '../constants';
 
 /**
  * Hook for managing application logs
@@ -20,14 +21,14 @@ export function useLogs(params?: {
     error,
     refetch,
   } = useQuery({
-    queryKey: ['logs', params],
+    queryKey: QUERY_KEYS.LOGS(params),
     queryFn: () => logsService.getLogs(params),
   });
 
   const clearMutation = useMutation({
     mutationFn: () => logsService.clearLogs(),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['logs'] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.LOGS() });
     },
     onError: (error) => handleError(error),
   });

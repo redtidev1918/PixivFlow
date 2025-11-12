@@ -2,6 +2,7 @@ import { Navigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Spin } from 'antd';
 import { api } from '../services/api';
+import { QUERY_KEYS } from '../constants';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -14,7 +15,7 @@ interface ProtectedRouteProps {
  */
 export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   const { data, isLoading } = useQuery({
-    queryKey: ['authStatus'],
+    queryKey: QUERY_KEYS.AUTH_STATUS,
     queryFn: () => api.getAuthStatus(),
     retry: false,
     staleTime: 0, // No cache - always fetch fresh data

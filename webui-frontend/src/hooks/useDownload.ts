@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { downloadService } from '../services/downloadService';
 import { ConfigData } from '../services/api';
 import { useErrorHandler } from './useErrorHandler';
+import { QUERY_KEYS } from '../constants';
 
 /**
  * Hook for managing download tasks
@@ -21,7 +22,7 @@ export function useDownload() {
       configPaths?: string[];
     }) => downloadService.startDownload(targetId, config, configPaths),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['download', 'status'] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.DOWNLOAD_STATUS() });
     },
     onError: (error) => handleError(error),
   });
@@ -29,7 +30,7 @@ export function useDownload() {
   const stopMutation = useMutation({
     mutationFn: (taskId: string) => downloadService.stopDownload(taskId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['download', 'status'] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.DOWNLOAD_STATUS() });
     },
     onError: (error) => handleError(error),
   });
@@ -54,7 +55,7 @@ export function useDownloadStatus(taskId?: string, refetchInterval?: number | fa
     error,
     refetch,
   } = useQuery({
-    queryKey: ['download', 'status', taskId],
+    queryKey: QUERY_KEYS.DOWNLOAD_STATUS(taskId),
     queryFn: () => downloadService.getDownloadStatus(taskId),
     refetchInterval: refetchInterval ?? 2000,
   });
@@ -80,7 +81,7 @@ export function useDownloadLogs(taskId: string | undefined, limit?: number, refe
     error,
     refetch,
   } = useQuery({
-    queryKey: ['download', 'logs', taskId],
+    queryKey: QUERY_KEYS.DOWNLOAD_LOGS(taskId!),
     queryFn: () => downloadService.getTaskLogs(taskId!, limit),
     enabled: !!taskId,
     refetchInterval: taskId && (refetchInterval ?? 2000) ? refetchInterval ?? 2000 : false,
@@ -114,7 +115,7 @@ export function useDownloadHistory(params?: {
     error,
     refetch,
   } = useQuery({
-    queryKey: ['download', 'history', params],
+    queryKey: QUERY_KEYS.DOWNLOAD_HISTORY(params),
     queryFn: () => downloadService.getDownloadHistory(params),
   });
 
@@ -142,7 +143,7 @@ export function useIncompleteTasks() {
     error,
     refetch,
   } = useQuery({
-    queryKey: ['download', 'incomplete'],
+    queryKey: QUERY_KEYS.INCOMPLETE_TASKS,
     queryFn: () => downloadService.getIncompleteTasks(),
   });
 
@@ -150,8 +151,8 @@ export function useIncompleteTasks() {
     mutationFn: ({ tag, type }: { tag: string; type: 'illustration' | 'novel' }) =>
       downloadService.resumeDownload(tag, type),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['download', 'incomplete'] });
-      queryClient.invalidateQueries({ queryKey: ['download', 'status'] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.INCOMPLETE_TASKS });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.DOWNLOAD_STATUS() });
     },
     onError: (error) => handleError(error),
   });
@@ -159,7 +160,7 @@ export function useIncompleteTasks() {
   const deleteMutation = useMutation({
     mutationFn: (id: number) => downloadService.deleteIncompleteTask(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['download', 'incomplete'] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.INCOMPLETE_TASKS });
     },
     onError: (error) => handleError(error),
   });
@@ -167,7 +168,7 @@ export function useIncompleteTasks() {
   const deleteAllMutation = useMutation({
     mutationFn: () => downloadService.deleteAllIncompleteTasks(),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['download', 'incomplete'] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.INCOMPLETE_TASKS });
     },
     onError: (error) => handleError(error),
   });

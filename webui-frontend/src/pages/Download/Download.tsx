@@ -5,6 +5,7 @@ import { Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { api } from '../../services/api';
 import { translateErrorCode, extractErrorInfo } from '../../utils/errorCodeTranslator';
+import { QUERY_KEYS } from '../../constants';
 import {
   useDownload,
   useDownloadStatus,
@@ -36,7 +37,6 @@ export default function Download() {
   } = useDownload();
 
   const {
-    status: statusData,
     isLoading: statusLoading,
     hasActiveTask,
     activeTask,
@@ -58,11 +58,11 @@ export default function Download() {
   } = useIncompleteTasks();
 
   // Get config to show available targets and paths
-  const { config: configData, refetch: refetchConfig } = useConfig(5000);
+  const { config: configData, refetch: refetchConfig } = useConfig();
 
   // Get configuration files list
   const { data: configFilesData } = useQuery({
-    queryKey: ['configFiles'],
+    queryKey: QUERY_KEYS.CONFIG_FILES,
     queryFn: () => api.listConfigFiles(),
   });
 
@@ -172,7 +172,7 @@ export default function Download() {
   const handleDeleteAll = async () => {
     try {
       const response = await deleteAllIncompleteTasksAsync();
-      const deletedCount = response?.data?.data?.deletedCount || 0;
+      const deletedCount = response?.deletedCount || 0;
       if (deletedCount === 0) {
         message.info(t('download.noIncompleteTasks'));
       } else {
@@ -213,7 +213,7 @@ export default function Download() {
         isStarting={isStarting}
         isRunningAll={false}
         isStopping={isStopping}
-        storage={configData?.data?.storage}
+        storage={configData?.storage}
         onRefreshConfig={refetchConfig}
       />
 
@@ -252,7 +252,7 @@ export default function Download() {
         onFinish={handleStart}
         isSubmitting={isStarting}
         configFiles={configFilesData?.data?.data || []}
-        targets={configData?.data?.targets || []}
+        targets={configData?.targets || []}
       />
     </div>
   );

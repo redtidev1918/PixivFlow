@@ -4,7 +4,6 @@ import { EditOutlined, PlayCircleOutlined, DeleteOutlined, ReloadOutlined } from
 import { useTranslation } from 'react-i18next';
 import { useConfigFiles } from '../../../hooks/useConfig';
 import { useErrorHandler } from '../../../hooks/useErrorHandler';
-import { api } from '../../../services/api';
 import { extractErrorInfo } from '../../../utils/errorCodeTranslator';
 import { ConfigJsonEditor } from './ConfigJsonEditor';
 
@@ -33,7 +32,6 @@ export const ConfigFilesManager: React.FC<ConfigFilesManagerProps> = ({
   const { handleError } = useErrorHandler();
   const [jsonEditorVisible, setJsonEditorVisible] = useState(false);
   const [editingConfigFile, setEditingConfigFile] = useState<string | null>(null);
-  const [jsonEditorLoading, setJsonEditorLoading] = useState(false);
 
   const handleEditJson = async (filename: string) => {
     if (onJsonEditorOpen) {
@@ -42,7 +40,6 @@ export const ConfigFilesManager: React.FC<ConfigFilesManagerProps> = ({
     }
 
     try {
-      setJsonEditorLoading(true);
       setEditingConfigFile(filename);
       setJsonEditorVisible(true);
     } catch (error: any) {
@@ -50,8 +47,6 @@ export const ConfigFilesManager: React.FC<ConfigFilesManagerProps> = ({
       message.error(
         `${t('config.configFileReadFailed')}: ${errorMessage || error?.message || t('config.unknownError')}`
       );
-    } finally {
-      setJsonEditorLoading(false);
     }
   };
 

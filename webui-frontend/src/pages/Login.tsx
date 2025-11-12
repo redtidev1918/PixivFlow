@@ -6,6 +6,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 import { translateErrorCode, extractErrorInfo } from '../utils/errorCodeTranslator';
+import { QUERY_KEYS } from '../constants';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -23,7 +24,7 @@ export default function Login() {
 
   // Check if already logged in
   const { data: authStatus, isLoading: authStatusLoading, refetch: refetchAuthStatus } = useQuery({
-    queryKey: ['authStatus'],
+    queryKey: QUERY_KEYS.AUTH_STATUS,
     queryFn: () => api.getAuthStatus(),
     retry: false,
     refetchInterval: false, // We'll handle polling manually
@@ -31,7 +32,7 @@ export default function Login() {
 
   // Get config to read proxy settings
   const { data: configData } = useQuery({
-    queryKey: ['config'],
+    queryKey: QUERY_KEYS.CONFIG,
     queryFn: () => api.getConfig(),
   });
 
@@ -226,8 +227,8 @@ export default function Login() {
         }
         
         // Invalidate queries to refresh data
-        queryClient.invalidateQueries({ queryKey: ['authStatus'] });
-        queryClient.invalidateQueries({ queryKey: ['config'] });
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.AUTH_STATUS });
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CONFIG });
         
         // Wait for backend config to refresh (give it more time)
         await new Promise(resolve => setTimeout(resolve, 1500));

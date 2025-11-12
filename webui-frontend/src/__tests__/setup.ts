@@ -31,3 +31,7 @@ global.IntersectionObserver = class IntersectionObserver {
   unobserve() {}
 } as unknown as typeof IntersectionObserver;
 
+// Mock URL.createObjectURL
+global.URL.createObjectURL = jest.fn(() => 'mock-object-url');
+global.URL.revokeObjectURL = jest.fn();
+

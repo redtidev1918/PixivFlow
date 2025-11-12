@@ -21,22 +21,71 @@ function normalizeRelativePath(relativePath: string): string {
 }
 
 /**
- * Detect and fix path duplication in absolute paths
- * Checks if an absolute path contains "downloads/downloads" and fixes it
+ * Detect and fix various path issues in absolute paths
+ * - Path duplication (e.g., /downloads/downloads/)
+ * - Path concatenation errors (e.g., /Users/ya/Users/yaoxiaohang/...)
+ * - Multiple slashes
+ * 
+ * Only fixes obvious errors, doesn't modify valid paths
  */
-function fixAbsolutePathDuplication(absolutePath: string): string {
-  const normalized = normalize(absolutePath);
-  // Check if path contains "downloads/downloads" pattern
-  if (normalized.includes('/downloads/downloads/')) {
-    // Replace "downloads/downloads" with "downloads"
-    const fixed = normalized.replace(/\/downloads\/downloads\//g, '/downloads/');
-    logger.warn('Detected path duplication in absolute path, fixing', {
-      original: absolutePath,
-      fixed: fixed,
-    });
-    return fixed;
+function fixAbsolutePathIssues(absolutePath: string, expectedBaseDir?: string): string {
+  let fixed = normalize(absolutePath);
+  
+  // Fix multiple consecutive slashes (except at the start for Unix paths)
+  fixed = fixed.replace(/([^/])\/+/g, '$1/');
+  
+  // Fix path duplication patterns - only fix if pattern is clearly duplicated
+  // Common patterns: /downloads/downloads/, /data/data/, /illustrations/illustrations/
+  const duplicationPatterns = [
+    { pattern: /\/downloads\/downloads\//g, replacement: '/downloads/' },
+    { pattern: /\/data\/data\//g, replacement: '/data/' },
+    { pattern: /\/illustrations\/illustrations\//g, replacement: '/illustrations/' },
+    { pattern: /\/novels\/novels\//g, replacement: '/novels/' },
+  ];
+  
+  for (const { pattern, replacement } of duplicationPatterns) {
+    if (pattern.test(fixed)) {
+      const before = fixed;
+      fixed = fixed.replace(pattern, replacement);
+      if (before !== fixed) {
+        logger.warn('Detected path duplication, fixing', {
+          original: absolutePath,
+          fixed: fixed,
+        });
+      }
+    }
   }
-  return normalized;
+  
+  // Fix user path concatenation errors
+  // macOS/Linux: /Users/username1/Users/username2/ or /home/username1/home/username2/
+  // Windows: C:\Users\username1\Users\username2\
+  if (process.platform === 'win32') {
+    // Windows path pattern: C:\Users\user1\Users\user2\ or similar
+    const winUserPathPattern = /^([A-Z]:\\)Users\\([^\\]+)\\Users\\([^\\]+)\\/i;
+    const winMatch = fixed.match(winUserPathPattern);
+    if (winMatch && winMatch[2] !== winMatch[3]) {
+      const corrected = fixed.replace(/^([A-Z]:\\)Users\\[^\\]+\\/i, '$1Users\\' + winMatch[3] + '\\');
+      logger.warn('Detected Windows user path concatenation error, fixing', {
+        original: absolutePath,
+        fixed: corrected,
+      });
+      return normalize(corrected);
+    }
+  } else {
+    // Unix path pattern: /Users/username1/Users/username2/ or /home/username1/home/username2/
+    const unixUserPathPattern = /^\/(Users|home)\/([^/]+)\/\1\/([^/]+)\//;
+    const unixMatch = fixed.match(unixUserPathPattern);
+    if (unixMatch && unixMatch[2] !== unixMatch[3]) {
+      const corrected = fixed.replace(/^\/(Users|home)\/[^/]+\//, '/' + unixMatch[1] + '/' + unixMatch[3] + '/');
+      logger.warn('Detected Unix user path concatenation error, fixing', {
+        original: absolutePath,
+        fixed: corrected,
+      });
+      return normalize(corrected);
+    }
+  }
+  
+  return fixed;
 }
 
 /**
@@ -65,9 +114,15 @@ function resolveStoragePaths(storage: StorageConfig, baseDir: string): void {
     }
   }
   
-  const downloadDir = isAbsolute(storage.downloadDirectory!)
+  let downloadDir = isAbsolute(storage.downloadDirectory!)
     ? storage.downloadDirectory!
     : resolve(pathBaseDir, storage.downloadDirectory!);
+  
+  // Fix any path issues in download directory
+  downloadDir = fixAbsolutePathIssues(downloadDir, pathBaseDir);
+  
+  // Update downloadDirectory to absolute path to ensure consistency
+  storage.downloadDirectory = downloadDir;
   
   // Resolve illustration directory
   if (!storage.illustrationDirectory) {
@@ -77,8 +132,17 @@ function resolveStoragePaths(storage: StorageConfig, baseDir: string): void {
     const normalizedPath = normalizeRelativePath(storage.illustrationDirectory);
     storage.illustrationDirectory = resolve(downloadDir, normalizedPath);
   } else {
-    // Even for absolute paths, check and fix duplication
-    storage.illustrationDirectory = fixAbsolutePathDuplication(storage.illustrationDirectory);
+    // Even for absolute paths, check and fix all issues
+    storage.illustrationDirectory = fixAbsolutePathIssues(storage.illustrationDirectory, pathBaseDir);
+    // Ensure it's still within or relative to download directory
+    if (!storage.illustrationDirectory.startsWith(downloadDir)) {
+      // If absolute path is outside download directory, recalculate based on downloadDir
+      const baseName = basename(storage.illustrationDirectory) || 'illustrations';
+      storage.illustrationDirectory = resolve(downloadDir, baseName);
+      logger.warn('Illustration directory path was outside download directory, recalculating', {
+        newPath: storage.illustrationDirectory,
+      });
+    }
   }
   
   // Resolve novel directory
@@ -89,15 +153,27 @@ function resolveStoragePaths(storage: StorageConfig, baseDir: string): void {
     const normalizedPath = normalizeRelativePath(storage.novelDirectory);
     storage.novelDirectory = resolve(downloadDir, normalizedPath);
   } else {
-    // Even for absolute paths, check and fix duplication
-    storage.novelDirectory = fixAbsolutePathDuplication(storage.novelDirectory);
+    // Even for absolute paths, check and fix all issues
+    storage.novelDirectory = fixAbsolutePathIssues(storage.novelDirectory, pathBaseDir);
+    // Ensure it's still within or relative to download directory
+    if (!storage.novelDirectory.startsWith(downloadDir)) {
+      // If absolute path is outside download directory, recalculate based on downloadDir
+      const baseName = basename(storage.novelDirectory) || 'novels';
+      storage.novelDirectory = resolve(downloadDir, baseName);
+      logger.warn('Novel directory path was outside download directory, recalculating', {
+        newPath: storage.novelDirectory,
+      });
+    }
   }
 
   // Resolve database path - use baseDir to ensure relative paths are resolved correctly
   // Database path should still use config directory as base (or project root if config is in subdirectory)
-  storage.databasePath = isAbsolute(storage.databasePath!)
+  let dbPath = isAbsolute(storage.databasePath!)
     ? storage.databasePath!
     : resolve(pathBaseDir, storage.databasePath!);
+  
+  // Fix any path issues in database path
+  storage.databasePath = fixAbsolutePathIssues(dbPath, pathBaseDir);
 }
 
 /**

@@ -9,6 +9,7 @@ import { ConfigError } from '../utils/errors';
 import { ConfigPathMigrator } from '../utils/config-path-migrator';
 import { getBestAvailableToken, isPlaceholderToken, saveTokenToStorage } from '../utils/token-manager';
 import { getConfigManager } from '../utils/config-manager';
+import { getConfigDirectory, getDefaultConfigPath as getSmartDefaultConfigPath } from '../utils/project-root';
 import { StandaloneConfig } from './types';
 import { generateDefaultConfig } from './defaults';
 import { applyDefaults } from './path-resolution';
@@ -19,30 +20,32 @@ import { validateConfig } from './validation';
 /**
  * Get the resolved configuration file path
  * If no path is specified, automatically selects the first available config file
+ * Uses smart detection to find project root or falls back to user home directory
  */
 export function getConfigPath(configPath?: string): string {
   // If explicitly provided or via environment variable, use it
   if (configPath || process.env.PIXIV_DOWNLOADER_CONFIG) {
     return resolve(
-      configPath ?? process.env.PIXIV_DOWNLOADER_CONFIG ?? 'config/standalone.config.json'
+      configPath ?? process.env.PIXIV_DOWNLOADER_CONFIG ?? getSmartDefaultConfigPath()
     );
   }
 
-  // Otherwise, use ConfigManager to find the first available config
+  // Otherwise, use ConfigManager with smart detection to find the first available config
   try {
-    const configManager = getConfigManager('config');
+    // getConfigManager() without arguments will use smart detection
+    const configManager = getConfigManager();
     const currentConfig = configManager.getCurrentConfigFile();
     if (currentConfig) {
       return currentConfig;
     }
   } catch (error) {
-    logger.warn('Failed to use ConfigManager, falling back to default path', {
+    logger.warn('Failed to use ConfigManager, falling back to smart default path', {
       error: error instanceof Error ? error.message : String(error),
     });
   }
 
-  // Fallback to default path
-  return resolve('config/standalone.config.json');
+  // Fallback to smart default path (project root or user home)
+  return getSmartDefaultConfigPath();
 }
 
 /**
@@ -56,7 +59,8 @@ export function loadConfig(configPath?: string, skipValidation: boolean = false)
   // If config file doesn't exist, try to find or create one
   if (!existsSync(resolvedPath)) {
     try {
-      const configManager = getConfigManager('config');
+      // getConfigManager() without arguments will use smart detection
+      const configManager = getConfigManager();
       const firstAvailable = configManager.getFirstAvailableConfig();
       if (firstAvailable) {
         resolvedPath = firstAvailable;

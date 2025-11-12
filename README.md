@@ -12,7 +12,7 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg?style=for-the-badge)](https://www.gnu.org/licenses/gpl-3.0)
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.6+-blue.svg?style=flat-square&logo=typescript)](https://www.typescriptlang.org/)
-[![Node.js](https://img.shields.io/badge/Node.js-18+-green.svg?style=flat-square&logo=node.js)](https://nodejs.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-18%2B%20LTS-green.svg?style=flat-square&logo=node.js)](https://nodejs.org/)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg?style=flat-square)](https://github.com/zoidberg-xgd/pixivflow)
 [![Maintenance](https://img.shields.io/badge/Maintained-yes-green.svg?style=flat-square)](https://github.com/zoidberg-xgd/pixivflow/graphs/commit-activity)
 
@@ -159,10 +159,15 @@
 
 ### 📋 环境要求
 
-- **Node.js 18+** 和 **npm 9+**
+- **Node.js 18+** 和 **npm 9+**（推荐使用 LTS 版本：18.x, 20.x, 22.x 或 24.x）
 - **Pixiv 账号**
 - **Windows 用户**：推荐使用 WSL（`wsl --install`）或 Git Bash
 
+> ⚠️ **Node.js 版本说明**：
+> - 推荐使用 **LTS（长期支持）版本**：18.x, 20.x, 22.x 或 24.x
+> - 避免使用奇数版本（如 19.x, 21.x, 23.x），这些版本可能不被所有依赖包支持
+> - 如果看到 `EBADENGINE` 警告，建议切换到 LTS 版本
+> 
 > 💡 **登录说明**：项目默认使用 Node.js 库进行登录，**无需 Python**。Python gppt 仅作为后备方案（可选）。  
 > 📖 **详细指南**：查看 [快速开始指南](docs/QUICKSTART.md)
 

@@ -13,14 +13,22 @@ import { listConfigFiles, getFirstAvailableConfig, getNextConfigFilename, saniti
 import { loadCurrentConfigFile, persistCurrentConfigFile } from './config-manager/config-persistence';
 import { repairConfigFile, RepairResult } from './config-manager/config-repair';
 import { normalizeConfigForDisplay } from './config-manager/config-normalization';
+import { getConfigDirectory } from './project-root';
 
 export class ConfigManager {
   private configDir: string;
   private currentConfigFile: string | null = null;
   private parser: ConfigParser;
 
-  constructor(configDir: string = 'config') {
-    this.configDir = resolve(configDir);
+  constructor(configDir?: string) {
+    // If no configDir provided, use smart detection
+    if (configDir) {
+      this.configDir = resolve(configDir);
+    } else {
+      // Use smart detection to find the best config directory
+      this.configDir = getConfigDirectory();
+    }
+    
     // Ensure config directory exists
     if (!existsSync(this.configDir)) {
       mkdirSync(this.configDir, { recursive: true });

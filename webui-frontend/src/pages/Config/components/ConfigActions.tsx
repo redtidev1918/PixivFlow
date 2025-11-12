@@ -15,11 +15,12 @@ interface ConfigActionsProps {
   onPreview: () => void;
   onExport: () => void;
   onImport: () => void;
-  onCopy: () => void;
+  onCopy: () => void | Promise<void>;
   onValidate: () => void;
   onSave: () => void;
   isValidating: boolean;
   isUpdating: boolean;
+  isImporting?: boolean;
 }
 
 /**
@@ -35,6 +36,7 @@ export function ConfigActions({
   onSave,
   isValidating,
   isUpdating,
+  isImporting = false,
 }: ConfigActionsProps) {
   const { t } = useTranslation();
 
@@ -49,7 +51,7 @@ export function ConfigActions({
       <Button icon={<DownloadOutlined />} onClick={onExport}>
         {t('config.exportConfig')}
       </Button>
-      <Button icon={<UploadOutlined />} onClick={onImport}>
+      <Button icon={<UploadOutlined />} onClick={onImport} loading={isImporting} disabled={isImporting}>
         {t('config.importConfig')}
       </Button>
       <Button icon={<CopyOutlined />} onClick={onCopy}>

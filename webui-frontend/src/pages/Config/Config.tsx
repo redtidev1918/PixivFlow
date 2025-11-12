@@ -40,6 +40,7 @@ export default function Config() {
     handleCopyConfig,
     handleConfigFileSwitch,
     handleConfigApplied,
+    isImporting,
   } = useConfigOperations(config);
 
   const { configFiles, refetch: refetchConfigFiles } = useConfigFiles();
@@ -77,6 +78,7 @@ export default function Config() {
           onSave={handleSave}
           isValidating={isValidating}
           isUpdating={isUpdating}
+        isImporting={isImporting}
         />
       </div>
 

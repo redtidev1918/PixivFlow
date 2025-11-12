@@ -1,4 +1,5 @@
 import { Form, Tabs, Typography } from 'antd';
+import type { FormInstance } from 'antd';
 import { FileTextOutlined, HistoryOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { BasicConfigForm } from './BasicConfigForm';
@@ -9,17 +10,18 @@ import { DownloadConfigForm } from './DownloadConfigForm';
 import { TargetsConfigForm } from './TargetsConfigForm';
 import { ConfigFilesManager } from './ConfigFilesManager';
 import { ConfigHistoryManager } from './ConfigHistoryManager';
+import type { ConfigFormValues } from '../hooks';
 
 const { Text } = Typography;
 
 interface ConfigTabsProps {
-  form: any;
+  form: FormInstance<ConfigFormValues>;
   activeTab: string;
   onTabChange: (key: string) => void;
   onConfigFileSwitch: () => void;
   onJsonEditorOpen: (filename: string) => void;
   onConfigApplied: () => void;
-  onTargetChange: () => void;
+  onTargetChange: () => void | Promise<void>;
 }
 
 /**

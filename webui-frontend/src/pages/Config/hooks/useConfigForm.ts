@@ -84,7 +84,7 @@ export function useConfigForm() {
 
 type ConfigTarget = NonNullable<ConfigData['targets']>[number];
 
-type ConfigFormTarget = {
+export type ConfigFormTarget = {
   type?: ConfigTarget['type'];
   tag?: ConfigTarget['tag'];
   limit?: ConfigTarget['limit'];
@@ -101,7 +101,7 @@ type ConfigFormTarget = {
   novelId?: ConfigTarget['novelId'];
 } & Record<string, any>;
 
-type ConfigFormValues = Omit<ConfigData, '_meta' | '_validation' | 'targets'> & {
+export type ConfigFormValues = Omit<ConfigData, '_meta' | '_validation' | 'targets'> & {
   targets?: ConfigFormTarget[];
 };
 

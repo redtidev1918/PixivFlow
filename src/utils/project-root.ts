@@ -133,11 +133,12 @@ function isDevelopmentDirectory(dir: string): boolean {
  * A project root should have:
  * 1. package.json file
  * 2. config directory (optional - will be created if missing)
- * 3. Either src/ directory or webui-frontend/ directory (to distinguish from dist/)
+ * 3. src/ directory (to distinguish from dist/)
  * 
  * IMPORTANT: 
  * - Development directories should NOT be considered as project roots for configuration
  * - Deployment directories (like ~/pixivflow) SHOULD be considered as project roots
+ * - Frontend is now a separate project and is not required for backend project root detection
  */
 function isProjectRoot(dir: string): boolean {
   // Skip development directories - they should not be used for production configuration
@@ -148,16 +149,15 @@ function isProjectRoot(dir: string): boolean {
   const packageJsonPath = join(dir, 'package.json');
   const configDirPath = join(dir, 'config');
   const srcDirPath = join(dir, 'src');
-  const webuiFrontendPath = join(dir, 'webui-frontend');
   
   // Must have package.json
   if (!existsSync(packageJsonPath)) {
     return false;
   }
   
-  // Must have either src/ or webui-frontend/ to distinguish from dist/
+  // Must have src/ directory to distinguish from dist/
   // This ensures we find the actual project root, not the dist/ directory
-  if (!existsSync(srcDirPath) && !existsSync(webuiFrontendPath)) {
+  if (!existsSync(srcDirPath)) {
     return false;
   }
   

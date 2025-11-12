@@ -22,13 +22,14 @@
 |------|------|--------|
 | [📋 配置指南](./CONFIG.md) | **配置文件使用指南** - 所有配置选项详解 | ⭐⭐⭐⭐⭐ |
 | [🛠️ 脚本指南](./SCRIPTS.md) | **脚本使用指南** - 所有脚本详细说明 | ⭐⭐⭐⭐⭐ |
+| [🏗️ 架构文档](./ARCHITECTURE.md) | **项目架构说明** - 架构设计和 API 说明 | ⭐⭐⭐⭐ |
 
-### 🌐 部署与界面
+### 🐳 部署与运维
 
 | 文档 | 说明 | 推荐度 |
 |------|------|--------|
-| [🌐 WebUI 指南](./WEBUI.md) | **WebUI 使用指南** - Web 管理界面和部署配置 | ⭐⭐⭐⭐ |
 | [🐳 Docker 指南](./DOCKER.md) | **Docker 使用指南** - Docker 部署和使用（包含常见问题解决方案） | ⭐⭐⭐⭐ |
+| [📱 Termux 安装指南](./TERMUX_INSTALL.md) | **Termux/Android 安装指南** - Android 设备上的安装和使用 | ⭐⭐⭐ |
 
 ### 📄 项目文档
 
@@ -50,6 +51,7 @@ PixivFlow 是一个**完全独立运行**的 Pixiv 作品批量下载工具，�
 - 🖥️ **服务器友好**：专为服务器设计，支持后台运行
 - 🔐 **安全可靠**：OAuth 2.0 PKCE 标准流程
 - 📦 **轻量级**：资源占用低，SQLite 数据库
+- 📡 **API 服务器**：提供 RESTful API，可与前端集成
 
 ### 主要功能
 
@@ -58,7 +60,8 @@ PixivFlow 是一个**完全独立运行**的 Pixiv 作品批量下载工具，�
 - ⏰ 定时任务（Cron）
 - 💾 自动去重
 - 🔄 断点续传
-- 🌐 WebUI 管理界面
+- 📡 RESTful API 和 WebSocket
+- 🎨 CLI 命令行工具
 
 ---
 
@@ -117,8 +120,9 @@ docs/
 ├── USAGE.md               # 使用指南
 ├── CONFIG.md              # 配置指南
 ├── SCRIPTS.md             # 脚本指南
-├── WEBUI.md               # WebUI 指南
+├── ARCHITECTURE.md        # 架构文档
 ├── DOCKER.md              # Docker 指南
+├── TERMUX_INSTALL.md      # Termux 安装指南
 └── project/               # 项目文档
     ├── CHANGELOG.md       # 更新日志
     └── CONTRIBUTING.md    # 贡献指南
@@ -128,7 +132,7 @@ docs/
 
 - **快速开始**：适合首次使用的用户，提供快速上手指南
 - **使用指南**：详细的功能说明和配置选项，帮助深入使用
-- **部署与界面**：WebUI 和 Docker 相关，适合部署和运维
+- **部署与运维**：Docker 和 Termux 相关，适合部署和运维
 - **项目文档**：开发相关文档，适合贡献者和开发者
 
 ---
@@ -151,13 +155,14 @@ docs/
 ### 路径 3：部署运维（20 分钟）
 
 1. [Docker 指南](./DOCKER.md) - Docker 部署
-2. [WebUI 指南](./WEBUI.md) - WebUI 配置
+2. [架构文档](./ARCHITECTURE.md) - 了解架构和 API
 3. [脚本指南](./SCRIPTS.md) - 运维脚本
 
 ### 路径 4：参与开发
 
 1. [贡献指南](./project/CONTRIBUTING.md) - 了解如何贡献
 2. [更新日志](./project/CHANGELOG.md) - 了解项目历史
+3. [架构文档](./ARCHITECTURE.md) - 了解项目架构
 
 ---
 
@@ -174,6 +179,7 @@ docs/
 - [主项目 README](../README.md) - 返回主项目页面
 - [GitHub 仓库](https://github.com/zoidberg-xgd/pixivflow) - 查看源代码
 - [GitHub Releases](https://github.com/zoidberg-xgd/pixivflow/releases) - 查看版本发布
+- [前端项目](https://github.com/zoidberg-xgd/pixivflow-webui) - 前端独立仓库
 
 ---
 

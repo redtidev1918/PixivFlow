@@ -1,2 +1,0 @@
-export { useLayoutAuth } from './useLayoutAuth';
-

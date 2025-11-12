@@ -516,6 +516,6 @@ sudo systemctl status pixivflow
 - [配置指南](./CONFIG.md)
 - [登录指南](./LOGIN.md)
 - [脚本指南](./SCRIPTS.md)
-- [WebUI 指南](./WEBUI.md)
+- [架构文档](./ARCHITECTURE.md) - 了解 API 服务器和前端集成
 - [Docker 指南](./DOCKER.md)
 

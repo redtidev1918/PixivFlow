@@ -41,7 +41,7 @@ npm run login
 # 4. 启动定时任务服务
 docker-compose up -d pixivflow
 
-# 或启动 WebUI 服务
+# 或启动 API 服务器
 docker-compose up -d pixivflow-webui
 
 # 或同时启动两个服务
@@ -61,17 +61,19 @@ docker-compose up -d
 - **健康检查**：自动检查数据库文件是否存在
 - **端口**：无需端口映射
 
-### 2. pixivflow-webui - WebUI 管理界面（可选）
+### 2. pixivflow-webui - API 服务器（可选）
 
-- **功能**：提供现代化的 Web 管理界面
+- **功能**：提供 RESTful API 服务器
 - **访问地址**：http://localhost:3000（可在 `.env` 中配置）
-- **功能包括**：
-  - 文件浏览和管理
-  - 统计信息查看
-  - 任务管理
-  - 实时日志查看
-  - 配置管理
-- **健康检查**：自动检查 WebUI 是否可访问
+- **API 端点**：
+  - `/api/auth` - 认证相关
+  - `/api/config` - 配置管理
+  - `/api/download` - 下载管理
+  - `/api/stats` - 统计信息
+  - `/api/logs` - 日志查看（WebSocket）
+  - `/api/files` - 文件管理
+- **前端集成**：前端已分离到独立仓库 [pixivflow-webui](https://github.com/zoidberg-xgd/pixivflow-webui)，可通过 API 与后端通信
+- **健康检查**：自动检查 API 服务器是否可访问
 
 ---
 
@@ -126,7 +128,7 @@ docker-compose up -d
 # 启动定时任务服务
 docker-compose up -d pixivflow
 
-# 启动 WebUI 服务
+# 启动 API 服务器
 docker-compose up -d pixivflow-webui
 
 # 同时启动两个服务
@@ -281,7 +283,7 @@ tar -xzf pixivflow-backup-YYYYMMDD.tar.gz
 | `PIXIV_NOVEL_DIR` | 小说目录（容器内） | `/app/downloads/novels` |
 | `PIXIV_LOG_LEVEL` | 日志级别 | `info` |
 | `PIXIV_SCHEDULER_ENABLED` | 是否启用调度器 | `true` |
-| `WEBUI_PORT` | WebUI 端口（宿主机端口） | `3000` |
+| `WEBUI_PORT` | API 服务器端口（宿主机端口） | `3000` |
 | `HTTP_PROXY` | HTTP 代理地址 | - |
 | `HTTPS_PROXY` | HTTPS 代理地址 | - |
 | `ALL_PROXY` | 通用代理地址（SOCKS5） | - |
@@ -289,7 +291,7 @@ tar -xzf pixivflow-backup-YYYYMMDD.tar.gz
 ### 端口映射
 
 - **定时任务服务**：无需端口映射（后台运行）
-- **WebUI 服务**：默认端口 3000（可在 `.env` 文件中通过 `WEBUI_PORT` 配置）
+- **API 服务器**：默认端口 3000（可在 `.env` 文件中通过 `WEBUI_PORT` 配置）
 
 修改端口映射：
 
@@ -399,7 +401,7 @@ docker-compose ps
 2. 检查 `docker-compose.yml` 中的 volume 配置
 3. 确认主机上的目录存在且有正确的权限
 
-### 问题 4：WebUI 无法访问
+### 问题 4：API 服务器无法访问
 
 **症状**：无法访问 http://localhost:3000
 
@@ -408,6 +410,7 @@ docker-compose ps
 2. 检查端口映射：`docker-compose ps` 查看端口映射
 3. 查看日志：`docker-compose logs -f pixivflow-webui`
 4. 检查防火墙设置
+5. 测试 API：`curl http://localhost:3000/api/health`
 
 ### 问题 5：镜像构建失败
 

@@ -140,14 +140,15 @@ Compared to other Pixiv downloaders, PixivFlow focuses on **automation** and **s
 | **💾 Auto Deduplication** | SQLite database records history, automatically skips already downloaded artworks |
 | **🔄 Resume Download** | Automatically resumes after interruption, no need to restart |
 | **🛡️ Error Handling** | Auto retry, error recovery, smart skip deleted/private artworks |
-| **🌐 WebUI Management** | Modern web management interface with file preview, real-time logs, and task management |
+| **📡 RESTful API** | Complete REST API with authentication, configuration, download, and statistics |
+| **🔌 WebSocket** | Real-time log streaming and download status updates |
 | **📊 Statistics Reports** | Detailed run logs and download statistics |
 
 ### 🎁 Additional Advantages
 
 - ✅ **Fully Standalone**: No browser required, pure CLI tool
-- ✅ **WebUI Support**: Modern web management interface with graphical operations
-- ✅ **Cross-Platform**: Windows / macOS / Linux support
+- ✅ **API Server**: Provides RESTful API and WebSocket, can integrate with any frontend
+- ✅ **npm Package**: Can be installed as npm package, supports global and local installation
 - ✅ **Lightweight**: Low resource usage, suitable for long-term server running
 - ✅ **Open Source**: GPL-3.0 license, free to customize and distribute
 - ✅ **Type Safe**: Written in TypeScript with complete type hints
@@ -381,97 +382,62 @@ That's it! 🎉
 
 ---
 
-### 🌐 Using WebUI (Optional)
+### 📡 API Server (Optional)
 
-PixivFlow also provides a modern web management interface with graphical operations:
+PixivFlow provides a RESTful API server that can integrate with frontend projects.
 
-**After Global Installation:**
+**Architecture Note**: This project uses a completely separated frontend-backend architecture. The backend is a pure API server that can be used as an npm package independently. The frontend is an independent React project that has been separated to an independent repository: [pixivflow-webui](https://github.com/zoidberg-xgd/pixivflow-webui). See [Architecture Documentation](docs/ARCHITECTURE.md) for details.
+
+#### Start API Server
 
 ```bash
-# Method 1: Auto-build and start (Recommended ⭐)
-# First, clone the source repository (if not already done)
-git clone https://github.com/zoidberg-xgd/pixivflow.git
-cd pixivflow
+# Method 1: Use as npm package (Recommended)
+npm install -g pixivflow
+pixivflow webui                    # Start API server, visit http://localhost:3000
 
-# Install backend dependencies (if not already installed)
+# Method 2: Run from source
+npm run build
+node dist/webui/index.js
+
+# Method 3: Specify static file path (Optional, for simple deployment)
+pixivflow webui --static-path /path/to/frontend/dist
+
+# Or use environment variable
+STATIC_PATH=/path/to/frontend/dist pixivflow webui
+
+# Method 4: Start backend API only (Recommended for production)
+pixivflow webui                    # Pure API mode, no static files served
+```
+
+#### API Endpoints
+
+- `/api/auth` - Authentication (login, logout, status check)
+- `/api/config` - Configuration management (view, edit, backup, restore)
+- `/api/download` - Download management (start, stop, status query)
+- `/api/stats` - Statistics (download stats, file stats)
+- `/api/logs` - Logs (real-time log stream, WebSocket)
+- `/api/files` - File management (file list, preview, operations)
+
+#### Frontend Integration
+
+Frontend has been separated to an independent repository: [**pixivflow-webui**](https://github.com/zoidberg-xgd/pixivflow-webui)
+
+```bash
+# Clone frontend repository
+git clone https://github.com/zoidberg-xgd/pixivflow-webui.git
+cd pixivflow-webui
+
+# Install dependencies
 npm install
 
-# Start WebUI from project root (auto-detects and installs frontend dependencies, builds frontend)
-pixivflow webui                    # Visit http://localhost:3000
+# Development mode (requires backend API running)
+npm run dev                        # Start frontend dev server, visit http://localhost:5173
 
-# Method 2: Manually build frontend (Optional)
-# If auto-build fails, you can build manually
-cd webui-frontend
-npm install                        # Install frontend dependencies
-npm run build                      # Build frontend
-cd ..
-pixivflow webui                    # Start WebUI
-
-# Method 3: Manually specify frontend static file path
-# If frontend is already built in another location, you can directly specify the path
-pixivflow webui --static-path /path/to/webui-frontend/dist
-# Or use environment variable
-STATIC_PATH=/path/to/webui-frontend/dist pixivflow webui
-
-# Method 4: API-only mode (Automatic fallback)
-# If frontend is not found or build fails, the server will automatically provide API service only
-pixivflow webui                    # Visit http://localhost:3000 (API only, no frontend UI)
+# Build production version
+npm run build                      # Build output in dist/ directory
 ```
 
-> 💡 **Tips**:
-> - After global installation, the package installed via `npm install -g pixivflow` typically does not include frontend source code. To use the full WebUI, you need to clone the source repository separately to your local machine.
-> - **Recommended to run from project root**: `pixivflow webui` will prioritize searching for the project from the current working directory. If it detects the frontend is not built, it will automatically install frontend dependencies and build the frontend (first build may take some time).
-> - If auto-build fails, please manually execute: `cd webui-frontend && npm install && npm run build`
-> - Even if the frontend is not found, the server will still start and provide API service, allowing management through API endpoints.
-
-**From Source Installation:**
-
-**Development Mode (Frontend-Backend Separation):**
-```bash
-# 1. Start WebUI backend
-npm run webui
-
-# 2. Start frontend in another terminal
-npm run webui:frontend
-```
-
-Then visit http://localhost:5173 to use the WebUI (frontend development server).
-
-**Production Mode (Single Server):**
-```bash
-# 1. Build frontend
-npm run webui:build
-
-# 2. Start WebUI (automatically serves frontend static files)
-STATIC_PATH=webui-frontend/dist npm run webui
-```
-
-Then visit http://localhost:3000 to use the WebUI (backend server).
-
-> **Note**:
-> - Development mode uses Vite dev server (port 5173), production mode uses Express server (port 3000)
-> - Docker deployment uses production mode, frontend static files are built into the image, access port is 3000
-> 📖 **Detailed Instructions**: See [WebUI Usage Guide](docs/WEBUI.md)
-
-**WebUI API Endpoints**:
-- Root path `GET /` - Returns API info (when static files not configured)
-- Health check `GET /api/health` - Server health status
-- Authentication `GET /api/auth/*` - Login, logout, status query
-- Config management `GET /api/config` - Get and update config
-- Download tasks `POST /api/download/*` - Start, stop, query download tasks
-- Statistics `GET /api/stats/*` - Download stats, tag stats, author stats
-- Log viewing `GET /api/logs` - Get logs, WebSocket real-time log stream
-- File browsing `GET /api/files/*` - File list, preview, delete
-
-**WebUI Features**:
-- 📊 Download statistics and overview
-- 📁 File browsing and preview (supports special characters in filenames like Japanese, Chinese)
-- 📝 Real-time log viewing
-- ⚙️ Configuration management
-- 🎯 Task management (start/stop downloads)
-- 📈 Download history viewing
-
-> 📖 **Detailed Instructions**: See [WebUI Usage Guide](docs/WEBUI.md)
+> 📖 **Detailed Instructions**: See [Architecture Documentation](docs/ARCHITECTURE.md) to learn about frontend-backend separation architecture and deployment methods
 
 ---
 

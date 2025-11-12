@@ -4,16 +4,20 @@
 # 
 # 本文件定义了两个服务：
 # 1. pixivflow - 定时任务服务（自动执行下载任务）
-# 2. pixivflow-webui - WebUI 管理界面（可选，提供 Web 管理界面）
+# 2. pixivflow-webui - API 服务器（可选，提供 RESTful API）
 #
 # 使用说明：
 # - 启动定时任务：docker-compose up -d pixivflow
-# - 启动 WebUI：docker-compose up -d pixivflow-webui
+# - 启动 API 服务器：docker-compose up -d pixivflow-webui
 # - 同时启动两个服务：docker-compose up -d
 # - 查看日志：docker-compose logs -f pixivflow
 # - 停止服务：docker-compose down
 #
 # 详细文档：docs/DOCKER.md
+#
+# 前端集成：
+# - 前端已分离到独立仓库：https://github.com/zoidberg-xgd/pixivflow-webui
+# - 前端可通过 API 与后端通信
 #
 # 环境变量配置：
 # 1. 复制 docker-env.example 为 .env: cp docker-env.example .env
@@ -96,10 +100,11 @@ services:
       start_period: 40s
 
   # ============================================================================
-  # WebUI 服务（可选）
-  # 功能：提供现代化的 Web 管理界面
+  # API 服务器（可选）
+  # 功能：提供 RESTful API 服务器
   # 访问地址：http://localhost:3000
-  # 功能包括：文件浏览、统计查看、任务管理、实时日志等
+  # API 端点：/api/auth, /api/config, /api/download, /api/stats, /api/logs, /api/files
+  # 前端集成：前端已分离到独立仓库，可通过 API 与后端通信
   # ============================================================================
   pixivflow-webui:
     build:
@@ -120,10 +125,9 @@ services:
     environment:
       - NODE_ENV=production
       - TZ=${TZ:-Asia/Shanghai}
-      # WebUI 服务器配置
+      # API 服务器配置
       - PORT=3000
       - HOST=0.0.0.0
-      - STATIC_PATH=/app/webui-frontend/dist
       # Docker 容器内路径配置（必须使用容器内路径）
       - PIXIV_DATABASE_PATH=${PIXIV_DATABASE_PATH:-/app/data/pixiv-downloader.db}
       - PIXIV_DOWNLOAD_DIR=${PIXIV_DOWNLOAD_DIR:-/app/downloads}

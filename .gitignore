@@ -86,11 +86,8 @@ tmp/
 temp/
 
 # WebUI
-webui-frontend/node_modules
-webui-frontend/dist
-webui-frontend/.vite
-webui-frontend/package-lock.json
-webui-frontend/release
+# 前端已分离到独立仓库: https://github.com/zoidberg-xgd/pixivflow-webui
+# Frontend has been moved to separate repository
 
 # Backend build output
 dist/

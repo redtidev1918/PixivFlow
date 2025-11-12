@@ -10,14 +10,11 @@ const port = process.env.PORT ? parseInt(process.env.PORT, 10) : PORTS.PROD_API;
 const host = process.env.HOST || 'localhost';
 
 /**
- * 自动检测静态文件路径
- * 按优先级顺序检查：
- * 1. 环境变量 STATIC_PATH
- * 2. 相对于项目根目录的 webui-frontend/dist
- * 3. 相对于当前工作目录的 webui-frontend/dist
+ * 获取静态文件路径
+ * 仅从环境变量 STATIC_PATH 获取，不再自动查找前端构建产物
+ * 前端应作为独立项目部署，通过环境变量或反向代理配置
  */
-function findStaticPath(): string | undefined {
-  // 1. 检查环境变量
+function getStaticPath(): string | undefined {
   if (process.env.STATIC_PATH) {
     const envPath = path.resolve(process.env.STATIC_PATH);
     if (fs.existsSync(envPath)) {
@@ -27,38 +24,16 @@ function findStaticPath(): string | undefined {
       }
     }
   }
-
-  // 2. 检查项目根目录下的 webui-frontend/dist
-  const projectRoot = path.resolve(__dirname, '../..');
-  const projectStaticPath = path.join(projectRoot, 'webui-frontend', 'dist');
-  if (fs.existsSync(projectStaticPath)) {
-    const indexPath = path.join(projectStaticPath, 'index.html');
-    if (fs.existsSync(indexPath)) {
-      return projectStaticPath;
-    }
-  }
-
-  // 3. 检查当前工作目录下的 webui-frontend/dist
-  const cwdStaticPath = path.join(process.cwd(), 'webui-frontend', 'dist');
-  if (fs.existsSync(cwdStaticPath)) {
-    const indexPath = path.join(cwdStaticPath, 'index.html');
-    if (fs.existsSync(indexPath)) {
-      return cwdStaticPath;
-    }
-  }
-
   return undefined;
 }
 
-const staticPath = process.env.STATIC_PATH 
-  ? path.resolve(process.env.STATIC_PATH)
-  : findStaticPath();
+const staticPath = getStaticPath();
 
 // 调试日志
-console.log('[WebUI] Starting server...');
+console.log('[WebUI] Starting API server...');
 console.log('[WebUI] PORT:', port);
 console.log('[WebUI] HOST:', host);
-console.log('[WebUI] STATIC_PATH:', staticPath || '(not found)');
+console.log('[WebUI] STATIC_PATH:', staticPath || '(not configured)');
 
 if (staticPath) {
   const resolvedPath = path.resolve(staticPath);
@@ -66,8 +41,6 @@ if (staticPath) {
   console.log('[WebUI] STATIC_PATH exists:', fs.existsSync(resolvedPath));
   if (fs.existsSync(resolvedPath)) {
     try {
-      const files = fs.readdirSync(resolvedPath);
-      console.log('[WebUI] STATIC_PATH contents:', files.join(', '));
       const indexPath = path.join(resolvedPath, 'index.html');
       const indexExists = fs.existsSync(indexPath);
       console.log('[WebUI] index.html exists:', indexExists);
@@ -81,11 +54,9 @@ if (staticPath) {
     console.warn('[WebUI] ⚠️  Warning: STATIC_PATH does not exist!');
   }
 } else {
-  console.log('[WebUI] ⚠️  STATIC_PATH not found - frontend will not be served');
-  console.log('[WebUI] 💡 To serve the frontend, either:');
-  console.log('[WebUI]    1. Set STATIC_PATH environment variable');
-  console.log('[WebUI]    2. Build the frontend: npm run webui:build');
-  console.log('[WebUI]    3. Ensure webui-frontend/dist exists with index.html');
+  console.log('[WebUI] 📡 Running in API-only mode (no static files)');
+  console.log('[WebUI] 💡 To serve frontend static files, set STATIC_PATH environment variable');
+  console.log('[WebUI]    Example: STATIC_PATH=/path/to/frontend/dist node dist/webui/index.js');
 }
 
 startWebUI({

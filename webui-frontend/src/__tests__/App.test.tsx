@@ -76,7 +76,7 @@ describe('App', () => {
     );
   };
 
-  it('renders login page at /login', () => {
+  it('renders login page at /login', async () => {
     render(
       <QueryClientProvider client={queryClient}>
         <MemoryRouter initialEntries={['/login']}>
@@ -84,7 +84,7 @@ describe('App', () => {
         </MemoryRouter>
       </QueryClientProvider>
     );
-    expect(screen.getByText('Login Page')).toBeInTheDocument();
+    expect(await screen.findByText('Login Page')).toBeInTheDocument();
   });
 
   it('redirects root path to dashboard', async () => {
@@ -96,12 +96,10 @@ describe('App', () => {
       </QueryClientProvider>
     );
     // Should render AppLayout with Dashboard - wait for lazy loading
-    await waitFor(() => {
-      expect(screen.getByTestId('app-layout')).toBeInTheDocument();
-    });
+    expect(await screen.findByTestId('app-layout')).toBeInTheDocument();
   });
 
-  it('renders dashboard at /dashboard', () => {
+  it('renders dashboard at /dashboard', async () => {
     render(
       <QueryClientProvider client={queryClient}>
         <MemoryRouter initialEntries={['/dashboard']}>
@@ -109,10 +107,10 @@ describe('App', () => {
         </MemoryRouter>
       </QueryClientProvider>
     );
-    expect(screen.getByTestId('app-layout')).toBeInTheDocument();
+    expect(await screen.findByTestId('app-layout')).toBeInTheDocument();
   });
 
-  it('renders config page at /config', () => {
+  it('renders config page at /config', async () => {
     render(
       <QueryClientProvider client={queryClient}>
         <MemoryRouter initialEntries={['/config']}>
@@ -120,10 +118,10 @@ describe('App', () => {
         </MemoryRouter>
       </QueryClientProvider>
     );
-    expect(screen.getByTestId('app-layout')).toBeInTheDocument();
+    expect(await screen.findByTestId('app-layout')).toBeInTheDocument();
   });
 
-  it('renders download page at /download', () => {
+  it('renders download page at /download', async () => {
     render(
       <QueryClientProvider client={queryClient}>
         <MemoryRouter initialEntries={['/download']}>
@@ -131,10 +129,10 @@ describe('App', () => {
         </MemoryRouter>
       </QueryClientProvider>
     );
-    expect(screen.getByTestId('app-layout')).toBeInTheDocument();
+    expect(await screen.findByTestId('app-layout')).toBeInTheDocument();
   });
 
-  it('renders history page at /history', () => {
+  it('renders history page at /history', async () => {
     render(
       <QueryClientProvider client={queryClient}>
         <MemoryRouter initialEntries={['/history']}>
@@ -142,10 +140,10 @@ describe('App', () => {
         </MemoryRouter>
       </QueryClientProvider>
     );
-    expect(screen.getByTestId('app-layout')).toBeInTheDocument();
+    expect(await screen.findByTestId('app-layout')).toBeInTheDocument();
   });
 
-  it('renders logs page at /logs', () => {
+  it('renders logs page at /logs', async () => {
     render(
       <QueryClientProvider client={queryClient}>
         <MemoryRouter initialEntries={['/logs']}>
@@ -153,10 +151,10 @@ describe('App', () => {
         </MemoryRouter>
       </QueryClientProvider>
     );
-    expect(screen.getByTestId('app-layout')).toBeInTheDocument();
+    expect(await screen.findByTestId('app-layout')).toBeInTheDocument();
   });
 
-  it('renders files page at /files', () => {
+  it('renders files page at /files', async () => {
     render(
       <QueryClientProvider client={queryClient}>
         <MemoryRouter initialEntries={['/files']}>
@@ -164,7 +162,7 @@ describe('App', () => {
         </MemoryRouter>
       </QueryClientProvider>
     );
-    expect(screen.getByTestId('app-layout')).toBeInTheDocument();
+    expect(await screen.findByTestId('app-layout')).toBeInTheDocument();
   });
 });
 

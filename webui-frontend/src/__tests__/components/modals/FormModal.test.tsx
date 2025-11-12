@@ -2,7 +2,7 @@
 import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { Form } from 'antd';
+import { Form, Input } from 'antd';
 import { FormModal } from '../../../components/modals/FormModal';
 
 describe('FormModal', () => {
@@ -25,10 +25,10 @@ describe('FormModal', () => {
         initialValues={initialValues}
       >
         <Form.Item name="name" label="Name" rules={[{ required: true, message: 'Name is required' }]}>
-          <input data-testid="name-input" />
+          <Input data-testid="name-input" />
         </Form.Item>
         <Form.Item name="email" label="Email">
-          <input data-testid="email-input" />
+          <Input data-testid="email-input" />
         </Form.Item>
       </FormModal>
     );
@@ -132,7 +132,7 @@ describe('FormModal', () => {
           resetOnCancel={true}
         >
           <Form.Item name="name">
-            <input data-testid="name-input" />
+            <Input data-testid="name-input" />
           </Form.Item>
         </FormModal>
       );
@@ -147,7 +147,7 @@ describe('FormModal', () => {
     await user.click(cancelButton);
     
     await waitFor(() => {
-      expect(nameInput).toHaveValue('');
+      expect(screen.getByTestId('name-input')).toHaveValue('');
     });
   });
 

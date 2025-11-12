@@ -43,7 +43,8 @@ describe('FileUploader', () => {
     render(<FileUploader onChange={onChange} />);
     
     const file = createFile('test.txt', 1000);
-    const input = screen.getByRole('button').parentElement?.querySelector('input[type="file"]') as HTMLInputElement;
+    const uploadButton = screen.getByRole('button', { name: /select file/i });
+    const input = uploadButton.parentElement?.querySelector('input[type="file"]') as HTMLInputElement;
     
     if (input) {
       Object.defineProperty(input, 'files', {
@@ -88,7 +89,8 @@ describe('FileUploader', () => {
     render(<FileUploader onChange={onChange} maxSize={1024} />);
     
     const largeFile = createFile('large.txt', 2048);
-    const input = screen.getByRole('button').parentElement?.querySelector('input[type="file"]') as HTMLInputElement;
+    const uploadButton = screen.getByRole('button', { name: /select file/i });
+    const input = uploadButton.parentElement?.querySelector('input[type="file"]') as HTMLInputElement;
     
     if (input) {
       Object.defineProperty(input, 'files', {
@@ -111,7 +113,8 @@ describe('FileUploader', () => {
     render(<FileUploader onChange={onChange} maxCount={1} fileList={[file1]} />);
     
     const file2 = createFile('file2.txt', 100);
-    const input = screen.getByRole('button').parentElement?.querySelector('input[type="file"]') as HTMLInputElement;
+    const uploadButton = screen.getByRole('button', { name: /select file/i });
+    const input = uploadButton.parentElement?.querySelector('input[type="file"]') as HTMLInputElement;
     
     if (input) {
       Object.defineProperty(input, 'files', {
@@ -129,8 +132,8 @@ describe('FileUploader', () => {
 
   it('is disabled when disabled prop is true', () => {
     render(<FileUploader onChange={() => {}} disabled />);
-    const button = screen.getByText('Select File');
-    expect(button.closest('button')).toBeDisabled();
+    const button = screen.getByRole('button', { name: /select file/i });
+    expect(button).toBeDisabled();
   });
 
   it('formats file size correctly', () => {

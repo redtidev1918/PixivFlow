@@ -3,7 +3,7 @@ import React from 'react';
 import { render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import Files from '../../pages/Files';
-import { useFiles } from '../../hooks/useFiles';
+import { useFiles, useFileNormalize, useFilePreview } from '../../hooks/useFiles';
 
 // Mock i18n
 jest.mock('react-i18next', () => ({
@@ -17,7 +17,16 @@ jest.mock('react-i18next', () => ({
 }));
 
 // Mock hooks
-jest.mock('../../hooks/useFiles');
+jest.mock('../../hooks/useFiles', () => ({
+  useFiles: jest.fn(),
+  useFilePreview: jest.fn(),
+  useFileNormalize: jest.fn(() => ({
+    normalizeAsync: jest.fn(),
+    normalize: jest.fn(),
+    isNormalizing: false,
+    normalizeResult: undefined,
+  })),
+}));
 jest.mock('../../hooks/useErrorHandler', () => ({
   useErrorHandler: () => ({
     handleError: jest.fn(),
@@ -40,6 +49,9 @@ jest.mock('antd', () => {
 
 describe('Files', () => {
   let queryClient: QueryClient;
+  const mockedUseFiles = useFiles as jest.MockedFunction<typeof useFiles>;
+  const mockedUseFileNormalize = useFileNormalize as jest.MockedFunction<typeof useFileNormalize>;
+  const mockedUseFilePreview = useFilePreview as jest.MockedFunction<typeof useFilePreview>;
 
   beforeEach(() => {
     queryClient = new QueryClient({
@@ -50,9 +62,28 @@ describe('Files', () => {
       },
     });
     jest.clearAllMocks();
-    (useFiles as jest.Mock).mockReturnValue({
+    mockedUseFiles.mockReturnValue({
       files: [],
+      directories: [],
+      currentPath: '',
       isLoading: false,
+      error: null,
+      refetch: jest.fn(),
+      deleteFile: jest.fn(),
+      deleteFileAsync: jest.fn(),
+      isDeleting: false,
+    });
+    mockedUseFileNormalize.mockReturnValue({
+      normalizeAsync: jest.fn(),
+      normalize: jest.fn(),
+      isNormalizing: false,
+      normalizeResult: undefined,
+    });
+    mockedUseFilePreview.mockReturnValue({
+      previewUrl: null,
+      previewBlob: undefined,
+      isLoading: false,
+      error: null,
       refetch: jest.fn(),
     });
   });
@@ -67,35 +98,36 @@ describe('Files', () => {
 
   it('renders files page', () => {
     renderWithProviders(<Files />);
-    // Check for any text that indicates the page is rendered
-    // The actual title might be translated or rendered differently
-    expect(screen.getByText(/files\.title|文件管理/i)).toBeInTheDocument();
+    expect(screen.getByText('files.title')).toBeInTheDocument();
   });
 
   it('renders file browser', () => {
     renderWithProviders(<Files />);
-    // File browser should be rendered - check for common elements
-    const page = screen.getByText(/files\.title|文件管理/i);
+    const page = screen.getByText('files.title');
     expect(page).toBeInTheDocument();
   });
 
   it('renders file filters', () => {
     renderWithProviders(<Files />);
-    // File filters should be rendered
-    const page = screen.getByText(/files\.title|文件管理/i);
+    const page = screen.getByText('files.title');
     expect(page).toBeInTheDocument();
   });
 
   it('shows loading state when files are loading', () => {
-    (useFiles as jest.Mock).mockReturnValue({
+    mockedUseFiles.mockReturnValueOnce({
       files: [],
+      directories: [],
+      currentPath: '',
       isLoading: true,
+      error: null,
       refetch: jest.fn(),
+      deleteFile: jest.fn(),
+      deleteFileAsync: jest.fn(),
+      isDeleting: false,
     });
 
     renderWithProviders(<Files />);
-    // Page should still render even when loading
-    const page = screen.getByText(/files\.title|文件管理/i);
+    const page = screen.getByText('files.title');
     expect(page).toBeInTheDocument();
   });
 });

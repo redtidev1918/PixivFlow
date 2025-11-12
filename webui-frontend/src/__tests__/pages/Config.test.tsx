@@ -77,8 +77,7 @@ describe('Config', () => {
     });
 
     renderWithProviders(<Config />);
-    // Config component shows loading as text "common.loading"
-    expect(screen.getByText('common.loading')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toBeInTheDocument();
   });
 
   it('renders config files manager', () => {

@@ -48,8 +48,7 @@ describe('ProtectedRoute', () => {
       </ProtectedRoute>
     );
 
-    // Ant Design Spin component uses aria-label="loading" instead of role="status"
-    expect(screen.getByLabelText('loading')).toBeInTheDocument();
+    expect(document.querySelector('.ant-spin')).toBeInTheDocument();
   });
 
   it('renders children when authenticated', async () => {

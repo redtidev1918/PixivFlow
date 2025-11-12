@@ -7,6 +7,7 @@ import { MemoryRouter } from 'react-router-dom';
 import Config from '../../pages/Config';
 import { configService } from '../../services/configService';
 import { useConfig, useConfigFiles, useConfigHistory } from '../../hooks/useConfig';
+import type { ConfigData, ConfigFileInfo, ConfigHistoryEntry } from '../../services/api';
 
 // Mock services
 jest.mock('../../services/configService');
@@ -17,10 +18,53 @@ const mockUseConfig = useConfig as jest.MockedFunction<typeof useConfig>;
 const mockUseConfigFiles = useConfigFiles as jest.MockedFunction<typeof useConfigFiles>;
 const mockUseConfigHistory = useConfigHistory as jest.MockedFunction<typeof useConfigHistory>;
 
+const createMockConfig = (overrides: Partial<ConfigData> = {}): ConfigData => ({
+  storage: {
+    downloadDirectory: '/test/path',
+    ...(overrides.storage ?? {}),
+  },
+  network: {
+    timeoutMs: 30000,
+    proxy: {
+      enabled: false,
+      ...(overrides.network?.proxy ?? {}),
+    },
+    ...(overrides.network ?? {}),
+  },
+  targets: [],
+  ...overrides,
+});
+
+const createMockConfigFile = (filename: string, isActive = false): ConfigFileInfo => ({
+  filename,
+  path: `/${filename}`,
+  pathRelative: filename,
+  modifiedTime: new Date().toISOString(),
+  size: 1024,
+  isActive,
+});
+
+const createMockHistoryEntry = (
+  overrides: Partial<ConfigHistoryEntry> = {},
+): ConfigHistoryEntry => ({
+  id: 1,
+  name: 'Test config',
+  description: 'Test config description',
+  config: createMockConfig({
+    storage: { downloadDirectory: '/old/path' },
+  }),
+  created_at: new Date().toISOString(),
+  updated_at: new Date().toISOString(),
+  is_active: 0,
+  ...overrides,
+});
+
 describe('Config Management Integration Flow', () => {
   let queryClient: QueryClient;
+  const mockUpdate = jest.fn();
   const mockUpdateAsync = jest.fn();
   const mockValidate = jest.fn();
+  const mockValidateAsync = jest.fn();
   const mockRefetchConfigFiles = jest.fn();
   const mockSaveHistory = jest.fn();
   const mockApplyHistory = jest.fn();
@@ -36,52 +80,56 @@ describe('Config Management Integration Flow', () => {
     jest.clearAllMocks();
 
     // Setup default mocks
+    mockUpdateAsync.mockResolvedValue(createMockConfig());
+    mockValidateAsync.mockResolvedValue({ valid: true, errors: [] });
+
     mockUseConfig.mockReturnValue({
-      config: {
-        downloadDirectory: '/test/path',
-        targets: [],
-        network: {
-          proxy: null,
-          timeout: 30000,
-        },
-      },
+      config: createMockConfig(),
       isLoading: false,
-      updateAsync: mockUpdateAsync,
-      validate: mockValidate,
-      isUpdating: false,
-      isValidating: false,
       error: null,
-    });
+      refetch: jest.fn(),
+      update: mockUpdate,
+      updateAsync: mockUpdateAsync,
+      isUpdating: false,
+      validate: mockValidate,
+      validateAsync: mockValidateAsync,
+      isValidating: false,
+      validationResult: undefined,
+    } as unknown as ReturnType<typeof useConfig>);
 
     mockUseConfigFiles.mockReturnValue({
-      configFiles: [
-        { name: 'config.json', path: '/config.json', isActive: true },
-      ],
+      configFiles: [createMockConfigFile('config.json', true)],
       isLoading: false,
-      refetch: mockRefetchConfigFiles,
-      switchConfig: jest.fn(),
-      importConfig: jest.fn(),
-      deleteConfig: jest.fn(),
       error: null,
-    });
+      refetch: mockRefetchConfigFiles,
+      switchFile: jest.fn(),
+      switchFileAsync: jest.fn(),
+      isSwitching: false,
+      importFile: jest.fn(),
+      importFileAsync: jest.fn(),
+      isImporting: false,
+      deleteFile: jest.fn(),
+      deleteFileAsync: jest.fn(),
+      isDeleting: false,
+    } as unknown as ReturnType<typeof useConfigFiles>);
 
     mockUseConfigHistory.mockReturnValue({
       history: [],
       isLoading: false,
-      saveHistory: mockSaveHistory,
-      applyHistory: mockApplyHistory,
-      deleteHistory: jest.fn(),
       error: null,
-    });
+      refetch: jest.fn(),
+      save: mockSaveHistory,
+      saveAsync: jest.fn(),
+      isSaving: false,
+      apply: mockApplyHistory,
+      applyAsync: mockApplyHistory,
+      isApplying: false,
+      delete: jest.fn(),
+      deleteAsync: jest.fn(),
+      isDeleting: false,
+    } as unknown as ReturnType<typeof useConfigHistory>);
 
-    mockConfigService.getConfig = jest.fn().mockResolvedValue({
-      data: {
-        data: {
-          downloadDirectory: '/test/path',
-          targets: [],
-        },
-      },
-    });
+    mockConfigService.getConfig = jest.fn().mockResolvedValue(createMockConfig());
   });
 
   const renderWithProviders = (ui: React.ReactElement) => {
@@ -107,14 +155,14 @@ describe('Config Management Integration Flow', () => {
 
     // Step 3: Update download directory
     mockUpdateAsync.mockResolvedValueOnce({});
-    const downloadDirInput = screen.getByLabelText(/download.*directory/i);
+    const downloadDirInput = document.querySelector<HTMLInputElement>('input[name="storage[downloadDirectory]"]');
     if (downloadDirInput) {
       await user.clear(downloadDirInput);
       await user.type(downloadDirInput, '/new/path');
     }
 
     // Step 4: Validate config
-    mockValidate.mockResolvedValueOnce({ isValid: true, errors: [] });
+    mockValidate.mockResolvedValueOnce(undefined);
     const validateButton = screen.getByRole('button', { name: /validate/i });
     if (validateButton) {
       await user.click(validateButton);
@@ -135,20 +183,26 @@ describe('Config Management Integration Flow', () => {
 
   it('should handle config file switching flow', async () => {
     const user = userEvent.setup();
-    const mockSwitchConfig = jest.fn().mockResolvedValue({});
+    const mockSwitchFileAsync = jest.fn().mockResolvedValue(undefined);
 
     mockUseConfigFiles.mockReturnValue({
       configFiles: [
-        { name: 'config.json', path: '/config.json', isActive: true },
-        { name: 'config2.json', path: '/config2.json', isActive: false },
+        createMockConfigFile('config.json', true),
+        createMockConfigFile('config2.json', false),
       ],
       isLoading: false,
-      refetch: mockRefetchConfigFiles,
-      switchConfig: mockSwitchConfig,
-      importConfig: jest.fn(),
-      deleteConfig: jest.fn(),
       error: null,
-    });
+      refetch: mockRefetchConfigFiles,
+      switchFile: jest.fn(),
+      switchFileAsync: mockSwitchFileAsync,
+      isSwitching: false,
+      importFile: jest.fn(),
+      importFileAsync: jest.fn(),
+      isImporting: false,
+      deleteFile: jest.fn(),
+      deleteFileAsync: jest.fn(),
+      isDeleting: false,
+    } as unknown as ReturnType<typeof useConfigFiles>);
 
     renderWithProviders(<Config />);
 
@@ -157,11 +211,11 @@ describe('Config Management Integration Flow', () => {
     if (switchButton) {
       await user.click(switchButton);
       await waitFor(() => {
-        expect(mockSwitchConfig).toHaveBeenCalled();
+        expect(mockSwitchFileAsync).toHaveBeenCalled();
       }, { timeout: 3000 });
     } else {
       // If button doesn't exist, skip this assertion
-      expect(mockSwitchConfig).not.toHaveBeenCalled();
+      expect(mockSwitchFileAsync).not.toHaveBeenCalled();
     }
   }, 10000);
 
@@ -170,19 +224,25 @@ describe('Config Management Integration Flow', () => {
 
     mockUseConfigHistory.mockReturnValue({
       history: [
-        {
-          id: '1',
-          timestamp: new Date().toISOString(),
+        createMockHistoryEntry({
+          id: 1,
           description: 'Test config',
-          config: { downloadDirectory: '/old/path' },
-        },
+          config: createMockConfig({ storage: { downloadDirectory: '/old/path' } }),
+        }),
       ],
       isLoading: false,
-      saveHistory: mockSaveHistory,
-      applyHistory: mockApplyHistory,
-      deleteHistory: jest.fn(),
       error: null,
-    });
+      refetch: jest.fn(),
+      save: mockSaveHistory,
+      saveAsync: jest.fn(),
+      isSaving: false,
+      apply: mockApplyHistory,
+      applyAsync: mockApplyHistory,
+      isApplying: false,
+      delete: jest.fn(),
+      deleteAsync: jest.fn(),
+      isDeleting: false,
+    } as unknown as ReturnType<typeof useConfigHistory>);
 
     renderWithProviders(<Config />);
 

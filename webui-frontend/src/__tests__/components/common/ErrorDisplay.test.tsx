@@ -40,7 +40,7 @@ describe('ErrorDisplay', () => {
     render(<ErrorDisplay error={error} onRetry={onRetry} />);
     
     // Wait for the button to be rendered
-    const retryButton = await screen.findByText('重试');
+    const retryButton = await screen.findByRole('button', { name: /重\s*试/ });
     expect(retryButton).toBeInTheDocument();
     
     fireEvent.click(retryButton);
@@ -53,7 +53,7 @@ describe('ErrorDisplay', () => {
       message: 'Error message',
     };
     render(<ErrorDisplay error={error} />);
-    expect(screen.queryByText('重试')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /重\s*试/ })).not.toBeInTheDocument();
   });
 
   it('displays correct status for NETWORK_ERROR', () => {

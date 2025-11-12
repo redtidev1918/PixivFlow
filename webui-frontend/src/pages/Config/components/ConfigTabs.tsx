@@ -1,18 +1,7 @@
-import { Form, Tabs, Typography } from 'antd';
+import { Form, Tabs } from 'antd';
 import type { FormInstance } from 'antd';
-import { FileTextOutlined, HistoryOutlined } from '@ant-design/icons';
-import { useTranslation } from 'react-i18next';
-import { BasicConfigForm } from './BasicConfigForm';
-import { NetworkConfigForm } from './NetworkConfigForm';
-import { StorageConfigForm } from './StorageConfigForm';
-import { SchedulerConfigForm } from './SchedulerConfigForm';
-import { DownloadConfigForm } from './DownloadConfigForm';
-import { TargetsConfigForm } from './TargetsConfigForm';
-import { ConfigFilesManager } from './ConfigFilesManager';
-import { ConfigHistoryManager } from './ConfigHistoryManager';
+import { useConfigTabItems } from './hooks/useConfigTabItems';
 import type { ConfigFormValues } from '../hooks';
-
-const { Text } = Typography;
 
 interface ConfigTabsProps {
   form: FormInstance<ConfigFormValues>;
@@ -36,54 +25,17 @@ export function ConfigTabs({
   onConfigApplied,
   onTargetChange,
 }: ConfigTabsProps) {
-  const { t } = useTranslation();
+  const { tabItems } = useConfigTabItems({
+    form,
+    onConfigFileSwitch,
+    onJsonEditorOpen,
+    onConfigApplied,
+    onTargetChange,
+  });
 
   return (
     <Form form={form} layout="vertical">
-      <Tabs activeKey={activeTab} onChange={onTabChange}>
-        <Tabs.TabPane tab={<><FileTextOutlined /> {t('config.tabConfigFiles')}</>} key="files">
-          <ConfigFilesManager
-            onConfigFileSwitch={onConfigFileSwitch}
-            onJsonEditorOpen={onJsonEditorOpen}
-          />
-        </Tabs.TabPane>
-
-        <Tabs.TabPane tab={t('config.tabBasic')} key="basic">
-          <BasicConfigForm />
-        </Tabs.TabPane>
-
-        <Tabs.TabPane tab={t('config.tabPixiv')} key="pixiv">
-          <div>
-            <Text type="secondary">
-              {t('config.pixivCredentialsHidden')}
-            </Text>
-          </div>
-        </Tabs.TabPane>
-
-        <Tabs.TabPane tab={t('config.tabNetwork')} key="network">
-          <NetworkConfigForm />
-        </Tabs.TabPane>
-
-        <Tabs.TabPane tab={t('config.tabStorage')} key="storage">
-          <StorageConfigForm />
-        </Tabs.TabPane>
-
-        <Tabs.TabPane tab={t('config.tabScheduler')} key="scheduler">
-          <SchedulerConfigForm />
-        </Tabs.TabPane>
-
-        <Tabs.TabPane tab={t('config.tabDownload')} key="download">
-          <DownloadConfigForm />
-        </Tabs.TabPane>
-
-        <Tabs.TabPane tab={<><HistoryOutlined /> {t('config.tabHistory')}</>} key="history">
-          <ConfigHistoryManager onConfigApplied={onConfigApplied} />
-        </Tabs.TabPane>
-
-        <Tabs.TabPane tab={t('config.tabTargets')} key="targets">
-          <TargetsConfigForm form={form} onTargetChange={onTargetChange} />
-        </Tabs.TabPane>
-      </Tabs>
+      <Tabs activeKey={activeTab} onChange={onTabChange} items={tabItems} />
     </Form>
   );
 }

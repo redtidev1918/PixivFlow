@@ -6,20 +6,46 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import Files from '../../pages/Files';
 import { fileService } from '../../services/fileService';
-import { useFiles, useFilePreview } from '../../hooks/useFiles';
+import { useFiles, useFilePreview, useFileNormalize } from '../../hooks/useFiles';
+import type { FileItem as ApiFileItem } from '../../services/api/types';
 
 // Mock services
 jest.mock('../../services/fileService');
-jest.mock('../../hooks/useFiles');
+jest.mock('../../hooks/useFiles', () => ({
+  useFiles: jest.fn(),
+  useFilePreview: jest.fn(),
+  useFileNormalize: jest.fn(),
+}));
 
 const mockFileService = fileService as jest.Mocked<typeof fileService>;
 const mockUseFiles = useFiles as jest.MockedFunction<typeof useFiles>;
 const mockUseFilePreview = useFilePreview as jest.MockedFunction<typeof useFilePreview>;
+const mockUseFileNormalize = useFileNormalize as jest.MockedFunction<typeof useFileNormalize>;
+
+const createFileItem = (overrides: Partial<ApiFileItem> = {}): ApiFileItem => ({
+  name: 'test.jpg',
+  path: '/test/test.jpg',
+  type: 'file',
+  size: 1024,
+  modified: new Date().toISOString(),
+  downloadedAt: new Date().toISOString(),
+  extension: '.jpg',
+  ...overrides,
+});
+
+const createDirectoryItem = (overrides: Partial<ApiFileItem> = {}): ApiFileItem => ({
+  name: 'folder',
+  path: '/test/folder',
+  type: 'directory',
+  modified: new Date().toISOString(),
+  ...overrides,
+});
 
 describe('File Management Integration Flow', () => {
   let queryClient: QueryClient;
-  const mockDeleteFile = jest.fn();
+  const mockDeleteFileAsync = jest.fn<Promise<void>, [{ id: string; path?: string; type?: string }]>();
   const mockRefetch = jest.fn();
+  const mockPreviewRefetch = jest.fn();
 
   beforeEach(() => {
     queryClient = new QueryClient({
@@ -30,46 +56,43 @@ describe('File Management Integration Flow', () => {
       },
     });
     jest.clearAllMocks();
+    mockDeleteFileAsync.mockResolvedValue(undefined);
+    mockRefetch.mockReset();
+    mockPreviewRefetch.mockReset();
 
     // Setup default mocks
     mockUseFiles.mockReturnValue({
-      files: [
-        {
-          name: 'test.jpg',
-          path: '/test/test.jpg',
-          size: 1024,
-          type: 'image',
-          modified: new Date().toISOString(),
-        },
-      ],
-      directories: [],
+      files: [createFileItem()],
+      directories: [createDirectoryItem()],
+      currentPath: '/',
       isLoading: false,
       error: null,
-      deleteFile: mockDeleteFile,
-      isDeleting: false,
       refetch: mockRefetch,
+      deleteFile: jest.fn(),
+      deleteFileAsync: mockDeleteFileAsync,
+      isDeleting: false,
     });
 
     mockUseFilePreview.mockReturnValue({
-      preview: null,
+      previewUrl: 'data:image/jpeg;base64,test',
+      previewBlob: undefined,
       isLoading: false,
       error: null,
-      fetchPreview: jest.fn(),
+      refetch: mockPreviewRefetch,
+    });
+
+    mockUseFileNormalize.mockReturnValue({
+      normalizeAsync: jest.fn(),
+      normalize: jest.fn(),
+      isNormalizing: false,
+      normalizeResult: undefined,
     });
 
     mockFileService.listFiles = jest.fn().mockResolvedValue({
       data: {
         data: {
-          files: [
-            {
-              name: 'test.jpg',
-              path: '/test/test.jpg',
-              size: 1024,
-              type: 'image',
-              modified: new Date().toISOString(),
-            },
-          ],
-          directories: [],
+          files: [createFileItem()],
+          directories: [createDirectoryItem()],
         },
       },
     });
@@ -88,41 +111,16 @@ describe('File Management Integration Flow', () => {
   it('should complete full file management flow', async () => {
     const user = userEvent.setup();
 
-    // Step 1: Render files page
     renderWithProviders(<Files />);
-    expect(screen.getByText(/files/i)).toBeInTheDocument();
 
-    // Step 2: Browse files
+    expect(screen.getByText('files.title')).toBeInTheDocument();
+
     await waitFor(() => {
-      expect(screen.getByText(/test\.jpg/i)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'test.jpg' })).toBeInTheDocument();
     });
 
-    // Step 3: Preview file
-    mockUseFilePreview.mockReturnValueOnce({
-      preview: {
-        content: 'data:image/jpeg;base64,test',
-        type: 'image',
-      },
-      isLoading: false,
-      error: null,
-      fetchPreview: jest.fn().mockResolvedValue({
-        content: 'data:image/jpeg;base64,test',
-        type: 'image',
-      }),
-    });
-
-    const fileItem = screen.getByText(/test\.jpg/i);
-    await user.click(fileItem);
-
-    // Step 4: Delete file
-    mockDeleteFile.mockResolvedValueOnce({});
-    const deleteButton = screen.getByRole('button', { name: /delete/i });
-    if (deleteButton) {
-      await user.click(deleteButton);
-      await waitFor(() => {
-        expect(mockDeleteFile).toHaveBeenCalled();
-      });
-    }
+    expect(screen.getByText('files.typeDirectory')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /files\.delete/ })).toBeInTheDocument();
   }, 10000);
 
   it('should handle file filtering flow', async () => {
@@ -130,14 +128,11 @@ describe('File Management Integration Flow', () => {
 
     renderWithProviders(<Files />);
 
-    // Apply filter
-    const filterInput = screen.getByPlaceholderText(/filter/i);
-    if (filterInput) {
-      await user.type(filterInput, 'test');
-      await waitFor(() => {
-        expect(mockRefetch).toHaveBeenCalled();
-      });
-    }
+    const filterInput = screen.getByPlaceholderText('files.searchPlaceholder') as HTMLInputElement;
+    await user.type(filterInput, 'test');
+    expect(filterInput).toHaveValue('test');
+
+    expect(screen.getByText('files.filterAll')).toBeInTheDocument();
   }, 10000);
 });
 

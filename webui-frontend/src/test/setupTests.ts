@@ -1,9 +1,14 @@
-/**
- * Jest setup file
- * This file runs before each test file
- */
-
 import '@testing-library/jest-dom';
+
+jest.mock('dayjs', () => {
+  const actualDayjs = jest.requireActual<typeof import('dayjs')>('dayjs');
+
+  return {
+    __esModule: true,
+    ...actualDayjs,
+    default: actualDayjs,
+  };
+});
 
 // Mock Vite environment variables for tests
 if (typeof globalThis !== 'undefined') {
@@ -18,7 +23,7 @@ if (typeof globalThis !== 'undefined') {
 // Mock window.matchMedia
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
-  value: jest.fn().mockImplementation((query) => ({
+  value: jest.fn().mockImplementation((query: string) => ({
     matches: false,
     media: query,
     onchange: null,
@@ -32,12 +37,16 @@ Object.defineProperty(window, 'matchMedia', {
 
 // Mock IntersectionObserver
 global.IntersectionObserver = class IntersectionObserver {
+  // eslint-disable-next-line @typescript-eslint/no-empty-function
   constructor() {}
+  // eslint-disable-next-line @typescript-eslint/no-empty-function
   disconnect() {}
+  // eslint-disable-next-line @typescript-eslint/no-empty-function
   observe() {}
   takeRecords() {
     return [];
   }
+  // eslint-disable-next-line @typescript-eslint/no-empty-function
   unobserve() {}
 } as unknown as typeof IntersectionObserver;
 

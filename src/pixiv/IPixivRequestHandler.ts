@@ -52,3 +52,16 @@ export interface IPixivRequestHandler {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+

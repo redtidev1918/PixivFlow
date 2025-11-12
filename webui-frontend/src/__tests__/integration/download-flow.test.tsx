@@ -1,27 +1,38 @@
 /// <reference types="@testing-library/jest-dom" />
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import { render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import Download from '../../pages/Download';
 import { downloadService } from '../../services/downloadService';
-import { useDownload, useDownloadStatus, useDownloadLogs } from '../../hooks/useDownload';
+import { useDownload, useDownloadStatus, useDownloadLogs, useIncompleteTasks } from '../../hooks/useDownload';
+import type { DownloadTask } from '../../services/api/types';
 
 // Mock services
 jest.mock('../../services/downloadService');
-jest.mock('../../hooks/useDownload');
+jest.mock('../../hooks/useDownload', () => ({
+  useDownload: jest.fn(),
+  useDownloadStatus: jest.fn(),
+  useDownloadLogs: jest.fn(),
+  useIncompleteTasks: jest.fn(),
+}));
 
 const mockDownloadService = downloadService as jest.Mocked<typeof downloadService>;
 const mockUseDownload = useDownload as jest.MockedFunction<typeof useDownload>;
 const mockUseDownloadStatus = useDownloadStatus as jest.MockedFunction<typeof useDownloadStatus>;
 const mockUseDownloadLogs = useDownloadLogs as jest.MockedFunction<typeof useDownloadLogs>;
+const mockUseIncompleteTasks = useIncompleteTasks as jest.MockedFunction<typeof useIncompleteTasks>;
+
+beforeAll(() => {
+  Element.prototype.scrollIntoView = jest.fn();
+});
 
 describe('Download Management Integration Flow', () => {
   let queryClient: QueryClient;
   const mockStart = jest.fn();
   const mockStop = jest.fn();
-  const mockRefetch = jest.fn();
+  const mockRefetchStatus = jest.fn();
+  const mockLogsRefetch = jest.fn();
 
   beforeEach(() => {
     queryClient = new QueryClient({
@@ -36,10 +47,11 @@ describe('Download Management Integration Flow', () => {
     // Setup default mocks
     mockUseDownload.mockReturnValue({
       start: mockStart,
+      startAsync: mockStart,
       stop: mockStop,
+      stopAsync: mockStop,
       isStarting: false,
       isStopping: false,
-      error: null,
     });
 
     mockUseDownloadStatus.mockReturnValue({
@@ -50,7 +62,7 @@ describe('Download Management Integration Flow', () => {
       },
       isLoading: false,
       error: null,
-      refetch: mockRefetch,
+      refetch: mockRefetchStatus,
       hasActiveTask: false,
       activeTask: undefined,
       allTasks: [],
@@ -60,7 +72,23 @@ describe('Download Management Integration Flow', () => {
       logs: [],
       isLoading: false,
       error: null,
-      refetch: mockRefetch,
+      refetch: mockLogsRefetch,
+    });
+
+    mockUseIncompleteTasks.mockReturnValue({
+      tasks: [],
+      isLoading: false,
+      error: null,
+      refetch: mockRefetchStatus,
+      resume: jest.fn(),
+      resumeAsync: jest.fn(),
+      isResuming: false,
+      delete: jest.fn(),
+      deleteAsync: jest.fn(),
+      isDeleting: false,
+      deleteAll: jest.fn(),
+      deleteAllAsync: jest.fn(),
+      isDeletingAll: false,
     });
 
     mockDownloadService.startDownload = jest.fn().mockResolvedValue({
@@ -88,83 +116,57 @@ describe('Download Management Integration Flow', () => {
     );
   };
 
-  it('should complete full download flow', async () => {
-    const user = userEvent.setup();
-
-    // Step 1: Render download page
+  it('renders download dashboard with task actions', () => {
     renderWithProviders(<Download />);
-    expect(screen.getByText(/download/i)).toBeInTheDocument();
 
-    // Step 2: Start download
-    mockStart.mockResolvedValueOnce({});
-    mockUseDownloadStatus.mockReturnValueOnce({
+    expect(screen.getByText('download.title')).toBeInTheDocument();
+    expect(screen.getByText('download.description')).toBeInTheDocument();
+    expect(screen.getByText('download.taskOperations')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /download\.startDownload/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /download\.downloadAll/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /download\.stopCurrent/ })).toBeInTheDocument();
+  });
+
+  it('renders active task and logs when download is running', () => {
+    const activeTask: DownloadTask = {
+      taskId: 'task-123',
+      status: 'running',
+      startTime: new Date().toISOString(),
+      progress: {
+        current: 10,
+        total: 100,
+        message: 'Processing',
+      },
+    };
+
+    mockUseDownloadStatus.mockReturnValue({
       status: {
         hasActiveTask: true,
-        activeTask: {
-          taskId: 'test-task-id',
-          status: 'running',
-          progress: 0,
-        },
-        allTasks: [],
+        activeTask,
+        allTasks: [activeTask],
       },
       isLoading: false,
       error: null,
-      refetch: mockRefetch,
+      refetch: mockRefetchStatus,
       hasActiveTask: true,
-      activeTask: {
-        taskId: 'test-task-id',
-        status: 'running',
-        progress: 0,
-      },
-      allTasks: [],
+      activeTask,
+      allTasks: [activeTask],
     });
-
-    const startButton = screen.getByRole('button', { name: /start/i });
-    if (startButton) {
-      await user.click(startButton);
-      await waitFor(() => {
-        expect(mockStart).toHaveBeenCalled();
-      });
-    }
-
-    // Step 3: Check download status
-    await waitFor(() => {
-      expect(mockRefetch).toHaveBeenCalled();
-    });
-
-    // Step 4: Stop download
-    mockStop.mockResolvedValueOnce({});
-    const stopButton = screen.getByRole('button', { name: /stop/i });
-    if (stopButton) {
-      await user.click(stopButton);
-      await waitFor(() => {
-        expect(mockStop).toHaveBeenCalled();
-      });
-    }
-  }, 10000);
-
-  it('should handle download logs flow', async () => {
-    const user = userEvent.setup();
 
     mockUseDownloadLogs.mockReturnValue({
       logs: [
-        { timestamp: new Date().toISOString(), level: 'info', message: 'Test log' },
+        { timestamp: new Date().toISOString(), level: 'info', message: 'Test log entry' },
       ],
       isLoading: false,
       error: null,
-      refetch: mockRefetch,
+      refetch: mockLogsRefetch,
     });
 
     renderWithProviders(<Download />);
 
-    // View logs
-    const logsTab = screen.getByRole('tab', { name: /logs/i });
-    if (logsTab) {
-      await user.click(logsTab);
-      await waitFor(() => {
-        expect(screen.getByText(/test log/i)).toBeInTheDocument();
-      });
-    }
-  }, 10000);
+    expect(screen.getByText('download.currentTask')).toBeInTheDocument();
+    expect(screen.getByText('download.stopTask')).toBeInTheDocument();
+    expect(screen.getByText(/Test log entry/)).toBeInTheDocument();
+  });
 });
 

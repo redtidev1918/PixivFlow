@@ -73,6 +73,7 @@ module.exports = {
   testEnvironment: 'jsdom',
   roots: ['<rootDir>/src'],
   testMatch: ['**/__tests__/**/*.{ts,tsx}', '**/*.{spec,test}.{ts,tsx}'],
+  setupFiles: ['<rootDir>/src/test/setupFiles.ts'],
   globals: {
     'import.meta': {
       env: {
@@ -89,8 +90,10 @@ module.exports = {
     }),
     '\\.(css|less|scss|sass)$': 'identity-obj-proxy',
     '^dayjs$': require.resolve('dayjs'),
+    '^i18next-browser-languagedetector$': '<rootDir>/__mocks__/i18next-browser-languagedetector.js',
+    '.*/i18n/config$': '<rootDir>/src/test/mocks/i18nConfigMock.ts',
   },
-  setupFilesAfterEnv: ['<rootDir>/src/__tests__/setup.ts'],
+  setupFilesAfterEnv: ['<rootDir>/src/test/setupTests.ts'],
   collectCoverageFrom: [
     'src/**/*.{ts,tsx}',
     '!src/**/*.d.ts',

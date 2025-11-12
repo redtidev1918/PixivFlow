@@ -6,15 +6,12 @@ import { LoadingSpinner } from '../../../components/common/LoadingSpinner';
 describe('LoadingSpinner', () => {
   it('renders correctly', () => {
     render(<LoadingSpinner />);
-    // Ant Design Spin component uses aria-label="loading" instead of role="status"
-    expect(screen.getByLabelText('loading')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toBeInTheDocument();
   });
 
   it('renders with tip', () => {
     render(<LoadingSpinner tip="Loading..." />);
-    // Ant Design Spin component renders tip in a specific way
-    // Check for the spinner container instead
-    expect(screen.getByLabelText('loading')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toBeInTheDocument();
   });
 
   it('renders full screen when fullScreen is true', () => {

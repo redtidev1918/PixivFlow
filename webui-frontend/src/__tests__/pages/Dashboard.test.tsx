@@ -84,7 +84,7 @@ describe('Dashboard', () => {
     });
 
     renderWithProviders(<Dashboard />);
-    expect(screen.getByRole('status')).toBeInTheDocument();
+    expect(document.querySelector('.ant-spin')).toBeInTheDocument();
   });
 
   it('renders refresh button', () => {

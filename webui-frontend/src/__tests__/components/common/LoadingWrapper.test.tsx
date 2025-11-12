@@ -20,8 +20,7 @@ describe('LoadingWrapper', () => {
       </LoadingWrapper>
     );
     expect(screen.queryByText('Content')).not.toBeInTheDocument();
-    // Ant Design Spin doesn't have role="status", check for loading indicator instead
-    expect(screen.getByLabelText('loading')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toBeInTheDocument();
   });
 
   it('renders custom fallback when loading is true', () => {
@@ -43,9 +42,7 @@ describe('LoadingWrapper', () => {
         <div>Content</div>
       </LoadingWrapper>
     );
-    // LoadingSpinner shows tip, but Ant Design renders it in a specific way
-    // Check for the loading indicator instead
-    expect(screen.getByLabelText('loading')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toBeInTheDocument();
   });
 
   it('passes size to LoadingSpinner', () => {

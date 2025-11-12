@@ -41,6 +41,9 @@ export function LoadingSpinner({
           size={size}
           tip={tip}
           indicator={<LoadingOutlined style={{ fontSize: iconSize }} spin />}
+          role="status"
+          aria-live="polite"
+          aria-label={tip ?? 'loading'}
           {...props}
         />
       </div>
@@ -53,6 +56,9 @@ export function LoadingSpinner({
       size={size}
       tip={tip}
       indicator={<LoadingOutlined style={{ fontSize: iconSize }} spin />}
+      role="status"
+      aria-live="polite"
+      aria-label={tip ?? 'loading'}
       {...props}
     />
   );

@@ -1,28 +1,32 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter } from 'react-router-dom';
-import { useLayoutAuth } from '../../../components/Layout/hooks/useLayoutAuth';
 
-// Mock the API
-vi.mock('../../../services/api', () => ({
+jest.mock('../../services/api', () => ({
   api: {
-    getAuthStatus: vi.fn(() => Promise.resolve({
-      data: {
-        data: {
-          authenticated: true,
-        },
-      },
-    })),
-    logout: vi.fn(() => Promise.resolve({})),
-    refreshToken: vi.fn(() => Promise.resolve({})),
+    getAuthStatus: jest.fn(),
+    logout: jest.fn(),
+    refreshToken: jest.fn(),
   },
 }));
+
+import { api } from '../../services/api';
+import { useLayoutAuth } from '../../components/Layout/hooks/useLayoutAuth';
 
 describe('useLayoutAuth', () => {
   let queryClient: QueryClient;
 
   beforeEach(() => {
+    jest.clearAllMocks();
+    (api.getAuthStatus as jest.Mock).mockResolvedValue({
+      data: {
+        data: {
+          authenticated: true,
+        },
+      },
+    });
+    (api.logout as jest.Mock).mockResolvedValue({});
+    (api.refreshToken as jest.Mock).mockResolvedValue({});
     queryClient = new QueryClient({
       defaultOptions: {
         queries: {

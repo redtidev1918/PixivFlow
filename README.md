@@ -331,7 +331,7 @@ npm run webui:start        # 构建前端并启动后端服务器
 
 # 生产模式（手动启动）
 npm run webui:build        # 构建前端
-npm run webui              # 启动后端（访问 http://localhost:3000）
+npm run webui              # 启动后端（默认端口 3000，可通过 PORT 环境变量修改）
 
 # 桌面应用（Electron）
 cd webui-frontend

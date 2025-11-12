@@ -28,9 +28,8 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
     // API response structure: response.data.data.authenticated or response.data.authenticated
     const responseData = response?.data?.data || response?.data;
     // Check multiple possible fields: authenticated, isAuthenticated, hasToken
-    return responseData?.authenticated === true 
-      || responseData?.isAuthenticated === true 
-      || responseData?.hasToken === true;
+    return res    return responseData?.authenticated === true 
+      || responseData?.isAuthenticated === true;
   };
 
   if (isLoading) {

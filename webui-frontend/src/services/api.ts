@@ -1,768 +1,127 @@
-import axios, { AxiosResponse } from 'axios';
-
-// Declare global type for test environment
-declare global {
-  var __VITE_ENV__: Record<string, string | undefined> | undefined;
-}
-
 /**
- * Get environment variable value
- * Supports both Vite (import.meta.env) and Jest (process.env) environments
+ * @deprecated This file is kept for backward compatibility.
+ * Please use the new API structure from './api/index' instead.
+ * 
+ * The API has been refactored into separate service modules:
+ * - authApi: Authentication related APIs
+ * - configApi: Configuration related APIs
+ * - downloadApi: Download related APIs
+ * - filesApi: File management APIs
+ * - logsApi: Logs APIs
+ * - statsApi: Statistics APIs
+ * 
+ * The old `api` object is still available for backward compatibility,
+ * but new code should use the individual API services.
  */
-function getEnvVar(key: string): string | undefined {
-  // In Jest/test environment, use process.env or global mock
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const nodeProcess = typeof (globalThis as any).process !== 'undefined' ? (globalThis as any).process : undefined;
-  if (nodeProcess?.env?.[key]) {
-    return nodeProcess.env[key];
-  }
-  
-  // Check global mock (for tests)
-  if (typeof globalThis !== 'undefined' && globalThis.__VITE_ENV__?.[key]) {
-    return globalThis.__VITE_ENV__[key];
-  }
-  
-  // In Vite environment, import.meta.env is replaced at build time
-  // For runtime, we use a global variable that Vite sets
-  // In tests, this will be undefined and we'll use the global mock above
-  return undefined;
-}
 
-/**
- * API Base URL Configuration
- * Supports environment variable configuration for mobile/remote access
- * Example: VITE_API_BASE_URL=http://192.168.1.100:3000
- */
-const getApiBaseURL = (): string => {
-  // Priority 1: Environment variable
-  const apiBaseUrl = getEnvVar('VITE_API_BASE_URL');
-  
-  if (apiBaseUrl) {
-    return `${apiBaseUrl}/api`;
-  }
-  // Priority 2: Relative path (same origin)
-  return '/api';
+// Import individual services to avoid circular dependency
+import { authApi } from './api/auth';
+import { configApi } from './api/config';
+import { downloadApi } from './api/download';
+import { filesApi } from './api/files';
+import { logsApi } from './api/logs';
+import { statsApi } from './api/stats';
+import { apiClient, createApiClient, createCustomApiClient } from './api/client';
+import { ApiError, handleApiError } from './api/error-handler';
+import { setupRequestInterceptor, setupResponseInterceptor } from './api/interceptors';
+
+// Re-export all services
+export {
+  authApi,
+  configApi,
+  downloadApi,
+  filesApi,
+  logsApi,
+  statsApi,
+  apiClient,
+  createApiClient,
+  createCustomApiClient,
+  ApiError,
+  handleApiError,
+  setupRequestInterceptor,
+  setupResponseInterceptor,
 };
 
-/**
- * Axios client instance with default configuration
- */
-const apiClient = axios.create({
-  baseURL: getApiBaseURL(),
-  timeout: 30000,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-// Request interceptor for adding auth tokens if needed
-apiClient.interceptors.request.use(
-  (config) => {
-    // Add any auth tokens here if needed in the future
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
-  }
-);
-
-// Response interceptor for handling common errors
-apiClient.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    // Handle common HTTP errors
-    if (error.response) {
-      // Server responded with error status
-      console.error('API Error:', error.response.status, error.response.data);
-    } else if (error.request) {
-      // Request was made but no response received
-      console.error('Network Error:', error.message);
-    } else {
-      // Something else happened
-      console.error('Error:', error.message);
-    }
-    return Promise.reject(error);
-  }
-);
-
-// ============================================================================
-// Type Definitions
-// ============================================================================
-
-/**
- * Generic API response wrapper
- */
-export interface ApiResponse<T = any> {
-  data: T;
-  message?: string;
-  error?: string;
-}
-
-/**
- * Statistics overview data
- */
-export interface StatsOverview {
-  totalDownloads: number;
-  illustrations: number;
-  novels: number;
-  recentDownloads: number;
-}
-
-/**
- * Download task status
- */
-export interface DownloadTask {
-  taskId: string;
-  status: 'running' | 'completed' | 'failed' | 'stopped';
-  startTime: string;
-  endTime?: string;
-  error?: string;
-  progress?: {
-    current: number;
-    total: number;
-    message?: string;
-  };
-}
-
-/**
- * Download status response
- */
-export interface DownloadStatus {
-  hasActiveTask: boolean;
-  activeTask?: DownloadTask;
-  allTasks: DownloadTask[];
-}
-
-/**
- * Incomplete task data
- */
-export interface IncompleteTask {
-  id: number;
-  tag: string;
-  type: 'illustration' | 'novel';
-  status: 'failed' | 'partial';
-  message: string | null;
-  executedAt: string;
-}
-
-/**
- * Download history item
- */
-export interface DownloadHistoryItem {
-  id: number;
-  pixivId: string;
-  type: 'illustration' | 'novel';
-  title: string;
-  tag: string;
-  author?: string;
-  filePath: string;
-  downloadedAt: string;
-}
-
-/**
- * Download history response
- */
-export interface DownloadHistoryResponse {
-  items: DownloadHistoryItem[];
-  total: number;
-  page: number;
-  limit: number;
-}
-
-/**
- * File item data
- */
-export interface FileItem {
-  name: string;
-  path: string;
-  type: 'file' | 'directory';
-  size?: number;
-  modified?: string;
-  downloadedAt?: string | null;
-  extension?: string;
-}
-
-/**
- * Files list response
- */
-export interface FilesResponse {
-  files: FileItem[];
-  directories: FileItem[];
-  currentPath: string;
-}
-
-/**
- * Log entry data
- */
-export interface LogEntry {
-  line: string;
-  level?: string;
-  timestamp?: string;
-}
-
-/**
- * Logs response
- */
-export interface LogsResponse {
-  logs: string[];
-  total: number;
-  page: number;
-  limit: number;
-}
-
-/**
- * Config data structure
- */
-export interface ConfigData {
-  logLevel?: string;
-  initialDelay?: number;
-  pixiv?: {
-    clientId?: string;
-    refreshToken?: string;
-    userAgent?: string;
-  };
-  network?: {
-    timeoutMs?: number;
-    retries?: number;
-    retryDelay?: number;
-    proxy?: {
-      enabled?: boolean;
-      host?: string;
-      port?: number;
-      protocol?: string;
-      username?: string;
-      password?: string;
-    };
-  };
-  storage?: {
-    databasePath?: string;
-    downloadDirectory?: string;
-    illustrationDirectory?: string;
-    novelDirectory?: string;
-    illustrationOrganization?: string;
-    novelOrganization?: string;
-  };
-  scheduler?: {
-    enabled?: boolean;
-    cron?: string;
-    timezone?: string;
-    maxExecutions?: number;
-    minInterval?: number;
-    timeout?: number;
-  };
-  download?: {
-    concurrency?: number;
-    maxRetries?: number;
-    retryDelay?: number;
-    timeout?: number;
-  };
-  targets?: Array<{
-    type: 'illustration' | 'novel';
-    tag?: string;
-    limit?: number;
-    searchTarget?: string;
-    sort?: string;
-    mode?: string;
-    rankingMode?: string;
-    rankingDate?: string;
-    filterTag?: string;
-    minBookmarks?: number;
-    startDate?: string;
-    endDate?: string;
-    seriesId?: number;
-    novelId?: number;
-    [key: string]: any;
-  }>;
-  _meta?: {
-    configPath?: string;
-    configPathRelative?: string;
-  };
-}
-
-// ============================================================================
-// API Methods
-// ============================================================================
-
-/**
- * API service object with all available endpoints
- */
+// Create unified API object for backward compatibility
 export const api = {
-  // ========== Authentication ==========
-  
-  /**
-   * Get current authentication status
-   */
-  getAuthStatus: (): Promise<AxiosResponse<ApiResponse<{ isAuthenticated: boolean; user?: any }>>> =>
-    apiClient.get('/auth/status'),
+  // Authentication
+  getAuthStatus: authApi.getAuthStatus,
+  login: authApi.login,
+  loginWithToken: authApi.loginWithToken,
+  refreshToken: authApi.refreshToken,
+  logout: authApi.logout,
 
-  /**
-   * Login to Pixiv
-   * @param username - Pixiv username or email
-   * @param password - Pixiv password
-   * @param headless - Use headless mode (gppt) or interactive mode (Puppeteer)
-   * @param proxy - Optional proxy configuration
-   */
-  login: (
-    username: string,
-    password: string,
-    headless: boolean = true,
-    proxy?: any
-  ): Promise<AxiosResponse<ApiResponse<{ refreshToken: string }>>> => {
-    // For interactive mode, use a longer timeout (10 minutes) since user needs time to complete login
-    const timeout = headless ? 30000 : 600000; // 30s for headless, 10min for interactive
-    return apiClient.post('/auth/login', { username, password, headless, proxy }, { timeout });
-  },
+  // Configuration
+  getConfig: configApi.getConfig,
+  updateConfig: configApi.updateConfig,
+  validateConfig: configApi.validateConfig,
+  backupConfig: configApi.backupConfig,
+  restoreConfig: configApi.restoreConfig,
+  getConfigHistory: configApi.getConfigHistory,
+  saveConfigHistory: configApi.saveConfigHistory,
+  applyConfigHistory: configApi.applyConfigHistory,
+  deleteConfigHistory: configApi.deleteConfigHistory,
+  listConfigFiles: configApi.listConfigFiles,
+  switchConfigFile: configApi.switchConfigFile,
+  importConfigFile: configApi.importConfigFile,
+  deleteConfigFile: configApi.deleteConfigFile,
+  getConfigFileContent: configApi.getConfigFileContent,
+  updateConfigFileContent: configApi.updateConfigFileContent,
+  diagnoseConfig: configApi.diagnoseConfig,
+  repairConfig: configApi.repairConfig,
 
-  /**
-   * Login with refresh token directly
-   * @param refreshToken - Refresh token to validate and save
-   */
-  loginWithToken: (
-    refreshToken: string
-  ): Promise<AxiosResponse<ApiResponse<{ refreshToken: string; accessToken: string; expiresIn: number; user?: any }>>> =>
-    apiClient.post('/auth/login-with-token', { refreshToken }),
+  // Download
+  startDownload: downloadApi.startDownload,
+  stopDownload: downloadApi.stopDownload,
+  getDownloadStatus: downloadApi.getDownloadStatus,
+  getTaskLogs: downloadApi.getTaskLogs,
+  getDownloadHistory: downloadApi.getDownloadHistory,
+  runAllDownloads: downloadApi.runAllDownloads,
+  randomDownload: downloadApi.randomDownload,
+  getIncompleteTasks: downloadApi.getIncompleteTasks,
+  resumeDownload: downloadApi.resumeDownload,
+  deleteIncompleteTask: downloadApi.deleteIncompleteTask,
+  deleteAllIncompleteTasks: downloadApi.deleteAllIncompleteTasks,
 
-  /**
-   * Refresh authentication token
-   * 
-   * Refreshes the Pixiv authentication token using the refresh token.
-   * If no refresh token is provided, uses the one from the current configuration.
-   * 
-   * @param refreshToken - Optional refresh token (uses config if not provided)
-   * @returns Promise resolving to API response with new refresh token
-   * 
-   * @example
-   * ```typescript
-   * // Refresh using token from config
-   * const response = await api.refreshToken();
-   * 
-   * // Refresh using specific token
-   * const response = await api.refreshToken('your-refresh-token');
-   * ```
-   */
-  refreshToken: (refreshToken?: string): Promise<AxiosResponse<ApiResponse<{ refreshToken: string }>>> =>
-    apiClient.post('/auth/refresh', { refreshToken }),
+  // Statistics
+  getStatsOverview: statsApi.getStatsOverview,
+  getDownloadStats: statsApi.getDownloadStats,
+  getTagStats: statsApi.getTagStats,
+  getAuthorStats: statsApi.getAuthorStats,
 
-  /**
-   * Logout and clear authentication
-   */
-  logout: (): Promise<AxiosResponse<ApiResponse<void>>> =>
-    apiClient.post('/auth/logout'),
+  // Logs
+  getLogs: logsApi.getLogs,
+  clearLogs: logsApi.clearLogs,
 
-  // ========== Configuration ==========
-
-  /**
-   * Get current configuration
-   */
-  getConfig: (): Promise<AxiosResponse<ApiResponse<ConfigData>>> =>
-    apiClient.get('/config'),
-
-  /**
-   * Update configuration
-   * @param config - Configuration object to update
-   */
-  updateConfig: (config: Partial<ConfigData>): Promise<AxiosResponse<ApiResponse<ConfigData>>> =>
-    apiClient.put('/config', config),
-
-  /**
-   * Validate configuration without saving
-   * @param config - Configuration object to validate
-   */
-  validateConfig: (config: Partial<ConfigData>): Promise<AxiosResponse<ApiResponse<{ valid: boolean; errors?: string[] }>>> =>
-    apiClient.post('/config/validate', config),
-
-  /**
-   * Backup current configuration
-   */
-  backupConfig: (): Promise<AxiosResponse<ApiResponse<{ backupPath: string }>>> =>
-    apiClient.get('/config/backup'),
-
-  /**
-   * Restore configuration from backup
-   * @param backupPath - Path to backup file
-   */
-  restoreConfig: (backupPath: string): Promise<AxiosResponse<ApiResponse<ConfigData>>> =>
-    apiClient.post('/config/restore', { backupPath }),
-
-  /**
-   * Get configuration history
-   */
-  getConfigHistory: (): Promise<AxiosResponse<ApiResponse<Array<{
-    id: number;
-    name: string;
-    description: string | null;
-    config: ConfigData;
-    created_at: string;
-    updated_at: string;
-    is_active: number;
-  }>>>> =>
-    apiClient.get('/config/history'),
-
-  /**
-   * Save configuration to history
-   * @param name - Configuration name
-   * @param config - Configuration object
-   * @param description - Optional description
-   */
-  saveConfigHistory: (
-    name: string,
-    config: Partial<ConfigData>,
-    description?: string
-  ): Promise<AxiosResponse<ApiResponse<{ id: number }>>> =>
-    apiClient.post('/config/history', { name, config, description }),
-
-  /**
-   * Apply a configuration history entry
-   * @param id - History entry ID
-   */
-  applyConfigHistory: (id: number): Promise<AxiosResponse<ApiResponse<void>>> =>
-    apiClient.post(`/config/history/${id}/apply`),
-
-  /**
-   * Delete a configuration history entry
-   * @param id - History entry ID
-   */
-  deleteConfigHistory: (id: number): Promise<AxiosResponse<ApiResponse<void>>> =>
-    apiClient.delete(`/config/history/${id}`),
-
-  // ========== Configuration Files ==========
-
-  /**
-   * List all configuration files in the config directory
-   */
-  listConfigFiles: (): Promise<AxiosResponse<ApiResponse<Array<{
-    filename: string;
-    path: string;
-    pathRelative: string;
-    modifiedTime: string;
-    size: number;
-    isActive: boolean;
-  }>>>> =>
-    apiClient.get('/config/files'),
-
-  /**
-   * Switch to a different configuration file
-   * @param path - Path to the configuration file
-   */
-  switchConfigFile: (path: string): Promise<AxiosResponse<ApiResponse<void>>> =>
-    apiClient.post('/config/files/switch', { path }),
-
-  /**
-   * Import a configuration and save it with auto-numbering
-   * @param config - Configuration object to import
-   * @param name - Optional name for the config
-   */
-  importConfigFile: (
-    config: Partial<ConfigData>,
-    name?: string
-  ): Promise<AxiosResponse<ApiResponse<{
-    path: string;
-    pathRelative: string;
-    filename: string;
-  }>>> =>
-    apiClient.post('/config/files/import', { config, name }),
-
-  /**
-   * Delete a configuration file
-   * @param filename - Filename to delete
-   */
-  deleteConfigFile: (filename: string): Promise<AxiosResponse<ApiResponse<void>>> =>
-    apiClient.delete(`/config/files/${filename}`),
-
-  /**
-   * Get the raw JSON content of a configuration file
-   * @param filename - Filename to read
-   */
-  getConfigFileContent: (filename: string): Promise<AxiosResponse<ApiResponse<{
-    filename: string;
-    path: string;
-    pathRelative: string;
-    content: string;
-  }>>> =>
-    apiClient.get(`/config/files/${filename}/content`),
-
-  /**
-   * Update the raw JSON content of a configuration file
-   * @param filename - Filename to update
-   * @param content - Raw JSON content as string
-   */
-  updateConfigFileContent: (
-    filename: string,
-    content: string
-  ): Promise<AxiosResponse<ApiResponse<void>>> =>
-    apiClient.put(`/config/files/${filename}/content`, { content }),
-
-  /**
-   * Diagnose and analyze current configuration
-   */
-  diagnoseConfig: (): Promise<AxiosResponse<ApiResponse<{
-    stats: {
-      totalFields: number;
-      totalSections: number;
-      totalTargets: number;
-      maxDepth: number;
-      fieldTypes: Record<string, number>;
-    };
-    errors: string[];
-    warnings: string[];
-    fields: Array<{
-      path: string;
-      name: string;
-      type: string;
-      required: boolean;
-      description?: string;
-      defaultValue?: any;
-      enumValues?: any[];
-      depth: number;
-      isLeaf: boolean;
-    }>;
-    sections: Record<string, any[]>;
-  }>>> =>
-    apiClient.get('/config/diagnose'),
-
-  /**
-   * Repair current configuration file
-   * @param createBackup - Whether to create a backup before repairing (default: true)
-   */
-  repairConfig: (createBackup?: boolean): Promise<AxiosResponse<ApiResponse<{
-    fixed: boolean;
-    errors: string[];
-    warnings: string[];
-    backupPath?: string;
-  }>>> =>
-    apiClient.post('/config/repair', { createBackup }),
-
-  // ========== Download Management ==========
-
-  /**
-   * Start a download task
-   * @param targetId - Optional target ID to download (downloads all if not provided)
-   * @param config - Optional configuration override
-   * @param configPaths - Optional array of config file paths to use
-   */
-  startDownload: (
-    targetId?: string,
-    config?: Partial<ConfigData>,
-    configPaths?: string[]
-  ): Promise<AxiosResponse<ApiResponse<{ taskId: string }>>> =>
-    apiClient.post('/download/start', { targetId, config, configPaths }),
-
-  /**
-   * Stop a running download task
-   * @param taskId - ID of the task to stop
-   */
-  stopDownload: (taskId: string): Promise<AxiosResponse<ApiResponse<void>>> =>
-    apiClient.post('/download/stop', { taskId }),
-
-  /**
-   * Get download status
-   * @param taskId - Optional task ID (gets all tasks if not provided)
-   */
-  getDownloadStatus: (taskId?: string): Promise<AxiosResponse<ApiResponse<DownloadStatus>>> =>
-    apiClient.get('/download/status', { params: { taskId } }),
-
-  /**
-   * Get logs for a specific task
-   * @param taskId - Task ID
-   * @param limit - Maximum number of log entries to return
-   */
-  getTaskLogs: (
-    taskId: string,
-    limit?: number
-  ): Promise<AxiosResponse<ApiResponse<{ logs: Array<{ timestamp: string; level: string; message: string }> }>>> =>
-    apiClient.get('/download/logs', { params: { taskId, limit } }),
-
-  /**
-   * Get download history with filtering and pagination
-   */
-  getDownloadHistory: (params?: {
-    page?: number;
-    limit?: number;
-    type?: string;
-    tag?: string;
-    author?: string;
-    startDate?: string;
-    endDate?: string;
-    sortBy?: 'downloadedAt' | 'title' | 'author' | 'pixivId';
-    sortOrder?: 'asc' | 'desc';
-  }): Promise<AxiosResponse<ApiResponse<DownloadHistoryResponse>>> =>
-    apiClient.get('/download/history', { params }),
-
-  /**
-   * Run all configured download targets
-   * @param configPaths - Optional array of config file paths to use
-   */
-  runAllDownloads: (configPaths?: string[]): Promise<AxiosResponse<ApiResponse<{ taskId: string }>>> =>
-    apiClient.post('/download/run-all', { configPaths }),
-
-  /**
-   * Download random works
-   * @param type - Type of works to download
-   */
-  randomDownload: (type?: 'illustration' | 'novel'): Promise<AxiosResponse<ApiResponse<{ taskId: string }>>> =>
-    apiClient.post('/download/random', { type }),
-
-  /**
-   * Get list of incomplete download tasks
-   */
-  getIncompleteTasks: (): Promise<AxiosResponse<ApiResponse<{ tasks: IncompleteTask[] }>>> =>
-    apiClient.get('/download/incomplete'),
-
-  /**
-   * Resume an incomplete download
-   * @param tag - Tag to resume
-   * @param type - Type of content
-   */
-  resumeDownload: (
-    tag: string,
-    type: 'illustration' | 'novel'
-  ): Promise<AxiosResponse<ApiResponse<{ taskId: string }>>> =>
-    apiClient.post('/download/resume', { tag, type }),
-
-  /**
-   * Delete a single incomplete task
-   * @param id - Task ID
-   */
-  deleteIncompleteTask: (id: number): Promise<AxiosResponse<ApiResponse<void>>> =>
-    apiClient.delete(`/download/incomplete/${id}`),
-
-  /**
-   * Delete all incomplete tasks
-   */
-  deleteAllIncompleteTasks: (): Promise<AxiosResponse<ApiResponse<{ deletedCount: number }>>> =>
-    apiClient.delete('/download/incomplete'),
-
-  // ========== Statistics ==========
-
-  /**
-   * Get overview statistics
-   */
-  getStatsOverview: (): Promise<AxiosResponse<ApiResponse<StatsOverview>>> =>
-    apiClient.get('/stats/overview'),
-
-  /**
-   * Get download statistics for a period
-   * @param period - Time period (e.g., 'day', 'week', 'month')
-   */
-  getDownloadStats: (period?: string): Promise<AxiosResponse<ApiResponse<any>>> =>
-    apiClient.get('/stats/downloads', { params: { period } }),
-
-  /**
-   * Get tag statistics
-   * @param limit - Maximum number of tags to return
-   */
-  getTagStats: (limit?: number): Promise<AxiosResponse<ApiResponse<any>>> =>
-    apiClient.get('/stats/tags', { params: { limit } }),
-
-  /**
-   * Get author statistics
-   * @param limit - Maximum number of authors to return
-   */
-  getAuthorStats: (limit?: number): Promise<AxiosResponse<ApiResponse<any>>> =>
-    apiClient.get('/stats/authors', { params: { limit } }),
-
-  // ========== Logs ==========
-
-  /**
-   * Get application logs with filtering
-   */
-  getLogs: (params?: {
-    page?: number;
-    limit?: number;
-    level?: string;
-    search?: string;
-  }): Promise<AxiosResponse<ApiResponse<LogsResponse>>> =>
-    apiClient.get('/logs', { params }),
-
-  /**
-   * Clear all logs
-   */
-  clearLogs: (): Promise<AxiosResponse<ApiResponse<void>>> =>
-    apiClient.delete('/logs'),
-
-  // ========== File Management ==========
-
-  /**
-   * List files in a directory
-   */
-  listFiles: (params?: {
-    path?: string;
-    type?: string;
-    sort?: string;
-    order?: string;
-    dateFilter?: 'today' | 'yesterday' | 'thisWeek' | 'lastWeek' | 'thisMonth' | 'lastMonth' | 'all';
-  }): Promise<AxiosResponse<ApiResponse<FilesResponse>>> =>
-    apiClient.get('/files/list', { params }),
-
-  /**
-   * Get recently downloaded files
-   * 
-   * Retrieves a list of recently downloaded files with optional filtering.
-   * 
-   * @param params - Query parameters
-   * @param params.limit - Maximum number of files to return (default: 50)
-   * @param params.type - File type filter: 'illustration' | 'novel' | undefined (all types)
-   * @param params.filter - Time filter: 'today' | 'yesterday' | 'last7days' | 'last30days'
-   * @returns Promise resolving to API response containing array of file items
-   * 
-   * @example
-   * ```typescript
-   * // Get last 10 illustrations downloaded today
-   * const response = await api.getRecentFiles({ 
-   *   limit: 10, 
-   *   type: 'illustration', 
-   *   filter: 'today' 
-   * });
-   * const files = response.data.data.files;
-   * ```
-   */
-  getRecentFiles: (params?: {
-    limit?: number;
-    type?: 'illustration' | 'novel';
-    filter?: 'today' | 'yesterday' | 'last7days' | 'last30days';
-  }): Promise<AxiosResponse<ApiResponse<{ files: FileItem[] }>>> =>
-    apiClient.get('/files/recent', { params }),
-
-  /**
-   * Get file preview (image or text content)
-   * @param path - File path
-   * @param type - File type
-   */
-  getFilePreview: (path: string, type?: string): Promise<AxiosResponse<Blob>> =>
-    apiClient.get('/files/preview', { params: { path, type }, responseType: 'blob' }),
-
-  /**
-   * Delete a file
-   * @param id - File ID or name
-   * @param params - Additional parameters (path, type)
-   */
-  deleteFile: (
-    id: string,
-    params?: { path?: string; type?: string }
-  ): Promise<AxiosResponse<ApiResponse<void>>> =>
-    apiClient.delete(`/files/${id}`, { params }),
-
-  /**
-   * Normalize files (rename, reorganize, update database)
-   * @param options - Normalization options
-   */
-  normalizeFiles: (options?: {
-    dryRun?: boolean;
-    normalizeNames?: boolean;
-    reorganize?: boolean;
-    updateDatabase?: boolean;
-    type?: 'illustration' | 'novel' | 'all';
-  }): Promise<AxiosResponse<ApiResponse<{
-    result: {
-      totalFiles: number;
-      processedFiles: number;
-      movedFiles: number;
-      renamedFiles: number;
-      updatedDatabase: number;
-      skippedFiles: number;
-      errors: Array<{ file: string; error: string }>;
-    };
-  }>>> =>
-    apiClient.post('/files/normalize', options),
+  // Files
+  listFiles: filesApi.listFiles,
+  getRecentFiles: filesApi.getRecentFiles,
+  getFilePreview: filesApi.getFilePreview,
+  deleteFile: filesApi.deleteFile,
+  normalizeFiles: filesApi.normalizeFiles,
 };
 
+// Re-export types
+export type {
+  ApiResponse,
+  StatsOverview,
+  DownloadTask,
+  DownloadStatus,
+  IncompleteTask,
+  DownloadHistoryItem,
+  DownloadHistoryResponse,
+  FileItem,
+  FilesResponse,
+  LogEntry,
+  LogsResponse,
+  ConfigData,
+  AuthStatus,
+  AuthLoginResponse,
+  ConfigHistoryEntry,
+  ConfigFileInfo,
+  ConfigFileContent,
+  ConfigDiagnoseResult,
+  ConfigRepairResult,
+  TaskLogsResponse,
+  NormalizeFilesResult,
+} from './api/types';

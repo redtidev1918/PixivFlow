@@ -103,7 +103,7 @@ export function handleApiError(error: unknown): ApiError {
 
   // Handle Axios errors
   if (isAxiosError(error)) {
-    const axiosError = error as AxiosError<{ errorCode?: string; message?: string; details?: unknown }>;
+    const axiosError = error as AxiosError<{ errorCode?: string; message?: string; details?: unknown; params?: unknown }>;
     const response = axiosError.response;
     const request = axiosError.request;
 
@@ -112,7 +112,7 @@ export function handleApiError(error: unknown): ApiError {
       const errorCode = response.data?.errorCode || getErrorCodeFromStatus(response.status);
       const message = response.data?.message || response.statusText || 'An error occurred';
       const details = response.data?.details;
-      const params = response.data?.params;
+      const params = response.data?.params as Record<string, unknown> | undefined;
 
       return new ApiError(
         errorCode,

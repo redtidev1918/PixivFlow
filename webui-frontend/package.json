@@ -75,5 +75,8 @@
     "ts-jest": "^29.1.1",
     "typescript": "^5.2.2",
     "vite": "^7.2.2"
+  },
+  "overrides": {
+    "glob": "^10.3.10"
   }
 }

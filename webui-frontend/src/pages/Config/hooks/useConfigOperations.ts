@@ -10,9 +10,6 @@ import { useConfigFiles } from '../../../hooks/useConfig';
 import { useErrorHandler } from '../../../hooks/useErrorHandler';
 import { useLoadingState } from '../../../hooks/useLoadingState';
 
-type HtmlInputChangeEvent = Event & {
-  target: EventTarget & { files: FileList | null };
-};
 
 const IMPORT_LOADING_KEY = 'config-import';
 
@@ -76,8 +73,9 @@ export function useConfigOperations(config: ConfigData | undefined) {
     input.accept = '.json';
     input.multiple = true;
 
-    input.onchange = async (event: HtmlInputChangeEvent) => {
-      const files = Array.from(event.target.files ?? []);
+    input.onchange = async (event: Event) => {
+      const target = event.target as HTMLInputElement;
+      const files = Array.from(target.files ?? []);
       if (files.length === 0) {
         return;
       }

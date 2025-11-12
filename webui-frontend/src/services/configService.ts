@@ -70,7 +70,17 @@ export const configService = {
     description?: string
   ): Promise<ConfigHistoryEntry> {
     const response = await api.saveConfigHistory(name, config, description);
-    return response.data.data;
+    // API returns { id: number }, but we need to fetch the full entry
+    // For now, return a minimal entry - the actual entry will be fetched via listConfigHistory
+    return {
+      id: response.data.data.id,
+      name,
+      description: description ?? null,
+      config: config as ConfigData,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      is_active: 0,
+    };
   },
 
   /**
@@ -110,7 +120,17 @@ export const configService = {
     name?: string
   ): Promise<ConfigFileInfo> {
     const response = await api.importConfigFile(config, name);
-    return response.data.data;
+    const data = response.data.data;
+    // API returns { path, pathRelative, filename }, but we need full ConfigFileInfo
+    // Return a minimal ConfigFileInfo - full info will be available via listConfigFiles
+    return {
+      filename: data.filename,
+      path: data.path,
+      pathRelative: data.pathRelative,
+      modifiedTime: new Date().toISOString(),
+      size: 0,
+      isActive: false,
+    };
   },
 
   /**

@@ -41,6 +41,7 @@ import { setupMiddleware, errorHandler } from './server-middleware';
 import { setupRoutes } from './server-routes';
 import { setupStaticFiles } from './server-static';
 import { findAvailablePort, logServerStart, logServerError } from './server-utils';
+import { PORTS } from '../ports';
 import { WebUIServerOptions } from './types';
 
 export { WebUIServerOptions } from './types';
@@ -57,7 +58,7 @@ export class WebUIServer {
   }
 
   constructor(options: WebUIServerOptions = {}) {
-    this.port = options.port || (process.env.PORT ? parseInt(process.env.PORT, 10) : 3000);
+    this.port = options.port || (process.env.PORT ? parseInt(process.env.PORT, 10) : PORTS.PROD_API);
     this.host = options.host || 'localhost';
 
     // Initialize Express app

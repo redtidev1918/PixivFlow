@@ -15,6 +15,6 @@ export interface TargetConfig {
   novelId?: number;
   _index?: number;
   _rowKey?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 

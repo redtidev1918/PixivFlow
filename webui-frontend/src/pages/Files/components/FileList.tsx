@@ -202,7 +202,7 @@ export function FileList({
       key: 'action',
       width: 150,
       fixed: 'right' as const,
-      render: (_: any, record: FileItem) => (
+      render: (_: unknown, record: FileItem) => (
         <Space>
           {record.type === 'file' &&
             (imageExtensions.includes(record.extension?.toLowerCase() || '') ||

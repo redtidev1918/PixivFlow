@@ -4,7 +4,9 @@ import { startWebUI } from './server/server';
 import path from 'path';
 import fs from 'fs';
 
-const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+import { PORTS } from './ports';
+
+const port = process.env.PORT ? parseInt(process.env.PORT, 10) : PORTS.PROD_API;
 const host = process.env.HOST || 'localhost';
 
 /**

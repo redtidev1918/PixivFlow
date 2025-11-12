@@ -319,11 +319,11 @@ npm install                # 安装前端依赖
 cd ..
 
 # 开发模式（推荐：一键启动）
-npm run dev                # 同时启动前端 (http://localhost:5173) 和后端 (http://localhost:3001)，支持热重载
+npm run dev                # 推荐：一键启动开发环境，支持热重载\n# - 自动协调前端和后端开发服务器端口（详见 `src/webui/ports.ts`）\n# - 注意：此命令会自动清理所需端口，避免冲突。
 
 # 开发模式（手动启动，前后端分离）
 # 注意：此方式需要确保前后端端口匹配，不推荐
-npm run webui              # 启动后端（默认端口 3000，可能会自动切换）
+npm run webui              # 启动后端（默认端口详见 `src/webui/ports.ts`）
 npm run webui:frontend     # 启动前端（默认访问 http://localhost:5173）
 
 # 生产模式（推荐：一键启动）

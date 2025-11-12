@@ -121,7 +121,7 @@ services:
       - NODE_ENV=production
       - TZ=${TZ:-Asia/Shanghai}
       # WebUI 服务器配置
-      - PORT=${WEBUI_PORT:-3000}
+      - PORT=3000
       - HOST=0.0.0.0
       - STATIC_PATH=/app/webui-frontend/dist
       # Docker 容器内路径配置（必须使用容器内路径）

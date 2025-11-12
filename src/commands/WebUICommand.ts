@@ -5,6 +5,7 @@
 import { BaseCommand } from './Command';
 import { CommandContext, CommandArgs, CommandResult } from './types';
 import { startWebUI } from '../webui/server/server';
+import { PORTS } from '../webui/ports';
 import path from 'path';
 import fs from 'fs';
 import { spawn } from 'child_process';
@@ -21,7 +22,7 @@ export class WebUICommand extends BaseCommand {
     try {
       const port = args.options.port 
         ? parseInt(String(args.options.port), 10) 
-        : (process.env.PORT ? parseInt(process.env.PORT, 10) : 3000);
+        : (process.env.PORT ? parseInt(process.env.PORT, 10) : PORTS.PROD_API);
       
       const host = (args.options.host as string) || process.env.HOST || 'localhost';
       

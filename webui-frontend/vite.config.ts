@@ -3,6 +3,8 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 
 // https://vitejs.dev/config/
+const DEV_API_PORT = process.env.VITE_DEV_API_PORT || 3001;
+
 export default defineConfig({
   plugins: [react()],
   resolve: {
@@ -14,11 +16,11 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'http://localhost:3001',
+        target: `http://localhost:${DEV_API_PORT}`,
         changeOrigin: true,
       },
       '/socket.io': {
-        target: 'http://localhost:3000',
+        target: `http://localhost:${DEV_API_PORT}`,
         ws: true,
       },
     },

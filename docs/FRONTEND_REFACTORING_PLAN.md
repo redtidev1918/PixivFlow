@@ -1124,6 +1124,12 @@ Component Update
 - [x] 单元测试（部分完成）✅
   - [x] Layout 组件测试
   - [x] useLayoutAuth Hook 测试
+  - [x] useFiles Hook 测试
+  - [x] useStats Hook 测试
+  - [x] useAuth Hook 测试
+  - [x] useConfig Hook 测试
+  - [x] useDownload Hook 测试
+- [ ] 通用组件测试（FormField, FormSection, DataTable, ConfirmModal 等）
 - [ ] 集成测试
 - [ ] E2E 测试
 
@@ -1239,6 +1245,29 @@ Component Update
   - ✅ useStats Hook 测试（useStats.test.tsx）- 覆盖所有统计相关 Hooks
   - ✅ 测试基础设施完善
   - ✅ 修复 Jest 配置问题，统一使用 Jest 测试框架
+
+### 2025-01-XX (Phase 6 - Hooks 测试扩展完成)
+- ✅ 添加更多 Hooks 单元测试
+  - ✅ useAuth Hook 测试（useAuth.test.tsx）- 12 个测试用例全部通过
+    - ✅ 认证状态获取测试
+    - ✅ 登录功能测试（用户名密码、Token 登录）
+    - ✅ Token 刷新测试
+    - ✅ 登出功能测试
+    - ✅ 加载状态跟踪测试
+  - ✅ useConfig Hook 测试（useConfig.test.tsx）- 16 个测试用例全部通过
+    - ✅ useConfig 基础功能测试（获取、更新、验证配置）
+    - ✅ useConfigFiles 测试（配置文件列表、切换、导入、删除）
+    - ✅ useConfigHistory 测试（配置历史获取、保存、应用、删除）
+    - ✅ useConfigValidation 测试（配置验证、诊断、修复）
+  - ✅ useDownload Hook 测试（useDownload.test.tsx）- 20 个测试用例全部通过
+    - ✅ useDownload 测试（启动、停止下载）
+    - ✅ useDownloadStatus 测试（下载状态获取、轮询）
+    - ✅ useDownloadLogs 测试（任务日志获取）
+    - ✅ useDownloadHistory 测试（下载历史获取）
+    - ✅ useIncompleteTasks 测试（未完成任务管理）
+  - ✅ 所有测试用例总计 48 个，全部通过
+  - ✅ 修复测试文件扩展名问题（.ts → .tsx）
+  - ✅ 修复异步状态测试问题（使用 waitFor 等待状态更新）
 
 ---
 

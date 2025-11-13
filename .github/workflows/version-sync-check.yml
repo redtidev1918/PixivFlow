@@ -102,24 +102,41 @@ jobs:
       - name: Report status
         run: |
           VERSION="${{ steps.package-version.outputs.version }}"
-          NPM_EXISTS="${{ steps.npm-check.outputs.exists }}"
           TAG_EXISTS="${{ steps.github-tags.outputs.exists }}"
           TAG_INCONSISTENT="${{ steps.github-tags.outputs.inconsistent }}"
           EXTRA_TAGS="${{ steps.extra-tags.outputs.extra_tags }}"
-          
+
+          # Re-check npm with retry if tag exists (allow time for publish/indexing)
+          NPM_EXISTS=false
+          if npm view pixivflow@"$VERSION" version &>/dev/null; then
+            NPM_EXISTS=true
+          else
+            if [[ "$TAG_EXISTS" == "true" ]]; then
+              echo "Waiting for npm to publish/index version $VERSION..."
+              for i in {1..20}; do  # up to ~5 minutes if 15s sleep
+                sleep 15
+                if npm view pixivflow@"$VERSION" version &>/dev/null; then
+                  NPM_EXISTS=true
+                  echo "npm version $VERSION detected after wait ($i attempts)"
+                  break
+                fi
+              done
+            fi
+          fi
+
           echo "## 📊 Version Sync Status Report" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Package Version:** \`$VERSION\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Package Version:** `$VERSION`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
-          
+
           if [[ "$NPM_EXISTS" == "true" ]]; then
             echo "| npm | ✅ Published |" >> $GITHUB_STEP_SUMMARY
           else
             echo "| npm | ❌ Not published |" >> $GITHUB_STEP_SUMMARY
           fi
-          
+
           if [[ "$TAG_EXISTS" == "true" ]]; then
             if [[ "$TAG_INCONSISTENT" == "true" ]]; then
               echo "| GitHub Tag | ⚠️  Inconsistent |" >> $GITHUB_STEP_SUMMARY
@@ -129,7 +146,7 @@ jobs:
           else
             echo "| GitHub Tag | ❌ Missing |" >> $GITHUB_STEP_SUMMARY
           fi
-          
+
           if [[ -n "$EXTRA_TAGS" ]]; then
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "### ⚠️  Extra Tags Found" >> $GITHUB_STEP_SUMMARY
@@ -138,19 +155,19 @@ jobs:
               echo "- \`$tag\`" >> $GITHUB_STEP_SUMMARY
             done
           fi
-          
+
           # 判断是否失败
           FAILED=false
           if [[ "$NPM_EXISTS" != "true" ]] && [[ "$TAG_EXISTS" == "true" ]]; then
             FAILED=true
-            echo "❌ Version $VERSION has a tag but is not published to npm"
+            echo "❌ Version $VERSION has a tag but is not published to npm (after wait)"
           fi
-          
+
           if [[ "$TAG_INCONSISTENT" == "true" ]]; then
             FAILED=true
             echo "❌ Tag version is inconsistent with package.json"
           fi
-          
+
           if [[ "$FAILED" == "true" ]]; then
             echo "::error::Version synchronization check failed"
             exit 1

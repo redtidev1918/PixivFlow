@@ -728,17 +728,18 @@ npm run start migrate-config --dry-run # Preview changes
 | [📋 CONFIG](docs/CONFIG.md) | **Configuration file usage guide** - All configuration options explained | ⭐⭐⭐⭐⭐ |
 | [🛠️ SCRIPTS](docs/SCRIPTS.md) | **Script usage guide** - All scripts detailed instructions | ⭐⭐⭐⭐⭐ |
 
-### 🌐 WebUI and Docker
+### 🌐 Deployment and Environment
 
 | Document | Description | Rating |
 |----------|-------------|--------|
-| [🌐 WEBUI](docs/WEBUI.md) | **WebUI usage guide** - Web management interface and deployment configuration | ⭐⭐⭐⭐ |
 | [🐳 DOCKER](docs/DOCKER.md) | **Docker usage guide** - Docker deployment and usage (includes solutions for common issues) | ⭐⭐⭐⭐ |
 
 ### 📄 Project Documentation
 
 | Document | Description |
 |----------|-------------|
+| [🏗️ ARCHITECTURE](docs/ARCHITECTURE.md) | **Architecture documentation** - Project architecture and technical implementation details |
+| [🔄 CLI_MIGRATION](docs/CLI_MIGRATION_SUMMARY.md) | **CLI command migration summary** - CLI command migration and feature comparison |
 | [📝 CHANGELOG](docs/project/CHANGELOG.md) | Version changelog |
 | [🤝 CONTRIBUTING](docs/project/CONTRIBUTING.md) | Contributing guide |
 
@@ -939,22 +940,16 @@ pixivflow/
 │           └── *.json               # Artwork metadata JSON files
 │
 └── 📚 Documentation
-    ├── README.md                    # Main project doc
     └── docs/                        # Documentation directory
-        ├── getting-started/         # Getting started guides
-        │   ├── START_HERE.md        # Beginner guide
-        │   ├── QUICKSTART.md        # Quick start
-        │   └── TUTORIAL.md          # Complete tutorial
-        ├── guides/                  # Usage guides
-        │   ├── LOGIN_GUIDE.md       # Login guide
-        │   ├── CONFIG_GUIDE.md      # Config guide
-        │   ├── STANDALONE-SETUP-GUIDE.md  # Standalone setup guide
-        │   ├── RANKING_DOWNLOAD_GUIDE.md  # Ranking download guide
-        │   └── TEST_GUIDE.md        # Test guide
-        ├── webui/                   # WebUI documentation
-        ├── docker/                  # Docker documentation
-        ├── scripts/                 # Script documentation
-        │   └── SCRIPTS_GUIDE.md     # Script guide
+        ├── README.md                # Documentation index
+        ├── QUICKSTART.md            # Quick start guide
+        ├── LOGIN.md                 # Login guide
+        ├── CONFIG.md                # Configuration guide
+        ├── USAGE.md                 # Usage guide
+        ├── SCRIPTS.md               # Script guide
+        ├── ARCHITECTURE.md          # Architecture documentation
+        ├── CLI_MIGRATION_SUMMARY.md  # CLI migration summary
+        ├── DOCKER.md                # Docker guide
         └── project/                 # Project documentation
             ├── CHANGELOG.md         # Changelog
             └── CONTRIBUTING.md      # Contributing guide

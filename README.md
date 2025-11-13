@@ -55,7 +55,8 @@
   - [🐳 Docker 管理](#-docker-管理)
 - [📚 文档导航](#-文档导航)
   - [🌟 新手必读](#-新手必读)
-  - [📘 进阶文档](#-进阶文档)
+  - [📘 功能指南](#-功能指南)
+  - [🌐 部署和环境](#-部署和环境)
   - [📄 项目文档](#-项目文档)
 
 **使用与配置**
@@ -339,7 +340,7 @@ npm run electron:dev      # 开发模式
 npm run electron:build    # 构建（支持 Windows/macOS/Linux）
 ```
 
-> 📖 **详细说明**：查看 [WebUI 使用指南](docs/WEBUI.md)
+> 📖 **详细说明**：WebUI 功能已集成到 CLI 命令中，使用 `pixivflow webui` 启动
 
 **主要功能**：
 - 📊 下载统计和概览
@@ -503,11 +504,10 @@ PixivFlow 提供了丰富的脚本工具，所有脚本直接调用内置 CLI，
 | [📋 CONFIG](docs/CONFIG.md) | **配置文件使用指南** - 所有配置选项详解 | ⭐⭐⭐⭐⭐ |
 | [🛠️ SCRIPTS](docs/SCRIPTS.md) | **脚本使用指南** - 所有脚本详细说明 | ⭐⭐⭐⭐⭐ |
 
-### 🌐 WebUI 和 Docker
+### 🌐 部署和环境
 
 | 文档 | 说明 | 推荐度 |
 |------|------|--------|
-| [🌐 WEBUI](docs/WEBUI.md) | **WebUI 使用指南** - Web 管理界面和部署配置 | ⭐⭐⭐⭐ |
 | [🐳 DOCKER](docs/DOCKER.md) | **Docker 使用指南** - Docker 部署和使用（包含常见问题解决方案） | ⭐⭐⭐⭐ |
 | [📱 TERMUX](docs/TERMUX_INSTALL.md) | **Termux/Android 安装指南** - Android 设备上的安装和使用 | ⭐⭐⭐ |
 
@@ -515,7 +515,8 @@ PixivFlow 提供了丰富的脚本工具，所有脚本直接调用内置 CLI，
 
 | 文档 | 说明 |
 |------|------|
-| [版本同步保护机制](docs/VERSION_SYNC_PROTECTION.md) | 版本同步保护机制说明，确保 package.json、npm 和 GitHub 标签同步 |
+| [🏗️ ARCHITECTURE](docs/ARCHITECTURE.md) | **架构说明** - 项目架构和技术实现细节 |
+| [🔄 CLI_MIGRATION](docs/CLI_MIGRATION_SUMMARY.md) | **CLI 命令移植总结** - CLI 命令迁移和功能对照 |
 | [📝 CHANGELOG](docs/project/CHANGELOG.md) | 版本更新日志 |
 | [🤝 CONTRIBUTING](docs/project/CONTRIBUTING.md) | 贡献指南 |
 
@@ -689,7 +690,8 @@ pixivflow/
         ├── CONFIG.md                # 配置指南
         ├── USAGE.md                 # 使用指南
         ├── SCRIPTS.md               # 脚本指南
-        ├── WEBUI.md                 # WebUI 指南
+        ├── ARCHITECTURE.md          # 架构说明
+        ├── CLI_MIGRATION_SUMMARY.md  # CLI 迁移总结
         ├── DOCKER.md                # Docker 指南
         └── project/                 # 项目文档
             ├── CHANGELOG.md         # 更新日志

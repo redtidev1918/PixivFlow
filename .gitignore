@@ -54,6 +54,11 @@ _metadata
 # Standalone mode - User config files (NEVER commit these!)
 config/standalone.config.json
 config/standalone.config.simple.json
+# Block all backup files (various formats)
+config/standalone.config.json.backup.*
+config/standalone.config.*.backup.*
+config/*.backup.*
+config/*.backup
 # Allow example files but block any that might contain real tokens
 config/standalone.config.*.json
 !config/standalone.config.example.json

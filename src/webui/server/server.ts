@@ -18,11 +18,11 @@
  *   WebSocket (Socket.IO) for streaming logs and download status updates
  * 
  * - Static File Serving:
- *   Optionally serves static files when STATIC_PATH is configured
- *   Frontend is a separate project and should be deployed independently
+ *   Serves the React frontend build when STATIC_PATH is configured
  * 
  * @see src/webui/routes/ for API route definitions
  * @see src/webui/websocket/ for WebSocket handlers
+ * @see webui-frontend/ for the React frontend application
  */
 
 import express, { Express } from 'express';

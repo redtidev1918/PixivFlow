@@ -1,6 +1,8 @@
 {
   "_comment": "PixivFlow 完整配置示例 - 包含所有可用选项和详细说明",
   "_usage": "使用方法：复制此文件为 standalone.config.json 并修改 refreshToken",
+  "_note": "所有以 _ 开头的字段都是注释说明，不会影响程序运行",
+  
   "logLevel": "info",
   "_logLevel_note": "日志级别: debug（详细）| info（信息）| warn（警告）| error（错误）",
   
@@ -10,7 +12,7 @@
     "clientSecret": "lsACyCD94FhDUtGTXi3QzcFE2uU1hqtDaKeqrdwj",
     "deviceToken": "pixiv",
     "refreshToken": "YOUR_REFRESH_TOKEN",
-    "_refreshToken_note": "重要：请将 YOUR_REFRESH_TOKEN 替换为您的实际 refresh token。运行 npm run login 可自动获取",
+    "_refreshToken_note": "重要：请将 YOUR_REFRESH_TOKEN 替换为您的实际 refresh token。运行 pixivflow login 可自动获取",
     "userAgent": "PixivAndroidApp/5.0.234 (Android 11; Pixel 6)"
   },
   

@@ -31,7 +31,7 @@ cp config/standalone.config.example.json config/standalone.config.json
 **使用方法：**
 ```bash
 cp config/standalone.config.simple.json config/standalone.config.json
-# 运行 npm run login 获取 refreshToken
+# 运行 pixivflow login 获取 refreshToken
 # 修改配置文件中的 refreshToken
 # 根据需要修改 targets 中的标签
 ```
@@ -129,6 +129,10 @@ cp config/standalone.config.novel-chinese.json config/standalone.config.json
 
 1. **获取 refreshToken**
    ```bash
+   # 如果已全局安装
+   pixivflow login
+   
+   # 或从源码运行
    npm run login
    ```
    登录后会自动保存 refreshToken。
@@ -145,6 +149,10 @@ cp config/standalone.config.novel-chinese.json config/standalone.config.json
 
 4. **开始下载**
    ```bash
+   # 如果已全局安装
+   pixivflow download
+   
+   # 或从源码运行
    npm run download
    ```
 
@@ -154,7 +162,7 @@ cp config/standalone.config.novel-chinese.json config/standalone.config.json
 
 ### 必需配置项
 
-- `pixiv.refreshToken` - Pixiv 刷新令牌（通过 `npm run login` 获取）
+- `pixiv.refreshToken` - Pixiv 刷新令牌（通过 `pixivflow login` 获取）
 
 ### 常用配置项
 
@@ -198,4 +206,3 @@ cp config/standalone.config.novel-chinese.json config/standalone.config.json
 - 详细配置说明：查看 `docs/CONFIG.md`
 - 项目文档：查看 `docs/` 目录
 - 问题反馈：查看项目 Issues
-

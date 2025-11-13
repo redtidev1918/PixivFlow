@@ -2,9 +2,9 @@
   "_comment": "PixivFlow 中文小说下载配置示例",
   "_usage": "使用方法：",
   "_usage1": "  1. 复制此文件: cp config/standalone.config.novel-chinese.json config/standalone.config.json",
-  "_usage2": "  2. 修改 refreshToken（运行 npm run login 获取）",
+  "_usage2": "  2. 修改 refreshToken（运行 pixivflow login 获取）",
   "_usage3": "  3. 根据需要修改 targets 数组中的标签",
-  "_usage4": "  4. 运行下载: npm run download",
+  "_usage4": "  4. 运行下载: pixivflow download",
   
   "logLevel": "info",
   "pixiv": {
@@ -120,14 +120,5 @@
     "sort": "排序方式: popular_desc（按收藏数降序，最热门优先）| date_desc（按日期降序，最新优先）| date_asc（按日期升序）",
     "limit": "下载数量限制",
     "tag": "搜索标签，可以修改为你感兴趣的标签"
-  },
-  "_使用提示": [
-    "1. 复制此文件并重命名为 standalone.config.json",
-    "2. 修改 refreshToken 为你的 Pixiv 刷新令牌（运行 npm run login）",
-    "3. 根据需要修改 targets 数组中的标签和配置",
-    "4. 可以添加多个 target 来同时下载不同标签的中文小说",
-    "5. 语言检测需要至少50个字符的文本内容，太短的小说可能无法准确检测",
-    "6. 使用时间范围过滤可以下载指定时间段内发布的小说",
-    "7. 如果不需要语言过滤，删除 languageFilter 字段或设为 null"
-  ]
+  }
 }

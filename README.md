@@ -404,6 +404,19 @@ pixivflow setup                      # 交互式配置向导（首次使用）�
 pixivflow dirs                       # 查看目录信息（文件保存位置）⭐
 ```
 
+#### 无图形界面服务器的登录方式（使用现有 refresh token）
+
+```bash
+# 直接使用 refresh token 登录（会自动写入配置文件）
+pixivflow refresh <your_refresh_token>
+
+# 等价别名：
+pixivflow login-token <your_refresh_token>
+pixivflow set-token <your_refresh_token>
+```
+
+> 适用于没有图形浏览器的服务器；若没有 token，可在本地运行 `pixivflow login` 获取后复制到服务器。
+
 ### ⚙️ 配置管理
 
 ```bash

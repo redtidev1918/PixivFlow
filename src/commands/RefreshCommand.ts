@@ -28,8 +28,8 @@ function outputLoginResult(loginInfo: LoginInfo, json: boolean = false): void {
  */
 export class RefreshCommand extends BaseCommand {
   readonly name = 'refresh';
-  readonly description = 'Refresh access token using refresh token';
-  readonly aliases = ['r'];
+  readonly description = 'Login with an existing refresh token or refresh access token (suitable for headless servers)';
+  readonly aliases = ['r', 'login-token', 'token-login', 'set-token', 'lt'];
 
   validate(args: CommandArgs): { valid: boolean; errors: string[] } {
     const errors: string[] = [];
@@ -80,7 +80,7 @@ export class RefreshCommand extends BaseCommand {
   getUsage(): string {
     return `refresh <refresh_token> [options]
 
-Refresh access token using refresh token.
+Login using an existing refresh token, or refresh access token.\nThis is recommended for servers without GUI browsers.\nThe token will be written into your config automatically.
 
 Arguments:
   <refresh_token>        Refresh token to use for refreshing access token [required]
@@ -90,6 +90,8 @@ Options:
 
 Examples:
   pixivflow refresh <refresh_token>
+  pixivflow login-token <refresh_token>
+  pixivflow set-token <refresh_token>
   pixivflow refresh <refresh_token> --json`;
   }
 }

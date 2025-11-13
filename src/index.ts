@@ -14,7 +14,7 @@ import { ArgumentParser } from './cli/ArgumentParser';
 import { getConfigPath as getConfigPathUtil } from './config';
 import { updateConfigWithToken } from './utils/login-helper';
 import { generateDefaultConfig } from './config/defaults';
-import { AuthenticationError } from './utils/errors';
+import { AuthenticationError, ConfigError } from './utils/errors';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
@@ -81,8 +81,24 @@ async function bootstrap() {
                          commandName === 'login-interactive' || 
                          commandName === 'li' ||
                          commandName === 'login-headless';
+  // Also skip validation for help-related invocations so help can be shown without config
+  const isHelpInvocation =
+    commandName === 'help' ||
+    commandName === '-h' ||
+    commandName === '--help' ||
+    !!parsedArgs.options.help ||
+    !!parsedArgs.options.h ||
+    !commandName;
+  // Commands that do not require Pixiv authentication/token
+  const tokenOptionalCommands = new Set([
+    'help', 'h', '--help',
+    'config', 'dirs', 'logs', 'setup', 'status', 'health', 'maintain', 'normalize', 'migrate-config', 'backup', 'monitor',
+    // webui can boot without token; UI can guide login
+    'webui', 'w'
+  ]);
+  const isTokenOptional = commandName ? tokenOptionalCommands.has(commandName) : true;
   
-  const config = loadConfig(configPath, isLoginCommand);
+  const config = loadConfig(configPath, isLoginCommand || isHelpInvocation || isTokenOptional);
   const context = {
     config,
     logger,
@@ -299,6 +315,24 @@ async function bootstrap() {
       console.error('');
       console.error('════════════════════════════════════════════════════════════════\n');
       logger.error('Authentication failed - refresh token expired or invalid', {
+        error: error.message,
+      });
+      process.exit(1);
+    }
+    if (error instanceof ConfigError) {
+      console.error('\nℹ️  Initial setup required');
+      console.error('════════════════════════════════════════════════════════════════');
+      console.error(error.message);
+      console.error('');
+      console.error('💡 You have not logged in yet or your config is incomplete.');
+      console.error('   Please run one of the following commands to login and auto-fill your token:');
+      console.error('');
+      console.error('   • Interactive login:  pixivflow login');
+      console.error('   • Headless login:     pixivflow login-headless');
+      console.error('');
+      console.error('   Or manually edit your config file to set pixiv.refreshToken.');
+      console.error('════════════════════════════════════════════════════════════════\n');
+      logger.error('Configuration error - login/setup required', {
         error: error.message,
       });
       process.exit(1);

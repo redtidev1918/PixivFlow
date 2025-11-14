@@ -43,6 +43,7 @@
   - [🎬 快速开始（推荐）](#-快速开始推荐)
   - [🎯 手动配置方式](#-手动配置方式)
   - [🌐 使用 WebUI（可选）](#-使用-webui可选)
+  - [🔧 指定配置文件运行（--config 与环境变量）](#-指定配置文件运行config-与环境变量)
 
 **工具与文档**
 - [🎨 CLI 命令行工具](#-cli-命令行工具)
@@ -69,6 +70,8 @@
 - [⚙️ 核心配置](#️-核心配置)
   - [认证配置](#认证配置)
   - [下载目标](#下载目标)
+  - [⏱️ 占位符与日期范围](#️-占位符与日期范围)
+  - [🌐 语言过滤说明与限制](#-语言过滤说明与限制)
   - [定时任务](#定时任务)
   - [存储配置](#存储配置)
 
@@ -86,6 +89,9 @@
   - [部署到服务器](#部署到服务器)
   - [配置多个下载任务](#配置多个下载任务)
   - [使用代理](#使用代理)
+
+**最佳实践**
+- [✅ 最佳实践](#-最佳实践)
 
 **项目信息**
 - [📄 开源许可](#-开源许可)
@@ -191,6 +197,17 @@ pixivflow login
 pixivflow download
 ```
 
+> 👇 也可以直接指定配置文件路径运行：
+
+```bash
+# 使用 --config 指定配置
+pixivflow download --config "$(pwd)/config/standalone.config.json"
+
+# 或使用环境变量（对所有命令生效）
+export PIXIV_DOWNLOADER_CONFIG="$(pwd)/config/standalone.config.json"
+pixivflow download
+```
+
 #### 方式 2：从源码安装
 
 ```bash
@@ -262,6 +279,40 @@ npm run random       # 随机下载
 > - 配置文件位于 `~/.pixivflow/config/standalone.config.json`，或使用 `--config` 指定路径
 > - 首次使用需要运行 `pixivflow login` 进行登录
 > - npm 包地址：https://www.npmjs.com/package/pixivflow
+
+#### 🔧 指定配置文件运行（--config 与环境变量）
+
+- **命令行参数方式（推荐）**
+
+```bash
+# 执行下载（全局安装）
+pixivflow download --config "$(pwd)/config/standalone.config.json"
+
+# 启动定时任务
+pixivflow scheduler --config "$(pwd)/config/standalone.config.json"
+
+# 登录并写回到指定配置
+pixivflow login --config "$(pwd)/config/standalone.config.json"
+```
+
+- **环境变量方式（对所有子命令生效）**
+
+```bash
+export PIXIV_DOWNLOADER_CONFIG="$(pwd)/config/standalone.config.json"
+pixivflow download
+pixivflow scheduler
+pixivflow login
+```
+
+- **源码安装的 npm 脚本（注意使用 -- 传递参数）**
+
+```bash
+npm run download -- --config "$(pwd)/config/standalone.config.json"
+npm run scheduler -- --config "$(pwd)/config/standalone.config.json"
+npm run login -- --config "$(pwd)/config/standalone.config.json"
+```
+
+**解析优先级**：`--config` > `PIXIV_DOWNLOADER_CONFIG` > 最近使用/自动选择的配置 > 默认 `~/.pixivflow/config/standalone.config.json`
 
 ---
 
@@ -865,6 +916,44 @@ pixivflow/
 > 💡 **多标签搜索**：在 `tag` 字段中用空格分隔多个标签，表示作品必须同时包含所有标签（AND关系）。  
 > 📚 **完整配置指南**：查看 [配置文件使用指南](docs/CONFIG.md) 了解所有配置选项和详细示例
 
+#### ⏱️ 占位符与日期范围
+
+- **支持的占位符**
+
+```text
+YESTERDAY     # 昨天（YYYY-MM-DD）
+TODAY         # 今天（YYYY-MM-DD）
+LAST_7_DAYS   # 最近 7 天（自动展开为 startDate/endDate）
+LAST_30_DAYS  # 最近 30 天（自动展开为 startDate/endDate）
+LAST_N_DAYS:N # 最近 N 天（如 LAST_N_DAYS:14）
+```
+
+- **可用位置**
+  - `rankingDate`（排行榜日期）
+  - `startDate` / `endDate`（搜索日期范围）
+
+- **示例：仅下载昨天的数据**
+
+```json
+{
+  "targets": [
+    {
+      "type": "novel",
+      "tag": "オリジナル",
+      "mode": "search",
+      "sort": "popular_desc",
+      "startDate": "YESTERDAY",
+      "endDate": "YESTERDAY"
+    }
+  ]
+}
+```
+
+#### 🌐 语言过滤说明与限制
+
+- `languageFilter` 仅对 `type: "novel"` 生效；插画/漫画不支持语言过滤。
+- 语言检测需要足够文本内容（约 50+ 字符）才更可靠；过短文本会默认通过。
+
 ### 定时任务
 
 ```json
@@ -914,6 +1003,26 @@ pixivflow/
 
 ---
 
+## ✅ 最佳实践
+
+- **明确配置路径**
+  - 优先使用 `--config <绝对路径>`，或设置环境变量 `PIXIV_DOWNLOADER_CONFIG`。
+- **排行榜 + 标签的替代方案**
+  - 若想“按标签抓取热门”，优先用 `mode: "search"` + `sort: "popular_desc"`，通常比“ranking + filterTag”更高效、可控。
+- **多标签组合**
+  - `tagRelation: "and"`（默认，必须同时包含所有标签）
+  - `tagRelation: "or"`（任意一个标签即可，结果会合并去重）
+- **时间与时区**
+  - 定时任务指定 `timezone`（如 `Asia/Shanghai`），避免跨时区偏差。
+- **登录与凭据**
+  - 使用 `pixivflow login --config <path>` 写入 `refreshToken`，勿手动粘贴到仓库。
+- **运行前检查**
+  - 执行 `pixivflow health` 或 `pixivflow config validate`，提前发现配置或网络问题。
+- **数据与备份**
+  - 关注 `storage.databasePath` 与下载目录，定期备份或使用 `pixivflow backup`。
+
+---
+
 ## 🐛 常见问题
 
 ### ❓ 登录失败？
@@ -942,6 +1051,74 @@ npm run login  # 重新登录获取新 token
 **可能原因**：标签拼写错误、筛选条件过严、网络问题
 
 **解决方法**：
+
+---
+
+### ❓ 如何仅获取“昨天”的热门内容？
+
+- **方式一（推荐）**：搜索模式按热门排序，并限制日期为“昨天”（更可控，支持语言过滤/多标签等）
+
+```json
+{
+  "targets": [
+    {
+      "type": "novel",
+      "mode": "search",
+      "tag": "オリジナル",
+      "sort": "popular_desc",
+      "limit": 10,
+      "startDate": "YESTERDAY",
+      "endDate": "YESTERDAY"
+    }
+  ]
+}
+```
+
+- **方式二**：排行榜模式设置昨日日榜
+
+```json
+{
+  "targets": [
+    {
+      "type": "illustration",
+      "mode": "ranking",
+      "rankingMode": "day",
+      "rankingDate": "YESTERDAY",
+      "limit": 10
+    }
+  ]
+}
+```
+
+> 提示：若需要“仅中文”，请使用 `type: "novel"` 并结合 `languageFilter: "chinese"`（插画不支持语言过滤）。
+
+---
+
+### ❓ 如何限制总量并使用多标签并集（任意一个标签即可）？
+
+- 在 `tag` 中用空格写多个标签，设置 `tagRelation: "or"`，并全局通过 `limit` 限制总下载数（合并去重后取前 N）。
+
+```json
+{
+  "targets": [
+    {
+      "type": "novel",
+      "mode": "search",
+      "tag": "大肚 テーマ甲関連 テーマ甲",
+      "tagRelation": "or",
+      "searchTarget": "partial_match_for_tags",
+      "sort": "popular_desc",
+      "limit": 10,
+      "startDate": "YESTERDAY",
+      "endDate": "YESTERDAY",
+      "languageFilter": "chinese",
+      "detectLanguage": true
+    }
+  ]
+}
+```
+
+> 说明：`tagRelation: "or"` 表示任意一个标签命中即可；结果会合并去重后按排序截取到 `limit`。若想“必须包含所有标签”，使用 `tagRelation: "and"`（默认）。
 1. 尝试常见标签：`イラスト`、`風景`、`art`
 2. 降低 `minBookmarks` 值
 3. 检查网络和代理设置

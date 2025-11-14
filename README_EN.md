@@ -75,13 +75,13 @@ Make Pixiv artwork collection elegant and efficient | 让 Pixiv 作品收集变�
   - [Storage Configuration](#storage-configuration)
 
 **Troubleshooting & Advanced**
-- [🐛 FAQ](docs/USAGE.md)
-- [🔒 Security Tips](docs/USAGE.md)
-- [📊 Download Record Management](docs/USAGE.md)
-- [🚀 Advanced Usage](docs/USAGE.md)
-  - [Deploy on Server](docs/DOCKER.md)
-  - [Configure Multiple Download Tasks](docs/CONFIG.md)
-  - [Using Proxy](docs/USAGE.md)
+- [🐛 FAQ](#faq)
+- [🔒 Security Tips](#security-tips)
+- [📊 Download Record Management](#download-record-management)
+- [🚀 Advanced Usage](#advanced-usage)
+  - [Deploy on Server](#deploy-on-server)
+  - [Configure Multiple Download Tasks](#configure-multiple-download-tasks)
+  - [Using Proxy](#using-proxy)
 
 **Project Information**
 - [📄 Open Source License](#open-source-license)

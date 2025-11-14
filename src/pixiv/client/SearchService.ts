@@ -17,6 +17,44 @@ export class SearchService {
     if (!target.tag) {
       throw new Error('tag is required for illustration search');
     }
+
+    // Support tagRelation === 'or': split space-separated tags, query sequentially, merge & dedupe
+    if (target.tagRelation === 'or') {
+      const tags = target.tag.split(/\s+/).map((t) => t.trim()).filter(Boolean);
+      if (tags.length <= 1) {
+        return this.searchIllustrationsSingleTag(target, target.tag, requestDelayMs);
+      }
+
+      const seen = new Set<string>();
+      const merged: PixivIllust[] = [];
+
+      for (let i = 0; i < tags.length; i++) {
+        const tag = tags[i];
+        const part = await this.searchIllustrationsSingleTag(target, tag, requestDelayMs);
+        for (const item of part) {
+          const key = String((item as any).id);
+          if (!seen.has(key)) {
+            seen.add(key);
+            merged.push(item);
+          }
+        }
+        // Respect global limit early if possible
+        if (target.limit && merged.length >= target.limit) {
+          break;
+        }
+        // Add delay between tag requests to reduce rate limiting
+        if (i < tags.length - 1 && requestDelayMs > 0) {
+          await delay(requestDelayMs);
+        }
+      }
+
+      const sorted = sortPixivItems(merged, target.sort);
+      if (target.limit && sorted.length > target.limit) {
+        return sorted.slice(0, target.limit);
+      }
+      return sorted;
+    }
+
     return this.searchIllustrationsSingleTag(target, target.tag, requestDelayMs);
   }
 
@@ -24,6 +62,44 @@ export class SearchService {
     if (!target.tag) {
       throw new Error('tag is required for novel search');
     }
+
+    // Support tagRelation === 'or': split space-separated tags, query sequentially, merge & dedupe
+    if (target.tagRelation === 'or') {
+      const tags = target.tag.split(/\s+/).map((t) => t.trim()).filter(Boolean);
+      if (tags.length <= 1) {
+        return this.searchNovelsSingleTag(target, target.tag, requestDelayMs);
+      }
+
+      const seen = new Set<string>();
+      const merged: PixivNovel[] = [];
+
+      for (let i = 0; i < tags.length; i++) {
+        const tag = tags[i];
+        const part = await this.searchNovelsSingleTag(target, tag, requestDelayMs);
+        for (const item of part) {
+          const key = String((item as any).id);
+          if (!seen.has(key)) {
+            seen.add(key);
+            merged.push(item);
+          }
+        }
+        // Respect global limit early if possible
+        if (target.limit && merged.length >= target.limit) {
+          break;
+        }
+        // Add delay between tag requests to reduce rate limiting
+        if (i < tags.length - 1 && requestDelayMs > 0) {
+          await delay(requestDelayMs);
+        }
+      }
+
+      const sorted = sortPixivItems(merged, target.sort);
+      if (target.limit && sorted.length > target.limit) {
+        return sorted.slice(0, target.limit);
+      }
+      return sorted;
+    }
+
     return this.searchNovelsSingleTag(target, target.tag, requestDelayMs);
   }
 

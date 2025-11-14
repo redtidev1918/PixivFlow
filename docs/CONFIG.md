@@ -63,6 +63,24 @@ pixivflow dirs --verbose
 }
 ```
 
+#### 示例 1b：多标签 OR 搜索（逐个标签检索并合并）
+
+```json
+{
+  "targets": [
+    {
+      "type": "novel",
+      "tag": "風景 イラスト オリジナル",  
+      "tagRelation": "or",
+      "limit": 10,
+      "mode": "search",
+      "searchTarget": "partial_match_for_tags",
+      "sort": "popular_desc"
+    }
+  ]
+}
+```
+
 **说明**：
 - `refreshToken`：通过 `npm run login` 自动获取，无需手动填写
 - `clientId` 和 `clientSecret`：Pixiv API 凭证，通常不需要修改
@@ -104,6 +122,11 @@ pixivflow dirs --verbose
 | `startDate` / `endDate` | string | 日期范围 | `"2024-01-01"`（YYYY-MM-DD 格式） |
 | `random` | boolean | 随机选择 | `true` 表示从搜索结果中随机选择 |
 | `restrict` | string | 限制类型 | `"public"`（公开）或 `"private"`（私有） |
+
+> 关于 `tagRelation`：
+> - `and`（默认）：把整串 `tag` 作为同时匹配的多个标签（空格分隔），要求作品同时包含所有标签。
+> - `or`：会把 `tag` 按空格拆分为多个标签，按标签逐个串行检索；各标签结果会被合并并按作品 `id` 去重，然后再按 `sort` 排序并按 `limit` 截断。
+> - 为降低速率限制风险，`or` 模式会在相邻标签检索之间加入延迟（使用 `download.requestDelay`）。建议把该值设置为 1500~3000ms。
 
 ### 排行榜配置（仅当 `mode="ranking"` 时）
 
@@ -361,6 +384,8 @@ pixivflow dirs --verbose
 - `maxRetries`：每个下载的最大重试次数，默认 3
 - `retryDelay`：重试延迟（毫秒），默认 2000（2秒）
 - `timeout`：下载超时时间（毫秒），默认 60000（60秒）
+
+> 速率限制建议：若使用 `tagRelation: "or"`（会对多个标签顺序检索并在标签之间施加延迟），推荐将 `requestDelay` 适当调高（例如 1500~3000ms），以进一步降低 429 的概率。
 
 ---
 

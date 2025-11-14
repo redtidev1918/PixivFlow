@@ -66,6 +66,9 @@ config/standalone.config.*.json
 !config/standalone.config.novel-chinese.json
 !config/standalone.config.ranking.json
 
+# Local custom configs (never commit)
+config/local/*
+
 # User data directories (NEVER commit these!)
 data/
 downloads/

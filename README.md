@@ -72,16 +72,18 @@
   - [下载目标](#下载目标)
   - [定时任务](#定时任务)
   - [存储配置](#存储配置)
-- [最佳实践](#最佳实践)
 
 **故障排除与进阶**
-- [常见问题](#常见问题)
-- [安全提示](#安全提示)
-- [下载记录管理](#下载记录管理)
-- [进阶使用](#进阶使用)
-  - [服务器部署](#服务器部署)
-  - [配置多个下载任务](#配置多个下载任务)
-  - [使用代理](#使用代理)
+- [常见问题](docs/USAGE.md)
+- [安全提示](docs/USAGE.md)
+- [下载记录管理](docs/USAGE.md)
+- [进阶使用](docs/USAGE.md)
+  - [服务器部署](docs/DOCKER.md)
+  - [配置多个下载任务](docs/CONFIG.md)
+  - [使用代理](docs/USAGE.md)
+
+**最佳实践**
+- [最佳实践](docs/USAGE.md)
 
 **项目信息**
 - [开源许可](#开源许可)
@@ -626,6 +628,25 @@ PixivFlow 提供了丰富的脚本工具，所有脚本直接调用内置 CLI，
     "enabled": true,
     "cron": "0 2 * * *"
   }
+}
+```
+
+> 提示：支持 `tagRelation: "or"`。当为 `or` 时，会将 `tag` 按空格拆分，逐个标签顺序检索、合并并去重，然后按 `sort` 排序并按 `limit` 截断。建议在该模式下将 `download.requestDelay` 调高（例如 1500~3000ms）以降低速率限制。
+
+**示例 1b：多标签 OR 搜索（逐个标签检索并合并）**
+```json
+{
+  "targets": [
+    {
+      "type": "novel",
+      "tag": "風景 イラスト オリジナル",
+      "tagRelation": "or",
+      "limit": 10,
+      "mode": "search",
+      "searchTarget": "partial_match_for_tags",
+      "sort": "popular_desc"
+    }
+  ]
 }
 ```
 

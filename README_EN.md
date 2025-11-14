@@ -75,13 +75,13 @@ Make Pixiv artwork collection elegant and efficient | 让 Pixiv 作品收集变�
   - [Storage Configuration](#storage-configuration)
 
 **Troubleshooting & Advanced**
-- [🐛 FAQ](#faq)
-- [🔒 Security Tips](#security-tips)
-- [📊 Download Record Management](#download-record-management)
-- [🚀 Advanced Usage](#advanced-usage)
-  - [Deploy on Server](#deploy-on-server)
-  - [Configure Multiple Download Tasks](#configure-multiple-download-tasks)
-  - [Using Proxy](#using-proxy)
+- [🐛 FAQ](docs/USAGE.md)
+- [🔒 Security Tips](docs/USAGE.md)
+- [📊 Download Record Management](docs/USAGE.md)
+- [🚀 Advanced Usage](docs/USAGE.md)
+  - [Deploy on Server](docs/DOCKER.md)
+  - [Configure Multiple Download Tasks](docs/CONFIG.md)
+  - [Using Proxy](docs/USAGE.md)
 
 **Project Information**
 - [📄 Open Source License](#open-source-license)
@@ -795,6 +795,25 @@ npm run start migrate-config --dry-run # Preview changes
     "enabled": true,
     "cron": "0 2 * * *"
   }
+}
+```
+
+> Tip: `tagRelation: "or"` is supported. When set to `or`, the `tag` string is split by spaces, tags are queried sequentially, results are merged and deduplicated by item `id`, then sorted by `sort` and truncated by `limit`. It's recommended to increase `download.requestDelay` (e.g., 1500–3000ms) in this mode to reduce rate limiting.
+
+**Example 1b: Multi-tag OR search (sequential per-tag queries and merge)**
+```json
+{
+  "targets": [
+    {
+      "type": "novel",
+      "tag": "風景 イラスト オリジナル",
+      "tagRelation": "or",
+      "limit": 10,
+      "mode": "search",
+      "searchTarget": "partial_match_for_tags",
+      "sort": "popular_desc"
+    }
+  ]
 }
 ```
 

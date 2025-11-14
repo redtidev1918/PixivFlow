@@ -166,6 +166,11 @@ REFACTORING_PLAN.md
 !docs/**/*CLEANUP*.md
 # Note: SECURITY_CLEANUP*.md is already covered by *SECURITY*.md above
 
+# SEO optimization documents (internal only)
+*SEO*.md
+!docs/**/*SEO*.md
+SEO_OPTIMIZATION*.md
+
 # Documentation rewrite and planning documents (internal only)
 *REWRITE*.md
 !docs/**/*REWRITE*.md

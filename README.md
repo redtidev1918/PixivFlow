@@ -16,7 +16,7 @@
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg?style=flat-square)](https://github.com/zoidberg-xgd/pixivflow)
 [![Maintenance](https://img.shields.io/badge/Maintained-yes-green.svg?style=flat-square)](https://github.com/zoidberg-xgd/pixivflow/graphs/commit-activity)
 
-[快速开始](#-快速开始) • [功能特性](#-功能特性) • [CLI 命令](#-cli-命令行工具) • [脚本工具](#-脚本工具) • [使用场景](#-使用场景)
+[快速开始](#快速开始) • [功能特性](#功能特性) • [CLI 命令](#cli-命令行工具) • [脚本工具](#脚本工具) • [使用场景](#使用场景)
 
 [English](README_EN.md) | [中文](README.md)
 
@@ -1347,7 +1347,7 @@ npm run download
 | 💬 **社区交流** | [Discussions](https://github.com/zoidberg-xgd/pixivflow/discussions) | 与其他用户交流 |
 
 **提问前请先**：
-1. 🔍 查看 [常见问题](#-常见问题) 章节
+1. 🔍 查看 [常见问题](#常见问题) 章节
 2. 📖 阅读相关文档
 3. ✅ 运行健康检查 `./scripts/pixiv.sh health`
 4. 📋 查看运行日志 `./scripts/pixiv.sh logs`
@@ -1429,6 +1429,6 @@ Made with ❤️ by [zoidberg-xgd](https://github.com/zoidberg-xgd)
 
 **PixivFlow** - 让 Pixiv 作品收集变得优雅而高效
 
-[⬆ 回到顶部](#-pixivflow)
+[⬆ 回到顶部](#pixivflow)
 
 </div>

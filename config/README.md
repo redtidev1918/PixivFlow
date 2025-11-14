@@ -1,125 +1,61 @@
 # 配置文件说明
 
-本目录包含 PixivFlow 的各种配置文件示例。根据你的需求选择合适的配置文件。
+本目录包含 PixivFlow 的配置文件。所有示例配置文件已整理到 `examples/` 目录中。
 
-## 📁 配置文件列表
+## 📁 目录结构
 
-### 1. `standalone.config.example.json` - 完整配置示例
-**推荐用于：** 需要了解所有配置选项的详细说明
-
-- ✅ 包含所有可用配置选项
-- ✅ 每个选项都有详细的中文注释说明
-- ✅ 包含多个实际使用示例
-- ✅ 适合学习和参考
-
-**使用方法：**
-```bash
-cp config/standalone.config.example.json config/standalone.config.json
-# 然后修改 refreshToken
+```
+config/
+├── standalone.config.json          # 实际使用的配置文件（需要自行创建）
+├── examples/                        # 示例配置文件目录
+│   ├── standalone.config.example.json      # 完整配置示例
+│   ├── standalone.config.simple.json       # 简化快速开始
+│   ├── standalone.config.ranking.json      # 排行榜下载示例
+│   ├── standalone.config.novel-chinese.json # 中文小说下载示例
+│   ├── specific-download.example.json      # 特定下载任务示例
+│   ├── yesterday-popular-novel.zh.json    # 昨日热门中文小说示例
+│   ├── yesterday-ranking-illustration.json # 昨日日榜插画示例
+│   ├── multi-tag-or-limit.zh.json          # 多标签并集示例
+│   └── README.md                           # 示例文件详细说明
+├── backups/                        # 备份文件目录（自动生成）
+├── data/                          # 数据目录（自动生成）
+│   └── metadata/                  # 元数据目录
+└── README.md                      # 本文件
 ```
 
----
+## 📁 示例配置文件列表
 
-### 2. `standalone.config.simple.json` - 简化快速开始
-**推荐用于：** 快速开始使用，不需要复杂配置
+所有示例文件位于 `examples/` 目录中，详细说明请查看 [examples/README.md](examples/README.md)。
 
-- ✅ 配置简洁明了
-- ✅ 只包含最常用的选项
-- ✅ 适合新手快速上手
-- ✅ 包含一个基础的下载示例
+### 主要示例文件
 
-**使用方法：**
-```bash
-cp config/standalone.config.simple.json config/standalone.config.json
-# 运行 pixivflow login 获取 refreshToken
-# 修改配置文件中的 refreshToken
-# 根据需要修改 targets 中的标签
-```
+1. **`standalone.config.example.json`** - 完整配置示例
+   - 包含所有可用配置选项
+   - 每个选项都有详细的中文注释说明
+   - 适合学习和参考
 
----
+2. **`standalone.config.simple.json`** - 简化快速开始 ⭐ 推荐新手
+   - 配置简洁明了
+   - 只包含最常用的选项
+   - 适合新手快速上手
 
-### 3. `standalone.config.ranking.json` - 排行榜下载示例
-**推荐用于：** 主要下载排行榜作品
+3. **`standalone.config.ranking.json`** - 排行榜下载示例
+   - 包含各种排行榜模式的示例
+   - 日榜、周榜、月榜配置示例
 
-- ✅ 包含各种排行榜模式的示例
-- ✅ 日榜、周榜、月榜配置示例
-- ✅ 男性向、女性向、AI作品排行榜示例
-- ✅ 排行榜筛选标签的配置方法
+4. **`standalone.config.novel-chinese.json`** - 中文小说下载示例
+   - 包含中文小说下载的各种配置示例
+   - 语言过滤配置示例
 
-**使用方法：**
-```bash
-cp config/standalone.config.ranking.json config/standalone.config.json
-# 修改 refreshToken
-# 根据需要修改 targets 数组
-```
+5. **`specific-download.example.json`** - 特定下载任务示例
+   - 包含10个实际使用场景的配置示例
+   - 随机下载、质量过滤、时间范围等场景
 
-**支持的排行榜类型：**
-- `day` - 日榜
-- `week` - 周榜
-- `month` - 月榜
-- `day_male` - 男性向日榜
-- `day_female` - 女性向日榜
-- `day_ai` - AI作品日榜
-- `week_original` - 原创周榜
-- `week_rookie` - 新人周榜
-- `day_r18` - R18日榜
-- `day_male_r18` - 男性向R18日榜
-- `day_female_r18` - 女性向R18日榜
+### 快速使用示例
 
----
-
-### 4. `specific-download.example.json` - 特定下载任务示例
-**推荐用于：** 需要实现特定下载场景
-
-- ✅ 包含10个实际使用场景的配置示例
-- ✅ 随机下载、质量过滤、时间范围等场景
-- ✅ 小说系列下载、单作品下载示例
-- ✅ 语言过滤、多标签OR关系等高级用法
-
-**使用方法：**
-```bash
-cp config/specific-download.example.json config/standalone.config.json
-# 修改 refreshToken
-# 根据需要选择或修改 targets 中的场景
-```
-
-**包含的场景：**
-1. 随机下载 - 测试或获取随机作品
-2. 排行榜筛选 - 从排行榜中筛选特定标签
-3. 质量过滤 - 只下载高收藏数作品
-4. 时间范围 - 下载指定时间段的作品
-5. 多标签OR - 包含任意一个标签即可
-6. 系列下载 - 下载整个小说系列
-7. 单作品下载 - 下载指定ID的小说
-8. 语言过滤 - 只下载中文小说
-9. 特殊排行榜 - 原创周榜
-10. 特殊排行榜 - 新人周榜
-
----
-
-### 5. `standalone.config.novel-chinese.json` - 中文小说下载示例
-**推荐用于：** 主要下载中文小说
-
-- ✅ 包含中文小说下载的各种配置示例
-- ✅ 语言过滤配置（仅中文、非中文、不过滤）
-- ✅ 时间范围过滤示例
-- ✅ 按热门程度或日期排序
-
-**使用方法：**
-```bash
-cp config/standalone.config.novel-chinese.json config/standalone.config.json
-# 修改 refreshToken
-# 根据需要修改 targets 数组中的标签
-```
-
-**语言过滤选项：**
-- `chinese` - 仅下载中文小说
-- `non-chinese` - 仅下载非中文小说（日语、英语等）
-- `null` 或不设置 - 下载所有语言的小说
-
-**时间范围占位符：**
-- `LAST_7_DAYS` - 最近7天（程序自动计算日期）
-- `YESTERDAY` - 昨天
+- **`yesterday-popular-novel.zh.json`** - 昨日热门中文小说
+- **`yesterday-ranking-illustration.json`** - 昨日日榜插画
+- **`multi-tag-or-limit.zh.json`** - 多标签并集 + 中文过滤
 
 ---
 
@@ -140,7 +76,7 @@ cp config/standalone.config.novel-chinese.json config/standalone.config.json
 2. **选择配置文件**
    ```bash
    # 推荐新手使用简化配置
-   cp config/standalone.config.simple.json config/standalone.config.json
+   cp config/examples/standalone.config.simple.json config/standalone.config.json
    ```
 
 3. **修改配置**
@@ -155,6 +91,19 @@ cp config/standalone.config.novel-chinese.json config/standalone.config.json
    # 或从源码运行
    npm run download
    ```
+
+### 使用示例配置文件
+
+你也可以直接使用示例配置文件，无需复制：
+
+```bash
+# 方式 1：使用命令行参数
+pixivflow download --config "$(pwd)/config/examples/yesterday-popular-novel.zh.json"
+
+# 方式 2：使用环境变量
+export PIXIV_DOWNLOADER_CONFIG="$(pwd)/config/examples/yesterday-popular-novel.zh.json"
+pixivflow download
+```
 
 ---
 
@@ -184,11 +133,12 @@ cp config/standalone.config.novel-chinese.json config/standalone.config.json
 
 ## 💡 使用建议
 
-1. **新手用户**：使用 `standalone.config.simple.json`
-2. **排行榜下载**：使用 `standalone.config.ranking.json`
-3. **中文小说下载**：使用 `standalone.config.novel-chinese.json`
-4. **特定场景**：参考 `specific-download.example.json` 中的示例
-5. **深入学习**：查看 `standalone.config.example.json` 了解所有选项
+1. **新手用户**：使用 `examples/standalone.config.simple.json`
+2. **排行榜下载**：使用 `examples/standalone.config.ranking.json`
+3. **中文小说下载**：使用 `examples/standalone.config.novel-chinese.json`
+4. **特定场景**：参考 `examples/specific-download.example.json` 中的示例
+5. **深入学习**：查看 `examples/standalone.config.example.json` 了解所有选项
+6. **快速示例**：直接使用 `examples/` 目录中的快速示例文件
 
 ---
 
@@ -198,11 +148,13 @@ cp config/standalone.config.novel-chinese.json config/standalone.config.json
 2. **所有示例文件中的 `YOUR_REFRESH_TOKEN` 都需要替换为实际值**
 3. **配置文件使用 JSON 格式，注意语法正确性**
 4. **修改配置后建议先测试少量下载，确认配置正确**
+5. **备份文件会自动保存到 `backups/` 目录**
 
 ---
 
 ## 📚 更多信息
 
+- 示例文件详细说明：查看 [examples/README.md](examples/README.md)
 - 详细配置说明：查看 `docs/CONFIG.md`
 - 项目文档：查看 `docs/` 目录
 - 问题反馈：查看项目 Issues

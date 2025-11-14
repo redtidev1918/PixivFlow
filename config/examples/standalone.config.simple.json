@@ -1,0 +1,52 @@
+{
+  "_comment": "PixivFlow 简化配置 - 快速开始使用",
+  "_usage": "使用方法：",
+  "_usage1": "  1. 运行 pixivflow login 获取 refreshToken",
+  "_usage2": "  2. 将下面的 YOUR_REFRESH_TOKEN 替换为登录后获取的 token",
+  "_usage3": "  3. 根据需要修改 targets 数组中的标签和数量",
+  "_usage4": "  4. 运行 pixivflow download 开始下载",
+  
+  "logLevel": "info",
+  "pixiv": {
+    "clientId": "MOBrBDS8blbauoSck0ZfDbtuzpyT",
+    "clientSecret": "lsACyCD94FhDUtGTXi3QzcFE2uU1hqtDaKeqrdwj",
+    "deviceToken": "pixiv",
+    "refreshToken": "YOUR_REFRESH_TOKEN",
+    "userAgent": "PixivAndroidApp/5.0.234 (Android 11; Pixel 6)"
+  },
+  "network": {
+    "timeoutMs": 30000,
+    "retries": 3,
+    "retryDelay": 1000
+  },
+  "storage": {
+    "databasePath": "./data/pixiv-downloader.db",
+    "downloadDirectory": "./downloads",
+    "illustrationDirectory": "./downloads/illustrations",
+    "novelDirectory": "./downloads/novels",
+    "illustrationOrganization": "byDownloadDate",
+    "novelOrganization": "byDownloadDate"
+  },
+  "scheduler": {
+    "enabled": false
+  },
+  "targets": [
+    {
+      "_comment": "示例：下载包含'風景'标签的插画，每次下载20张",
+      "type": "illustration",
+      "tag": "風景",
+      "limit": 20,
+      "searchTarget": "partial_match_for_tags",
+      "sort": "date_desc"
+    }
+  ],
+  "download": {
+    "concurrency": 3,
+    "requestDelay": 500,
+    "dynamicConcurrency": true,
+    "minConcurrency": 1,
+    "maxRetries": 3,
+    "retryDelay": 2000,
+    "timeout": 60000
+  }
+}

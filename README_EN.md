@@ -16,7 +16,7 @@ Make Pixiv artwork collection elegant and efficient | 让 Pixiv 作品收集变�
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg?style=flat-square)](https://github.com/zoidberg-xgd/pixivflow)
 [![Maintenance](https://img.shields.io/badge/Maintained-yes-green.svg?style=flat-square)](https://github.com/zoidberg-xgd/pixivflow/graphs/commit-activity)
 
-[Quick Start](#-quick-start) • [Features](#-features) • [CLI Commands](#-cli-commands) • [Scripts](#-script-tools) • [Use Cases](#-use-cases)
+[Quick Start](#quick-start) • [Features](#features) • [CLI Commands](#cli-commands) • [Scripts](#script-tools) • [Use Cases](#use-cases)
 
 [English](README_EN.md) | [中文](README.md)
 
@@ -24,7 +24,8 @@ Make Pixiv artwork collection elegant and efficient | 让 Pixiv 作品收集变�
 
 ---
 
-## 📑 Table of Contents
+<a id="table-of-contents"></a>
+## Table of Contents
 
 <details>
 <summary><b>Click to expand full table of contents</b></summary>
@@ -32,79 +33,75 @@ Make Pixiv artwork collection elegant and efficient | 让 Pixiv 作品收集变�
 <br>
 
 **Getting Started**
-- [💡 What is PixivFlow?](#-what-is-pixivflow)
-  - [🌟 Why Choose PixivFlow?](#-why-choose-pixivflow)
-  - [🎯 Core Philosophy](#-core-philosophy)
-- [✨ Features](#-features)
-  - [🚀 Core Features](#-core-features)
-  - [🎁 Additional Advantages](#-additional-advantages)
-- [🚀 Quick Start](#-quick-start)
-  - [📋 Requirements](#-requirements)
-  - [🎬 Quick Start (Recommended)](#-quick-start-recommended)
-  - [🎯 Manual Setup](#-manual-setup)
-  - [🌐 Using WebUI (Optional)](#-using-webui-optional)
+- [💡 What is PixivFlow?](#what-is-pixivflow)
+  - [🌟 Why Choose PixivFlow?](#why-choose-pixivflow)
+  - [🎯 Core Philosophy](#core-philosophy)
+- [✨ Features](#features)
+  - [🚀 Core Features](#core-features)
+  - [🎁 Additional Advantages](#additional-advantages)
+- [🚀 Quick Start](#quick-start)
+  - [📋 Requirements](#requirements)
+  - [🎬 Quick Start (Recommended)](#quick-start-recommended)
+  - [🎯 Manual Setup](#manual-setup)
+  - [🌐 Using WebUI (Optional)](#using-webui-optional)
 
 **Tools & Documentation**
-- [🎨 CLI Commands](#-cli-commands)
-  - [🚀 Core Commands](#-core-commands)
-  - [⚙️ Configuration Management](#️-configuration-management-1)
-  - [📊 Monitoring and Maintenance](#-monitoring-and-maintenance-1)
-- [🛠️ Script Tools](#️-script-tools)
-  - [🎯 Main Control Script (Most Used)](#-main-control-script-most-used)
-  - [🔐 Login Management](#-login-management)
-  - [🐳 Docker Management](#-docker-management)
-- [📚 Documentation](#-documentation)
-  - [🌟 Must Read for Beginners](#-must-read-for-beginners)
-  - [📘 Advanced Documentation](#-advanced-documentation)
-  - [🐳 Docker Documentation](#-docker-documentation)
-  - [📄 Project Documentation](#-project-documentation)
+- [🎨 CLI Commands](#cli-commands)
+  - [🚀 Core Commands](#core-commands)
+  - [⚙️ Configuration Management](#configuration-management)
+  - [📊 Monitoring and Maintenance](#monitoring-and-maintenance)
+- [🛠️ Script Tools](#script-tools)
+  - [🎯 Main Control Script (Most Used)](#main-control-script-most-used)
+  - [🔐 Login Management](#login-management)
+  - [🐳 Docker Management](#docker-management)
+- [📚 Documentation](#documentation)
+  - [🌟 Must Read for Beginners](#must-read-for-beginners)
+  - [📘 Advanced Documentation](#advanced-documentation)
+  - [🐳 Docker Documentation](#docker-documentation)
+  - [📄 Project Documentation](#project-documentation)
 
 **Usage & Configuration**
-- [🎯 Use Cases](#-use-cases)
+- [🎯 Use Cases](#use-cases)
   - [Scenario 1: Daily Auto Collection](#scenario-1-daily-auto-collection-of-inspiration-materials)
   - [Scenario 2: Server Scheduled Collection](#scenario-2-server-scheduled-collection-of-specific-tags)
   - [Scenario 3: Quick Experience](#scenario-3-quick-experience---random-download)
-  - [Scenario 4: One-Time Batch Download](#scenario-4-one-time-batch-download)
-- [📁 Project Structure](#-project-structure)
-- [⚙️ Core Configuration](#️-core-configuration)
+  - [Scenario 4: One-Time Batch Download](#scenario-4-onetime-batch-download)
+- [📁 Project Structure](#project-structure)
+- [⚙️ Core Configuration](#core-configuration)
   - [Authentication Configuration](#authentication-configuration)
   - [Download Targets](#download-targets)
   - [Scheduled Tasks](#scheduled-tasks)
   - [Storage Configuration](#storage-configuration)
 
 **Troubleshooting & Advanced**
-- [🐛 FAQ](#-faq)
-  - [❓ Setup Wizard Login Failed?](#-setup-wizard-login-failed)
-  - [❓ Authentication Failed or Token Expired?](#-authentication-failed-or-token-expired)
-  - [❓ No Matching Artworks Found?](#-no-matching-artworks-found)
-  - [❓ Scheduled Task Not Running?](#-scheduled-task-not-running)
-  - [❓ Slow Download Speed or Frequent Failures?](#-slow-download-speed-or-frequent-failures)
-  - [❓ Encountered Deleted or Private Artworks?](#-encountered-deleted-or-private-artworks)
-- [🔒 Security Tips](#-security-tips)
-- [📊 Download Record Management](#-download-record-management)
-- [🚀 Advanced Usage](#-advanced-usage)
-  - [Deploy on Server](#deploy-on-server)
-  - [Configure Multiple Download Tasks](#configure-multiple-download-tasks)
-  - [Using Proxy](#using-proxy)
+- [🐛 FAQ](docs/USAGE.md)
+- [🔒 Security Tips](docs/USAGE.md)
+- [📊 Download Record Management](docs/USAGE.md)
+- [🚀 Advanced Usage](docs/USAGE.md)
+  - [Deploy on Server](docs/DOCKER.md)
+  - [Configure Multiple Download Tasks](docs/CONFIG.md)
+  - [Using Proxy](docs/USAGE.md)
 
 **Project Information**
-- [📄 Open Source License](#-open-source-license)
-- [🙏 Acknowledgments](#-acknowledgments)
-- [📮 Get Help](#-get-help)
-- [📈 Project Statistics](#-project-statistics)
-- [🤝 Contributing](#-contributing)
-- [📝 Changelog](#-changelog)
+- [📄 Open Source License](#open-source-license)
+- [🙏 Acknowledgments](#acknowledgments)
+- [📮 Get Help](#get-help)
+- [📈 Project Statistics](#project-statistics)
+- [🤝 Contributing](#contributing)
+- [📝 Changelog](#changelog)
 - [Support the Project](#support-the-project)
 
 </details>
 
 ---
 
-## 💡 What is PixivFlow?
+<a id="what-is-pixivflow"></a>
+## What is PixivFlow?
 
 **PixivFlow** is a **fully standalone** Pixiv artwork batch downloader designed for automation. No browser extension required, can run automatically in command line or on servers, supports scheduled tasks, intelligent deduplication, resume download, and more.
 
-### 🌟 Why Choose PixivFlow?
+<a id="why-choose-pixivflow"></a>
+### Why Choose PixivFlow?
 
 Compared to other Pixiv downloaders, PixivFlow focuses on **automation** and **server deployment** scenarios:
 
@@ -117,7 +114,8 @@ Compared to other Pixiv downloaders, PixivFlow focuses on **automation** and **s
 | 📦 **Lightweight Deployment** | Low resource usage, no additional services needed (like databases, Redis), SQLite is enough |
 | 🛠️ **Out of the Box** | Rich script tools and setup wizard, get started in 3 steps |
 
-### 🎯 Core Philosophy
+<a id="core-philosophy"></a>
+### Core Philosophy
 
 - **Automation First**: Set once, run automatically, no manual intervention
 - **Intelligent Management**: Auto deduplication, resume download, error retry
@@ -126,9 +124,11 @@ Compared to other Pixiv downloaders, PixivFlow focuses on **automation** and **s
 
 ---
 
-## ✨ Features
+<a id="features"></a>
+## Features
 
-### 🚀 Core Features
+<a id="core-features"></a>
+### Core Features
 
 | Feature | Description |
 |---------|-------------|
@@ -144,7 +144,8 @@ Compared to other Pixiv downloaders, PixivFlow focuses on **automation** and **s
 | **🔌 WebSocket** | Real-time log streaming and download status updates |
 | **📊 Statistics Reports** | Detailed run logs and download statistics |
 
-### 🎁 Additional Advantages
+<a id="additional-advantages"></a>
+### Additional Advantages
 
 - ✅ **Fully Standalone**: No browser required, pure CLI tool
 - ✅ **API Server**: Provides RESTful API and WebSocket, can integrate with any frontend
@@ -156,9 +157,11 @@ Compared to other Pixiv downloaders, PixivFlow focuses on **automation** and **s
 
 ---
 
-## 🚀 Quick Start
+<a id="quick-start"></a>
+## Quick Start
 
-### 📋 Requirements
+<a id="requirements"></a>
+### Requirements
 
 - **Node.js 18+** and **npm 9+** (Recommended: LTS versions 18.x, 20.x, 22.x, or 24.x)
 - **Pixiv account**
@@ -172,7 +175,8 @@ Compared to other Pixiv downloaders, PixivFlow focuses on **automation** and **s
 > 💡 **Login Note**: The project uses Node.js library for login by default, **Python is not required**. Python gppt is only used as a fallback option (optional).  
 > 📖 **Detailed Guide**: See [Quick Start Guide](docs/QUICKSTART.md)
 
-### 🎬 Quick Installation (Recommended ⭐)
+<a id="quick-start-recommended"></a>
+### Quick Installation (Recommended ⭐)
 
 #### Method 1: Install from npm (Easiest)
 
@@ -382,7 +386,8 @@ That's it! 🎉
 
 ---
 
-### 📡 API Server (Optional)
+<a id="api-server-optional"></a>
+### API Server (Optional)
 
 PixivFlow provides a RESTful API server that can integrate with frontend projects.
 
@@ -441,7 +446,8 @@ npm run build                      # Build output in dist/ directory
 
 ---
 
-### 🐳 Using Docker (Recommended)
+<a id="using-docker-recommended"></a>
+### Using Docker (Recommended)
 
 PixivFlow supports Docker deployment, no need to install Node.js environment:
 
@@ -538,11 +544,13 @@ docker-compose build
 
 ---
 
-## 🎨 CLI Commands
+<a id="cli-commands"></a>
+## CLI Commands
 
 > 💡 **Recommended**: After global installation, you can directly use the `pixivflow` command without relying on scripts in the project directory.
 
-### 🚀 Core Commands
+<a id="core-commands"></a>
+### Core Commands
 
 ```bash
 # Use after global installation
@@ -559,7 +567,8 @@ pixivflow setup                      # Interactive setup wizard (first time use)
 pixivflow dirs                       # View directory information (where files are saved) ⭐
 ```
 
-### ⚙️ Configuration Management
+<a id="configuration-management"></a>
+### Configuration Management
 
 ```bash
 pixivflow config                     # Config management (view/edit/backup/restore) ⭐
@@ -583,7 +592,8 @@ pixivflow config set storage.illustrationDirectory ./my-illustrations
 pixivflow config set storage.novelDirectory ./my-novels
 ```
 
-### 📊 Monitoring and Maintenance
+<a id="monitoring-and-maintenance"></a>
+### Monitoring and Maintenance
 
 ```bash
 pixivflow monitor                    # Real-time monitoring of process status and performance metrics ⭐
@@ -595,11 +605,13 @@ pixivflow backup                     # Auto backup config and data ⭐
 
 ---
 
-## 🛠️ Script Tools
+<a id="script-tools"></a>
+## Script Tools
 
 PixivFlow provides rich script tools so you don't need to remember complex npm commands. All scripts directly call built-in CLI functions for better performance and faster response.
 
-### 🎯 Main Control Script (Most Used)
+<a id="main-control-script-most-used"></a>
+### Main Control Script (Most Used)
 
 ```bash
 ./scripts/pixiv.sh <command>
@@ -624,7 +636,8 @@ PixivFlow provides rich script tools so you don't need to remember complex npm c
 - All commands directly call built-in CLI, no need to go through npm scripts, faster response.
 - **New Features**: `check --fix` and `update` commands support automatic fixing of common issues.
 
-### 🔐 Login Management
+<a id="login-management"></a>
+### Login Management
 
 ```bash
 # Method 1: Use main control script (recommended)
@@ -677,14 +690,15 @@ npm run start migrate-config --dry-run # Preview changes
 - ✅ Smart detection: Automatically detect if build artifacts are outdated
 - ✅ Unified error handling: Provide clear error messages and fix suggestions
 
-### 🚀 Deployment and Backup
+### Deployment and Backup
 
 ```bash
 # Auto deploy to server
 ./scripts/auto-deploy.sh
 ```
 
-### 🐳 Docker Management
+<a id="docker-management"></a>
+### Docker Management
 
 ```bash
 # Use main control script
@@ -709,11 +723,13 @@ npm run start migrate-config --dry-run # Preview changes
 
 ---
 
-## 📚 Documentation
+<a id="documentation"></a>
+## Documentation
 
 > 📖 **Complete Documentation Index**: See [Documentation Navigation](docs/README.md) for a complete list and classification of all documents
 
-### 🌟 Must Read for Beginners (Read in Order)
+<a id="must-read-for-beginners"></a>
+### Must Read for Beginners (Read in Order)
 
 | Document | Description | Rating |
 |----------|-------------|--------|
@@ -721,20 +737,23 @@ npm run start migrate-config --dry-run # Preview changes
 | [🔐 LOGIN](docs/LOGIN.md) | **Login process details** - Login problem solutions | ⭐⭐⭐⭐ |
 | [📖 USAGE](docs/USAGE.md) | **Usage guide** - Feature usage instructions | ⭐⭐⭐⭐ |
 
-### 📘 Feature Guides
+<a id="feature-guides"></a>
+### Feature Guides
 
 | Document | Description | Rating |
 |----------|-------------|--------|
 | [📋 CONFIG](docs/CONFIG.md) | **Configuration file usage guide** - All configuration options explained | ⭐⭐⭐⭐⭐ |
 | [🛠️ SCRIPTS](docs/SCRIPTS.md) | **Script usage guide** - All scripts detailed instructions | ⭐⭐⭐⭐⭐ |
 
-### 🌐 Deployment and Environment
+<a id="deployment-and-environment"></a>
+### Deployment and Environment
 
 | Document | Description | Rating |
 |----------|-------------|--------|
 | [🐳 DOCKER](docs/DOCKER.md) | **Docker usage guide** - Docker deployment and usage (includes solutions for common issues) | ⭐⭐⭐⭐ |
 
-### 📄 Project Documentation
+<a id="project-documentation"></a>
+### Project Documentation
 
 | Document | Description |
 |----------|-------------|
@@ -745,8 +764,10 @@ npm run start migrate-config --dry-run # Preview changes
 
 ---
 
-## 🎯 Use Cases
+<a id="use-cases"></a>
+## Use Cases
 
+<a id="scenario-1-daily-auto-collection-of-inspiration-materials"></a>
 ### Scenario 1: Daily Auto Collection of Inspiration Materials
 
 **Requirement**: Automatically download high-quality landscape and illustration artworks daily as design materials
@@ -784,6 +805,7 @@ npm run start migrate-config --dry-run # Preview changes
 
 ---
 
+<a id="scenario-2-server-scheduled-collection-of-specific-tags"></a>
 ### Scenario 2: Server Scheduled Collection of Specific Tags
 
 **Requirement**: Weekly collect popular artworks of specific tags on server
@@ -820,6 +842,7 @@ pm2 start "npm run scheduler" --name pixivflow
 
 ---
 
+<a id="scenario-3-quick-experience---random-download"></a>
 ### Scenario 3: Quick Experience - Random Download
 
 **Requirement**: Quick experience tool, download one random artwork
@@ -854,6 +877,7 @@ pixivflow random --novel
 
 ---
 
+<a id="scenario-4-onetime-batch-download"></a>
 ### Scenario 4: One-Time Batch Download
 
 **Requirement**: One-time download artworks of specified tags
@@ -889,7 +913,8 @@ pixivflow download
 
 ---
 
-## 📁 Project Structure
+<a id="project-structure"></a>
+## Project Structure
 
 ```
 pixivflow/

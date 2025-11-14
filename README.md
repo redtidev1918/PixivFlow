@@ -16,7 +16,7 @@
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg?style=flat-square)](https://github.com/zoidberg-xgd/pixivflow)
 [![Maintenance](https://img.shields.io/badge/Maintained-yes-green.svg?style=for-the-badge)](https://github.com/zoidberg-xgd/pixivflow/graphs/commit-activity)
 
-[快速开始](#快速开始) • [功能特性](#功能特性) • [CLI 命令](#cli-命令行工具) • [脚本工具](#脚本工具) • [使用场景](#使用场景)
+[功能特性](#功能特性) • [快速开始](#快速开始) • [CLI 命令](#cli-命令行工具) • [脚本工具](#脚本工具) • [使用场景](#使用场景)
 
 [English](README_EN.md) | [中文](README.md)
 
@@ -44,6 +44,7 @@
   - [安装方式说明](#安装方式说明)
   - [WebUI 管理界面（可选）](#webui-管理界面可选)
   - [指定配置文件运行（--config 与环境变量）](#指定配置文件运行-config-与环境变量)
+  - [Docker 部署（推荐）](#docker-部署推荐)
 
 **工具与文档**
 - [CLI 命令行工具](#cli-命令行工具)
@@ -53,7 +54,6 @@
 - [脚本工具](#脚本工具)
   - [主控脚本（最常用）](#主控脚本最常用)
   - [无图形界面服务器的登录方式（使用现有 refresh token）](#无图形界面服务器的登录方式使用现有-refresh-token)
-  - [Docker 部署（推荐）](#docker-部署推荐)
 - [文档导航](#文档导航)
   - [新手必读（按顺序阅读）](#新手必读按顺序阅读)
   - [功能指南](#功能指南)
@@ -282,7 +282,8 @@ npm run random       # 随机下载
 > - 首次使用需要运行 `pixivflow login` 进行登录
 > - npm 包地址：https://www.npmjs.com/package/pixivflow
 
-#### 🔧 指定配置文件运行（--config 与环境变量）
+<a id="指定配置文件运行-config-与环境变量" name="指定配置文件运行-config-与环境变量"></a>
+#### 指定配置文件运行（--config 与环境变量）
 
 - **命令行参数方式（推荐）**
 

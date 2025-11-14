@@ -16,7 +16,7 @@ Make Pixiv artwork collection elegant and efficient | 让 Pixiv 作品收集变�
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg?style=flat-square)](https://github.com/zoidberg-xgd/pixivflow)
 [![Maintenance](https://img.shields.io/badge/Maintained-yes-green.svg?style=flat-square)](https://github.com/zoidberg-xgd/pixivflow/graphs/commit-activity)
 
-[Quick Start](#quick-start) • [Features](#features) • [CLI Commands](#cli-commands) • [Scripts](#script-tools) • [Use Cases](#use-cases)
+[Features](#features) • [Quick Start](#quick-start) • [CLI Commands](#cli-commands) • [Scripts](#script-tools) • [Use Cases](#use-cases)
 
 [English](README_EN.md) | [中文](README.md)
 
@@ -43,7 +43,8 @@ Make Pixiv artwork collection elegant and efficient | 让 Pixiv 作品收集变�
   - [📋 Requirements](#requirements)
   - [🎬 Quick Start (Recommended)](#quick-start-recommended)
   - [🎯 Manual Setup](#manual-setup)
-  - [🌐 Using WebUI (Optional)](#using-webui-optional)
+  - [🌐 API Server (Optional)](#api-server-optional)
+  - [🐳 Using Docker (Recommended)](#using-docker-recommended)
 
 **Tools & Documentation**
 - [🎨 CLI Commands](#cli-commands)

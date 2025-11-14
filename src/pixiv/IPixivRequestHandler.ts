@@ -78,3 +78,8 @@ export interface IPixivRequestHandler {
 
 
 
+
+
+
+
+

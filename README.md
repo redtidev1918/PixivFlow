@@ -375,7 +375,9 @@ npm install                # 安装前端依赖
 cd ..
 
 # 开发模式（推荐：一键启动）
-npm run dev                # 推荐：一键启动开发环境，支持热重载\n# - 自动协调前端和后端开发服务器端口（详见 `src/webui/ports.ts`）\n# - 注意：此命令会自动清理所需端口，避免冲突。
+npm run dev                # 推荐：一键启动开发环境，支持热重载
+                          # - 自动协调前端和后端开发服务器端口（详见 `src/webui/ports.ts`）
+                          # - 注意：此命令会自动清理所需端口，避免冲突。
 
 # 开发模式（手动启动，前后端分离）
 # 注意：此方式需要确保前后端端口匹配，不推荐
@@ -706,7 +708,11 @@ pixivflow/
 ├── 📄 配置文件
 │   ├── config/
 │   │   ├── standalone.config.json           # 主配置（需自行创建）
-│   │   └── standalone.config.example.json   # 配置模板
+│   │   ├── examples/                        # 示例配置文件
+│   │   │   ├── standalone.config.example.json
+│   │   │   ├── standalone.config.simple.json
+│   │   │   └── ...
+│   │   └── backups/                         # 备份文件
 │
 ├── 💻 源代码
 │   ├── src/
@@ -1055,6 +1061,10 @@ npm run login  # 重新登录获取新 token
 **可能原因**：标签拼写错误、筛选条件过严、网络问题
 
 **解决方法**：
+1. 尝试常见标签：`イラスト`、`風景`、`art`
+2. 降低 `minBookmarks` 值
+3. 检查网络和代理设置
+4. 使用 `partial_match_for_tags` 搜索模式，提高匹配率
 
 ---
 
@@ -1122,10 +1132,7 @@ npm run login  # 重新登录获取新 token
 }
 ```
 
-> 说明：`tagRelation: "or"` 表示任意一个标签命中即可；结果会合并去重后按排序截取到 `limit`。若想“必须包含所有标签”，使用 `tagRelation: "and"`（默认）。
-1. 尝试常见标签：`イラスト`、`風景`、`art`
-2. 降低 `minBookmarks` 值
-3. 检查网络和代理设置
+> 说明：`tagRelation: "or"` 表示任意一个标签命中即可；结果会合并去重后按排序截取到 `limit`。若想"必须包含所有标签"，使用 `tagRelation: "and"`（默认）。
 
 ---
 

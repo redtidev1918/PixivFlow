@@ -1,6 +1,6 @@
 {
   "name": "pixivflow",
-  "version": "2.0.31",
+  "version": "2.0.32",
   "description": "🎨 智能的 Pixiv 自动化下载工具 - 支持批量下载插画和小说、定时任务、Docker部署 | Intelligent Pixiv Automation Downloader with batch download, scheduler, and Docker support",
   "repository": {
     "type": "git",
@@ -61,7 +61,7 @@
     "dev:kill": "npx kill-port 3001 5173 3000",
     "dev:backend": "cross-env PORT=3001 nodemon --watch dist dist/webui/index.js",
     "dev:frontend": "cross-env VITE_DEV_API_PORT=3001 npm run webui:frontend",
-    "dev": "npm run build && npx kill-port 3001 5173 3000 && concurrently -n \"backend-build,backend,frontend\" -c \"yellow,blue,green\" \"npm run build:watch\" \"npm run dev:backend\" \"npm run dev:frontend\"", 
+    "dev": "npm run build && npx kill-port 3001 5173 3000 && concurrently -n \"backend-build,backend,frontend\" -c \"yellow,blue,green\" \"npm run build:watch\" \"npm run dev:backend\" \"npm run dev:frontend\"",
     "webui:start": "npm run webui:build && npm run webui",
     "webui:dev:full": "npm run build && concurrently -n \"backend-build,backend,frontend\" -c \"yellow,blue,green\" \"npm run build:watch\" \"nodemon --watch dist dist/webui/index.js\" \"npm run webui:frontend\"",
     "publish:patch": "./scripts/publish.sh patch",

@@ -212,7 +212,7 @@ export class IllustrationTargetHandler {
         return;
       }
 
-      const detail = await this.client.getIllustDetail(illustId);
+      const detail = await this.client.getIllustration(illustId);
       // Use the detail directly as it's already a PixivIllust
       await this.illustrationDownloader.downloadIllustration(detail, `illust-${illustId}`);
       logger.info(`Successfully downloaded illustration ${illustId}`);

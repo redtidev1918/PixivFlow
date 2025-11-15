@@ -1,0 +1,12 @@
+# GitHub Pages Jekyll 配置
+# 如果使用 Jekyll，这个文件会被使用
+# 如果只使用静态 HTML，可以忽略此文件
+
+title: PixivFlow
+description: 智能的 Pixiv 自动化下载工具
+theme: jekyll-theme-minimal
+
+# 如果使用 Jekyll，取消下面的注释
+# plugins:
+#   - jekyll-sitemap
+

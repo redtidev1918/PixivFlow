@@ -1,0 +1,4 @@
+# 禁用 Jekyll 处理
+# 这个文件告诉 GitHub Pages 不要使用 Jekyll 处理这个目录
+# 直接提供静态 HTML 文件
+

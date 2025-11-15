@@ -101,6 +101,12 @@ Make Pixiv artwork collection elegant and efficient | 让 Pixiv 作品收集变�
 
 **PixivFlow** is a **fully standalone** Pixiv artwork batch downloader designed for automation. No browser extension required, can run automatically in command line or on servers, supports scheduled tasks, intelligent deduplication, resume download, and more.
 
+As a professional **Pixiv downloader**, PixivFlow supports the following core features:
+- 📥 **Batch Download Pixiv Illustrations and Novels**: Supports batch downloading artworks by tags, users, bookmarks, and other conditions
+- 🔗 **Direct URL Download**: Supports direct input of Pixiv URLs for download without modifying configuration files
+- 🎯 **Single Artwork Download**: Supports downloading single illustrations or novels by artwork ID
+- ⏰ **Scheduled Automatic Download**: Uses Cron expressions to configure scheduled tasks for automated downloads
+
 <a id="why-choose-pixivflow"></a>
 ### Why Choose PixivFlow?
 
@@ -134,6 +140,8 @@ Compared to other Pixiv downloaders, PixivFlow focuses on **automation** and **s
 | Feature | Description |
 |---------|-------------|
 | **📥 Batch Download** | Supports batch download of illustrations and novels, configurable download count and filters |
+| **🔗 Direct URL Download** | Supports direct input of Pixiv URLs for download without modifying configuration files |
+| **🎯 Single Artwork Download** | Supports downloading single illustrations or novels by artwork ID |
 | **🏷️ Tag Search** | Search artworks by tags, supports exact match, partial match, and other modes |
 | **🎲 Random Download** | One-click download random popular tag artworks for quick experience |
 | **⏰ Scheduled Tasks** | Cron expression configuration, supports daily, weekly, monthly automatic downloads |
@@ -527,6 +535,7 @@ docker-compose build
 # Use after global installation
 pixivflow login                      # Login to Pixiv account
 pixivflow download                   # Execute download
+pixivflow download --url <url>       # Download directly from URL (supports illustration/novel/series) ⭐
 pixivflow random                     # Random download
 pixivflow scheduler                  # Start scheduled task
 pixivflow normalize                  # Normalize files
@@ -536,6 +545,18 @@ pixivflow status                     # View download statistics and recent recor
 pixivflow logs                       # View run logs
 pixivflow setup                      # Interactive setup wizard (first time use) ⭐
 pixivflow dirs                       # View directory information (where files are saved) ⭐
+```
+
+**URL Download Examples**:
+```bash
+# Download illustration
+pixivflow download --url "https://www.pixiv.net/artworks/12345678"
+
+# Download novel
+pixivflow download --url "https://www.pixiv.net/novel/show.php?id=26132156"
+
+# Download novel series
+pixivflow download --url "https://www.pixiv.net/novel/series/14690617"
 ```
 
 <a id="configuration-management"></a>

@@ -20,6 +20,11 @@ export class IllustrationTargetHandler {
   ) {}
 
   async handle(target: TargetConfig): Promise<void> {
+    if (target.illustId) {
+      await this.handleSingleIllustration(target);
+      return;
+    }
+
     const mode = target.mode || 'search';
     const displayTag = target.filterTag || target.tag || 'unknown';
     logger.info(`Processing illustration ${mode === 'ranking' ? 'ranking' : 'tag'} ${displayTag}`);
@@ -194,6 +199,29 @@ export class IllustrationTargetHandler {
     throw error;
   }
 
+  private async handleSingleIllustration(target: TargetConfig): Promise<void> {
+    const illustId = Number(target.illustId);
+    if (!Number.isFinite(illustId)) {
+      throw new Error(`Invalid illustId: ${target.illustId}`);
+    }
+
+    logger.info(`Processing single illustration ${illustId}`);
+    try {
+      if (this.database.hasDownloaded(String(illustId), 'illustration')) {
+        logger.info(`Illustration ${illustId} already downloaded, skipping`);
+        return;
+      }
+
+      const detail = await this.client.getIllustDetail(illustId);
+      // Use the detail directly as it's already a PixivIllust
+      await this.illustrationDownloader.downloadIllustration(detail, `illust-${illustId}`);
+      logger.info(`Successfully downloaded illustration ${illustId}`);
+    } catch (error) {
+      this.logError(error, `Failed to download illustration ${illustId}`);
+      throw error;
+    }
+  }
+
   private sortByPopularityAndLog(
     items: PixivIllust[],
     limit: number,
@@ -224,6 +252,25 @@ export class IllustrationTargetHandler {
         views,
       });
     }
+  }
+
+  private logError(error: unknown, message: string): void {
+    let errorMessage = error instanceof Error ? error.message : String(error);
+
+    if (error instanceof NetworkError && error.cause) {
+      const causeMsg = error.cause instanceof Error ? error.cause.message : String(error.cause);
+      errorMessage = `${errorMessage} (原因: ${causeMsg})`;
+    }
+
+    if (error instanceof NetworkError && error.url) {
+      errorMessage = `${errorMessage} [URL: ${error.url}]`;
+    }
+
+    logger.error(message, {
+      error: errorMessage,
+      errorType: error instanceof Error ? error.constructor.name : typeof error,
+      stack: error instanceof Error ? error.stack : undefined,
+    });
   }
 }
 

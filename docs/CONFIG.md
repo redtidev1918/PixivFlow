@@ -136,12 +136,20 @@ pixivflow dirs --verbose
 | `rankingDate` | string | 排行榜日期 | `"2024-01-01"`（YYYY-MM-DD 格式）或 `"YESTERDAY"`（昨天） |
 | `filterTag` | string \| null | 过滤标签 | `"風景"` 或 `null`（不过滤） |
 
+### 单作品下载配置
+
+| 选项 | 类型 | 说明 | 示例 |
+|------|------|------|------|
+| `illustId` | number | 单个插画ID | `12345678`（从 URL `https://www.pixiv.net/artworks/12345678` 中获取） |
+| `novelId` | number | 单篇小说ID | `26132156`（从 URL `https://www.pixiv.net/novel/show.php?id=26132156` 中获取） |
+| `seriesId` | number | 小说系列ID | `14690617`（从 URL `https://www.pixiv.net/novel/series/14690617` 中获取） |
+
+**注意**：使用单作品下载时，`tag` 字段是可选的（可以设置为 `"single"` 作为标识）。
+
 ### 小说专用配置
 
 | 选项 | 类型 | 说明 | 示例 |
 |------|------|------|------|
-| `seriesId` | number | 小说系列ID | `14690617` |
-| `novelId` | number | 单篇小说ID | `26132156` |
 | `languageFilter` | string | 语言过滤 | `"chinese"`（仅中文）<br>`"non-chinese"`（仅非中文）<br>不设置则下载所有语言 |
 | `detectLanguage` | boolean | 启用语言检测 | `true`（默认）或 `false` |
 
@@ -211,7 +219,39 @@ pixivflow dirs --verbose
 }
 ```
 
-#### 示例 5：语言过滤（仅中文小说）
+#### 示例 5：单插画下载
+
+```json
+{
+  "targets": [
+    {
+      "type": "illustration",
+      "tag": "single",
+      "illustId": 12345678
+    }
+  ]
+}
+```
+
+**说明**：从 URL `https://www.pixiv.net/artworks/12345678` 中提取插画ID `12345678`。
+
+#### 示例 6：单篇小说下载
+
+```json
+{
+  "targets": [
+    {
+      "type": "novel",
+      "tag": "single",
+      "novelId": 26132156
+    }
+  ]
+}
+```
+
+**说明**：从 URL `https://www.pixiv.net/novel/show.php?id=26132156` 中提取小说ID `26132156`。
+
+#### 示例 7：语言过滤（仅中文小说）
 
 ```json
 {

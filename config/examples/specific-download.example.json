@@ -139,6 +139,13 @@
       "limit": 30,
       "mode": "ranking",
       "rankingMode": "week_rookie"
+    },
+    {
+      "_comment": "场景11: 下载单个插画",
+      "type": "illustration",
+      "tag": "single",
+      "illustId": 12345678,
+      "_illustId_note": "从URL https://www.pixiv.net/artworks/12345678 中获取插画ID"
     }
   ],
   "_场景说明": {
@@ -151,6 +158,7 @@
     "场景7": "单作品下载 - 下载指定ID的小说",
     "场景8": "语言过滤 - 只下载中文小说",
     "场景9": "特殊排行榜 - 原创周榜",
-    "场景10": "特殊排行榜 - 新人周榜"
+    "场景10": "特殊排行榜 - 新人周榜",
+    "场景11": "单插画下载 - 下载指定ID的插画"
   }
 }

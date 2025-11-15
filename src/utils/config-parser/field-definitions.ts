@@ -392,6 +392,12 @@ function initializeTargetFields(definitions: Map<string, FieldDefinition>): void
     description: 'Novel ID',
     type: 'number',
   });
+
+  definitions.set('targets[].illustId', {
+    required: false,
+    description: 'Illustration ID',
+    type: 'number',
+  });
 }
 
 /**

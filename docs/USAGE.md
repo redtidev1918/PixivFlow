@@ -26,6 +26,26 @@ npm run download
 ./scripts/pixiv.sh once
 ```
 
+### 通过 URL 直接下载
+
+支持直接输入 Pixiv URL 进行下载，无需修改配置文件：
+
+```bash
+# 下载插画
+pixivflow download --url "https://www.pixiv.net/artworks/12345678"
+
+# 下载小说
+pixivflow download --url "https://www.pixiv.net/novel/show.php?id=26132156"
+
+# 下载小说系列
+pixivflow download --url "https://www.pixiv.net/novel/series/14690617"
+```
+
+**支持的 URL 格式**：
+- 插画：`https://www.pixiv.net/artworks/{illustId}`
+- 小说：`https://www.pixiv.net/novel/show.php?id={novelId}`
+- 小说系列：`https://www.pixiv.net/novel/series/{seriesId}`
+
 ### 随机下载（快速体验）
 
 **全局安装方式**：
@@ -208,9 +228,47 @@ npm run scheduler
 }
 ```
 
-### 小说专用功能
+### 单作品下载
+
+#### 单插画下载
+
+通过插画ID直接下载单个插画：
+
+```json
+{
+  "targets": [
+    {
+      "type": "illustration",
+      "tag": "single",
+      "illustId": 12345678
+    }
+  ]
+}
+```
+
+**获取插画ID**：从插画页面 URL `https://www.pixiv.net/artworks/12345678` 中提取数字部分。
+
+#### 单篇小说下载
+
+通过小说ID直接下载单篇小说：
+
+```json
+{
+  "targets": [
+    {
+      "type": "novel",
+      "tag": "single",
+      "novelId": 26132156
+    }
+  ]
+}
+```
+
+**获取小说ID**：从小说页面 URL `https://www.pixiv.net/novel/show.php?id=26132156` 中提取 `id` 参数值。
 
 #### 小说系列下载
+
+通过系列ID下载整个小说系列：
 
 ```json
 {
@@ -224,18 +282,7 @@ npm run scheduler
 }
 ```
 
-#### 单篇小说下载
-
-```json
-{
-  "targets": [
-    {
-      "type": "novel",
-      "novelId": 26132156
-    }
-  ]
-}
-```
+**获取系列ID**：从系列页面 URL `https://www.pixiv.net/novel/series/14690617` 中提取数字部分。
 
 #### 语言过滤
 

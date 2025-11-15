@@ -36,6 +36,7 @@ log_info "当前版本: $CURRENT_VERSION"
 # 确定版本类型
 VERSION_TYPE=${1:-patch}
 
+# 预先计算新版本号（不实际更新）
 if [[ "$VERSION_TYPE" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
     NEW_VERSION=$VERSION_TYPE
     log_info "指定版本: $NEW_VERSION"
@@ -43,6 +44,17 @@ else
     case $VERSION_TYPE in
         patch|minor|major)
             log_info "版本类型: $VERSION_TYPE"
+            # 手动计算新版本号（更可靠，兼容所有系统）
+            IFS='.' read -ra VERSION_PARTS <<< "$CURRENT_VERSION"
+            MAJOR=${VERSION_PARTS[0]}
+            MINOR=${VERSION_PARTS[1]}
+            PATCH=${VERSION_PARTS[2]}
+            case $VERSION_TYPE in
+                patch) PATCH=$((PATCH + 1)) ;;
+                minor) MINOR=$((MINOR + 1)); PATCH=0 ;;
+                major) MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0 ;;
+            esac
+            NEW_VERSION="$MAJOR.$MINOR.$PATCH"
             ;;
         *)
             log_error "无效的版本类型: $VERSION_TYPE"
@@ -56,10 +68,39 @@ else
     esac
 fi
 
-# 检查是否有未提交的更改
+# 验证新版本号格式
+if [[ ! "$NEW_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    log_error "无效的版本号格式: $NEW_VERSION"
+    exit 1
+fi
+
+# 验证版本号是否递增
+if [[ "$(printf '%s\n' "$CURRENT_VERSION" "$NEW_VERSION" | sort -V | head -n1)" != "$CURRENT_VERSION" ]] && [[ "$CURRENT_VERSION" != "$NEW_VERSION" ]]; then
+    log_error "新版本 $NEW_VERSION 必须大于当前版本 $CURRENT_VERSION"
+    exit 1
+fi
+
+# 检查该版本是否已在 npm 上发布（提前检查）
+log_info "检查版本是否已在 npm 上发布..."
+if npm view pixivflow@$NEW_VERSION version &>/dev/null; then
+    log_error "版本 $NEW_VERSION 已在 npm 上发布，请使用下一个版本号"
+    exit 1
+fi
+
+# 显示版本更新信息并确认
+log_warn "版本更新计划: $CURRENT_VERSION -> $NEW_VERSION"
+read -p "确认继续发布流程？(y/N) " -n 1 -r
+echo
+if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    log_info "已取消发布"
+    exit 1
+fi
+
+# 检查是否有未提交的更改（在确认后检查，避免不必要的询问）
 if ! git diff-index --quiet HEAD --; then
     log_warn "检测到未提交的更改"
-    read -p "是否继续发布？(y/N) " -n 1 -r
+    log_info "建议先提交所有更改，然后再发布"
+    read -p "是否继续发布？（版本号将在确认发布时更新）(y/N) " -n 1 -r
     echo
     if [[ ! $REPLY =~ ^[Yy]$ ]]; then
         log_info "已取消发布"
@@ -89,39 +130,33 @@ log_info "构建项目..."
 npm run build
 log_success "构建完成"
 
-# 更新版本号（使用 --no-git-tag-version 避免自动创建标签）
-if [[ -n "$NEW_VERSION" ]]; then
-    log_info "更新版本号到: $NEW_VERSION"
+# 确认发布（在更新版本号之前）
+log_warn "准备发布 pixivflow@$NEW_VERSION 到 npm"
+log_info "当前版本: $CURRENT_VERSION -> 新版本: $NEW_VERSION"
+read -p "确认发布？(y/N) " -n 1 -r
+echo
+if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    log_info "已取消发布"
+    exit 1
+fi
+
+# 现在才更新版本号（使用 --no-git-tag-version 避免自动创建标签）
+log_info "更新版本号到: $NEW_VERSION"
+if [[ "$VERSION_TYPE" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
     npm version $NEW_VERSION --no-git-tag-version
 else
-    log_info "更新版本号 ($VERSION_TYPE)..."
     npm version $VERSION_TYPE --no-git-tag-version
 fi
 
-# 获取新版本号
-NEW_VERSION=$(node -p "require('./package.json').version")
-log_success "新版本: $NEW_VERSION"
-
-# 验证新版本号格式
-if [[ ! "$NEW_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-    log_error "无效的版本号格式: $NEW_VERSION"
-    exit 1
-fi
-
-# 验证版本号是否递增
-if [[ "$(printf '%s\n' "$CURRENT_VERSION" "$NEW_VERSION" | sort -V | head -n1)" != "$CURRENT_VERSION" ]] && [[ "$CURRENT_VERSION" != "$NEW_VERSION" ]]; then
-    log_error "新版本 $NEW_VERSION 必须大于当前版本 $CURRENT_VERSION"
-    exit 1
-fi
-
-# 检查该版本是否已在 npm 上发布（提前检查）
-log_info "检查版本是否已在 npm 上发布..."
-if npm view pixivflow@$NEW_VERSION version &>/dev/null; then
-    log_error "版本 $NEW_VERSION 已在 npm 上发布，请使用下一个版本号"
+# 验证更新后的版本号
+ACTUAL_VERSION=$(node -p "require('./package.json').version")
+if [[ "$ACTUAL_VERSION" != "$NEW_VERSION" ]]; then
+    log_error "版本号更新失败：期望 $NEW_VERSION，实际 $ACTUAL_VERSION"
     # 恢复版本号
     git checkout package.json package-lock.json 2>/dev/null || true
     exit 1
 fi
+log_success "版本号已更新: $NEW_VERSION"
 
 # 提交版本更改
 log_info "提交版本更改..."
@@ -132,7 +167,19 @@ if git check-ignore package-lock.json >/dev/null 2>&1; then
 else
     git add package-lock.json 2>/dev/null || log_warn "package-lock.json 可能不存在"
 fi
-git commit -m "chore: bump version to $NEW_VERSION" || log_warn "版本更改可能已提交或无需提交"
+
+# 检查是否有待提交的更改
+if git diff --cached --quiet; then
+    log_warn "没有版本更改需要提交（可能已经提交）"
+else
+    git commit -m "chore: bump version to $NEW_VERSION" || {
+        log_error "版本提交失败"
+        # 恢复版本号
+        git checkout package.json package-lock.json 2>/dev/null || true
+        exit 1
+    }
+    log_success "版本更改已提交"
+fi
 
 # 检查并处理已存在的标签
 TAG_NAME="v$NEW_VERSION"
@@ -187,22 +234,6 @@ if ! git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
     fi
 fi
 
-# 确认发布
-log_warn "准备发布 pixivflow@$NEW_VERSION 到 npm"
-read -p "确认发布？(y/N) " -n 1 -r
-echo
-if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-    log_info "已取消发布"
-    # 恢复版本号和提交
-    git reset --soft HEAD~1 2>/dev/null || true
-    git checkout package.json package-lock.json 2>/dev/null || true
-    # 删除可能创建的标签
-    if git rev-parse "$TAG_NAME" >/dev/null 2>&1 && [[ "$TAG_NAME" == "v$NEW_VERSION" ]]; then
-        git tag -d "$TAG_NAME" 2>/dev/null || true
-    fi
-    exit 1
-fi
-
 # 发布到 npm
 # 使用 --ignore-scripts 跳过 prepublishOnly 钩子，因为我们已经构建过了
 log_info "发布到 npm..."
@@ -210,6 +241,23 @@ if npm publish --access public --ignore-scripts; then
     log_success "✅ 成功发布 pixivflow@$NEW_VERSION 到 npm"
 else
     log_error "发布失败"
+    log_info "正在恢复版本号和提交..."
+    # 尝试恢复版本号
+    if git diff HEAD~1 --name-only | grep -q "package.json"; then
+        # 如果最后一个提交是版本更新，则撤销它
+        git reset --hard HEAD~1 2>/dev/null || {
+            log_warn "无法自动撤销提交，请手动处理"
+            log_info "可以运行: git reset --hard HEAD~1"
+        }
+    else
+        # 否则只恢复文件
+        git checkout HEAD -- package.json package-lock.json 2>/dev/null || true
+    fi
+    # 删除可能创建的标签
+    if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
+        git tag -d "$TAG_NAME" 2>/dev/null || true
+    fi
+    log_error "发布失败，已尝试恢复版本号"
     exit 1
 fi
 

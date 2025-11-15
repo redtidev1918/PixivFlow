@@ -110,6 +110,8 @@
 
 作为一款专业的 **Pixiv 下载器**，PixivFlow 支持以下核心功能：
 - 📥 **批量下载 Pixiv 插画和小说**：支持按标签、用户、收藏数等条件批量下载作品
+- 🔗 **URL 直接下载**：支持直接输入 Pixiv URL 进行下载，无需修改配置文件
+- 🎯 **单作品下载**：支持通过作品ID直接下载单个插画或小说
 - ⏰ **定时自动下载**：使用 Cron 表达式配置定时任务，实现自动化下载
 - 🐳 **Docker 部署**：支持 Docker 容器化部署，一键启动
 - 🔐 **安全认证**：采用 OAuth 2.0 PKCE 标准流程，保障账号安全
@@ -309,6 +311,7 @@ docker-compose up -d             # 启动服务
 # 全局安装后使用
 pixivflow login                      # 登录 Pixiv 账号
 pixivflow download                   # 执行下载
+pixivflow download --url <url>       # 通过 URL 直接下载（支持插画/小说/系列）⭐
 pixivflow random                     # 随机下载
 pixivflow scheduler                  # 启动定时任务
 pixivflow normalize                  # 整理文件
@@ -318,6 +321,18 @@ pixivflow status                     # 查看下载统计和最近记录
 pixivflow logs                       # 查看运行日志
 pixivflow setup                      # 交互式配置向导（首次使用）⭐
 pixivflow dirs                       # 查看目录信息（文件保存位置）⭐
+```
+
+**URL 下载示例**：
+```bash
+# 下载插画
+pixivflow download --url "https://www.pixiv.net/artworks/12345678"
+
+# 下载小说
+pixivflow download --url "https://www.pixiv.net/novel/show.php?id=26132156"
+
+# 下载小说系列
+pixivflow download --url "https://www.pixiv.net/novel/series/14690617"
 ```
 
 #### 无图形界面服务器的登录方式（使用现有 refresh token）

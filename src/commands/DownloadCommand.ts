@@ -11,6 +11,7 @@ import { PixivClient } from '../pixiv/PixivClient';
 import { FileService } from '../download/FileService';
 import { DownloadManager } from '../download/DownloadManager';
 import { withResources, createResource } from '../utils/resource-manager';
+import { parsePixivUrl, parsedUrlToTargetConfig } from '../utils/pixiv-url-parser';
 
 /**
  * Download command - Run download job once
@@ -26,9 +27,28 @@ export class DownloadCommand extends BaseCommand {
       const configPath = getConfigPath(configPathArg);
       let config = loadConfig(configPath);
 
-      // Support custom targets via --targets parameter
+      // Support custom targets via --targets parameter or --url parameter
       const targetsArg = (args.options.targets as string) || undefined;
-      if (targetsArg) {
+      const urlArg = (args.options.url as string) || undefined;
+      
+      if (urlArg) {
+        // Parse URL and convert to target config
+        const parsed = parsePixivUrl(urlArg);
+        if (!parsed || (!parsed.id && !parsed.seriesId)) {
+          return this.failure(`Invalid Pixiv URL: ${urlArg}. Supported formats: https://www.pixiv.net/artworks/{id}, https://www.pixiv.net/novel/show.php?id={id}, https://www.pixiv.net/novel/series/{id}`);
+        }
+        
+        try {
+          const targetConfig = parsedUrlToTargetConfig(parsed);
+          config = { ...config, targets: [targetConfig] };
+          context.logger.info(`Using URL target: ${urlArg} -> ${targetConfig.type} ID ${targetConfig.illustId || targetConfig.novelId || targetConfig.seriesId}`);
+        } catch (error) {
+          context.logger.error('Failed to convert URL to target config', { 
+            error: error instanceof Error ? error.message : String(error) 
+          });
+          return this.failure('Failed to convert URL to target config', { error });
+        }
+      } else if (targetsArg) {
         try {
           const customTargets = JSON.parse(targetsArg);
           // If it's an array, use it directly; if it's an object, wrap it in an array
@@ -115,10 +135,13 @@ export class DownloadCommand extends BaseCommand {
 Options:
   --config <path>        Path to config file
   --targets <json>       Custom targets JSON (overrides config file targets)
+  --url <url>            Download from Pixiv URL (overrides config file targets)
 
 Examples:
   pixivflow download
-  pixivflow download --targets '[{"type":"novel","tag":"アークナイツ","limit":5}]'`;
+  pixivflow download --targets '[{"type":"novel","tag":"アークナイツ","limit":5}]'
+  pixivflow download --url "https://www.pixiv.net/artworks/12345678"
+  pixivflow download --url "https://www.pixiv.net/novel/show.php?id=26132156"`;
   }
 }
 

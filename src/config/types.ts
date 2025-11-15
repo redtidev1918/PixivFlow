@@ -75,6 +75,12 @@ export interface TargetConfig {
    */
   novelId?: number;
   /**
+   * Illustration ID (only used when type='illustration')
+   * If specified, downloads a single illustration by ID
+   * Example: illust ID 12345678 from URL https://www.pixiv.net/artworks/12345678
+   */
+  illustId?: number;
+  /**
    * Minimum number of bookmarks required for a work to be downloaded
    * If specified, only works with bookmarks >= minBookmarks will be downloaded
    */

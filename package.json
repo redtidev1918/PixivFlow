@@ -54,7 +54,6 @@
     "standalone:run": "npm run scheduler",
     "standalone:run-once": "npm run download",
     "test:download": "npm run test",
-    "test:login": "npm run build && node dist/test-all-login-methods.js",
     "webui": "npm run build && node dist/webui/index.js",
     "webui:dev": "npm run build:watch & npm run webui",
     "webui:frontend": "cd webui-frontend && npm run dev",

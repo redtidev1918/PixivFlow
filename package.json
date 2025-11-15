@@ -6,7 +6,7 @@
     "type": "git",
     "url": "git+https://github.com/zoidberg-xgd/PixivFlow.git"
   },
-  "homepage": "https://github.com/zoidberg-xgd/PixivFlow#readme",
+  "homepage": "https://zoidberg-xgd.github.io/PixivFlow/",
   "bugs": {
     "url": "https://github.com/zoidberg-xgd/PixivFlow/issues"
   },
@@ -67,6 +67,8 @@
     "publish:patch": "./scripts/publish.sh patch",
     "publish:minor": "./scripts/publish.sh minor",
     "publish:major": "./scripts/publish.sh major",
+    "release": "./scripts/create-release.sh",
+    "release:create": "./scripts/create-release.sh",
     "check:version": "./scripts/check-version-sync.sh",
     "versions:list": "./scripts/manage-versions.sh list",
     "versions:deprecate": "./scripts/manage-versions.sh deprecate",

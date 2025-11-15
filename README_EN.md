@@ -18,7 +18,7 @@ Make Pixiv artwork collection elegant and efficient | 让 Pixiv 作品收集变�
 
 [Features](#features) • [Quick Start](#quick-start) • [CLI Commands](#cli-commands) • [Scripts](#script-tools) • [Use Cases](#use-cases)
 
-[English](README_EN.md) | [中文](README.md)
+[📖 Full Documentation](https://zoidberg-xgd.github.io/PixivFlow/) | [English](README_EN.md) | [中文](README.md)
 
 </div>
 

@@ -548,6 +548,18 @@ npm run download</code></pre>
                 </li>
                 <li>
                     <h4>执行下载</h4>
+                    <p><strong>方式 1：通过 URL 直接下载（最简单 ⭐）</strong></p>
+                    <pre><code># 下载插画
+pixivflow download --url "https://www.pixiv.net/artworks/12345678"
+
+# 下载小说
+pixivflow download --url "https://www.pixiv.net/novel/show.php?id=26132156"
+
+# 下载小说系列
+pixivflow download --url "https://www.pixiv.net/novel/series/14690617"</code></pre>
+                    <p>这是最简单快捷的方式，无需修改配置文件，直接输入 URL 即可下载。</p>
+                    
+                    <p><strong>方式 2：使用配置文件下载</strong></p>
                     <pre><code># 执行一次下载
 pixivflow download
 
@@ -576,6 +588,10 @@ pixivflow scheduler</code></pre>
                     <tr>
                         <td><code>pixivflow download</code></td>
                         <td>执行下载</td>
+                    </tr>
+                    <tr>
+                        <td><code>pixivflow download --url &lt;url&gt;</code></td>
+                        <td>通过 URL 直接下载（最简单快捷）⭐</td>
                     </tr>
                     <tr>
                         <td><code>pixivflow random</code></td>
@@ -684,21 +700,7 @@ pixivflow scheduler</code></pre>
             
             <p><strong>日期占位符：</strong>支持 <code>YESTERDAY</code>、<code>TODAY</code>、<code>LAST_7_DAYS</code>、<code>LAST_30_DAYS</code> 等</p>
 
-            <h3>2.3 通过 URL 直接下载</h3>
-            <p>支持直接输入 Pixiv URL 进行下载，无需修改配置文件：</p>
-            <pre><code># 下载插画
-pixivflow download --url "https://www.pixiv.net/artworks/12345678"
-
-# 下载小说
-pixivflow download --url "https://www.pixiv.net/novel/show.php?id=26132156"
-
-# 下载小说系列
-pixivflow download --url "https://www.pixiv.net/novel/series/14690617"</code></pre>
-            <div class="alert alert-info">
-                <strong>💡 提示：</strong>这是最简单快捷的下载方式，适合快速下载单个作品，无需编辑配置文件。
-            </div>
-            
-            <h3>2.4 单作品下载</h3>
+            <h3>2.3 单作品下载</h3>
             <p>支持通过作品ID直接下载单个插画或小说，无需搜索：</p>
             
             <p><strong>单插画下载：</strong></p>
@@ -737,7 +739,7 @@ pixivflow download --url "https://www.pixiv.net/novel/series/14690617"</code></p
 }</code></pre>
             <p>从 URL <code>https://www.pixiv.net/novel/series/14690617</code> 中提取系列ID</p>
             
-            <h3>2.5 小说下载</h3>
+            <h3>2.4 小说下载</h3>
             <p>支持小说系列、语言过滤等功能：</p>
             
             <p><strong>语言过滤（仅中文小说）：</strong></p>
@@ -754,7 +756,7 @@ pixivflow download --url "https://www.pixiv.net/novel/series/14690617"</code></p
 }</code></pre>
             <p>支持 <code>"chinese"</code>（仅中文）或 <code>"non-chinese"</code>（仅非中文）</p>
 
-            <h3>2.6 智能筛选</h3>
+            <h3>2.5 智能筛选</h3>
             <p>支持按收藏数、日期范围、作品类型等多维度筛选：</p>
             <pre><code>{
   "targets": [
@@ -770,7 +772,7 @@ pixivflow download --url "https://www.pixiv.net/novel/series/14690617"</code></p
   ]
 }</code></pre>
 
-            <h3>2.7 实际应用场景</h3>
+            <h3>2.6 实际应用场景</h3>
             
             <h4>场景 1：每日自动收集灵感素材</h4>
             <p>每天自动下载风景、插画类高质量作品作为设计素材：</p>

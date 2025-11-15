@@ -6,15 +6,16 @@ on:
       - master
       - main
     paths:
-      - 'docs/index.html'
       - 'docs/**'
   workflow_dispatch:  # 允许手动触发
 
+# 设置 GITHUB_TOKEN 的权限，允许部署到 GitHub Pages
 permissions:
   contents: read
   pages: write
   id-token: write
 
+# 只允许一个并发部署，跳过正在进行的运行
 concurrency:
   group: "pages"
   cancel-in-progress: false

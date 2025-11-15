@@ -8,6 +8,8 @@
 
 > 🎯 **PixivFlow** 是一个专业的 Pixiv 批量下载工具，支持插画和小说下载、定时任务、Docker 部署。适用于个人用户和服务器自动化场景。
 
+> 📖 **[查看完整教程文档](https://zoidberg-xgd.github.io/PixivFlow/)** - 包含详细的使用教程、配置说明、部署指南和最佳实践
+
 <!-- SEO Keywords: pixiv downloader, pixiv批量下载, pixiv自动化下载, pixiv批量下载工具, pixiv下载器, pixiv artwork downloader, pixiv novel downloader, pixiv cli tool, pixiv scheduler, pixiv automation, pixiv批量下载脚本, pixiv下载工具, pixiv作品下载, pixiv插画下载, pixiv小说下载, pixiv定时下载, pixiv爬虫, pixiv api client, pixiv命令行工具, pixiv服务器部署, pixiv docker, pixiv webui, pixiv管理界面 -->
 
 [![GitHub stars](https://img.shields.io/github/stars/zoidberg-xgd/pixivflow?style=for-the-badge&logo=github)](https://github.com/zoidberg-xgd/pixivflow/stargazers)
@@ -22,7 +24,7 @@
 
 [功能特性](#功能特性) • [快速开始](#快速开始) • [CLI 命令](#cli-命令行工具) • [脚本工具](#脚本工具) • [使用场景](#使用场景)
 
-[English](README_EN.md) | [中文](README.md)
+[📖 完整教程文档](https://zoidberg-xgd.github.io/PixivFlow/) | [English](README_EN.md) | [中文](README.md)
 
 </div>
 

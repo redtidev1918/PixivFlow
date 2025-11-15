@@ -376,9 +376,11 @@
                 <li><a href="#intro">项目介绍</a></li>
                 <li><a href="#features">功能特性</a></li>
                 <li><a href="#quickstart">快速开始</a></li>
-                <li><a href="#tutorial">使用教程</a></li>
-                <li><a href="#config">配置说明</a></li>
-                <li><a href="#deployment">部署指南</a></li>
+                <li><a href="#tutorial-basic">入门教程</a></li>
+                <li><a href="#tutorial-advanced">高级功能</a></li>
+                <li><a href="#tutorial-config">配置详解</a></li>
+                <li><a href="#tutorial-deployment">部署指南</a></li>
+                <li><a href="#tutorial-best-practices">最佳实践</a></li>
                 <li><a href="#faq">常见问题</a></li>
             </ul>
         </div>
@@ -510,10 +512,13 @@ npm run download</code></pre>
             </div>
         </section>
 
-        <section id="tutorial">
-            <h2>📚 使用教程</h2>
+        <section id="tutorial-basic">
+            <h2>📚 第一章：入门教程</h2>
+            <p class="alert alert-info" style="margin-bottom: 2rem;">
+                <strong>学习目标：</strong>通过本章节，你将学会如何安装、登录和进行基础的下载操作。
+            </p>
 
-            <h3>基础使用</h3>
+            <h3>1.1 基础使用</h3>
             <ol class="steps">
                 <li>
                     <h4>登录账号</h4>
@@ -546,7 +551,8 @@ pixivflow scheduler</code></pre>
                 </li>
             </ol>
 
-            <h3>常用命令</h3>
+            <h3>1.2 常用命令参考</h3>
+            <p>以下是 PixivFlow 的核心命令，建议收藏备用：</p>
             <table>
                 <thead>
                     <tr>
@@ -590,9 +596,15 @@ pixivflow scheduler</code></pre>
                 </tbody>
             </table>
 
-            <h3>高级功能详解</h3>
+        </section>
+
+        <section id="tutorial-advanced">
+            <h2>📚 第二章：高级功能详解</h2>
+            <p class="alert alert-info" style="margin-bottom: 2rem;">
+                <strong>学习目标：</strong>掌握多标签搜索、排行榜下载、小说下载等高级功能的使用方法。
+            </p>
             
-            <h4>1. 多标签搜索</h4>
+            <h3>2.1 多标签搜索</h3>
             <p>支持 AND 和 OR 两种标签关系：</p>
             
             <p><strong>AND 关系（默认）</strong>：作品必须同时包含所有标签</p>
@@ -628,7 +640,7 @@ pixivflow scheduler</code></pre>
                 <strong>💡 提示：</strong>OR 模式会逐个标签检索并合并结果，建议将 <code>download.requestDelay</code> 设置为 1500-3000ms 以降低速率限制风险。
             </div>
 
-            <h4>2. 排行榜下载</h4>
+            <h3>2.2 排行榜下载</h3>
             <p>支持多种排行榜模式，可下载日榜、周榜、月榜等：</p>
             <pre><code>{
   "targets": [
@@ -664,7 +676,7 @@ pixivflow scheduler</code></pre>
             
             <p><strong>日期占位符：</strong>支持 <code>YESTERDAY</code>、<code>TODAY</code>、<code>LAST_7_DAYS</code>、<code>LAST_30_DAYS</code> 等</p>
 
-            <h4>3. 小说下载</h4>
+            <h3>2.3 小说下载</h3>
             <p>支持单篇小说、小说系列、语言过滤等功能：</p>
             
             <p><strong>单篇小说下载：</strong></p>
@@ -702,7 +714,7 @@ pixivflow scheduler</code></pre>
 }</code></pre>
             <p>支持 <code>"chinese"</code>（仅中文）或 <code>"non-chinese"</code>（仅非中文）</p>
 
-            <h4>4. 智能筛选</h4>
+            <h3>2.4 智能筛选</h3>
             <p>支持按收藏数、日期范围、作品类型等多维度筛选：</p>
             <pre><code>{
   "targets": [
@@ -718,7 +730,7 @@ pixivflow scheduler</code></pre>
   ]
 }</code></pre>
 
-            <h3>使用场景示例</h3>
+            <h3>2.5 实际应用场景</h3>
             
             <h4>场景 1：每日自动收集灵感素材</h4>
             <p>每天自动下载风景、插画类高质量作品作为设计素材：</p>
@@ -802,10 +814,13 @@ pixivflow scheduler</code></pre>
 }</code></pre>
         </section>
 
-        <section id="config">
-            <h2>⚙️ 配置说明</h2>
+        <section id="tutorial-config">
+            <h2>📚 第三章：配置详解</h2>
+            <p class="alert alert-info" style="margin-bottom: 2rem;">
+                <strong>学习目标：</strong>深入了解所有配置选项，掌握如何优化下载性能和管理文件存储。
+            </p>
 
-            <h3>核心配置项</h3>
+            <h3>3.1 核心配置项</h3>
             
             <h4>认证配置</h4>
             <pre><code>{
@@ -820,6 +835,7 @@ pixivflow scheduler</code></pre>
             </div>
 
             <h4>下载目标配置</h4>
+            <p>这是最重要的配置部分，定义了要下载的内容和筛选条件：</p>
             <pre><code>{
   "targets": [
     {
@@ -833,7 +849,7 @@ pixivflow scheduler</code></pre>
   ]
 }</code></pre>
 
-            <h4>定时任务配置</h4>
+            <h3>3.2 定时任务配置</h3>
             <pre><code>{
   "scheduler": {
     "enabled": true,
@@ -874,7 +890,7 @@ pixivflow scheduler</code></pre>
                 </tbody>
             </table>
 
-            <h4>存储配置</h4>
+            <h3>3.3 存储配置</h3>
             <pre><code>{
   "storage": {
     "databasePath": "./data/pixiv-downloader.db",
@@ -905,7 +921,7 @@ pixivflow scheduler</code></pre>
                 </tbody>
             </table>
 
-            <h4>下载配置</h4>
+            <h3>3.4 下载性能配置</h3>
             <pre><code>{
   "download": {
     "concurrency": 3,                    // 并发下载数（建议 1-5）
@@ -920,7 +936,7 @@ pixivflow scheduler</code></pre>
                 <strong>💡 提示：</strong>启用 <code>dynamicConcurrency</code> 后，系统会自动检测速率限制（429 错误）并调整并发数，提高下载稳定性。
             </div>
 
-            <h4>网络配置</h4>
+            <h3>3.5 网络配置</h3>
             <pre><code>{
   "network": {
     "timeoutMs": 30000,
@@ -940,7 +956,7 @@ pixivflow scheduler</code></pre>
                 <li><strong>环境变量</strong>：<code>export all_proxy=socks5://127.0.0.1:6153</code>（优先级更高）</li>
             </ul>
 
-            <h4>命令行配置管理</h4>
+            <h3>3.6 命令行配置管理</h3>
             <p>使用命令行快速管理配置，无需手动编辑文件：</p>
             <pre><code># 查看配置
 pixivflow config show
@@ -1013,10 +1029,13 @@ pm2 save && pm2 startup</code></pre>
             </ul>
         </section>
 
-        <section id="deployment">
-            <h2>🚀 部署指南</h2>
+        <section id="tutorial-deployment">
+            <h2>📚 第四章：部署指南</h2>
+            <p class="alert alert-info" style="margin-bottom: 2rem;">
+                <strong>学习目标：</strong>学会在服务器上部署 PixivFlow，实现 7x24 小时自动化运行。
+            </p>
 
-            <h3>Docker 部署（推荐）</h3>
+            <h3>4.1 Docker 部署（推荐）</h3>
             <p>使用 Docker 部署无需安装 Node.js 环境，适合服务器和生产环境：</p>
             
             <h4>快速开始</h4>
@@ -1052,9 +1071,9 @@ docker-compose logs -f pixivflow</code></pre>
                 <li><strong>pixivflow-webui</strong>：API 服务器（提供 RESTful API，可选）</li>
             </ul>
 
-            <h3>服务器部署</h3>
+            <h3>4.2 服务器部署</h3>
             
-            <h4>使用 PM2 管理（推荐）</h4>
+            <h4>方式 1：使用 PM2 管理（推荐）</h4>
             <pre><code># 安装 PM2
 npm install -g pm2
 
@@ -1067,7 +1086,7 @@ pm2 save
 # 设置开机自启
 pm2 startup</code></pre>
 
-            <h4>使用 systemd</h4>
+            <h4>方式 2：使用 systemd</h4>
             <p>创建服务文件 <code>/etc/systemd/system/pixivflow.service</code>：</p>
             <pre><code>[Unit]
 Description=PixivFlow Automation Downloader
@@ -1088,7 +1107,15 @@ WantedBy=multi-user.target</code></pre>
 sudo systemctl start pixivflow
 sudo systemctl status pixivflow</code></pre>
 
-            <h3>最佳实践</h3>
+        </section>
+
+        <section id="tutorial-best-practices">
+            <h2>📚 第五章：最佳实践</h2>
+            <p class="alert alert-info" style="margin-bottom: 2rem;">
+                <strong>学习目标：</strong>掌握 PixivFlow 的最佳使用方式，避免常见错误，提高下载效率。
+            </p>
+
+            <h3>5.1 配置最佳实践</h3>
             <ul>
                 <li><strong>明确配置路径</strong>：优先使用 <code>--config &lt;绝对路径&gt;</code>，或设置环境变量 <code>PIXIV_DOWNLOADER_CONFIG</code></li>
                 <li><strong>排行榜 + 标签的替代方案</strong>：若想"按标签抓取热门"，优先用 <code>mode: "search"</code> + <code>sort: "popular_desc"</code></li>
@@ -1097,6 +1124,22 @@ sudo systemctl status pixivflow</code></pre>
                 <li><strong>登录与凭据</strong>：使用 <code>pixivflow login --config &lt;path&gt;</code> 写入 <code>refreshToken</code>，勿手动粘贴到仓库</li>
                 <li><strong>运行前检查</strong>：执行 <code>pixivflow health</code> 或 <code>pixivflow config validate</code>，提前发现配置或网络问题</li>
                 <li><strong>数据与备份</strong>：关注 <code>storage.databasePath</code> 与下载目录，定期备份或使用 <code>pixivflow backup</code></li>
+            </ul>
+
+            <h3>5.2 性能优化建议</h3>
+            <ul>
+                <li><strong>并发数设置</strong>：根据网络情况调整 <code>download.concurrency</code>，建议范围 1-5</li>
+                <li><strong>启用动态并发</strong>：保持 <code>download.dynamicConcurrency: true</code>，自动应对速率限制</li>
+                <li><strong>请求延迟</strong>：OR 模式或多标签搜索时，建议将 <code>download.requestDelay</code> 设置为 1500-3000ms</li>
+                <li><strong>代理使用</strong>：如果遇到网络问题，配置代理可以提高下载稳定性</li>
+            </ul>
+
+            <h3>5.3 安全建议</h3>
+            <ul>
+                <li><strong>不要分享配置文件</strong>：<code>config/standalone.config.json</code> 包含敏感认证信息</li>
+                <li><strong>不要提交到 Git</strong>：确保配置文件在 <code>.gitignore</code> 中（已默认排除）</li>
+                <li><strong>定期备份</strong>：使用 <code>pixivflow backup</code> 备份配置和数据</li>
+                <li><strong>定期更新 Token</strong>：定期重新运行配置向导更新认证信息</li>
             </ul>
         </section>
 

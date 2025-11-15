@@ -80,9 +80,9 @@ export function validateConfig(config: Partial<StandaloneConfig>, location: stri
     errors.push('targets: At least one target must be configured');
   } else {
     config.targets.forEach((target, index) => {
-      // Tag is required for search mode, optional for ranking, series, single novel, or single illustration mode
-      if (target.mode !== 'ranking' && !target.seriesId && !target.novelId && !target.illustId && (!target.tag || target.tag.trim() === '')) {
-        errors.push(`targets[${index}].tag: Required field is missing or empty (required for search mode, optional for ranking/series/single novel/single illustration mode)`);
+      // Tag is required for search mode, optional for ranking, series, single novel, single illustration, or user mode
+      if (target.mode !== 'ranking' && !target.seriesId && !target.novelId && !target.illustId && !target.userId && (!target.tag || target.tag.trim() === '')) {
+        errors.push(`targets[${index}].tag: Required field is missing or empty (required for search mode, optional for ranking/series/single novel/single illustration/user mode)`);
       }
       if (target.type && !['illustration', 'novel'].includes(target.type)) {
         errors.push(`targets[${index}].type: Must be "illustration" or "novel"`);

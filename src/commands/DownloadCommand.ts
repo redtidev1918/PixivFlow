@@ -34,14 +34,15 @@ export class DownloadCommand extends BaseCommand {
       if (urlArg) {
         // Parse URL and convert to target config
         const parsed = parsePixivUrl(urlArg);
-        if (!parsed || (!parsed.id && !parsed.seriesId)) {
-          return this.failure(`Invalid Pixiv URL: ${urlArg}. Supported formats: https://www.pixiv.net/artworks/{id}, https://www.pixiv.net/novel/show.php?id={id}, https://www.pixiv.net/novel/series/{id}`);
+        if (!parsed || (!parsed.id && !parsed.seriesId && !parsed.userId)) {
+          return this.failure(`Invalid Pixiv URL: ${urlArg}. Supported formats: https://www.pixiv.net/artworks/{id}, https://www.pixiv.net/novel/show.php?id={id}, https://www.pixiv.net/novel/series/{id}, https://www.pixiv.net/users/{userId}`);
         }
         
         try {
           const targetConfig = parsedUrlToTargetConfig(parsed);
           config = { ...config, targets: [targetConfig] };
-          context.logger.info(`Using URL target: ${urlArg} -> ${targetConfig.type} ID ${targetConfig.illustId || targetConfig.novelId || targetConfig.seriesId}`);
+          const idInfo = targetConfig.illustId || targetConfig.novelId || targetConfig.seriesId || targetConfig.userId;
+          context.logger.info(`Using URL target: ${urlArg} -> ${targetConfig.type} ${targetConfig.userId ? 'User' : 'ID'} ${idInfo}`);
         } catch (error) {
           context.logger.error('Failed to convert URL to target config', { 
             error: error instanceof Error ? error.message : String(error) 
@@ -141,7 +142,8 @@ Examples:
   pixivflow download
   pixivflow download --targets '[{"type":"novel","tag":"アークナイツ","limit":5}]'
   pixivflow download --url "https://www.pixiv.net/artworks/12345678"
-  pixivflow download --url "https://www.pixiv.net/novel/show.php?id=26132156"`;
+  pixivflow download --url "https://www.pixiv.net/novel/show.php?id=26132156"
+  pixivflow download --url "https://www.pixiv.net/users/123456"`;
   }
 }
 

@@ -143,8 +143,9 @@ pixivflow dirs --verbose
 | `illustId` | number | 单个插画ID | `12345678`（从 URL `https://www.pixiv.net/artworks/12345678` 中获取） |
 | `novelId` | number | 单篇小说ID | `26132156`（从 URL `https://www.pixiv.net/novel/show.php?id=26132156` 中获取） |
 | `seriesId` | number | 小说系列ID | `14690617`（从 URL `https://www.pixiv.net/novel/series/14690617` 中获取） |
+| `userId` | string | 用户ID | `"123456"`（从 URL `https://www.pixiv.net/users/123456` 中获取，下载该用户的所有作品） |
 
-**注意**：使用单作品下载时，`tag` 字段是可选的（可以设置为 `"single"` 作为标识）。
+**注意**：使用单作品下载或用户下载时，`tag` 字段是可选的（可以设置为 `"single"` 或 `"user-{userId}"` 作为标识）。
 
 ### 小说专用配置
 
@@ -251,7 +252,24 @@ pixivflow dirs --verbose
 
 **说明**：从 URL `https://www.pixiv.net/novel/show.php?id=26132156` 中提取小说ID `26132156`。
 
-#### 示例 7：语言过滤（仅中文小说）
+#### 示例 7：下载用户的所有作品
+
+```json
+{
+  "targets": [
+    {
+      "type": "illustration",
+      "tag": "user",
+      "userId": "123456",
+      "limit": 100
+    }
+  ]
+}
+```
+
+**说明**：从 URL `https://www.pixiv.net/users/123456` 中提取用户ID `123456`。`limit` 字段可选，如果不设置则默认下载 30 个作品。
+
+#### 示例 8：语言过滤（仅中文小说）
 
 ```json
 {

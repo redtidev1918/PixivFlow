@@ -557,6 +557,9 @@ pixivflow download --url "https://www.pixiv.net/novel/show.php?id=26132156"
 
 # Download novel series
 pixivflow download --url "https://www.pixiv.net/novel/series/14690617"
+
+# Download all works from a user
+pixivflow download --url "https://www.pixiv.net/users/123456"
 ```
 
 <a id="configuration-management"></a>

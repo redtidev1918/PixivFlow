@@ -398,6 +398,12 @@ function initializeTargetFields(definitions: Map<string, FieldDefinition>): void
     description: 'Illustration ID',
     type: 'number',
   });
+
+  definitions.set('targets[].userId', {
+    required: false,
+    description: 'User ID (downloads all works from the user)',
+    type: 'string',
+  });
 }
 
 /**

@@ -81,6 +81,12 @@ export interface TargetConfig {
    */
   illustId?: number;
   /**
+   * User ID (used when type='illustration' or 'novel')
+   * If specified, downloads all works (illustrations or novels) from the user
+   * Example: user ID 123456 from URL https://www.pixiv.net/users/123456
+   */
+  userId?: string;
+  /**
    * Minimum number of bookmarks required for a work to be downloaded
    * If specified, only works with bookmarks >= minBookmarks will be downloaded
    */

@@ -4,9 +4,10 @@
  */
 
 export interface ParsedPixivUrl {
-  type: 'illustration' | 'novel' | 'series' | 'unknown';
+  type: 'illustration' | 'novel' | 'series' | 'user' | 'unknown';
   id?: number;
   seriesId?: number;
+  userId?: string;
 }
 
 /**
@@ -16,6 +17,7 @@ export interface ParsedPixivUrl {
  * - https://www.pixiv.net/artworks/{illustId}
  * - https://www.pixiv.net/novel/show.php?id={novelId}
  * - https://www.pixiv.net/novel/series/{seriesId}
+ * - https://www.pixiv.net/users/{userId}
  * - https://pixiv.net/artworks/{illustId} (without www)
  * 
  * @param url Pixiv URL
@@ -86,6 +88,18 @@ export function parsePixivUrl(url: string): ParsedPixivUrl | null {
       }
     }
 
+    // Parse user URL: /users/{userId}
+    const userMatch = pathname.match(/^\/users\/(\d+)$/);
+    if (userMatch) {
+      const userId = userMatch[1];
+      if (userId) {
+        return {
+          type: 'user',
+          userId: userId,
+        };
+      }
+    }
+
     return null;
   } catch (error) {
     // If any error occurs, try to extract ID from string
@@ -134,6 +148,18 @@ function parseIdFromString(str: string): ParsedPixivUrl | null {
     }
   }
 
+  // Try to find user ID pattern: users/{id}
+  const userMatch = str.match(/users[\/\s]+(\d+)/i);
+  if (userMatch) {
+    const userId = userMatch[1];
+    if (userId) {
+      return {
+        type: 'user',
+        userId: userId,
+      };
+    }
+  }
+
   // Last resort: try to find any large number (likely an ID)
   const numberMatch = str.match(/\b(\d{6,})\b/);
   if (numberMatch) {
@@ -159,10 +185,18 @@ function parseIdFromString(str: string): ParsedPixivUrl | null {
 export function parsedUrlToTargetConfig(
   parsed: ParsedPixivUrl,
   typeOverride?: 'illustration' | 'novel'
-): { type: 'illustration' | 'novel'; illustId?: number; novelId?: number; seriesId?: number; tag?: string } {
+): { type: 'illustration' | 'novel'; illustId?: number; novelId?: number; seriesId?: number; userId?: string; tag?: string } {
   const type = typeOverride || (parsed.type === 'series' ? 'novel' : parsed.type === 'illustration' ? 'illustration' : 'novel');
   
-  if (parsed.type === 'series') {
+  if (parsed.type === 'user' && parsed.userId) {
+    // For user URLs, default to illustration type, but allow override
+    const userType = typeOverride || 'illustration';
+    return {
+      type: userType,
+      userId: parsed.userId,
+      tag: `user-${parsed.userId}`,
+    };
+  } else if (parsed.type === 'series') {
     return {
       type: 'novel',
       seriesId: parsed.seriesId,
@@ -197,6 +231,6 @@ export function parsedUrlToTargetConfig(
     }
   }
 
-  throw new Error('Invalid parsed URL: missing ID');
+  throw new Error('Invalid parsed URL: missing ID or userId');
 }
 

@@ -25,6 +25,11 @@ export class IllustrationTargetHandler {
       return;
     }
 
+    if (target.userId) {
+      await this.handleUserIllustrations(target);
+      return;
+    }
+
     const mode = target.mode || 'search';
     const displayTag = target.filterTag || target.tag || 'unknown';
     logger.info(`Processing illustration ${mode === 'ranking' ? 'ranking' : 'tag'} ${displayTag}`);
@@ -218,6 +223,39 @@ export class IllustrationTargetHandler {
       logger.info(`Successfully downloaded illustration ${illustId}`);
     } catch (error) {
       this.logError(error, `Failed to download illustration ${illustId}`);
+      throw error;
+    }
+  }
+
+  private async handleUserIllustrations(target: TargetConfig): Promise<void> {
+    const userId = target.userId;
+    if (!userId || userId.trim() === '') {
+      throw new Error(`Invalid userId: ${userId}`);
+    }
+
+    logger.info(`Processing user illustrations for user ${userId}`);
+    try {
+      const targetLimit = target.limit;
+      const illusts = await this.client.getUserIllustrations(userId, {
+        limit: targetLimit,
+        offset: 0,
+      });
+      logger.info(`Found ${illusts.length} illustration(s) from user ${userId}`);
+
+      if (illusts.length === 0) {
+        logger.info(`No illustrations found for user ${userId}`);
+        return;
+      }
+
+      const result = await this.pipeline.run(
+        illusts,
+        target,
+        'illustration',
+        (illust, tag) => this.illustrationDownloader.downloadIllustration(illust, tag)
+      );
+      this.handleDownloadResult(result, target, 'user', `user-${userId}`, illusts.length);
+    } catch (error) {
+      this.logError(error, `Failed to download illustrations for user ${userId}`);
       throw error;
     }
   }

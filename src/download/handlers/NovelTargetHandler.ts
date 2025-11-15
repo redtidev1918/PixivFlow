@@ -30,6 +30,11 @@ export class NovelTargetHandler {
       return;
     }
 
+    if (target.userId) {
+      await this.handleUserNovels(target);
+      return;
+    }
+
     const mode = target.mode || 'search';
     const displayTag = target.filterTag || target.tag || 'unknown';
     logger.info(`Processing novel ${mode === 'ranking' ? 'ranking' : 'tag'} ${displayTag}`);
@@ -272,6 +277,39 @@ export class NovelTargetHandler {
       logger.error(`Failed to download novel series ${seriesId}`, {
         error: error instanceof Error ? error.message : String(error),
       });
+      throw error;
+    }
+  }
+
+  private async handleUserNovels(target: TargetConfig): Promise<void> {
+    const userId = target.userId;
+    if (!userId || userId.trim() === '') {
+      throw new Error(`Invalid userId: ${userId}`);
+    }
+
+    logger.info(`Processing user novels for user ${userId}`);
+    try {
+      const targetLimit = target.limit;
+      const novels = await this.client.getUserNovels(userId, {
+        limit: targetLimit,
+        offset: 0,
+      });
+      logger.info(`Found ${novels.length} novel(s) from user ${userId}`);
+
+      if (novels.length === 0) {
+        logger.info(`No novels found for user ${userId}`);
+        return;
+      }
+
+      const result = await this.pipeline.run(
+        novels,
+        target,
+        'novel',
+        (novel, tag) => this.novelDownloader.download(novel, tag, target)
+      );
+      this.handleDownloadResult(result, target, 'user', `user-${userId}`, novels.length);
+    } catch (error) {
+      this.logError(error, `Failed to download novels for user ${userId}`);
       throw error;
     }
   }

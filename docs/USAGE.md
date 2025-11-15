@@ -39,12 +39,16 @@ pixivflow download --url "https://www.pixiv.net/novel/show.php?id=26132156"
 
 # 下载小说系列
 pixivflow download --url "https://www.pixiv.net/novel/series/14690617"
+
+# 下载用户的所有作品（插画）
+pixivflow download --url "https://www.pixiv.net/users/123456"
 ```
 
 **支持的 URL 格式**：
 - 插画：`https://www.pixiv.net/artworks/{illustId}`
 - 小说：`https://www.pixiv.net/novel/show.php?id={novelId}`
 - 小说系列：`https://www.pixiv.net/novel/series/{seriesId}`
+- 用户作品：`https://www.pixiv.net/users/{userId}`（下载该用户的所有插画，默认最多 30 个，可通过配置文件设置 limit）
 
 ### 随机下载（快速体验）
 
@@ -283,6 +287,30 @@ npm run scheduler
 ```
 
 **获取系列ID**：从系列页面 URL `https://www.pixiv.net/novel/series/14690617` 中提取数字部分。
+
+#### 下载用户的所有作品
+
+通过用户ID下载该用户的所有作品（插画或小说）：
+
+```json
+{
+  "targets": [
+    {
+      "type": "illustration",
+      "tag": "user",
+      "userId": "123456",
+      "limit": 100
+    }
+  ]
+}
+```
+
+**获取用户ID**：从用户页面 URL `https://www.pixiv.net/users/123456` 中提取数字部分。
+
+**注意**：
+- `type` 设置为 `"illustration"` 时下载该用户的所有插画
+- `type` 设置为 `"novel"` 时下载该用户的所有小说
+- `limit` 字段可选，用于限制下载数量（默认 30 个）
 
 #### 语言过滤
 

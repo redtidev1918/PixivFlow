@@ -333,6 +333,9 @@ pixivflow download --url "https://www.pixiv.net/novel/show.php?id=26132156"
 
 # 下载小说系列
 pixivflow download --url "https://www.pixiv.net/novel/series/14690617"
+
+# 下载用户的所有作品
+pixivflow download --url "https://www.pixiv.net/users/123456"
 ```
 
 #### 无图形界面服务器的登录方式（使用现有 refresh token）

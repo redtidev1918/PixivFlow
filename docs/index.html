@@ -558,6 +558,13 @@ pixivflow download --url "https://www.pixiv.net/novel/show.php?id=26132156"
 # 下载小说系列
 pixivflow download --url "https://www.pixiv.net/novel/series/14690617"</code></pre>
                     <p>这是最简单快捷的方式，无需修改配置文件，直接输入 URL 即可下载。</p>
+                    <p><strong>支持的 URL 类型：</strong></p>
+                    <ul>
+                        <li>插画：<code>https://www.pixiv.net/artworks/{id}</code></li>
+                        <li>小说：<code>https://www.pixiv.net/novel/show.php?id={id}</code></li>
+                        <li>小说系列：<code>https://www.pixiv.net/novel/series/{id}</code></li>
+                        <li>用户作品：<code>https://www.pixiv.net/users/{userId}</code> ⭐</li>
+                    </ul>
                     
                     <p><strong>方式 2：使用配置文件下载</strong></p>
                     <pre><code># 执行一次下载
@@ -738,6 +745,27 @@ pixivflow scheduler</code></pre>
   ]
 }</code></pre>
             <p>从 URL <code>https://www.pixiv.net/novel/series/14690617</code> 中提取系列ID</p>
+            
+            <p><strong>下载用户的所有作品：</strong></p>
+            <pre><code>{
+  "targets": [
+    {
+      "type": "illustration",
+      "tag": "user",
+      "userId": "123456",
+      "limit": 100
+    }
+  ]
+}</code></pre>
+            <p>从 URL <code>https://www.pixiv.net/users/123456</code> 中提取用户ID</p>
+            <div class="alert alert-info">
+                <strong>💡 提示：</strong>
+                <ul>
+                    <li><code>type</code> 设置为 <code>"illustration"</code> 时下载该用户的所有插画</li>
+                    <li><code>type</code> 设置为 <code>"novel"</code> 时下载该用户的所有小说</li>
+                    <li><code>limit</code> 字段可选，用于限制下载数量（默认 30 个）</li>
+                </ul>
+            </div>
             
             <h3>2.4 小说下载</h3>
             <p>支持小说系列、语言过滤等功能：</p>

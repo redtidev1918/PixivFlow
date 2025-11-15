@@ -1,0 +1,44 @@
+# 使用 GitHub 推荐的静态 HTML 部署方式
+# 这是最简单可靠的 GitHub Pages 部署方法
+
+name: Deploy static content to Pages
+
+on:
+  # 允许手动触发
+  workflow_dispatch:
+  # 当推送到 master 分支且 docs 目录有变化时自动触发
+  push:
+    branches:
+      - master
+    paths:
+      - 'docs/**'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          # 上传 docs 目录的所有内容
+          path: './docs'
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+

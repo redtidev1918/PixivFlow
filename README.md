@@ -6,6 +6,8 @@
 
 让 Pixiv 作品收集变得优雅而高效 | Make Pixiv artwork collection elegant and efficient
 
+> 🎯 **PixivFlow** 是一个专业的 Pixiv 批量下载工具，支持插画和小说下载、定时任务、Docker 部署、WebUI 管理界面。适用于个人用户和服务器自动化场景。
+
 <!-- SEO Keywords: pixiv downloader, pixiv批量下载, pixiv自动化下载, pixiv批量下载工具, pixiv下载器, pixiv artwork downloader, pixiv novel downloader, pixiv cli tool, pixiv scheduler, pixiv automation, pixiv批量下载脚本, pixiv下载工具, pixiv作品下载, pixiv插画下载, pixiv小说下载, pixiv定时下载, pixiv爬虫, pixiv api client, pixiv命令行工具, pixiv服务器部署, pixiv docker, pixiv webui, pixiv管理界面 -->
 
 [![GitHub stars](https://img.shields.io/github/stars/zoidberg-xgd/pixivflow?style=for-the-badge&logo=github)](https://github.com/zoidberg-xgd/pixivflow/stargazers)
@@ -105,7 +107,7 @@
 
 **PixivFlow** 是一个**完全独立运行**的 Pixiv 作品批量下载工具，专为自动化设计。无需浏览器扩展，可在命令行或服务器上自动化运行，支持定时任务、智能去重、断点续传等功能。
 
-PixivFlow 是一个功能强大的 **Pixiv 批量下载工具**，支持：
+作为一款专业的 **Pixiv 下载器**，PixivFlow 支持以下核心功能：
 - 📥 **批量下载 Pixiv 插画和小说**：支持按标签、用户、收藏数等条件批量下载作品
 - ⏰ **定时自动下载**：使用 Cron 表达式配置定时任务，实现自动化下载
 - 🐳 **Docker 部署**：支持 Docker 容器化部署，一键启动
@@ -1492,39 +1494,6 @@ Made with ❤️ by [zoidberg-xgd](https://github.com/zoidberg-xgd)
 **PixivFlow** - 让 Pixiv 作品收集变得优雅而高效
 
 [⬆ 回到顶部](#pixivflow)
-
----
-
-## 🔍 相关搜索关键词
-
-PixivFlow 是一个功能强大的 Pixiv 下载工具，支持以下功能：
-
-- **Pixiv 批量下载**：支持批量下载 Pixiv 插画和小说
-- **Pixiv 自动化下载**：支持定时任务和自动化下载
-- **Pixiv 下载器**：命令行工具，支持服务器部署
-- **Pixiv 爬虫**：自动化收集 Pixiv 作品
-- **Pixiv API 客户端**：基于官方 API 的安全下载
-- **Pixiv 定时下载**：使用 Cron 表达式配置定时任务
-- **Pixiv WebUI**：提供现代化的 Web 管理界面
-- **Pixiv Docker**：支持 Docker 容器化部署
-- **Pixiv 作品管理**：智能去重、断点续传、错误重试
-- **Pixiv 备份工具**：自动备份和归档 Pixiv 作品
-
-### 适用场景
-
-- 个人用户：批量下载喜欢的 Pixiv 作品
-- 服务器部署：在服务器上定时自动下载
-- 作品收集：自动化收集特定标签或用户的作品
-- 作品备份：定期备份收藏的作品
-- 素材收集：为创作收集灵感和素材
-
-### 技术特点
-
-- **TypeScript 编写**：类型安全，代码质量高
-- **Node.js 运行**：跨平台支持，易于部署
-- **SQLite 存储**：轻量级数据库，无需额外服务
-- **OAuth 2.0 PKCE**：安全的认证流程
-- **Docker 支持**：容器化部署，一键启动
 
 ---
 

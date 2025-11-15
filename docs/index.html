@@ -684,7 +684,21 @@ pixivflow scheduler</code></pre>
             
             <p><strong>日期占位符：</strong>支持 <code>YESTERDAY</code>、<code>TODAY</code>、<code>LAST_7_DAYS</code>、<code>LAST_30_DAYS</code> 等</p>
 
-            <h3>2.3 单作品下载</h3>
+            <h3>2.3 通过 URL 直接下载</h3>
+            <p>支持直接输入 Pixiv URL 进行下载，无需修改配置文件：</p>
+            <pre><code># 下载插画
+pixivflow download --url "https://www.pixiv.net/artworks/12345678"
+
+# 下载小说
+pixivflow download --url "https://www.pixiv.net/novel/show.php?id=26132156"
+
+# 下载小说系列
+pixivflow download --url "https://www.pixiv.net/novel/series/14690617"</code></pre>
+            <div class="alert alert-info">
+                <strong>💡 提示：</strong>这是最简单快捷的下载方式，适合快速下载单个作品，无需编辑配置文件。
+            </div>
+            
+            <h3>2.4 单作品下载</h3>
             <p>支持通过作品ID直接下载单个插画或小说，无需搜索：</p>
             
             <p><strong>单插画下载：</strong></p>
@@ -722,17 +736,6 @@ pixivflow scheduler</code></pre>
   ]
 }</code></pre>
             <p>从 URL <code>https://www.pixiv.net/novel/series/14690617</code> 中提取系列ID</p>
-            
-            <h3>2.4 通过 URL 直接下载</h3>
-            <p>支持直接输入 Pixiv URL 进行下载，无需修改配置文件：</p>
-            <pre><code># 下载插画
-pixivflow download --url "https://www.pixiv.net/artworks/12345678"
-
-# 下载小说
-pixivflow download --url "https://www.pixiv.net/novel/show.php?id=26132156"
-
-# 下载小说系列
-pixivflow download --url "https://www.pixiv.net/novel/series/14690617"</code></pre>
             
             <h3>2.5 小说下载</h3>
             <p>支持小说系列、语言过滤等功能：</p>

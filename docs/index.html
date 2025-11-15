@@ -378,6 +378,7 @@
                 <li><a href="#quickstart">快速开始</a></li>
                 <li><a href="#tutorial">使用教程</a></li>
                 <li><a href="#config">配置说明</a></li>
+                <li><a href="#deployment">部署指南</a></li>
                 <li><a href="#faq">常见问题</a></li>
             </ul>
         </div>
@@ -589,6 +590,134 @@ pixivflow scheduler</code></pre>
                 </tbody>
             </table>
 
+            <h3>高级功能详解</h3>
+            
+            <h4>1. 多标签搜索</h4>
+            <p>支持 AND 和 OR 两种标签关系：</p>
+            
+            <p><strong>AND 关系（默认）</strong>：作品必须同时包含所有标签</p>
+            <pre><code>{
+  "targets": [
+    {
+      "type": "illustration",
+      "tag": "明日方舟 アークナイツ アーミヤ",
+      "tagRelation": "and",
+      "limit": 30,
+      "searchTarget": "partial_match_for_tags"
+    }
+  ]
+}</code></pre>
+            
+            <p><strong>OR 关系</strong>：作品包含任意一个标签即可（结果会合并去重）</p>
+            <pre><code>{
+  "targets": [
+    {
+      "type": "illustration",
+      "tag": "風景 イラスト オリジナル",
+      "tagRelation": "or",
+      "limit": 50,
+      "searchTarget": "partial_match_for_tags",
+      "sort": "popular_desc"
+    }
+  ],
+  "download": {
+    "requestDelay": 2000  // OR 模式建议增加延迟
+  }
+}</code></pre>
+            <div class="alert alert-info">
+                <strong>💡 提示：</strong>OR 模式会逐个标签检索并合并结果，建议将 <code>download.requestDelay</code> 设置为 1500-3000ms 以降低速率限制风险。
+            </div>
+
+            <h4>2. 排行榜下载</h4>
+            <p>支持多种排行榜模式，可下载日榜、周榜、月榜等：</p>
+            <pre><code>{
+  "targets": [
+    {
+      "type": "illustration",
+      "mode": "ranking",
+      "rankingMode": "day",           // 日榜
+      "rankingDate": "YESTERDAY",     // 昨天（支持日期占位符）
+      "limit": 100
+    }
+  ]
+}</code></pre>
+            
+            <p><strong>支持的排行榜模式：</strong></p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>模式</th>
+                        <th>说明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td><code>day</code></td><td>日榜</td></tr>
+                    <tr><td><code>week</code></td><td>周榜</td></tr>
+                    <tr><td><code>month</code></td><td>月榜</td></tr>
+                    <tr><td><code>day_male</code></td><td>男性向日榜</td></tr>
+                    <tr><td><code>day_female</code></td><td>女性向日榜</td></tr>
+                    <tr><td><code>day_ai</code></td><td>AI 日榜</td></tr>
+                    <tr><td><code>week_original</code></td><td>原创周榜</td></tr>
+                    <tr><td><code>week_rookie</code></td><td>新人周榜</td></tr>
+                </tbody>
+            </table>
+            
+            <p><strong>日期占位符：</strong>支持 <code>YESTERDAY</code>、<code>TODAY</code>、<code>LAST_7_DAYS</code>、<code>LAST_30_DAYS</code> 等</p>
+
+            <h4>3. 小说下载</h4>
+            <p>支持单篇小说、小说系列、语言过滤等功能：</p>
+            
+            <p><strong>单篇小说下载：</strong></p>
+            <pre><code>{
+  "targets": [
+    {
+      "type": "novel",
+      "novelId": 26132156
+    }
+  ]
+}</code></pre>
+            
+            <p><strong>小说系列下载：</strong></p>
+            <pre><code>{
+  "targets": [
+    {
+      "type": "novel",
+      "seriesId": 14690617,
+      "limit": 50
+    }
+  ]
+}</code></pre>
+            
+            <p><strong>语言过滤（仅中文小说）：</strong></p>
+            <pre><code>{
+  "targets": [
+    {
+      "type": "novel",
+      "tag": "原神",
+      "limit": 20,
+      "languageFilter": "chinese",    // 仅中文
+      "detectLanguage": true          // 启用语言检测
+    }
+  ]
+}</code></pre>
+            <p>支持 <code>"chinese"</code>（仅中文）或 <code>"non-chinese"</code>（仅非中文）</p>
+
+            <h4>4. 智能筛选</h4>
+            <p>支持按收藏数、日期范围、作品类型等多维度筛选：</p>
+            <pre><code>{
+  "targets": [
+    {
+      "type": "illustration",
+      "tag": "風景",
+      "limit": 50,
+      "minBookmarks": 1000,          // 最低收藏数
+      "startDate": "2024-01-01",     // 开始日期
+      "endDate": "2024-12-31",       // 结束日期
+      "sort": "popular_desc"         // 按收藏数降序
+    }
+  ]
+}</code></pre>
+
             <h3>使用场景示例</h3>
             
             <h4>场景 1：每日自动收集灵感素材</h4>
@@ -599,12 +728,20 @@ pixivflow scheduler</code></pre>
       "type": "illustration",
       "tag": "風景",
       "limit": 50,
-      "minBookmarks": 1000
+      "minBookmarks": 1000,
+      "sort": "popular_desc"
+    },
+    {
+      "type": "illustration",
+      "tag": "イラスト",
+      "limit": 30,
+      "minBookmarks": 5000
     }
   ],
   "scheduler": {
     "enabled": true,
-    "cron": "0 2 * * *"
+    "cron": "0 2 * * *",
+    "timezone": "Asia/Shanghai"
   }
 }</code></pre>
 
@@ -616,13 +753,51 @@ pixivflow scheduler</code></pre>
       "type": "illustration",
       "tag": "原神",
       "limit": 100,
-      "searchTarget": "partial_match_for_tags"
+      "searchTarget": "partial_match_for_tags",
+      "sort": "popular_desc"
     }
   ],
   "scheduler": {
     "enabled": true,
     "cron": "0 0 * * 0",
     "timezone": "Asia/Shanghai"
+  }
+}</code></pre>
+
+            <h4>场景 3：多标签 OR 搜索</h4>
+            <p>从多个标签中收集作品（任意一个标签即可）：</p>
+            <pre><code>{
+  "targets": [
+    {
+      "type": "novel",
+      "tag": "風景 イラスト オリジナル",
+      "tagRelation": "or",
+      "limit": 10,
+      "mode": "search",
+      "searchTarget": "partial_match_for_tags",
+      "sort": "popular_desc"
+    }
+  ],
+  "download": {
+    "requestDelay": 2000  // OR 模式建议增加延迟
+  }
+}</code></pre>
+
+            <h4>场景 4：排行榜批量下载</h4>
+            <p>每天自动下载昨天的排行榜作品：</p>
+            <pre><code>{
+  "targets": [
+    {
+      "type": "illustration",
+      "mode": "ranking",
+      "rankingMode": "day",
+      "rankingDate": "YESTERDAY",
+      "limit": 100
+    }
+  ],
+  "scheduler": {
+    "enabled": true,
+    "cron": "0 1 * * *"  // 每天凌晨1点执行
   }
 }</code></pre>
         </section>
@@ -705,9 +880,87 @@ pixivflow scheduler</code></pre>
     "databasePath": "./data/pixiv-downloader.db",
     "downloadDirectory": "./downloads",
     "illustrationDirectory": "./downloads/illustrations",
-    "novelDirectory": "./downloads/novels"
+    "novelDirectory": "./downloads/novels",
+    "illustrationOrganization": "byAuthorAndTag",
+    "novelOrganization": "byDateAndAuthor"
   }
 }</code></pre>
+            
+            <p><strong>目录组织方式：</strong></p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>模式</th>
+                        <th>说明</th>
+                        <th>示例</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td><code>flat</code></td><td>扁平结构（默认）</td><td><code>illustrations/123456_标题_1.jpg</code></td></tr>
+                    <tr><td><code>byAuthor</code></td><td>按作者组织</td><td><code>illustrations/作者名/123456_标题_1.jpg</code></td></tr>
+                    <tr><td><code>byTag</code></td><td>按标签组织</td><td><code>illustrations/标签名/123456_标题_1.jpg</code></td></tr>
+                    <tr><td><code>byDate</code></td><td>按日期组织（YYYY-MM）</td><td><code>illustrations/2024-12/123456_标题_1.jpg</code></td></tr>
+                    <tr><td><code>byAuthorAndTag</code></td><td>按作者和标签</td><td><code>illustrations/作者名/标签名/123456_标题_1.jpg</code></td></tr>
+                    <tr><td><code>byDateAndAuthor</code></td><td>按日期和作者</td><td><code>illustrations/2024-12/作者名/123456_标题_1.jpg</code></td></tr>
+                </tbody>
+            </table>
+
+            <h4>下载配置</h4>
+            <pre><code>{
+  "download": {
+    "concurrency": 3,                    // 并发下载数（建议 1-5）
+    "dynamicConcurrency": true,          // 动态并发调整（推荐启用）
+    "minConcurrency": 1,                 // 最小并发数
+    "requestDelay": 1000,                // 请求延迟（毫秒）
+    "retries": 3,                        // 重试次数
+    "timeout": 30000                     // 超时时间（毫秒）
+  }
+}</code></pre>
+            <div class="alert alert-info">
+                <strong>💡 提示：</strong>启用 <code>dynamicConcurrency</code> 后，系统会自动检测速率限制（429 错误）并调整并发数，提高下载稳定性。
+            </div>
+
+            <h4>网络配置</h4>
+            <pre><code>{
+  "network": {
+    "timeoutMs": 30000,
+    "retries": 3,
+    "retryDelay": 1000,
+    "proxy": {
+      "enabled": false,
+      "host": "127.0.0.1",
+      "port": 7890,
+      "protocol": "http"  // http, https, socks4, socks5
+    }
+  }
+}</code></pre>
+            <p><strong>代理设置方式：</strong></p>
+            <ul>
+                <li><strong>配置文件</strong>：在 <code>network.proxy</code> 中配置</li>
+                <li><strong>环境变量</strong>：<code>export all_proxy=socks5://127.0.0.1:6153</code>（优先级更高）</li>
+            </ul>
+
+            <h4>命令行配置管理</h4>
+            <p>使用命令行快速管理配置，无需手动编辑文件：</p>
+            <pre><code># 查看配置
+pixivflow config show
+
+# 设置配置项（会自动备份原配置）
+pixivflow config set storage.downloadDirectory ./my-downloads
+pixivflow config set download.concurrency 2
+
+# 验证配置
+pixivflow config validate
+
+# 备份配置
+pixivflow config backup
+
+# 恢复配置
+pixivflow config restore
+
+# 查看目录信息
+pixivflow dirs
+pixivflow dirs --verbose</code></pre>
 
             <div class="alert alert-info">
                 <strong>💡 提示：</strong>可以使用 <code>pixivflow config set</code> 命令快速设置配置项，无需手动编辑配置文件。
@@ -749,6 +1002,102 @@ pixivflow logs      # 查看日志</code></pre>
             <p><strong>确保程序持续运行：</strong></p>
             <pre><code>pm2 start "pixivflow scheduler" --name pixivflow
 pm2 save && pm2 startup</code></pre>
+
+            <h3>遇到已删除或私有的作品？</h3>
+            <p>这是正常现象。PixivFlow 会自动跳过这些作品并继续下载其他作品。在下载完成后会显示跳过的作品数量。</p>
+            <ul>
+                <li>✅ 自动跳过已删除作品</li>
+                <li>✅ 自动跳过私有作品</li>
+                <li>✅ 自动跳过无法访问的作品</li>
+                <li>✅ 不会中断整个下载流程</li>
+            </ul>
+        </section>
+
+        <section id="deployment">
+            <h2>🚀 部署指南</h2>
+
+            <h3>Docker 部署（推荐）</h3>
+            <p>使用 Docker 部署无需安装 Node.js 环境，适合服务器和生产环境：</p>
+            
+            <h4>快速开始</h4>
+            <pre><code># 1. 准备配置文件
+cp config/standalone.config.example.json config/standalone.config.json
+
+# 2. 登录账号（在主机上）
+npm run login
+
+# 3. 启动定时任务服务
+docker-compose up -d pixivflow
+
+# 4. 查看日志
+docker-compose logs -f pixivflow</code></pre>
+
+            <h4>使用脚本工具</h4>
+            <pre><code># 初始化 Docker 环境
+./scripts/pixiv.sh docker setup
+
+# 登录账号
+./scripts/pixiv.sh docker login
+
+# 构建并部署
+./scripts/pixiv.sh docker deploy
+
+# 查看状态
+./scripts/pixiv.sh docker status</code></pre>
+
+            <h4>Docker 服务说明</h4>
+            <p><code>docker-compose.yml</code> 提供了两个服务：</p>
+            <ul>
+                <li><strong>pixivflow</strong>：定时任务服务（自动执行定时下载任务）</li>
+                <li><strong>pixivflow-webui</strong>：API 服务器（提供 RESTful API，可选）</li>
+            </ul>
+
+            <h3>服务器部署</h3>
+            
+            <h4>使用 PM2 管理（推荐）</h4>
+            <pre><code># 安装 PM2
+npm install -g pm2
+
+# 启动定时任务
+pm2 start "pixivflow scheduler" --name pixivflow
+
+# 保存 PM2 配置
+pm2 save
+
+# 设置开机自启
+pm2 startup</code></pre>
+
+            <h4>使用 systemd</h4>
+            <p>创建服务文件 <code>/etc/systemd/system/pixivflow.service</code>：</p>
+            <pre><code>[Unit]
+Description=PixivFlow Automation Downloader
+After=network.target
+
+[Service]
+Type=simple
+User=your-username
+WorkingDirectory=/path/to/pixivflow
+ExecStart=/usr/bin/node dist/index.js scheduler
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target</code></pre>
+            <p>启动服务：</p>
+            <pre><code>sudo systemctl enable pixivflow
+sudo systemctl start pixivflow
+sudo systemctl status pixivflow</code></pre>
+
+            <h3>最佳实践</h3>
+            <ul>
+                <li><strong>明确配置路径</strong>：优先使用 <code>--config &lt;绝对路径&gt;</code>，或设置环境变量 <code>PIXIV_DOWNLOADER_CONFIG</code></li>
+                <li><strong>排行榜 + 标签的替代方案</strong>：若想"按标签抓取热门"，优先用 <code>mode: "search"</code> + <code>sort: "popular_desc"</code></li>
+                <li><strong>多标签组合</strong>：<code>tagRelation: "and"</code>（默认，必须同时包含所有标签）或 <code>"or"</code>（任意一个标签即可）</li>
+                <li><strong>时间与时区</strong>：定时任务指定 <code>timezone</code>（如 <code>Asia/Shanghai</code>），避免跨时区偏差</li>
+                <li><strong>登录与凭据</strong>：使用 <code>pixivflow login --config &lt;path&gt;</code> 写入 <code>refreshToken</code>，勿手动粘贴到仓库</li>
+                <li><strong>运行前检查</strong>：执行 <code>pixivflow health</code> 或 <code>pixivflow config validate</code>，提前发现配置或网络问题</li>
+                <li><strong>数据与备份</strong>：关注 <code>storage.databasePath</code> 与下载目录，定期备份或使用 <code>pixivflow backup</code></li>
+            </ul>
         </section>
 
         <section>

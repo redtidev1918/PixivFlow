@@ -6,7 +6,7 @@
 
 让 Pixiv 作品收集变得优雅而高效 | Make Pixiv artwork collection elegant and efficient
 
-> 🎯 **PixivFlow** 是一个专业的 Pixiv 批量下载工具，支持插画和小说下载、定时任务、Docker 部署、WebUI 管理界面。适用于个人用户和服务器自动化场景。
+> 🎯 **PixivFlow** 是一个专业的 Pixiv 批量下载工具，支持插画和小说下载、定时任务、Docker 部署。适用于个人用户和服务器自动化场景。
 
 <!-- SEO Keywords: pixiv downloader, pixiv批量下载, pixiv自动化下载, pixiv批量下载工具, pixiv下载器, pixiv artwork downloader, pixiv novel downloader, pixiv cli tool, pixiv scheduler, pixiv automation, pixiv批量下载脚本, pixiv下载工具, pixiv作品下载, pixiv插画下载, pixiv小说下载, pixiv定时下载, pixiv爬虫, pixiv api client, pixiv命令行工具, pixiv服务器部署, pixiv docker, pixiv webui, pixiv管理界面 -->
 
@@ -46,8 +46,7 @@
   - [环境要求](#环境要求)
   - [快速安装（推荐 ⭐）](#快速安装推荐)
   - [安装方式说明](#安装方式说明)
-  - [WebUI 管理界面（可选）](#webui-管理界面可选)
-  - [指定配置文件运行（--config 与环境变量）](#指定配置文件运行-config-与环境变量)
+  - [WebUI 后端 API（可选）](#webui-后端-api可选)
   - [Docker 部署（推荐）](#docker-部署推荐)
 
 **工具与文档**
@@ -158,15 +157,13 @@
 | **💾 自动去重** | SQLite 数据库记录历史，自动跳过已下载作品 |
 | **🔄 断点续传** | 下载中断后自动恢复，无需重新开始 |
 | **🛡️ 错误处理** | 自动重试、错误恢复、智能跳过已删除/私有作品 |
-| **🌐 WebUI 管理** | 现代化的 Web 管理界面，支持文件预览、实时日志、任务管理 |
 | **📊 统计报告** | 详细的运行日志和下载统计报告 |
 
 <a id="额外优势"></a>
 ### 额外优势
 
 - ✅ **完全独立**：无需浏览器，纯命令行工具
-- ✅ **WebUI 支持**：提供现代化的 Web 管理界面，支持图形化操作
-- ✅ **跨平台支持**：Windows / macOS / Linux 桌面应用（Electron），支持 Web 浏览器访问
+- ✅ **跨平台支持**：Windows / macOS / Linux，可在任何环境运行
 - ✅ **轻量级**：资源占用低，适合服务器长期运行
 - ✅ **开源免费**：GPL-3.0 许可证，可自由定制和分发
 - ✅ **类型安全**：TypeScript 编写，类型提示完善
@@ -185,13 +182,13 @@
 - **Windows 用户**：推荐使用 WSL（`wsl --install`）或 Git Bash
 - **Android/Termux 用户**：需要安装构建工具，详见 [Termux 安装指南](docs/TERMUX_INSTALL.md)
 
-> ⚠️ **Node.js 版本说明**：
+> **Node.js 版本说明**：
 > - 推荐使用 **LTS（长期支持）版本**：18.x, 20.x, 22.x 或 24.x
 > - 避免使用奇数版本（如 19.x, 21.x, 23.x），这些版本可能不被所有依赖包支持
 > - 如果看到 `EBADENGINE` 警告，建议切换到 LTS 版本
 > 
-> 💡 **登录说明**：项目默认使用 Node.js 库进行登录，**无需 Python**。Python gppt 仅作为后备方案（可选）。  
-> 📖 **详细指南**：查看 [快速开始指南](docs/QUICKSTART.md)
+> **登录说明**：项目默认使用 Node.js 库进行登录，**无需 Python**。Python gppt 仅作为后备方案（可选）。  
+> **详细指南**：查看 [快速开始指南](docs/QUICKSTART.md)
 
 <a id="快速安装推荐"></a>
 ### 快速安装（推荐 ⭐）
@@ -248,177 +245,39 @@ npm run download
 
 ---
 
-<a id="安装方式说明"></a>
-### 安装方式说明
-
-#### 从 npm 安装（推荐 ⭐）
-
-最简单的方式，直接使用 npm 全局安装：
-
-```bash
-npm install -g pixivflow
-```
-
-安装后即可在任何目录使用 `pixivflow` 命令。
-
-#### 从源码安装
-
-适合需要自定义或开发的情况：
-
-```bash
-# 从本地目录全局安装
-npm install && npm run build && npm install -g .
-
-# 或从 GitHub 安装
-npm install -g git+https://github.com/zoidberg-xgd/pixivflow.git
-```
-
-**使用命令**（全局安装后）：
-
-```bash
-pixivflow login      # 登录
-pixivflow download   # 下载
-pixivflow scheduler  # 定时任务
-pixivflow random     # 随机下载
-```
-
-**使用命令**（源码安装，未全局安装）：
-
-```bash
-npm run login        # 登录
-npm run download     # 下载
-npm run scheduler    # 定时任务
-npm run random       # 随机下载
-```
-
-> 💡 **提示**：
+> **提示**：
 > - 配置文件位于 `~/.pixivflow/config/standalone.config.json`，或使用 `--config` 指定路径
 > - 首次使用需要运行 `pixivflow login` 进行登录
-> - npm 包地址：https://www.npmjs.com/package/pixivflow
-
-<a id="指定配置文件运行-config-与环境变量" name="指定配置文件运行-config-与环境变量"></a>
-#### 指定配置文件运行（--config 与环境变量）
-
-- **命令行参数方式（推荐）**
-
-```bash
-# 执行下载（全局安装）
-pixivflow download --config "$(pwd)/config/standalone.config.json"
-
-# 启动定时任务
-pixivflow scheduler --config "$(pwd)/config/standalone.config.json"
-
-# 登录并写回到指定配置
-pixivflow login --config "$(pwd)/config/standalone.config.json"
-```
-
-- **环境变量方式（对所有子命令生效）**
-
-```bash
-export PIXIV_DOWNLOADER_CONFIG="$(pwd)/config/standalone.config.json"
-pixivflow download
-pixivflow scheduler
-pixivflow login
-```
-
-- **源码安装的 npm 脚本（注意使用 -- 传递参数）**
-
-```bash
-npm run download -- --config "$(pwd)/config/standalone.config.json"
-npm run scheduler -- --config "$(pwd)/config/standalone.config.json"
-npm run login -- --config "$(pwd)/config/standalone.config.json"
-```
-
-**解析优先级**：`--config` > `PIXIV_DOWNLOADER_CONFIG` > 最近使用/自动选择的配置 > 默认 `~/.pixivflow/config/standalone.config.json`
+> - **更多安装方式**：从源码安装、Docker 部署等，请查看 [快速开始指南](docs/QUICKSTART.md)
+> - **配置文件管理**：查看 [配置指南](docs/CONFIG.md) 了解配置文件的使用方法
 
 ---
 
-<a id="webui-管理界面可选"></a>
-### WebUI 管理界面（可选）
+### WebUI 后端 API（可选）
 
-PixivFlow 还提供了现代化的 Web 管理界面，支持图形化操作：
-
-**启动方式**：
-
-#### 全局安装后使用
+PixivFlow 提供了 WebUI 后端 API 服务，支持通过 RESTful API 和 WebSocket 进行管理：
 
 ```bash
-# 方式 1：自动构建并启动（推荐 ⭐）
-# 首先需要克隆源码仓库（如果还没有）
-git clone https://github.com/zoidberg-xgd/pixivflow.git
-cd pixivflow
+# 启动 WebUI 后端 API 服务
+pixivflow webui                    # 默认端口 3000
 
-# 首次使用需要安装后端依赖（如果还没有安装）
-npm install
-
-# 从项目根目录启动 WebUI（会自动检测并安装前端依赖、构建前端）
-pixivflow webui                    # 访问 http://localhost:3000
-
-# 方式 2：手动构建前端（可选）
-# 如果自动构建失败，可以手动构建
-cd webui-frontend
-npm install                        # 安装前端依赖
-npm run build                      # 构建前端
-cd ..
-pixivflow webui                    # 启动 WebUI
-
-# 方式 3：手动指定前端静态文件路径
-# 如果前端已经构建在其他位置，可以直接指定路径
-pixivflow webui --static-path /path/to/webui-frontend/dist
-# 或使用环境变量
-STATIC_PATH=/path/to/webui-frontend/dist pixivflow webui
-
-# 方式 4：仅启动后端 API（自动回退）
-# 如果找不到前端或构建失败，服务器会自动仅提供 API 服务
-pixivflow webui                    # 访问 http://localhost:3000（仅 API，无前端界面）
+# 或使用环境变量指定端口
+PORT=8080 pixivflow webui
 ```
-
-> 💡 **提示**：
-> - 全局安装后，`npm install -g pixivflow` 安装的包通常不包含前端源码。要使用完整的 WebUI，需要单独克隆源码仓库到本地。
-> - **推荐从项目根目录运行**：`pixivflow webui` 会优先从当前工作目录查找项目，如果检测到前端未构建，会自动安装前端依赖并构建前端（首次构建需要一些时间）。
-> - 如果自动构建失败，请手动执行：`cd webui-frontend && npm install && npm run build`
-> - 即使找不到前端，服务器仍会启动并提供 API 服务，可以通过 API 接口进行管理。
-
-#### 源码安装使用
-
-```bash
-# 首次使用：安装依赖
-npm install                # 安装后端依赖
-cd webui-frontend
-npm install                # 安装前端依赖
-cd ..
-
-# 开发模式（推荐：一键启动）
-npm run dev                # 推荐：一键启动开发环境，支持热重载
-                          # - 自动协调前端和后端开发服务器端口（详见 `src/webui/ports.ts`）
-                          # - 注意：此命令会自动清理所需端口，避免冲突。
-
-# 开发模式（手动启动，前后端分离）
-# 注意：此方式需要确保前后端端口匹配，不推荐
-npm run webui              # 启动后端（默认端口详见 `src/webui/ports.ts`）
-npm run webui:frontend     # 启动前端（默认访问 http://localhost:5173）
-
-# 生产模式（推荐：一键启动）
-npm run webui:start        # 构建前端并启动后端服务器
-
-# 生产模式（手动启动）
-npm run webui:build        # 构建前端
-npm run webui              # 启动后端（默认端口 3000，可通过 PORT 环境变量修改）
-
-# 桌面应用（Electron）
-cd webui-frontend
-npm run electron:dev      # 开发模式
-npm run electron:build    # 构建（支持 Windows/macOS/Linux）
-```
-
-> 📖 **详细说明**：WebUI 功能已集成到 CLI 命令中，使用 `pixivflow webui` 启动
 
 **主要功能**：
-- 📊 下载统计和概览
-- 📁 文件浏览和预览（支持特殊字符文件名）
-- 📝 实时日志查看
-- ⚙️ 配置管理
-- 🎯 任务管理（启动/停止下载）
+- **认证 API**：登录、登出、Token 管理
+- **配置管理 API**：查看、编辑、备份、恢复配置
+- **下载管理 API**：启动/停止下载、查看任务状态
+- **统计 API**：下载统计、文件列表
+- **日志 API**：查看运行日志（支持 WebSocket 实时推送）
+- **文件管理 API**：文件列表、预览、操作
+
+> **说明**：
+> - PixivFlow 只提供后端 API，不包含前端界面
+> - **前端项目**：现代化的 React 前端界面请查看 [pixivflow-webui](https://github.com/zoidberg-xgd/pixivflow-webui)
+> - 可以通过 API 直接调用，或连接其他前端项目
+> - **API 文档**：查看 [使用指南](docs/USAGE.md) 了解详细的 API 使用方法
 
 ---
 
@@ -429,34 +288,17 @@ Docker 部署无需安装 Node.js 环境：
 ```bash
 # 快速开始
 cp config/standalone.config.example.json config/standalone.config.json
-npm run login  # 在主机上登录
-docker-compose up -d
-
-# 或使用脚本工具
-./scripts/pixiv.sh docker setup    # 初始化
-./scripts/pixiv.sh docker login    # 登录
-./scripts/pixiv.sh docker deploy   # 部署
+npm run login                    # 在主机上登录
+docker-compose up -d             # 启动服务
 ```
 
-**服务说明**：
-- `pixivflow` - 定时任务服务（后台运行）
-- `pixivflow-webui` - WebUI 管理界面（访问 http://localhost:3000）
-
-**常用命令**：
-```bash
-docker-compose up -d          # 启动服务
-docker-compose logs -f        # 查看日志
-docker-compose down           # 停止服务
-./scripts/pixiv.sh docker status  # 查看状态
-```
-
-> 📖 **详细说明**：查看 [Docker 使用指南](docs/DOCKER.md)
+> **详细说明**：查看 [Docker 使用指南](docs/DOCKER.md) 了解完整的部署方法和常见问题
 
 ---
 
 ## CLI 命令行工具
 
-> 💡 **推荐使用**：全局安装后可直接使用 `pixivflow` 命令，无需依赖项目目录中的脚本。
+> **推荐使用**：全局安装后可直接使用 `pixivflow` 命令，无需依赖项目目录中的脚本。
 
 <a id="核心命令"></a>
 ### 核心命令
@@ -533,7 +375,7 @@ pixivflow backup                     # 自动备份配置和数据 ⭐
 
 PixivFlow 提供了丰富的脚本工具，所有脚本直接调用内置 CLI，性能更好、响应更快。
 
-> 💡 **说明**：后端核心完全独立，可在任何环境运行（服务器、Docker、CI/CD）。WebUI 是可选的辅助工具，所有核心功能都可通过命令行使用。
+> **说明**：PixivFlow 完全独立，可在任何环境运行（服务器、Docker、CI/CD）。所有功能都可通过命令行使用。
 
 ### 主控脚本（最常用）
 
@@ -577,29 +419,29 @@ PixivFlow 提供了丰富的脚本工具，所有脚本直接调用内置 CLI，
 <a id="文档导航"></a>
 ## 文档导航
 
-> 📖 **完整文档索引**: 查看 [文档导航](docs/README.md) 获取所有文档的完整列表和分类
+> **完整文档索引**: 查看 [文档导航](docs/README.md) 获取所有文档的完整列表和分类
 
 ### 新手必读（按顺序阅读）
 
-| 文档 | 说明 | 推荐度 |
-|------|------|--------|
-| [⚡ QUICKSTART](docs/QUICKSTART.md) | **3 分钟快速上手** - 最快开始使用 | ⭐⭐⭐⭐⭐ |
-| [🔐 LOGIN](docs/LOGIN.md) | **登录流程详解** - 登录问题解决方案 | ⭐⭐⭐⭐ |
-| [📖 USAGE](docs/USAGE.md) | **使用指南** - 功能使用说明 | ⭐⭐⭐⭐ |
+| 文档 | 说明 |
+|------|------|
+| [⚡ QUICKSTART](docs/QUICKSTART.md) | **3 分钟快速上手** - 最快开始使用 |
+| [🔐 LOGIN](docs/LOGIN.md) | **登录流程详解** - 登录问题解决方案 |
+| [📖 USAGE](docs/USAGE.md) | **使用指南** - 功能使用说明 |
 
 ### 功能指南
 
-| 文档 | 说明 | 推荐度 |
-|------|------|--------|
-| [📋 CONFIG](docs/CONFIG.md) | **配置文件使用指南** - 所有配置选项详解 | ⭐⭐⭐⭐⭐ |
-| [🛠️ SCRIPTS](docs/SCRIPTS.md) | **脚本使用指南** - 所有脚本详细说明 | ⭐⭐⭐⭐⭐ |
+| 文档 | 说明 |
+|------|------|
+| [📋 CONFIG](docs/CONFIG.md) | **配置文件使用指南** - 所有配置选项详解 |
+| [🛠️ SCRIPTS](docs/SCRIPTS.md) | **脚本使用指南** - 所有脚本详细说明 |
 
 ### 部署和环境
 
-| 文档 | 说明 | 推荐度 |
-|------|------|--------|
-| [🐳 DOCKER](docs/DOCKER.md) | **Docker 使用指南** - Docker 部署和使用（包含常见问题解决方案） | ⭐⭐⭐⭐ |
-| [📱 TERMUX](docs/TERMUX_INSTALL.md) | **Termux/Android 安装指南** - Android 设备上的安装和使用 | ⭐⭐⭐ |
+| 文档 | 说明 |
+|------|------|
+| [🐳 DOCKER](docs/DOCKER.md) | **Docker 使用指南** - Docker 部署和使用（包含常见问题解决方案） |
+| [📱 TERMUX](docs/TERMUX_INSTALL.md) | **Termux/Android 安装指南** - Android 设备上的安装和使用 |
 
 ### 项目文档
 
@@ -745,79 +587,6 @@ pixivflow random --novel
 
 ---
 
-<a id="项目结构"></a>
-## 项目结构
-
-```
-pixivflow/
-├── 📄 配置文件
-│   ├── config/
-│   │   ├── standalone.config.json           # 主配置（需自行创建）
-│   │   ├── examples/                        # 示例配置文件
-│   │   │   ├── standalone.config.example.json
-│   │   │   ├── standalone.config.simple.json
-│   │   │   └── ...
-│   │   └── backups/                         # 备份文件
-│
-├── 💻 源代码
-│   ├── src/
-│   │   ├── index.ts                 # 主程序入口
-│   │   ├── setup-wizard.ts          # 配置向导
-│   │   ├── config.ts                # 配置管理
-│   │   ├── logger.ts                # 日志系统
-│   │   ├── pixiv/                   # Pixiv API
-│   │   │   ├── AuthClient.ts        # 认证客户端
-│   │   │   └── PixivClient.ts       # API 客户端
-│   │   ├── download/                # 下载模块
-│   │   │   ├── DownloadManager.ts   # 下载管理器
-│   │   │   └── FileService.ts       # 文件服务
-│   │   ├── storage/                 # 数据持久化
-│   │   │   └── Database.ts          # SQLite 数据库
-│   │   └── scheduler/               # 定时任务
-│   │       └── Scheduler.ts         # 任务调度器
-│
-├── 🛠️ 脚本工具
-│   ├── scripts/
-│   │   ├── pixiv.sh                 # 主控制脚本（推荐）
-│   │   ├── easy-setup.sh            # 配置向导（备用）
-│   │   └── auto-deploy.sh           # 自动部署
-│   │
-│   │   ⚠️ 注意：以下功能已迁移到 CLI 命令（全局安装后使用）：
-│   │   - 配置管理：`pixivflow config`
-│   │   - 健康检查：`pixivflow health`
-│   │   - 自动监控：`pixivflow monitor`
-│   │   - 自动维护：`pixivflow maintain`
-│   │   - 自动备份：`pixivflow backup`
-│
-├── 📦 输出目录（自动创建）
-│   ├── dist/                        # 编译输出
-│   ├── downloads/                   # 下载目录
-│   │   ├── illustrations/           # 插画
-│   │   └── novels/                  # 小说
-│   └── data/                        # 数据目录
-│       ├── pixiv-downloader.db      # SQLite 数据库
-│       ├── pixiv-downloader.log     # 运行日志
-│       └── metadata/                # 元数据目录（自动创建）
-│           └── *.json               # 作品元数据 JSON 文件
-│
-└── 📚 文档
-    ├── README.md                    # 项目主文档
-    └── docs/                        # 文档目录
-        ├── README.md                # 文档导航
-        ├── QUICKSTART.md            # 快速开始指南
-        ├── LOGIN.md                 # 登录指南
-        ├── CONFIG.md                # 配置指南
-        ├── USAGE.md                 # 使用指南
-        ├── SCRIPTS.md               # 脚本指南
-        ├── ARCHITECTURE.md          # 架构说明
-        ├── CLI_MIGRATION_SUMMARY.md  # CLI 迁移总结
-        ├── DOCKER.md                # Docker 指南
-        └── project/                 # 项目文档
-            ├── CHANGELOG.md         # 更新日志
-            └── CONTRIBUTING.md      # 贡献指南
-```
-
----
 
 <a id="核心配置"></a>
 ## 核心配置
@@ -880,22 +649,21 @@ pixivflow/
 
 #### 配置示例
 
-**示例 1：多标签搜索**
+**基础示例：按标签下载插画**
 ```json
 {
   "targets": [
     {
       "type": "illustration",
-      "tag": "明日方舟 アークナイツ アーミヤ",
-      "limit": 30,
-      "mode": "search",
-      "searchTarget": "partial_match_for_tags"
+      "tag": "風景",
+      "limit": 20,
+      "mode": "search"
     }
   ]
 }
 ```
 
-**示例 2：按收藏数筛选**
+**进阶示例：按收藏数筛选热门作品**
 ```json
 {
   "targets": [
@@ -911,106 +679,14 @@ pixivflow/
 }
 ```
 
-**示例 3：排行榜下载**
-```json
-{
-  "targets": [
-    {
-      "type": "illustration",
-      "tag": "ranking",
-      "limit": 10,
-      "mode": "ranking",
-      "rankingMode": "day",
-      "rankingDate": "YESTERDAY"
-    }
-  ]
-}
-```
+> 💡 **提示**：
+> - 在 `tag` 字段中用空格分隔多个标签，表示作品必须同时包含所有标签（AND关系）
+> - 使用 `tagRelation: "or"` 可以实现标签并集（任意一个标签即可）
+> - `languageFilter` 仅对小说生效，支持 `"chinese"` 或 `"non-chinese"`
+> - 📚 **更多配置示例**：查看 [配置文件使用指南](docs/CONFIG.md) 了解所有配置选项和详细示例（多标签搜索、排行榜下载、小说系列下载、语言过滤等）
 
-**示例 4：小说系列下载**
-```json
-{
-  "targets": [
-    {
-      "type": "novel",
-      "seriesId": 14690617,
-      "limit": 50
-    }
-  ]
-}
-```
-
-**示例 5：语言过滤（仅下载中文小说）**
-```json
-{
-  "targets": [
-    {
-      "type": "novel",
-      "tag": "原神",
-      "limit": 20,
-      "languageFilter": "chinese",
-      "detectLanguage": true
-    }
-  ]
-}
-```
-
-**示例 6：语言过滤（仅下载非中文小说）**
-```json
-{
-  "targets": [
-    {
-      "type": "novel",
-      "tag": "アークナイツ",
-      "limit": 20,
-      "languageFilter": "non-chinese",
-      "detectLanguage": true
-    }
-  ]
-}
-```
-
-> 💡 **语言检测**：`languageFilter` 支持 `"chinese"`（仅中文）或 `"non-chinese"`（仅非中文）。检测结果会保存到元数据文件。  
-> 💡 **多标签搜索**：在 `tag` 字段中用空格分隔多个标签，表示作品必须同时包含所有标签（AND关系）。  
-> 📚 **完整配置指南**：查看 [配置文件使用指南](docs/CONFIG.md) 了解所有配置选项和详细示例
-
-#### ⏱️ 占位符与日期范围
-
-- **支持的占位符**
-
-```text
-YESTERDAY     # 昨天（YYYY-MM-DD）
-TODAY         # 今天（YYYY-MM-DD）
-LAST_7_DAYS   # 最近 7 天（自动展开为 startDate/endDate）
-LAST_30_DAYS  # 最近 30 天（自动展开为 startDate/endDate）
-LAST_N_DAYS:N # 最近 N 天（如 LAST_N_DAYS:14）
-```
-
-- **可用位置**
-  - `rankingDate`（排行榜日期）
-  - `startDate` / `endDate`（搜索日期范围）
-
-- **示例：仅下载昨天的数据**
-
-```json
-{
-  "targets": [
-    {
-      "type": "novel",
-      "tag": "オリジナル",
-      "mode": "search",
-      "sort": "popular_desc",
-      "startDate": "YESTERDAY",
-      "endDate": "YESTERDAY"
-    }
-  ]
-}
-```
-
-#### 🌐 语言过滤说明与限制
-
-- `languageFilter` 仅对 `type: "novel"` 生效；插画/漫画不支持语言过滤。
-- 语言检测需要足够文本内容（约 50+ 字符）才更可靠；过短文本会默认通过。
+> 💡 **日期占位符**：支持 `YESTERDAY`、`TODAY`、`LAST_7_DAYS`、`LAST_30_DAYS` 等，可用于 `startDate`、`endDate`、`rankingDate`  
+> 📚 **完整配置说明**：查看 [配置指南](docs/CONFIG.md) 了解所有配置选项、占位符和高级用法
 
 <a id="定时任务"></a>
 ### 定时任务
@@ -1118,89 +794,6 @@ npm run login  # 重新登录获取新 token
 
 ---
 
-### ❓ 如何仅获取“昨天”的热门内容？
-
-- **方式一（推荐）**：搜索模式按热门排序，并限制日期为“昨天”（更可控，支持语言过滤/多标签等）
-
-```json
-{
-  "targets": [
-    {
-      "type": "novel",
-      "mode": "search",
-      "tag": "オリジナル",
-      "sort": "popular_desc",
-      "limit": 10,
-      "startDate": "YESTERDAY",
-      "endDate": "YESTERDAY"
-    }
-  ]
-}
-```
-
-- **方式二**：排行榜模式设置昨日日榜
-
-```json
-{
-  "targets": [
-    {
-      "type": "illustration",
-      "mode": "ranking",
-      "rankingMode": "day",
-      "rankingDate": "YESTERDAY",
-      "limit": 10
-    }
-  ]
-}
-```
-
-> 提示：若需要“仅中文”，请使用 `type: "novel"` 并结合 `languageFilter: "chinese"`（插画不支持语言过滤）。
-
----
-
-### ❓ 如何限制总量并使用多标签并集（任意一个标签即可）？
-
-- 在 `tag` 中用空格写多个标签，设置 `tagRelation: "or"`，并全局通过 `limit` 限制总下载数（合并去重后取前 N）。
-
-```json
-{
-  "targets": [
-    {
-      "type": "novel",
-      "mode": "search",
-      "tag": "大肚 テーマ甲関連 テーマ甲",
-      "tagRelation": "or",
-      "searchTarget": "partial_match_for_tags",
-      "sort": "popular_desc",
-      "limit": 10,
-      "startDate": "YESTERDAY",
-      "endDate": "YESTERDAY",
-      "languageFilter": "chinese",
-      "detectLanguage": true
-    }
-  ]
-}
-```
-
-> 说明：`tagRelation: "or"` 表示任意一个标签命中即可；结果会合并去重后按排序截取到 `limit`。若想"必须包含所有标签"，使用 `tagRelation: "and"`（默认）。
-
----
-
-### ❓ 定时任务没有运行？
-
-```bash
-./scripts/pixiv.sh status    # 查看状态
-./scripts/pixiv.sh logs      # 查看日志
-```
-
-**确保程序持续运行**：
-```bash
-pm2 start "npm run scheduler" --name pixivflow
-pm2 save && pm2 startup
-```
-
----
-
 ### ❓ 下载速度慢或经常失败？
 
 **解决方法**：
@@ -1212,43 +805,22 @@ pm2 save && pm2 startup
 
 ---
 
-### ❓ 遇到已删除或私有的作品？
-
-**自动处理**：系统会自动跳过已删除、私有或无法访问的作品，不会中断下载流程。跳过的数量会在任务结束时显示。
-
----
-
-### ❓ Android/Termux 安装失败？
-
-如果在 Android Termux 环境下安装时遇到 `better-sqlite3` 编译错误：
-
-**解决方案**：
-
-1. **安装构建工具**：
-   ```bash
-   pkg install python3 make clang
-   ```
-
-2. **使用本地安装**（推荐）：
-   ```bash
-   mkdir ~/pixivflow && cd ~/pixivflow
-   npm install pixivflow
-   npx pixivflow --help
-   ```
-
-3. **如果仍然失败**，查看详细的 [Termux 安装指南](docs/TERMUX_INSTALL.md)
-
-> 💡 **提示**：Termux 环境下推荐使用本地安装而不是全局安装，以避免权限和路径问题。
-
----
-
-### 🔍 查看详细日志
+### ❓ 定时任务没有运行？
 
 ```bash
-./scripts/pixiv.sh logs
-# 或
-tail -f data/pixiv-downloader.log
+pixivflow status    # 查看状态
+pixivflow logs      # 查看日志
 ```
+
+**确保程序持续运行**：
+```bash
+pm2 start "pixivflow scheduler" --name pixivflow
+pm2 save && pm2 startup
+```
+
+---
+
+> 📖 **更多问题**：查看 [使用指南](docs/USAGE.md) 了解其他常见问题和解决方案（日期过滤、多标签搜索、Android 安装等）
 
 ---
 
@@ -1498,10 +1070,11 @@ Made with ❤️ by [zoidberg-xgd](https://github.com/zoidberg-xgd)
 ---
 
 **相关链接**：
-- 📦 [npm 包](https://www.npmjs.com/package/pixivflow)
-- 🐙 [GitHub 仓库](https://github.com/zoidberg-xgd/PixivFlow)
-- 📚 [完整文档](docs/README.md)
-- 🐛 [问题反馈](https://github.com/zoidberg-xgd/PixivFlow/issues)
-- 💬 [讨论区](https://github.com/zoidberg-xgd/PixivFlow/discussions)
+- [npm 包](https://www.npmjs.com/package/pixivflow)
+- [GitHub 仓库](https://github.com/zoidberg-xgd/PixivFlow)
+- [前端项目 (pixivflow-webui)](https://github.com/zoidberg-xgd/pixivflow-webui)
+- [完整文档](docs/README.md)
+- [问题反馈](https://github.com/zoidberg-xgd/PixivFlow/issues)
+- [讨论区](https://github.com/zoidberg-xgd/PixivFlow/discussions)
 
 </div>

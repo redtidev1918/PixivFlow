@@ -388,62 +388,32 @@ That's it! 🎉
 ---
 
 <a id="api-server-optional"></a>
-### API Server (Optional)
+### WebUI Backend API (Optional)
 
-PixivFlow provides a RESTful API server that can integrate with frontend projects.
-
-**Architecture Note**: This project uses a completely separated frontend-backend architecture. The backend is a pure API server that can be used as an npm package independently. The frontend is an independent React project that has been separated to an independent repository: [pixivflow-webui](https://github.com/zoidberg-xgd/pixivflow-webui). See [Architecture Documentation](docs/ARCHITECTURE.md) for details.
-
-#### Start API Server
+PixivFlow provides a WebUI backend API service that supports management through RESTful API and WebSocket:
 
 ```bash
-# Method 1: Use as npm package (Recommended)
-npm install -g pixivflow
-pixivflow webui                    # Start API server, visit http://localhost:3000
+# Start WebUI backend API service
+pixivflow webui                    # Default port 3000
 
-# Method 2: Run from source
-npm run build
-node dist/webui/index.js
-
-# Method 3: Specify static file path (Optional, for simple deployment)
-pixivflow webui --static-path /path/to/frontend/dist
-
-# Or use environment variable
-STATIC_PATH=/path/to/frontend/dist pixivflow webui
-
-# Method 4: Start backend API only (Recommended for production)
-pixivflow webui                    # Pure API mode, no static files served
+# Or specify port via environment variable
+PORT=8080 pixivflow webui
 ```
 
-#### API Endpoints
+**Main Features**:
+- **Authentication API**: Login, logout, Token management
+- **Configuration Management API**: View, edit, backup, restore configuration
+- **Download Management API**: Start/stop downloads, view task status
+- **Statistics API**: Download statistics, file list
+- **Logs API**: View running logs (supports WebSocket real-time push)
+- **File Management API**: File list, preview, operations
 
-- `/api/auth` - Authentication (login, logout, status check)
-- `/api/config` - Configuration management (view, edit, backup, restore)
-- `/api/download` - Download management (start, stop, status query)
-- `/api/stats` - Statistics (download stats, file stats)
-- `/api/logs` - Logs (real-time log stream, WebSocket)
-- `/api/files` - File management (file list, preview, operations)
+> **Note**:
+> - PixivFlow only provides backend API, does not include frontend interface
+> - **Frontend Project**: Modern React frontend interface, see [pixivflow-webui](https://github.com/zoidberg-xgd/pixivflow-webui)
+> - Can be called directly via API, or connect to other frontend projects
+> - **API Documentation**: See [Usage Guide](docs/USAGE.md) for detailed API usage
 
-#### Frontend Integration
-
-Frontend has been separated to an independent repository: [**pixivflow-webui**](https://github.com/zoidberg-xgd/pixivflow-webui)
-
-```bash
-# Clone frontend repository
-git clone https://github.com/zoidberg-xgd/pixivflow-webui.git
-cd pixivflow-webui
-
-# Install dependencies
-npm install
-
-# Development mode (requires backend API running)
-npm run dev                        # Start frontend dev server, visit http://localhost:5173
-
-# Build production version
-npm run build                      # Build output in dist/ directory
-```
-
-> 📖 **Detailed Instructions**: See [Architecture Documentation](docs/ARCHITECTURE.md) to learn about frontend-backend separation architecture and deployment methods
 
 ---
 
@@ -732,26 +702,26 @@ npm run start migrate-config --dry-run # Preview changes
 <a id="must-read-for-beginners"></a>
 ### Must Read for Beginners (Read in Order)
 
-| Document | Description | Rating |
-|----------|-------------|--------|
-| [⚡ QUICKSTART](docs/QUICKSTART.md) | **3-minute quick start** - Fastest way to get started | ⭐⭐⭐⭐⭐ |
-| [🔐 LOGIN](docs/LOGIN.md) | **Login process details** - Login problem solutions | ⭐⭐⭐⭐ |
-| [📖 USAGE](docs/USAGE.md) | **Usage guide** - Feature usage instructions | ⭐⭐⭐⭐ |
+| Document | Description |
+|----------|-------------|
+| [⚡ QUICKSTART](docs/QUICKSTART.md) | **3-minute quick start** - Fastest way to get started |
+| [🔐 LOGIN](docs/LOGIN.md) | **Login process details** - Login problem solutions |
+| [📖 USAGE](docs/USAGE.md) | **Usage guide** - Feature usage instructions |
 
 <a id="feature-guides"></a>
 ### Feature Guides
 
-| Document | Description | Rating |
-|----------|-------------|--------|
-| [📋 CONFIG](docs/CONFIG.md) | **Configuration file usage guide** - All configuration options explained | ⭐⭐⭐⭐⭐ |
-| [🛠️ SCRIPTS](docs/SCRIPTS.md) | **Script usage guide** - All scripts detailed instructions | ⭐⭐⭐⭐⭐ |
+| Document | Description |
+|----------|-------------|
+| [📋 CONFIG](docs/CONFIG.md) | **Configuration file usage guide** - All configuration options explained |
+| [🛠️ SCRIPTS](docs/SCRIPTS.md) | **Script usage guide** - All scripts detailed instructions |
 
 <a id="deployment-and-environment"></a>
 ### Deployment and Environment
 
-| Document | Description | Rating |
-|----------|-------------|--------|
-| [🐳 DOCKER](docs/DOCKER.md) | **Docker usage guide** - Docker deployment and usage (includes solutions for common issues) | ⭐⭐⭐⭐ |
+| Document | Description |
+|----------|-------------|
+| [🐳 DOCKER](docs/DOCKER.md) | **Docker usage guide** - Docker deployment and usage (includes solutions for common issues) |
 
 <a id="project-documentation"></a>
 ### Project Documentation
@@ -1554,6 +1524,16 @@ If this project helps you, please consider:
 ### ⭐ Star This Project
 
 **[⭐ Star on GitHub](https://github.com/zoidberg-xgd/pixivflow)** - Let more people discover PixivFlow!
+
+---
+
+**Related Links**:
+- [npm Package](https://www.npmjs.com/package/pixivflow)
+- [GitHub Repository](https://github.com/zoidberg-xgd/PixivFlow)
+- [Frontend Project (pixivflow-webui)](https://github.com/zoidberg-xgd/pixivflow-webui)
+- [Full Documentation](docs/README.md)
+- [Issue Tracker](https://github.com/zoidberg-xgd/PixivFlow/issues)
+- [Discussions](https://github.com/zoidberg-xgd/PixivFlow/discussions)
 
 ---
 

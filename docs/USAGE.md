@@ -4,9 +4,9 @@
 
 ---
 
-## 🚀 基本使用
+## 基本使用
 
-> 💡 **提示**：如果通过 `npm install -g pixivflow` 全局安装，可以直接使用 `pixivflow` 命令。如果从源码安装，请使用 `npm run` 命令。
+> **提示**：如果通过 `npm install -g pixivflow` 全局安装，可以直接使用 `pixivflow` 命令。如果从源码安装，请使用 `npm run` 命令。
 
 ### 执行一次下载
 

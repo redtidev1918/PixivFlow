@@ -248,6 +248,25 @@ else
     log_info "运行 ./scripts/check-version-sync.sh 查看详细信息"
 fi
 
+# 创建 GitHub Release（可选）
+log_info "是否要创建 GitHub Release？"
+read -p "自动创建 Release？(Y/n) " -n 1 -r
+echo
+if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+    if [ -f "./scripts/create-release.sh" ]; then
+        log_info "创建 GitHub Release..."
+        if ./scripts/create-release.sh "$NEW_VERSION"; then
+            log_success "✅ GitHub Release 创建成功"
+        else
+            log_warn "⚠️  GitHub Release 创建失败，可以稍后手动创建"
+        fi
+    else
+        log_warn "create-release.sh 脚本不存在，跳过自动创建 Release"
+    fi
+else
+    log_info "跳过 GitHub Release 创建"
+fi
+
 # 显示发布信息
 echo ""
 log_success "🎉 发布完成！"
@@ -263,10 +282,11 @@ echo "   - package.json: $NEW_VERSION"
 echo "   - npm: ${NPM_PUBLISHED_VERSION:-验证中...}"
 echo "   - GitHub tag: v$NEW_VERSION"
 echo ""
-echo "📝 下一步:"
-echo "   1. 在 GitHub 创建 Release: https://github.com/zoidberg-xgd/PixivFlow/releases/new"
-echo "   2. 标签: v$NEW_VERSION"
-echo "   3. 标题: v$NEW_VERSION"
-echo "   4. 描述: 从 CHANGELOG.md 复制更新内容"
+echo "📝 下一步（如果未自动创建）:"
+echo "   1. 手动创建 Release: ./scripts/create-release.sh $NEW_VERSION"
+echo "   2. 或访问: https://github.com/zoidberg-xgd/PixivFlow/releases/new"
+echo "   3. 标签: v$NEW_VERSION"
+echo "   4. 标题: v$NEW_VERSION"
+echo "   5. 描述: 从 CHANGELOG.md 复制更新内容"
 echo ""
 

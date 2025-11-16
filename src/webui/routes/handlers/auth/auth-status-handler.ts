@@ -27,12 +27,16 @@ export async function getAuthStatus(req: Request, res: Response): Promise<void> 
     if (hasToken && refreshToken) {
       const validation = await validateToken(refreshToken);
       tokenValid = validation.valid;
-      authenticated = validation.valid;
+      authenticated = validation.valid; // Only authenticated if token is valid
       user = validation.user;
       
       if (tokenValid) {
         logger.debug('Token validation successful', { hasUser: !!user });
+      } else {
+        logger.debug('Token validation failed - user is not authenticated', { hasToken });
       }
+    } else {
+      logger.debug('No valid token found - user is not authenticated', { hasToken, configPath });
     }
 
     logger.debug('Auth status check', { authenticated, hasToken, tokenValid, configPath });
@@ -87,8 +91,10 @@ export async function getAuthStatus(req: Request, res: Response): Promise<void> 
       
       const isTokenError = validationErrors.some(e => e.includes('refreshToken'));
 
-      // If the specific error is about the token, force authenticated to false
-      const finalAuthenticated = isTokenError ? false : authenticated;
+      // Final authentication status: must have valid token to be authenticated
+      // If token validation failed (tokenValid === false), user is NOT authenticated
+      // Also force false if there's a token-related error in config validation
+      const finalAuthenticated = (tokenValid && authenticated) && !isTokenError;
 
       logger.warn('Configuration invalid when checking auth status', {
         errors: validationErrors,

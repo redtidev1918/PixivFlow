@@ -10,7 +10,7 @@ export const PORTS = {
   /**
    * Port for the backend API server in development mode.
    */
-  DEV_API: 3001,
+  DEV_API: 3000,
 
   /**
    * Port for the frontend Vite development server.

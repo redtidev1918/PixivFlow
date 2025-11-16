@@ -164,7 +164,7 @@ cd pixivflow-webui
 npm run dev
 ```
 
-前端开发服务器会通过代理连接到后端 API（默认端口 3001）。
+前端开发服务器会通过代理连接到后端 API（默认端口 3000）。
 
 ### 环境变量
 
@@ -174,7 +174,7 @@ npm run dev
 - `STATIC_PATH` - 静态文件路径（可选）
 
 **前端环境变量：**
-- `VITE_DEV_API_PORT` - 开发模式下后端 API 端口（默认：3001）
+- `VITE_DEV_API_PORT` - 开发模式下后端 API 端口（默认：3000）
 - `VITE_API_URL` - 生产模式下后端 API URL
 
 ### 技术栈
@@ -377,7 +377,7 @@ cd pixivflow-webui
 npm run dev
 ```
 
-The frontend development server will connect to the backend API via proxy (default port 3001).
+The frontend development server will connect to the backend API via proxy (default port 3000).
 
 ### Environment Variables
 
@@ -387,7 +387,7 @@ The frontend development server will connect to the backend API via proxy (defau
 - `STATIC_PATH` - Static file path (optional)
 
 **Frontend Environment Variables:**
-- `VITE_DEV_API_PORT` - Backend API port in development mode (default: 3001)
+- `VITE_DEV_API_PORT` - Backend API port in development mode (default: 3000)
 - `VITE_API_URL` - Backend API URL in production mode
 
 ### Tech Stack

@@ -47,7 +47,11 @@ pixivflow webui                    # 纯 API 模式，不服务静态文件
 **API 端点：**
 - `/api/auth` - 认证相关（登录、登出、状态检查）
 - `/api/config` - 配置管理（查看、编辑、备份、恢复）
-- `/api/download` - 下载管理（启动、停止、状态查询）
+- `/api/download` - 下载管理（启动、停止、状态查询、任务历史管理）
+  - `GET /api/download/status` - 获取任务状态（包括历史任务）
+  - `GET /api/download/history` - 获取下载历史记录
+  - `DELETE /api/download/history/:taskId` - 删除指定任务历史
+  - `DELETE /api/download/history` - 删除所有任务历史
 - `/api/stats` - 统计信息（下载统计、文件统计）
 - `/api/logs` - 日志查看（实时日志流，WebSocket）
 - `/api/files` - 文件管理（文件列表、预览、操作）
@@ -260,7 +264,11 @@ pixivflow webui                    # Pure API mode, no static files
 **API Endpoints:**
 - `/api/auth` - Authentication (login, logout, status check)
 - `/api/config` - Configuration management (view, edit, backup, restore)
-- `/api/download` - Download management (start, stop, status query)
+- `/api/download` - Download management (start, stop, status query, task history management)
+  - `GET /api/download/status` - Get task status (including history)
+  - `GET /api/download/history` - Get download history records
+  - `DELETE /api/download/history/:taskId` - Delete specific task history
+  - `DELETE /api/download/history` - Delete all task history
 - `/api/stats` - Statistics (download stats, file stats)
 - `/api/logs` - Logs (real-time log stream, WebSocket)
 - `/api/files` - File management (file list, preview, operations)

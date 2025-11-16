@@ -41,9 +41,14 @@ export function isElectronEnvironment(): boolean {
     return true;
   }
   
-  if (process.env?.ELECTRON_RUN_AS_NODE !== undefined && process.env.ELECTRON_RUN_AS_NODE !== '1') {
-    return true;
+  // ELECTRON_RUN_AS_NODE=1 means Electron is running as Node.js
+  // In this case, it's NOT an Electron environment for the script
+  if (process.env?.ELECTRON_RUN_AS_NODE === '1') {
+    return false; // Running as Node.js, not Electron environment
   }
+  
+  // If ELECTRON_RUN_AS_NODE is set but not '1', it might be Electron
+  // But this is less reliable, so we don't use it as a primary check
   
   return false;
 }

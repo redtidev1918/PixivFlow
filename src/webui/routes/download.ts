@@ -12,6 +12,8 @@ router.post('/stop', basicHandlers.stopDownload);
 router.get('/status', basicHandlers.getDownloadStatus);
 router.get('/logs', basicHandlers.getDownloadLogs);
 router.get('/history', basicHandlers.getDownloadHistory);
+router.delete('/history/:taskId', basicHandlers.deleteTaskHistory);
+router.delete('/history', basicHandlers.deleteAllTaskHistory);
 
 // Batch download operations
 router.post('/run-all', batchHandlers.runAllDownloads);

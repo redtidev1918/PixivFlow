@@ -137,6 +137,56 @@ export class TaskHistoryRepository extends BaseRepository {
   }
 
   /**
+   * Delete a task history record by task ID
+   */
+  public deleteTaskHistory(taskId: string): { success: boolean; message?: string } {
+    try {
+      const stmt = this.db.prepare(
+        `DELETE FROM task_history WHERE task_id = ?`
+      );
+      const result = stmt.run(taskId);
+      
+      if (result.changes === 0) {
+        return { success: false, message: `Task history not found: ${taskId}` };
+      }
+      
+      logger.info('Successfully deleted task history', { taskId });
+      return { success: true };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error('Failed to delete task history', { taskId, error: errorMessage });
+      return { success: false, message: errorMessage };
+    }
+  }
+
+  /**
+   * Delete all task history records
+   */
+  public deleteAllTaskHistory(): { success: boolean; deletedCount: number; message?: string } {
+    try {
+      // First get count
+      const countStmt = this.db.prepare(`SELECT COUNT(*) as count FROM task_history`);
+      const countResult = countStmt.get() as { count: number };
+      const count = countResult.count;
+      
+      if (count === 0) {
+        return { success: true, deletedCount: 0 };
+      }
+      
+      // Delete all records
+      const stmt = this.db.prepare(`DELETE FROM task_history`);
+      const result = stmt.run();
+      
+      logger.info('Successfully deleted all task history', { deletedCount: result.changes });
+      return { success: true, deletedCount: result.changes };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error('Failed to delete all task history', { error: errorMessage });
+      return { success: false, deletedCount: 0, message: errorMessage };
+    }
+  }
+
+  /**
    * Delete old task history records (keep only the most recent N records)
    */
   public cleanupOldTaskHistory(keepCount: number = 100): number {

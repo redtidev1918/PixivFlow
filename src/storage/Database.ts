@@ -494,6 +494,14 @@ export class Database implements IDatabase {
     return this.taskHistoryRepo.getAllTaskHistory(limit);
   }
 
+  public deleteTaskHistory(taskId: string): { success: boolean; message?: string } {
+    return this.taskHistoryRepo.deleteTaskHistory(taskId);
+  }
+
+  public deleteAllTaskHistory(): { success: boolean; deletedCount: number; message?: string } {
+    return this.taskHistoryRepo.deleteAllTaskHistory();
+  }
+
   public close() {
     this.db.close();
   }

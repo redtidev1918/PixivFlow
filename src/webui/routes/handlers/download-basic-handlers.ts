@@ -298,6 +298,126 @@ export async function getDownloadLogs(req: Request, res: Response): Promise<void
 }
 
 /**
+ * DELETE /api/download/history/:taskId
+ * Delete a task history record by task ID
+ */
+export async function deleteTaskHistory(req: Request, res: Response): Promise<void> {
+  let database: Database | null = null;
+  try {
+    const { taskId } = req.params;
+
+    if (!taskId) {
+      res.status(400).json({
+        data: {
+          success: false,
+          errorCode: ErrorCode.INVALID_REQUEST,
+          message: 'Task ID is required',
+        },
+      });
+      return;
+    }
+
+    const configPath = getConfigPath();
+    const config = loadConfig(configPath);
+    database = new Database(config.storage!.databasePath!);
+    database.migrate();
+
+    const result = database.deleteTaskHistory(taskId);
+
+    database.close();
+    database = null;
+
+    if (result.success) {
+      res.json({
+        data: {
+          success: true,
+          message: 'Task history deleted successfully',
+        },
+      });
+    } else {
+      res.status(404).json({
+        data: {
+          success: false,
+          errorCode: ErrorCode.DOWNLOAD_TASK_NOT_FOUND,
+          message: result.message || 'Task history not found',
+        },
+      });
+    }
+  } catch (error) {
+    if (database) {
+      try {
+        database.close();
+      } catch (closeError) {
+        // Ignore close errors
+      }
+    }
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logger.error('Failed to delete task history', { error: errorMessage });
+    res.status(500).json({
+      data: {
+        success: false,
+        errorCode: ErrorCode.DOWNLOAD_HISTORY_FAILED,
+        message: errorMessage,
+      },
+    });
+  }
+}
+
+/**
+ * DELETE /api/download/history
+ * Delete all task history records
+ */
+export async function deleteAllTaskHistory(req: Request, res: Response): Promise<void> {
+  let database: Database | null = null;
+  try {
+    const configPath = getConfigPath();
+    const config = loadConfig(configPath);
+    database = new Database(config.storage!.databasePath!);
+    database.migrate();
+
+    const result = database.deleteAllTaskHistory();
+
+    database.close();
+    database = null;
+
+    if (result.success) {
+      res.json({
+        data: {
+          success: true,
+          deletedCount: result.deletedCount,
+          message: `Successfully deleted ${result.deletedCount} task history records`,
+        },
+      });
+    } else {
+      res.status(500).json({
+        data: {
+          success: false,
+          errorCode: ErrorCode.DOWNLOAD_HISTORY_FAILED,
+          message: result.message || 'Failed to delete task history',
+        },
+      });
+    }
+  } catch (error) {
+    if (database) {
+      try {
+        database.close();
+      } catch (closeError) {
+        // Ignore close errors
+      }
+    }
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logger.error('Failed to delete all task history', { error: errorMessage });
+    res.status(500).json({
+      data: {
+        success: false,
+        errorCode: ErrorCode.DOWNLOAD_HISTORY_FAILED,
+        message: errorMessage,
+      },
+    });
+  }
+}
+
+/**
  * GET /api/download/history
  * Get download history from database
  */

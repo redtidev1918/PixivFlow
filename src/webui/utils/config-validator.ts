@@ -45,10 +45,9 @@ export function validateConfig(config: StandaloneConfig): ValidationResult {
     }
   }
 
-  // Validate targets
-  if (!config.targets || config.targets.length === 0) {
-    errors.push({ code: 'CONFIG_VALIDATION_TARGETS_REQUIRED' });
-  } else {
+  // Validate targets (targets can be empty for URL-based downloads)
+  // Only validate target structure if targets are provided
+  if (config.targets && config.targets.length > 0) {
     config.targets.forEach((target, index) => {
       if (!target.type) {
         errors.push({ code: 'CONFIG_VALIDATION_TARGET_TYPE_REQUIRED', params: { index: index + 1 } });
@@ -61,6 +60,7 @@ export function validateConfig(config: StandaloneConfig): ValidationResult {
       }
     });
   }
+  // Note: Empty targets array is allowed for URL-based downloads
 
   // Validate storage config
   if (!config.storage) {

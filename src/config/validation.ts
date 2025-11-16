@@ -73,12 +73,11 @@ export function validateConfig(config: Partial<StandaloneConfig>, location: stri
     }
   }
 
-  // Validate targets
+  // Validate targets (targets can be empty for URL-based downloads)
   if (!Array.isArray(config.targets)) {
     errors.push('targets: Must be an array');
-  } else if (config.targets.length === 0) {
-    errors.push('targets: At least one target must be configured');
-  } else {
+  } else if (config.targets.length > 0) {
+    // Only validate target structure if targets are provided
     config.targets.forEach((target, index) => {
       // Tag is required for search mode, optional for ranking, series, single novel, single illustration, or user mode
       if (target.mode !== 'ranking' && !target.seriesId && !target.novelId && !target.illustId && !target.userId && (!target.tag || target.tag.trim() === '')) {

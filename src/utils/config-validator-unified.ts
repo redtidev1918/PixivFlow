@@ -100,14 +100,9 @@ export class ConfigValidator {
       }
     }
 
-    // Validate targets
-    if (!config.targets || config.targets.length === 0) {
-      errors.push({
-        code: 'CONFIG_VALIDATION_TARGETS_REQUIRED',
-        field: 'targets',
-        message: 'At least one download target is required',
-      });
-    } else {
+    // Validate targets (targets can be empty for URL-based downloads)
+    // Only validate target structure if targets are provided
+    if (config.targets && config.targets.length > 0) {
       config.targets.forEach((target, index) => {
         const targetPrefix = `targets[${index}]`;
         

@@ -9,6 +9,7 @@ import { DownloadRepository } from './repositories/DownloadRepository';
 import { ExecutionRepository } from './repositories/ExecutionRepository';
 import { SchedulerRepository } from './repositories/SchedulerRepository';
 import { ConfigHistoryRepository } from './repositories/ConfigHistoryRepository';
+import { TaskHistoryRepository } from './repositories/TaskHistoryRepository';
 
 export interface AccessTokenStore {
   accessToken: string;
@@ -48,6 +49,7 @@ export class Database implements IDatabase {
   private executionRepo: ExecutionRepository;
   private schedulerRepo: SchedulerRepository;
   private configHistoryRepo: ConfigHistoryRepository;
+  private taskHistoryRepo: TaskHistoryRepository;
 
   constructor(private readonly databasePath: string) {
     try {
@@ -66,6 +68,7 @@ export class Database implements IDatabase {
       this.executionRepo = new ExecutionRepository(this.db);
       this.schedulerRepo = new SchedulerRepository(this.db);
       this.configHistoryRepo = new ConfigHistoryRepository(this.db);
+      this.taskHistoryRepo = new TaskHistoryRepository(this.db);
     } catch (error) {
       throw new DatabaseError(
         `Failed to initialize database at ${this.databasePath}`,
@@ -467,6 +470,28 @@ export class Database implements IDatabase {
 
   public setActiveConfig(configId: number): void {
     this.setActiveConfigHistory(configId);
+  }
+
+  // Task history management - delegated to TaskHistoryRepository
+  public saveTaskHistory(taskId: string, data: {
+    status: 'running' | 'completed' | 'failed' | 'stopped';
+    startTime: Date;
+    endTime?: Date;
+    error?: string;
+    targetId?: string;
+    progressCurrent?: number;
+    progressTotal?: number;
+    progressMessage?: string;
+  }): void {
+    this.taskHistoryRepo.saveTaskHistory(taskId, data);
+  }
+
+  public getTaskHistory(taskId: string): import('./repositories/TaskHistoryRepository').TaskHistoryRecord | null {
+    return this.taskHistoryRepo.getTaskHistory(taskId);
+  }
+
+  public getAllTaskHistory(limit: number = 100): import('./repositories/TaskHistoryRepository').TaskHistoryRecord[] {
+    return this.taskHistoryRepo.getAllTaskHistory(limit);
   }
 
   public close() {

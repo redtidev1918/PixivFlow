@@ -133,25 +133,68 @@ export async function stopDownload(req: Request, res: Response): Promise<void> {
 }
 
 /**
+ * Convert database task history record to TaskStatus
+ */
+function deserializeTaskHistory(record: any): any {
+  return {
+    taskId: record.taskId,
+    status: record.status,
+    startTime: new Date(record.startTime),
+    endTime: record.endTime ? new Date(record.endTime) : undefined,
+    error: record.error || undefined,
+    targetId: record.targetId || undefined,
+    progress: record.progressCurrent !== null && record.progressTotal !== null ? {
+      current: record.progressCurrent,
+      total: record.progressTotal,
+      message: record.progressMessage || undefined,
+    } : undefined,
+    logs: [], // Database doesn't store logs
+  };
+}
+
+/**
  * GET /api/download/status
  * Get download task status
+ * Includes both in-memory tasks and database history
  */
 export async function getDownloadStatus(req: Request, res: Response): Promise<void> {
+  let database: Database | null = null;
   try {
     const { taskId } = req.query;
 
     if (taskId) {
+      // First check in-memory tasks
       const status = downloadTaskManager.getTaskStatus(taskId as string);
-      if (!status) {
-        res.status(404).json({
-          data: {
-            errorCode: ErrorCode.DOWNLOAD_TASK_NOT_FOUND,
-          },
+      if (status) {
+        res.json({
+          data: serializeTaskStatus(status),
         });
         return;
       }
-      res.json({
-        data: serializeTaskStatus(status),
+
+      // If not found in memory, check database
+      const configPath = getConfigPath();
+      const config = loadConfig(configPath);
+      database = new Database(config.storage!.databasePath!);
+      database.migrate();
+
+      const historyRecord = database.getTaskHistory(taskId as string);
+      if (historyRecord) {
+        const historyStatus = deserializeTaskHistory(historyRecord);
+        res.json({
+          data: serializeTaskStatus(historyStatus),
+        });
+        database.close();
+        database = null;
+        return;
+      }
+
+      database.close();
+      database = null;
+      res.status(404).json({
+        data: {
+          errorCode: ErrorCode.DOWNLOAD_TASK_NOT_FOUND,
+        },
       });
       return;
     }
@@ -160,14 +203,57 @@ export async function getDownloadStatus(req: Request, res: Response): Promise<vo
     const allTasks = downloadTaskManager.getAllTasks();
     const activeTask = downloadTaskManager.getActiveTask();
 
+    // Load task history from database and merge with in-memory tasks
+    const configPath = getConfigPath();
+    const config = loadConfig(configPath);
+    database = new Database(config.storage!.databasePath!);
+    database.migrate();
+
+    const historyTasks = database.getAllTaskHistory(100);
+    const historyTaskMap = new Map<string, any>();
+    
+    // Convert history records to TaskStatus format
+    for (const historyRecord of historyTasks) {
+      const historyStatus = deserializeTaskHistory(historyRecord);
+      historyTaskMap.set(historyRecord.taskId, historyStatus);
+    }
+
+    // Merge: in-memory tasks take precedence (they're more up-to-date)
+    const allTasksMap = new Map<string, any>();
+    
+    // First add database history
+    for (const [taskId, task] of historyTaskMap) {
+      allTasksMap.set(taskId, task);
+    }
+    
+    // Then add/update with in-memory tasks (these are more current)
+    for (const task of allTasks) {
+      allTasksMap.set(task.taskId, task);
+    }
+
+    // Convert to array and sort by start time (newest first)
+    const mergedTasks = Array.from(allTasksMap.values()).sort(
+      (a, b) => b.startTime.getTime() - a.startTime.getTime()
+    );
+
+    database.close();
+    database = null;
+
     res.json({
       data: {
         activeTask: serializeTaskStatus(activeTask),
-        allTasks: allTasks.map(serializeTaskStatus),
+        allTasks: mergedTasks.map(serializeTaskStatus),
         hasActiveTask: downloadTaskManager.hasActiveTask(),
       },
     });
   } catch (error) {
+    if (database) {
+      try {
+        database.close();
+      } catch (closeError) {
+        // Ignore close errors
+      }
+    }
     logger.error('Failed to get download status', { error });
     res.status(500).json({ errorCode: ErrorCode.DOWNLOAD_STATUS_FAILED });
   }

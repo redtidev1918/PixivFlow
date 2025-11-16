@@ -58,6 +58,20 @@ export class DatabaseMigration {
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
           )`,
+        `CREATE TABLE IF NOT EXISTS task_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            task_id TEXT NOT NULL UNIQUE,
+            status TEXT NOT NULL,
+            start_time DATETIME NOT NULL,
+            end_time DATETIME,
+            error TEXT,
+            target_id TEXT,
+            progress_current INTEGER,
+            progress_total INTEGER,
+            progress_message TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          )`,
       ];
 
       // Create indexes for better query performance
@@ -69,6 +83,9 @@ export class DatabaseMigration {
         `CREATE INDEX IF NOT EXISTS idx_scheduler_executions_number ON scheduler_executions(execution_number)`,
         `CREATE INDEX IF NOT EXISTS idx_scheduler_executions_status ON scheduler_executions(status)`,
         `CREATE INDEX IF NOT EXISTS idx_config_history_created_at ON config_history(created_at)`,
+        `CREATE INDEX IF NOT EXISTS idx_task_history_task_id ON task_history(task_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_task_history_status ON task_history(status)`,
+        `CREATE INDEX IF NOT EXISTS idx_task_history_start_time ON task_history(start_time)`,
       ];
 
       const transaction = this.db.transaction((stmts: string[]) => {
@@ -93,6 +110,18 @@ export class DatabaseMigration {
         // Column might already exist, ignore error
         // In SQLite, if column exists, ALTER TABLE will fail, which is fine
         logger.warn('Failed to add is_active column (may already exist)', { error });
+      }
+
+      // Add task_history table if it doesn't exist (for backward compatibility)
+      try {
+        const tableInfo = this.db.prepare(`PRAGMA table_info(task_history)`).all() as Array<{ name: string }>;
+        if (tableInfo.length === 0) {
+          // Table doesn't exist, but it should have been created by migrations above
+          // This is just a safety check
+          logger.debug('task_history table will be created by migrations');
+        }
+      } catch (error) {
+        logger.warn('Failed to check task_history table (may already exist)', { error });
       }
     } catch (error) {
       throw new DatabaseError(

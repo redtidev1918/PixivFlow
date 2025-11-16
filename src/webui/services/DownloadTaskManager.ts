@@ -127,6 +127,17 @@ export class DownloadTaskManager {
     this.tasks.set(taskId, taskStatus);
     this.taskLogs.set(taskId, []);
     
+    // Save task history to database
+    try {
+      database.saveTaskHistory(taskId, {
+        status: 'running',
+        startTime: taskStatus.startTime,
+        targetId,
+      });
+    } catch (error) {
+      logger.warn('Failed to save task history to database', { taskId, error });
+    }
+    
     // Add initial log entry
     this.addLog(taskId, 'info', `下载任务 ${taskId} 已启动`);
 
@@ -138,6 +149,21 @@ export class DownloadTaskManager {
         
         taskStatus.status = 'completed';
         taskStatus.endTime = new Date();
+        
+        // Update task history in database
+        try {
+          database.saveTaskHistory(taskId, {
+            status: 'completed',
+            startTime: taskStatus.startTime,
+            endTime: taskStatus.endTime,
+            progressCurrent: taskStatus.progress?.current,
+            progressTotal: taskStatus.progress?.total,
+            progressMessage: taskStatus.progress?.message,
+          });
+        } catch (error) {
+          logger.warn('Failed to update task history in database', { taskId, error });
+        }
+        
         this.addLog(taskId, 'info', '下载任务完成');
         logger.info(`Download task ${taskId} completed`);
       } catch (error) {
@@ -145,6 +171,22 @@ export class DownloadTaskManager {
         const errorMessage = error instanceof Error ? error.message : String(error);
         taskStatus.error = errorMessage;
         taskStatus.endTime = new Date();
+        
+        // Update task history in database
+        try {
+          database.saveTaskHistory(taskId, {
+            status: 'failed',
+            startTime: taskStatus.startTime,
+            endTime: taskStatus.endTime,
+            error: errorMessage,
+            progressCurrent: taskStatus.progress?.current,
+            progressTotal: taskStatus.progress?.total,
+            progressMessage: taskStatus.progress?.message,
+          });
+        } catch (dbError) {
+          logger.warn('Failed to update task history in database', { taskId, error: dbError });
+        }
+        
         this.addLog(taskId, 'error', `下载任务失败: ${errorMessage}`);
         if (error instanceof Error && error.stack) {
           this.addLog(taskId, 'error', `错误堆栈: ${error.stack}`);
@@ -185,14 +227,31 @@ export class DownloadTaskManager {
     }
 
     if (this.activeTask && this.activeTask.taskId === taskId) {
+      const database = this.activeTask.database;
+      
+      // Update task history in database BEFORE closing
+      try {
+        task.status = 'stopped';
+        task.endTime = new Date();
+        database.saveTaskHistory(taskId, {
+          status: 'stopped',
+          startTime: task.startTime,
+          endTime: task.endTime,
+          error: 'Task stopped by user',
+          progressCurrent: task.progress?.current,
+          progressTotal: task.progress?.total,
+          progressMessage: task.progress?.message,
+        });
+      } catch (error) {
+        logger.warn('Failed to update task history in database', { taskId, error });
+      }
+      
       // Signal abort
       this.activeTask.abortController.abort();
       
       // Close database
-      this.activeTask.database.close();
+      database.close();
       
-      task.status = 'stopped';
-      task.endTime = new Date();
       this.addLog(taskId, 'warn', '下载任务已停止');
       this.activeTask = null;
       
@@ -240,6 +299,22 @@ export class DownloadTaskManager {
     const task = this.tasks.get(taskId);
     if (task) {
       task.progress = progress;
+      
+      // Update task history in database (only if task is running)
+      if (task.status === 'running' && this.activeTask) {
+        try {
+          this.activeTask.database.saveTaskHistory(taskId, {
+            status: 'running',
+            startTime: task.startTime,
+            progressCurrent: progress.current,
+            progressTotal: progress.total,
+            progressMessage: progress.message,
+          });
+        } catch (error) {
+          // Don't log as error - progress updates are frequent and non-critical
+          logger.debug('Failed to update task progress in database', { taskId });
+        }
+      }
     }
   }
 

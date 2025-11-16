@@ -90,6 +90,9 @@ export enum ErrorCode {
   LOGS_GET_FAILED = 'LOGS_GET_FAILED',
   LOGS_CLEAR_SUCCESS = 'LOGS_CLEAR_SUCCESS',
   LOGS_CLEAR_FAILED = 'LOGS_CLEAR_FAILED',
+
+  // Request validation errors
+  INVALID_REQUEST = 'INVALID_REQUEST',
 }
 
 /**

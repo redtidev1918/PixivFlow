@@ -144,11 +144,15 @@ export async function getDownloadStatus(req: Request, res: Response): Promise<vo
       const status = downloadTaskManager.getTaskStatus(taskId as string);
       if (!status) {
         res.status(404).json({
-          errorCode: ErrorCode.DOWNLOAD_TASK_NOT_FOUND,
+          data: {
+            errorCode: ErrorCode.DOWNLOAD_TASK_NOT_FOUND,
+          },
         });
         return;
       }
-      res.json(serializeTaskStatus(status));
+      res.json({
+        data: serializeTaskStatus(status),
+      });
       return;
     }
 
@@ -157,9 +161,11 @@ export async function getDownloadStatus(req: Request, res: Response): Promise<vo
     const activeTask = downloadTaskManager.getActiveTask();
 
     res.json({
-      activeTask: serializeTaskStatus(activeTask),
-      allTasks: allTasks.map(serializeTaskStatus),
-      hasActiveTask: downloadTaskManager.hasActiveTask(),
+      data: {
+        activeTask: serializeTaskStatus(activeTask),
+        allTasks: allTasks.map(serializeTaskStatus),
+        hasActiveTask: downloadTaskManager.hasActiveTask(),
+      },
     });
   } catch (error) {
     logger.error('Failed to get download status', { error });

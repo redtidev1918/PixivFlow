@@ -2,6 +2,7 @@ import { Router } from 'express';
 import * as basicHandlers from './handlers/download-basic-handlers';
 import * as incompleteHandlers from './handlers/download-incomplete-handlers';
 import * as batchHandlers from './handlers/download-batch-handlers';
+import * as urlHandlers from './handlers/download-url-handlers';
 
 const router = Router();
 
@@ -15,6 +16,11 @@ router.get('/history', basicHandlers.getDownloadHistory);
 // Batch download operations
 router.post('/run-all', batchHandlers.runAllDownloads);
 router.post('/random', batchHandlers.randomDownload);
+
+// URL download operations
+router.post('/url', urlHandlers.downloadFromUrl);
+router.post('/batch-url', urlHandlers.downloadFromBatchUrls);
+router.post('/parse-url', urlHandlers.parseUrl);
 
 // Incomplete tasks management
 router.get('/incomplete', incompleteHandlers.getIncompleteTasks);

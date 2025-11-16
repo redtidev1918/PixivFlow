@@ -11,51 +11,72 @@ import { ErrorCode } from '../../utils/error-codes';
  * - https://www.pixiv.net/member_illust.php?mode=medium&illust_id=123456
  * - https://www.pixiv.net/novel/show.php?id=123456
  * - https://pixiv.net/artworks/123456
+ * - https://pixiv.net/i/123456 (short format)
  * - Direct ID: 123456
  */
 function parsePixivUrl(url: string): { id: string; type: 'illustration' | 'novel' } | null {
   try {
+    const trimmedUrl = url.trim();
+    
     // If it's just a number, treat as illustration ID
-    if (/^\d+$/.test(url.trim())) {
-      return { id: url.trim(), type: 'illustration' };
+    if (/^\d+$/.test(trimmedUrl)) {
+      return { id: trimmedUrl, type: 'illustration' };
     }
 
     // Try to parse as URL
     let urlObj: URL;
     try {
-      urlObj = new URL(url);
+      urlObj = new URL(trimmedUrl);
     } catch {
       // If URL parsing fails, try adding https://
-      urlObj = new URL(`https://${url}`);
+      try {
+        urlObj = new URL(`https://${trimmedUrl}`);
+      } catch {
+        // If still fails, it's not a valid URL format
+        return null;
+      }
     }
 
-    // Check if it's a Pixiv domain
-    if (!urlObj.hostname.includes('pixiv.net')) {
+    // Check if it's a Pixiv domain (support www.pixiv.net, pixiv.net, etc.)
+    const hostname = urlObj.hostname.toLowerCase();
+    if (!hostname.includes('pixiv.net') && !hostname.includes('pixiv.org')) {
       return null;
     }
 
     // Extract ID from different URL formats
-    const pathname = urlObj.pathname;
+    const pathname = urlObj.pathname.toLowerCase();
     const searchParams = urlObj.searchParams;
 
-    // Format: /artworks/123456 or /en/artworks/123456
+    // Format: /artworks/123456 or /en/artworks/123456 or /zh-cn/artworks/123456
     const artworksMatch = pathname.match(/\/artworks\/(\d+)/);
     if (artworksMatch) {
       return { id: artworksMatch[1], type: 'illustration' };
     }
 
-    // Format: /member_illust.php?illust_id=123456
+    // Format: /i/123456 (short format for illustrations)
+    const shortIllustMatch = pathname.match(/^\/i\/(\d+)$/);
+    if (shortIllustMatch) {
+      return { id: shortIllustMatch[1], type: 'illustration' };
+    }
+
+    // Format: /member_illust.php?illust_id=123456 or ?mode=medium&illust_id=123456
     const illustId = searchParams.get('illust_id');
-    if (illustId) {
+    if (illustId && /^\d+$/.test(illustId)) {
       return { id: illustId, type: 'illustration' };
     }
 
     // Format: /novel/show.php?id=123456
     if (pathname.includes('/novel/')) {
       const novelId = searchParams.get('id');
-      if (novelId) {
+      if (novelId && /^\d+$/.test(novelId)) {
         return { id: novelId, type: 'novel' };
       }
+    }
+
+    // Format: /users/123456/artworks/789012 (user's artwork page)
+    const userArtworkMatch = pathname.match(/\/users\/\d+\/artworks\/(\d+)/);
+    if (userArtworkMatch) {
+      return { id: userArtworkMatch[1], type: 'illustration' };
     }
 
     return null;
@@ -255,7 +276,13 @@ export async function parseUrl(req: Request, res: Response): Promise<void> {
         data: {
           success: false,
           errorCode: ErrorCode.INVALID_REQUEST,
-          message: 'Invalid Pixiv URL or ID. Supported formats: https://www.pixiv.net/artworks/123456 or just 123456',
+          message: 'Invalid Pixiv URL or ID. Supported formats:\n' +
+            '- https://www.pixiv.net/artworks/123456\n' +
+            '- https://www.pixiv.net/en/artworks/123456\n' +
+            '- https://www.pixiv.net/member_illust.php?illust_id=123456\n' +
+            '- https://www.pixiv.net/novel/show.php?id=123456\n' +
+            '- https://pixiv.net/i/123456\n' +
+            '- Direct ID: 123456',
         },
       });
       return;

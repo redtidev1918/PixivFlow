@@ -237,26 +237,31 @@ export async function parseUrl(req: Request, res: Response): Promise<void> {
     const { url } = req.body;
 
     if (!url || typeof url !== 'string') {
-      res.status(400).json({
-        errorCode: ErrorCode.INVALID_REQUEST,
-        message: 'URL is required',
+      // 返回 200 状态码，但 success: false，以便前端统一处理
+      res.status(200).json({
+        data: {
+          success: false,
+          errorCode: ErrorCode.INVALID_REQUEST,
+          message: 'URL is required',
+        },
       });
       return;
     }
 
     const parsed = parsePixivUrl(url);
     if (!parsed) {
-      res.status(400).json({
+      // 返回 200 状态码，但 success: false，以便前端统一处理
+      res.status(200).json({
         data: {
           success: false,
           errorCode: ErrorCode.INVALID_REQUEST,
-          message: 'Invalid Pixiv URL or ID',
+          message: 'Invalid Pixiv URL or ID. Supported formats: https://www.pixiv.net/artworks/123456 or just 123456',
         },
       });
       return;
     }
 
-    res.json({
+    res.status(200).json({
       data: {
         success: true,
         workId: parsed.id,
@@ -266,9 +271,13 @@ export async function parseUrl(req: Request, res: Response): Promise<void> {
     });
   } catch (error) {
     logger.error('Failed to parse URL', { error });
-    res.status(500).json({
-      errorCode: ErrorCode.INVALID_REQUEST,
-      message: error instanceof Error ? error.message : String(error),
+    // 返回 200 状态码，但 success: false，以便前端统一处理
+    res.status(200).json({
+      data: {
+        success: false,
+        errorCode: ErrorCode.INVALID_REQUEST,
+        message: error instanceof Error ? error.message : String(error),
+      },
     });
   }
 }

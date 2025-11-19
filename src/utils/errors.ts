@@ -146,23 +146,23 @@ export function getDetailedErrorInfo(error: unknown): {
     // Add suggestions based on error message
     const msgLower = message.toLowerCase();
     if (msgLower.includes('401') || msgLower.includes('unauthorized')) {
-      suggestions.push('认证失败：请检查 refresh token 是否有效');
-      suggestions.push('尝试重新登录以获取新的 refresh token');
+      suggestions.push('Authentication failed: Your refresh token may be invalid or expired');
+      suggestions.push('Run "pixivflow login" or "pixivflow login-headless" to get a new token');
     } else if (msgLower.includes('403') || msgLower.includes('forbidden')) {
-      suggestions.push('访问被拒绝：可能是 Pixiv API 限制');
-      suggestions.push('等待一段时间后重试，或检查账户状态');
+      suggestions.push('Access denied: This may be a Pixiv API restriction');
+      suggestions.push('Wait for a while and try again, or check your account status');
     } else if (msgLower.includes('timeout') || msgLower.includes('timed out')) {
-      suggestions.push('请求超时：检查网络连接');
-      suggestions.push('尝试增加网络超时时间或使用代理');
+      suggestions.push('Request timeout: Check your network connection');
+      suggestions.push('Try increasing network timeout or using a proxy');
     } else if (msgLower.includes('failed after')) {
-      suggestions.push('多次重试后仍然失败：可能是网络不稳定或 API 限制');
-      suggestions.push('检查网络连接和代理设置');
-      suggestions.push('等待一段时间后重试');
+      suggestions.push('Failed after multiple retries: Network may be unstable or API is rate-limiting');
+      suggestions.push('Check network connection and proxy settings');
+      suggestions.push('Wait for a while and try again');
     }
   } else if (error instanceof AuthenticationError) {
     type = 'AUTH_ERROR';
-    suggestions.push('认证错误：请检查 refresh token 是否有效');
-    suggestions.push('尝试重新登录以获取新的 refresh token');
+    suggestions.push('Authentication error: Your refresh token is invalid or expired');
+    suggestions.push('Run "pixivflow login" or "pixivflow login-headless" to authenticate');
   }
 
   return { message, type, cause, suggestions: suggestions.length > 0 ? suggestions : undefined };

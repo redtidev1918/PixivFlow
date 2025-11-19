@@ -6,11 +6,12 @@
  * (based on database path) so they persist when switching between config files.
  */
 
-import { existsSync, readFileSync, writeFileSync, mkdirSync, unlinkSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, mkdirSync, unlinkSync, copyFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { logger } from '../logger';
 
 const TOKEN_FILE_NAME = '.pixiv-refresh-token';
+const TOKEN_BACKUP_FILE_NAME = '.pixiv-refresh-token.backup';
 const PLACEHOLDER_TOKEN = 'YOUR_REFRESH_TOKEN';
 
 /**
@@ -47,6 +48,62 @@ export function isPlaceholderToken(token: string | undefined | null): boolean {
 }
 
 /**
+ * Create a backup of the current token file
+ * @param databasePath Optional database path to determine storage location
+ */
+function backupToken(databasePath?: string): void {
+  try {
+    const tokenPath = getTokenFilePath(databasePath);
+    if (!existsSync(tokenPath)) {
+      return; // No token to backup
+    }
+    
+    const backupPath = join(dirname(tokenPath), TOKEN_BACKUP_FILE_NAME);
+    copyFileSync(tokenPath, backupPath);
+    logger.debug('Token backup created', { backupPath });
+  } catch (error) {
+    logger.warn('Failed to create token backup', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    // Don't throw - backup is optional
+  }
+}
+
+/**
+ * Restore token from backup if main token file is missing or corrupted
+ * @param databasePath Optional database path to determine storage location
+ * @returns The restored token, or null if restoration failed
+ */
+function restoreTokenFromBackup(databasePath?: string): string | null {
+  try {
+    const backupPath = join(getTokenStorageDir(databasePath), TOKEN_BACKUP_FILE_NAME);
+    
+    if (!existsSync(backupPath)) {
+      return null;
+    }
+    
+    const token = readFileSync(backupPath, 'utf-8').trim();
+    
+    if (isPlaceholderToken(token)) {
+      return null;
+    }
+    
+    logger.info('Token restored from backup', { backupPath });
+    
+    // Restore the main token file
+    const tokenPath = getTokenFilePath(databasePath);
+    writeFileSync(tokenPath, token, 'utf-8');
+    
+    return token;
+  } catch (error) {
+    logger.warn('Failed to restore token from backup', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return null;
+  }
+}
+
+/**
  * Save refresh token to unified storage
  * @param refreshToken The refresh token to save
  * @param databasePath Optional database path to determine storage location
@@ -66,14 +123,30 @@ export function saveTokenToStorage(refreshToken: string, databasePath?: string):
       mkdirSync(storageDir, { recursive: true });
     }
     
+    // Create backup of existing token before overwriting
+    if (existsSync(tokenPath)) {
+      backupToken(databasePath);
+    }
+    
     // Save token to file (simple text file, no JSON wrapper needed)
     writeFileSync(tokenPath, refreshToken.trim(), 'utf-8');
     logger.debug('Token saved to unified storage', { tokenPath });
+    
+    // Verify the write was successful
+    if (!existsSync(tokenPath)) {
+      throw new Error('Token file was not created successfully');
+    }
+    
+    // Double-check the content
+    const savedToken = readFileSync(tokenPath, 'utf-8').trim();
+    if (savedToken !== refreshToken.trim()) {
+      throw new Error('Saved token does not match input token');
+    }
   } catch (error) {
-    logger.warn('Failed to save token to unified storage', {
+    logger.error('Failed to save token to unified storage', {
       error: error instanceof Error ? error.message : String(error),
     });
-    // Don't throw - this is a non-critical operation
+    // Don't throw - this is a non-critical operation, but log as error
   }
 }
 
@@ -87,13 +160,17 @@ export function loadTokenFromStorage(databasePath?: string): string | null {
     const tokenPath = getTokenFilePath(databasePath);
     
     if (!existsSync(tokenPath)) {
-      return null;
+      // Try to restore from backup
+      logger.debug('Token file not found, attempting to restore from backup');
+      return restoreTokenFromBackup(databasePath);
     }
     
     const token = readFileSync(tokenPath, 'utf-8').trim();
     
     if (isPlaceholderToken(token)) {
-      return null;
+      // Token is invalid, try backup
+      logger.debug('Token file contains placeholder, attempting to restore from backup');
+      return restoreTokenFromBackup(databasePath);
     }
     
     logger.debug('Token loaded from unified storage', { tokenPath });
@@ -102,7 +179,8 @@ export function loadTokenFromStorage(databasePath?: string): string | null {
     logger.warn('Failed to load token from unified storage', {
       error: error instanceof Error ? error.message : String(error),
     });
-    return null;
+    // Try backup as last resort
+    return restoreTokenFromBackup(databasePath);
   }
 }
 

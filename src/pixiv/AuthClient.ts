@@ -80,7 +80,7 @@ export class PixivAuth {
           if (!response.ok) {
             // Check for authentication errors (401, 403) which indicate refresh token is invalid/expired
             if (response.status === 401 || response.status === 403) {
-              const errorMessage = `Refresh token is invalid or expired (HTTP ${response.status}). Please login again.`;
+              const errorMessage = `Pixiv authentication failed (HTTP ${response.status}): Your refresh token is invalid or has expired.`;
               throw new AuthenticationError(errorMessage);
             }
             throw new Error(`Failed to refresh token: ${response.status} ${response.statusText}`);
@@ -98,32 +98,50 @@ export class PixivAuth {
 
           this.database.setToken(TOKEN_CACHE_KEY, stored);
 
-          // CRITICAL: Auto-update refresh token in both database and config file
+          // CRITICAL: Auto-update refresh token in all storage locations
           // This ensures the refresh token never expires and is always up-to-date
           if (data.refresh_token && data.refresh_token !== this.credentials.refreshToken) {
-            logger.info('Received updated refresh token, updating storage and config file');
+            logger.info('Received updated refresh token, updating all storage locations');
             
-            // Store in database
+            // Update internal credentials immediately
+            this.credentials.refreshToken = data.refresh_token;
+            
+            // 1. Store in database (primary storage)
             this.database.setToken(REFRESH_TOKEN_CACHE_KEY, {
               accessToken: '',
               expiresAt,
               refreshToken: data.refresh_token,
               tokenType: data.token_type,
             });
+            logger.debug('✓ Token saved to database');
 
-            // Auto-update config file to ensure refresh token never expires
+            // 2. Store in file system (unified storage)
+            try {
+              const { saveTokenToStorage } = await import('../utils/token-manager');
+              const databasePath = this.database ? (this.database as any).databasePath : undefined;
+              saveTokenToStorage(data.refresh_token, databasePath);
+              logger.debug('✓ Token saved to file system');
+            } catch (error) {
+              logger.warn('Failed to save token to file system', {
+                error: error instanceof Error ? error.message : String(error),
+              });
+            }
+
+            // 3. Auto-update config file to ensure refresh token never expires
             // This is the key to "one-time setup, forever working" solution
             if (this.configPath) {
               try {
                 await updateConfigWithToken(this.configPath, data.refresh_token);
-                logger.info('✓ Config file automatically updated with new refresh token');
+                logger.debug('✓ Config file automatically updated with new refresh token');
               } catch (error) {
                 logger.warn('Failed to update config file with new refresh token', {
                   error: error instanceof Error ? error.message : String(error),
                 });
-                // Don't throw - database update succeeded, config update is optional
+                // Don't throw - other storage updates succeeded
               }
             }
+            
+            logger.info('✓ Refresh token updated in all storage locations');
           }
 
           logger.info('Refreshed Pixiv access token');

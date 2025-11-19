@@ -12,6 +12,7 @@ import { FileService } from '../download/FileService';
 import { DownloadManager } from '../download/DownloadManager';
 import { withResources, createResource } from '../utils/resource-manager';
 import { parsePixivUrl, parsedUrlToTargetConfig } from '../utils/pixiv-url-parser';
+import { AuthenticationError, ConfigError } from '../utils/errors';
 
 /**
  * Download command - Run download job once
@@ -120,6 +121,39 @@ export class DownloadCommand extends BaseCommand {
 
       return this.success('Download completed successfully');
     } catch (error) {
+      // Handle authentication errors with friendly guidance
+      if (error instanceof AuthenticationError) {
+        const friendlyMessage = [
+          '\n❌ Authentication Error',
+          '════════════════════════════════════════════════════════════════',
+          error.message,
+          '',
+          '💡 Your refresh token has expired or is invalid.',
+          '   Please login again to get a new refresh token:',
+          '',
+          '   • Interactive login:  pixivflow login',
+          '   • Headless login:     pixivflow login-headless',
+          '',
+          '════════════════════════════════════════════════════════════════',
+        ].join('\n');
+        
+        console.error(friendlyMessage);
+        context.logger.error('Authentication failed - refresh token expired or invalid', {
+          error: error.message,
+        });
+        return this.failure(error.message, { error });
+      }
+      
+      // Handle config errors with friendly guidance
+      if (error instanceof ConfigError) {
+        console.error('\n' + error.message);
+        context.logger.error('Configuration error', {
+          error: error.message,
+        });
+        return this.failure(error.message, { error });
+      }
+      
+      // Handle other errors
       context.logger.error('Fatal error while running download', {
         error: error instanceof Error ? error.stack ?? error.message : String(error),
       });
@@ -136,14 +170,31 @@ export class DownloadCommand extends BaseCommand {
 Options:
   --config <path>        Path to config file
   --targets <json>       Custom targets JSON (overrides config file targets)
-  --url <url>            Download from Pixiv URL (overrides config file targets)
+  --url <url>            Download from Pixiv URL or ID (overrides config file targets)
+
+Supported URL formats:
+  • Standard artworks:        https://www.pixiv.net/artworks/{id}
+  • With language code:       https://www.pixiv.net/en/artworks/{id}
+  • Short format:             https://www.pixiv.net/i/{id}
+  • Legacy format:            https://www.pixiv.net/member_illust.php?illust_id={id}
+  • User's artwork:           https://www.pixiv.net/users/{userId}/artworks/{id}
+  • Novel:                    https://www.pixiv.net/novel/show.php?id={id}
+  • User's novel:             https://www.pixiv.net/users/{userId}/novels/{id}
+  • Novel series:             https://www.pixiv.net/novel/series/{id}
+  • User profile:             https://www.pixiv.net/users/{userId}
+  • Direct ID:                {id} (treated as illustration)
 
 Examples:
   pixivflow download
   pixivflow download --targets '[{"type":"novel","tag":"アークナイツ","limit":5}]'
   pixivflow download --url "https://www.pixiv.net/artworks/12345678"
+  pixivflow download --url "https://www.pixiv.net/en/artworks/12345678"
+  pixivflow download --url "https://www.pixiv.net/i/12345678"
+  pixivflow download --url "https://www.pixiv.net/member_illust.php?illust_id=12345678"
   pixivflow download --url "https://www.pixiv.net/novel/show.php?id=26132156"
-  pixivflow download --url "https://www.pixiv.net/users/123456"`;
+  pixivflow download --url "https://www.pixiv.net/users/123456/artworks/789012"
+  pixivflow download --url "https://www.pixiv.net/users/123456"
+  pixivflow download --url "12345678"`;
   }
 }
 

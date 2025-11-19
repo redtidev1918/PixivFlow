@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { loadConfig, getConfigPath } from './config';
+import { StandaloneConfig } from './config/types';
 import { DownloadManager } from './download/DownloadManager';
 import { FileService } from './download/FileService';
 import { logger } from './logger';
@@ -98,7 +99,39 @@ async function bootstrap() {
   ]);
   const isTokenOptional = commandName ? tokenOptionalCommands.has(commandName) : true;
   
-  const config = loadConfig(configPath, isLoginCommand || isHelpInvocation || isTokenOptional);
+  let config: StandaloneConfig;
+  try {
+    config = loadConfig(configPath, isLoginCommand || isHelpInvocation || isTokenOptional);
+  } catch (error) {
+    // Handle config loading errors with friendly messages
+    if (error instanceof ConfigError) {
+      console.error('\n' + error.message + '\n');
+      logger.error('Configuration error', {
+        error: error.message,
+      });
+      process.exit(1);
+    }
+    if (error instanceof AuthenticationError) {
+      console.error('\n❌ Authentication Error');
+      console.error('════════════════════════════════════════════════════════════════');
+      console.error(error.message);
+      console.error('');
+      console.error('💡 Your refresh token has expired or is invalid.');
+      console.error('   Please login again to get a new refresh token:');
+      console.error('');
+      console.error('   • Interactive login:  pixivflow login');
+      console.error('   • Headless login:     pixivflow login-headless');
+      console.error('');
+      console.error('════════════════════════════════════════════════════════════════\n');
+      logger.error('Authentication failed', {
+        error: error.message,
+      });
+      process.exit(1);
+    }
+    // Re-throw other errors
+    throw error;
+  }
+  
   const context = {
     config,
     logger,
@@ -320,19 +353,10 @@ async function bootstrap() {
       process.exit(1);
     }
     if (error instanceof ConfigError) {
-      console.error('\nℹ️  Initial setup required');
-      console.error('════════════════════════════════════════════════════════════════');
-      console.error(error.message);
-      console.error('');
-      console.error('💡 You have not logged in yet or your config is incomplete.');
-      console.error('   Please run one of the following commands to login and auto-fill your token:');
-      console.error('');
-      console.error('   • Interactive login:  pixivflow login');
-      console.error('   • Headless login:     pixivflow login-headless');
-      console.error('');
-      console.error('   Or manually edit your config file to set pixiv.refreshToken.');
-      console.error('════════════════════════════════════════════════════════════════\n');
-      logger.error('Configuration error - login/setup required', {
+      // The ConfigError message already contains friendly guidance if it's token-related
+      // Just print the message directly
+      console.error('\n' + error.message + '\n');
+      logger.error('Configuration error', {
         error: error.message,
       });
       process.exit(1);

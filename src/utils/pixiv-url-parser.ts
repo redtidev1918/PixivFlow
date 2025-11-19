@@ -15,12 +15,18 @@ export interface ParsedPixivUrl {
  * 
  * Supported URL formats:
  * - https://www.pixiv.net/artworks/{illustId}
+ * - https://www.pixiv.net/en/artworks/{illustId} (with language code)
+ * - https://www.pixiv.net/member_illust.php?mode=medium&illust_id={illustId} (legacy)
+ * - https://www.pixiv.net/i/{illustId} (short format)
  * - https://www.pixiv.net/novel/show.php?id={novelId}
  * - https://www.pixiv.net/novel/series/{seriesId}
  * - https://www.pixiv.net/users/{userId}
+ * - https://www.pixiv.net/users/{userId}/artworks/{illustId}
+ * - https://www.pixiv.net/users/{userId}/novels/{novelId}
  * - https://pixiv.net/artworks/{illustId} (without www)
+ * - Direct ID: {id} (treated as illustration)
  * 
- * @param url Pixiv URL
+ * @param url Pixiv URL or direct ID
  * @returns Parsed URL information or null if URL is invalid
  */
 export function parsePixivUrl(url: string): ParsedPixivUrl | null {
@@ -32,27 +38,68 @@ export function parsePixivUrl(url: string): ParsedPixivUrl | null {
     // Normalize URL: remove trailing slashes and whitespace
     const normalizedUrl = url.trim().replace(/\/+$/, '');
     
+    // Check if it's just a numeric ID (treat as illustration)
+    if (/^\d+$/.test(normalizedUrl)) {
+      const id = parseInt(normalizedUrl, 10);
+      if (!isNaN(id)) {
+        return {
+          type: 'illustration',
+          id: id,
+        };
+      }
+    }
+    
     // Try to parse as URL
     let urlObj: URL;
     try {
       urlObj = new URL(normalizedUrl);
     } catch {
-      // If URL parsing fails, try to extract ID from string directly
-      return parseIdFromString(normalizedUrl);
+      // Try adding https:// prefix
+      try {
+        urlObj = new URL(`https://${normalizedUrl}`);
+      } catch {
+        // If still fails, try to extract ID from string directly
+        return parseIdFromString(normalizedUrl);
+      }
     }
 
     const hostname = urlObj.hostname.toLowerCase();
     const pathname = urlObj.pathname;
+    const searchParams = urlObj.searchParams;
 
-    // Check if it's a Pixiv domain
-    if (!hostname.includes('pixiv.net')) {
+    // Check if it's a Pixiv domain (support pixiv.net and pixiv.org)
+    if (!hostname.includes('pixiv.net') && !hostname.includes('pixiv.org')) {
       return null;
     }
 
-    // Parse illustration URL: /artworks/{id}
-    const illustMatch = pathname.match(/^\/artworks\/(\d+)$/);
+    // Parse illustration URL: /artworks/{id} or /en/artworks/{id} or /zh-cn/artworks/{id}
+    const illustMatch = pathname.match(/\/artworks\/(\d+)/);
     if (illustMatch) {
       const illustId = parseInt(illustMatch[1], 10);
+      if (!isNaN(illustId)) {
+        return {
+          type: 'illustration',
+          id: illustId,
+        };
+      }
+    }
+
+    // Parse short illustration URL: /i/{id}
+    const shortIllustMatch = pathname.match(/^\/i\/(\d+)$/);
+    if (shortIllustMatch) {
+      const illustId = parseInt(shortIllustMatch[1], 10);
+      if (!isNaN(illustId)) {
+        return {
+          type: 'illustration',
+          id: illustId,
+        };
+      }
+    }
+
+    // Parse legacy illustration URL: /member_illust.php?illust_id={id}
+    const illustIdParam = searchParams.get('illust_id');
+    if (illustIdParam) {
+      const illustId = parseInt(illustIdParam, 10);
       if (!isNaN(illustId)) {
         return {
           type: 'illustration',
@@ -88,7 +135,31 @@ export function parsePixivUrl(url: string): ParsedPixivUrl | null {
       }
     }
 
-    // Parse user URL: /users/{userId}
+    // Parse user's artwork URL: /users/{userId}/artworks/{illustId}
+    const userArtworkMatch = pathname.match(/\/users\/(\d+)\/artworks\/(\d+)/);
+    if (userArtworkMatch) {
+      const illustId = parseInt(userArtworkMatch[2], 10);
+      if (!isNaN(illustId)) {
+        return {
+          type: 'illustration',
+          id: illustId,
+        };
+      }
+    }
+
+    // Parse user's novel URL: /users/{userId}/novels/{novelId}
+    const userNovelMatch = pathname.match(/\/users\/(\d+)\/novels\/(\d+)/);
+    if (userNovelMatch) {
+      const novelId = parseInt(userNovelMatch[2], 10);
+      if (!isNaN(novelId)) {
+        return {
+          type: 'novel',
+          id: novelId,
+        };
+      }
+    }
+
+    // Parse user URL: /users/{userId} (only user profile, no specific work)
     const userMatch = pathname.match(/^\/users\/(\d+)$/);
     if (userMatch) {
       const userId = userMatch[1];

@@ -60,11 +60,11 @@ export function validateConfig(config: Partial<StandaloneConfig>, location: stri
         logger.debug('Config file has placeholder token, but unified storage has valid token - validation passed');
       } else {
         // No token anywhere - this is an error
-        errors.push('pixiv.refreshToken: Please replace "YOUR_REFRESH_TOKEN" with your actual refresh token or login');
+        errors.push('pixiv.refreshToken: No valid refresh token found. Please login to authenticate.');
       }
     } else if (!hasValidConfigToken) {
       // No database path and config has placeholder - error
-      errors.push('pixiv.refreshToken: Please replace "YOUR_REFRESH_TOKEN" with your actual refresh token');
+      errors.push('pixiv.refreshToken: No valid refresh token found. Please login to authenticate.');
     }
     // If hasValidConfigToken is true, token is valid - no error
     
@@ -177,7 +177,18 @@ export function validateConfig(config: Partial<StandaloneConfig>, location: stri
 
   // Throw error if there are critical issues
   if (errors.length > 0) {
-    const errorMessage = `Configuration validation failed in ${location}:\n${errors.map(e => `  - ${e}`).join('\n')}`;
+    // Check if error is token-related
+    const hasTokenError = errors.some(e => e.includes('refreshToken'));
+    
+    let errorMessage = `Configuration validation failed in ${location}:\n${errors.map(e => `  - ${e}`).join('\n')}`;
+    
+    if (hasTokenError) {
+      errorMessage += `\n\n💡 You need to login first. Run one of the following commands:\n`;
+      errorMessage += `   • Interactive login:  pixivflow login\n`;
+      errorMessage += `   • Headless login:     pixivflow login-headless\n`;
+      errorMessage += `\n   These commands will automatically save your refresh token.`;
+    }
+    
     const configError = new ConfigValidationError(errorMessage, errors, warnings);
     throw new ConfigError(errorMessage, configError);
   }

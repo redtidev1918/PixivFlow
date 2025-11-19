@@ -4,6 +4,7 @@
 
 import * as path from 'path';
 import { BaseCommand } from './Command';
+import { CommandCategory } from './metadata';
 import { CommandContext, CommandArgs, CommandResult } from './types';
 import { TerminalLogin, LoginInfo } from '../terminal-login';
 import { updateConfigWithToken } from '../utils/login-helper';
@@ -36,6 +37,12 @@ export class LoginCommand extends BaseCommand {
   readonly name = 'login';
   readonly description = 'Login interactively (using Python gppt)';
   readonly aliases = ['l', 'login-interactive', 'li'];
+  readonly requiresToken = false;
+  readonly metadata = {
+    category: CommandCategory.AUTHENTICATION,
+    requiresAuth: false,
+    longRunning: false,
+  };
 
   async execute(context: CommandContext, args: CommandArgs): Promise<CommandResult> {
     const json = !!(args.options.json || args.options.j);

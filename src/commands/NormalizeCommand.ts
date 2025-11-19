@@ -3,6 +3,7 @@
  */
 
 import { BaseCommand } from './Command';
+import { CommandCategory } from './metadata';
 import { CommandContext, CommandArgs, CommandResult } from './types';
 import { getConfigPath, loadConfig } from '../config';
 import { Database } from '../storage/Database';
@@ -15,7 +16,12 @@ import { FileNormalizationService } from '../download/FileNormalizationService';
 export class NormalizeCommand extends BaseCommand {
   readonly name = 'normalize';
   readonly description = 'Normalize and reorganize downloaded files';
-  readonly aliases = ['nf'];
+  readonly aliases: string[] = ['nf'];
+  readonly metadata = {
+    category: CommandCategory.MAINTENANCE,
+    requiresAuth: false,
+    longRunning: false,
+  };
 
   async execute(context: CommandContext, args: CommandArgs): Promise<CommandResult> {
     let database: Database | null = null;

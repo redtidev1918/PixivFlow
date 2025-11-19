@@ -3,6 +3,7 @@
  */
 
 import { BaseCommand } from './Command';
+import { CommandCategory } from './metadata';
 import { CommandArgs, CommandContext, CommandResult } from './types';
 import { Database } from '../storage/Database';
 import * as fs from 'fs/promises';
@@ -16,6 +17,12 @@ export class HealthCommand extends BaseCommand {
   readonly name = 'health';
   readonly description = 'Perform system health check and diagnostics';
   readonly aliases = ['check', 'diagnostic'];
+  readonly metadata = {
+    category: CommandCategory.MONITORING,
+    requiresAuth: false,
+    longRunning: false,
+  };
+  readonly requiresToken = false;
 
   async execute(context: CommandContext, args: CommandArgs): Promise<CommandResult> {
     const issues: string[] = [];

@@ -3,6 +3,7 @@
  */
 
 import { CommandArgs, CommandContext, CommandResult, ValidationResult } from './types';
+import { CommandMetadata, DEFAULT_METADATA } from './metadata';
 
 /**
  * Base command interface that all commands must implement
@@ -19,9 +20,20 @@ export interface Command {
   readonly description: string;
 
   /**
+   * Whether the command requires a valid Pixiv token to run.
+   * Defaults to true.
+   */
+  readonly requiresToken?: boolean;
+  
+  /**
    * Command aliases (alternative names)
    */
   readonly aliases?: string[];
+
+  /**
+   * Command metadata for better organization
+   */
+  readonly metadata?: CommandMetadata;
 
   /**
    * Execute the command
@@ -52,6 +64,8 @@ export abstract class BaseCommand implements Command {
   abstract readonly name: string;
   abstract readonly description: string;
   readonly aliases?: string[];
+  readonly requiresToken: boolean = true;
+  readonly metadata?: CommandMetadata;
 
   abstract execute(context: CommandContext, args: CommandArgs): Promise<CommandResult>;
 
@@ -89,6 +103,13 @@ export abstract class BaseCommand implements Command {
       return this.aliases.includes(name);
     }
     return false;
+  }
+
+  /**
+   * Get command metadata with defaults
+   */
+  getMetadata(): CommandMetadata {
+    return this.metadata || DEFAULT_METADATA;
   }
 }
 

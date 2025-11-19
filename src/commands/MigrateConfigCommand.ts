@@ -3,6 +3,7 @@
  */
 
 import { BaseCommand } from './Command';
+import { CommandCategory } from './metadata';
 import { CommandContext, CommandArgs, CommandResult } from './types';
 import { getConfigPath } from '../config';
 import { ConfigPathMigrator } from '../utils/config-path-migrator';
@@ -14,6 +15,11 @@ export class MigrateConfigCommand extends BaseCommand {
   readonly name = 'migrate-config';
   readonly description = 'Migrate configuration paths (convert absolute to relative)';
   readonly aliases = ['mc'];
+  readonly metadata = {
+    category: CommandCategory.CONFIGURATION,
+    requiresAuth: false,
+    longRunning: false,
+  };
 
   async execute(context: CommandContext, args: CommandArgs): Promise<CommandResult> {
     try {

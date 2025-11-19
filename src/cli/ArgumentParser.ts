@@ -2,6 +2,8 @@
  * Command line argument parser
  */
 
+import { VersionRequest, HelpRequest } from '../utils/errors';
+
 /**
  * Parsed command line arguments
  */
@@ -19,6 +21,8 @@ export class ArgumentParser {
    * Parse command line arguments
    * @param args Command line arguments (typically process.argv.slice(2))
    * @returns Parsed arguments
+   * @throws {VersionRequest} if --version or -v is found
+   * @throws {HelpRequest} if --help or -h is found
    */
   static parse(args: string[]): ParsedArgs {
     const result: ParsedArgs = {
@@ -26,37 +30,40 @@ export class ArgumentParser {
       positional: [],
     };
 
+    // First pass to find command, as it can affect help context
+    const commandArg = args.find(arg => !arg.startsWith('-'));
+
     for (let i = 0; i < args.length; i++) {
       const arg = args[i];
+
+      if (arg === '--version' || arg === '-v') {
+        throw new VersionRequest();
+      }
+      if (arg === '--help' || arg === '-h') {
+        throw new HelpRequest(commandArg);
+      }
       
-      // Long option (--option)
       if (arg.startsWith('--')) {
         const key = arg.slice(2);
         const nextArg = args[i + 1];
         
-        // Check if next argument is a value (not an option)
         if (nextArg && !nextArg.startsWith('-')) {
           result.options[key] = nextArg;
-          i++; // Skip next argument as it's the value
+          i++;
         } else {
-          result.options[key] = true; // Boolean flag
+          result.options[key] = true;
         }
-      }
-      // Short option (-o)
-      else if (arg.startsWith('-')) {
+      } else if (arg.startsWith('-')) {
         const key = arg.slice(1);
         const nextArg = args[i + 1];
         
-        // Check if next argument is a value (not an option)
         if (nextArg && !nextArg.startsWith('-')) {
           result.options[key] = nextArg;
-          i++; // Skip next argument as it's the value
+          i++;
         } else {
-          result.options[key] = true; // Boolean flag
+          result.options[key] = true;
         }
-      }
-      // Command or positional argument
-      else {
+      } else {
         if (!result.command) {
           result.command = arg;
         } else {
@@ -68,12 +75,7 @@ export class ArgumentParser {
     return result;
   }
 
-  /**
-   * Check if an option is set
-   * @param options Options object
-   * @param name Option name (supports both short and long forms)
-   * @returns True if option is set
-   */
+  // ... (rest of the class is unchanged) ...
   static hasOption(
     options: Record<string, string | boolean>,
     name: string
@@ -81,13 +83,6 @@ export class ArgumentParser {
     return options[name] !== undefined && options[name] !== false;
   }
 
-  /**
-   * Get option value
-   * @param options Options object
-   * @param name Option name
-   * @param defaultValue Default value if not set
-   * @returns Option value or default
-   */
   static getOption<T = string>(
     options: Record<string, string | boolean>,
     name: string,
@@ -100,13 +95,6 @@ export class ArgumentParser {
     return value as T;
   }
 
-  /**
-   * Get boolean option value
-   * @param options Options object
-   * @param name Option name
-   * @param defaultValue Default value if not set
-   * @returns Boolean value
-   */
   static getBooleanOption(
     options: Record<string, string | boolean>,
     name: string,
@@ -125,66 +113,3 @@ export class ArgumentParser {
     return defaultValue;
   }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

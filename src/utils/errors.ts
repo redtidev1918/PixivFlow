@@ -70,6 +70,27 @@ export class DatabaseError extends PixivFlowError {
 }
 
 /**
+ * A special error-like class to signal a version request.
+ * This is used for early exit without a full error stack.
+ */
+export class VersionRequest extends Error {
+  constructor() {
+    super('Version requested');
+    this.name = 'VersionRequest';
+  }
+}
+
+/**
+ * A special error-like class to signal a help request.
+ */
+export class HelpRequest extends Error {
+  constructor(public readonly command?: string) {
+    super('Help requested');
+    this.name = 'HelpRequest';
+  }
+}
+
+/**
  * Check if an error is a 404 (not found) error
  */
 export function is404Error(error: unknown): boolean {

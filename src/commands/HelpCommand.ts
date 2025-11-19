@@ -6,6 +6,7 @@ import { BaseCommand } from './Command';
 import { CommandArgs, CommandContext, CommandResult } from './types';
 import { CommandRegistry } from './CommandRegistry';
 import { registerAllCommands } from './index';
+import { CommandCategory, getCategoryDisplay } from './metadata';
 
 /**
  * Help command implementation
@@ -14,6 +15,12 @@ export class HelpCommand extends BaseCommand {
   readonly name = 'help';
   readonly description = 'Show help message';
   readonly aliases = ['-h', '--help'];
+  readonly requiresToken = false;
+  readonly metadata = {
+    category: CommandCategory.UTILITY,
+    requiresAuth: false,
+    longRunning: false,
+  };
 
   constructor(private registry?: CommandRegistry) {
     super();
@@ -85,29 +92,7 @@ export class HelpCommand extends BaseCommand {
 
   private showGeneralHelp(): void {
     const registry = this.getRegistry();
-    const allCommands = registry.getAll();
-
-    // Group commands by category
-    const categories: Record<string, import('./Command').Command[]> = {
-      'Authentication': [],
-      'Download': [],
-      'Management': [],
-      'Utility': [],
-    };
-
-    allCommands.forEach(cmd => {
-      if (cmd.name === 'help') {
-        categories['Utility'].push(cmd);
-      } else if (['login', 'login-headless', 'refresh'].includes(cmd.name)) {
-        categories['Authentication'].push(cmd);
-      } else if (['download', 'random', 'scheduler'].includes(cmd.name)) {
-        categories['Download'].push(cmd);
-      } else if (['normalize', 'migrate-config'].includes(cmd.name)) {
-        categories['Management'].push(cmd);
-      } else {
-        categories['Utility'].push(cmd);
-      }
-    });
+    const commandsByCategory = registry.getCommandsByCategory();
 
     console.log(`
 Usage: pixivflow [command] [options]
@@ -116,7 +101,7 @@ Usage: pixivflow [command] [options]
 ║      🎨 PixivFlow - Intelligent Pixiv Automation Downloader   ║
 ╚════════════════════════════════════════════════════════════════╝
 
-${this.formatCommandsByCategory(categories)}
+${this.formatCommandsByCategory(commandsByCategory)}
 
 Global Options:
   -u, --username <id>         Pixiv ID (email, username, or account name)
@@ -147,13 +132,24 @@ Note:
 `);
   }
 
-  private formatCommandsByCategory(categories: Record<string, import('./Command').Command[]>): string {
+  private formatCommandsByCategory(categories: Record<CommandCategory, import('./Command').Command[]>): string {
     let output = '';
     
-    for (const [category, commands] of Object.entries(categories)) {
-      if (commands.length === 0) continue;
+    // Define the order of categories to display
+    const orderedCategories: CommandCategory[] = [
+      CommandCategory.AUTHENTICATION,
+      CommandCategory.DOWNLOAD,
+      CommandCategory.CONFIGURATION,
+      CommandCategory.MONITORING,
+      CommandCategory.MAINTENANCE,
+      CommandCategory.UTILITY,
+    ];
+    
+    for (const category of orderedCategories) {
+      const commands = categories[category];
+      if (!commands || commands.length === 0) continue;
       
-      output += `${category}:\n`;
+      output += `${getCategoryDisplay(category)}:\n`;
       commands.forEach((cmd: import('./Command').Command) => {
         const aliases = cmd.aliases && cmd.aliases.length > 0 
           ? `, ${cmd.aliases.join(', ')}` 

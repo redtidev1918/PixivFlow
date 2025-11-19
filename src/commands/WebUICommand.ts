@@ -3,6 +3,7 @@
  */
 
 import { BaseCommand } from './Command';
+import { CommandCategory } from './metadata';
 import { CommandContext, CommandArgs, CommandResult } from './types';
 import { startWebUI } from '../webui/server/server';
 import { PORTS } from '../webui/ports';
@@ -17,6 +18,11 @@ export class WebUICommand extends BaseCommand {
   readonly name = 'webui';
   readonly description = 'Start WebUI server';
   readonly aliases: string[] = ['w'];
+  readonly metadata = {
+    category: CommandCategory.UTILITY,
+    requiresAuth: false,
+    longRunning: true,
+  };
 
   async execute(context: CommandContext, args: CommandArgs): Promise<CommandResult> {
     try {

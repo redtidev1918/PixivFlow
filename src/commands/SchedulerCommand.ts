@@ -3,6 +3,7 @@
  */
 
 import { BaseCommand } from './Command';
+import { CommandCategory } from './metadata';
 import { CommandContext, CommandArgs, CommandResult } from './types';
 import { getConfigPath, loadConfig } from '../config';
 import { Database } from '../storage/Database';
@@ -19,7 +20,12 @@ import { createTokenMaintenanceService } from '../utils/token-maintenance';
 export class SchedulerCommand extends BaseCommand {
   readonly name = 'scheduler';
   readonly description = 'Start scheduler (default if enabled in config)';
-  readonly aliases: string[] = [];
+  readonly aliases: string[] = ['run', 's'];
+  readonly metadata = {
+    category: CommandCategory.DOWNLOAD,
+    requiresAuth: true,
+    longRunning: true,
+  };
 
   async execute(context: CommandContext, args: CommandArgs): Promise<CommandResult> {
     try {

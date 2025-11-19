@@ -3,6 +3,7 @@
  */
 
 import { BaseCommand } from './Command';
+import { CommandCategory } from './metadata';
 import { CommandArgs, CommandContext, CommandResult } from './types';
 import { getDirectoryInfo, displayDirectoryInfo } from '../utils/directory-info';
 
@@ -13,6 +14,11 @@ export class DirsCommand extends BaseCommand {
   readonly name = 'dirs';
   readonly description = 'Display directory information (where files are saved)';
   readonly aliases = ['directories', 'paths'];
+  readonly metadata = {
+    category: CommandCategory.UTILITY,
+    requiresAuth: false,
+    longRunning: false,
+  };
 
   async execute(context: CommandContext, args: CommandArgs): Promise<CommandResult> {
     try {

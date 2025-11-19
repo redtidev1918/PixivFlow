@@ -3,6 +3,7 @@
  */
 
 import { BaseCommand } from './Command';
+import { CommandCategory } from './metadata';
 import { CommandArgs, CommandContext, CommandResult } from './types';
 import { existsSync } from 'fs';
 import { Database } from '../storage/Database';
@@ -18,6 +19,11 @@ export class MonitorCommand extends BaseCommand {
   readonly name = 'monitor';
   readonly description = 'Real-time monitoring of process status and performance metrics';
   readonly aliases = ['watch', 'status-monitor'];
+  readonly metadata = {
+    category: CommandCategory.MONITORING,
+    requiresAuth: false,
+    longRunning: true,
+  };
 
   private readonly CPU_THRESHOLD = 80;
   private readonly MEM_THRESHOLD = 80;

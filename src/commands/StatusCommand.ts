@@ -3,6 +3,7 @@
  */
 
 import { BaseCommand } from './Command';
+import { CommandCategory } from './metadata';
 import { CommandArgs, CommandContext, CommandResult } from './types';
 import { Database } from '../storage/Database';
 import { existsSync } from 'fs';
@@ -14,6 +15,11 @@ export class StatusCommand extends BaseCommand {
   readonly name = 'status';
   readonly description = 'Show download statistics and recent records';
   readonly aliases = ['stats', 'info'];
+  readonly metadata = {
+    category: CommandCategory.MONITORING,
+    requiresAuth: false,
+    longRunning: false,
+  };
 
   async execute(context: CommandContext, args: CommandArgs): Promise<CommandResult> {
     const dbPath = context.config.storage?.databasePath || './data/pixiv-downloader.db';

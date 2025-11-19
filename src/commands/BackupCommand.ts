@@ -3,6 +3,7 @@
  */
 
 import { BaseCommand } from './Command';
+import { CommandCategory } from './metadata';
 import { CommandArgs, CommandContext, CommandResult } from './types';
 import { existsSync, mkdirSync, readdirSync, statSync } from 'fs';
 import { join, resolve } from 'path';
@@ -18,6 +19,11 @@ export class BackupCommand extends BaseCommand {
   readonly name = 'backup';
   readonly description = 'Automatic backup of configuration and data';
   readonly aliases = ['backup-data'];
+  readonly metadata = {
+    category: CommandCategory.MAINTENANCE,
+    requiresAuth: false,
+    longRunning: false,
+  };
 
   async execute(context: CommandContext, args: CommandArgs): Promise<CommandResult> {
     const outputDir = (typeof args.options.output === 'string' ? args.options.output : null) ||

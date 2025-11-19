@@ -3,8 +3,14 @@
  */
 
 import { BaseCommand } from './Command';
+import { CommandCategory } from './metadata';
 import { CommandContext, CommandArgs, CommandResult } from './types';
 import { TerminalLogin, LoginInfo } from '../terminal-login';
+import { updateConfigWithToken } from '../utils/login-helper';
+import { generateDefaultConfig } from '../config/defaults';
+import * as fs from 'fs/promises';
+import * as path from 'path';
+import { logger } from '../logger';
 
 /**
  * Output login result
@@ -30,6 +36,49 @@ export class RefreshCommand extends BaseCommand {
   readonly name = 'refresh';
   readonly description = 'Login with an existing refresh token or refresh access token (suitable for headless servers)';
   readonly aliases = ['r', 'login-token', 'token-login', 'set-token', 'lt'];
+  readonly requiresToken = false;
+  readonly metadata = {
+    category: CommandCategory.AUTHENTICATION,
+    requiresAuth: false,
+    longRunning: false,
+  };
+
+  /**
+   * Handles updating the config file with the refresh token before the main execution.
+   * This allows the command to work even if the config file has a placeholder token.
+   */
+  static async preExecute(args: CommandArgs, configPath: string): Promise<void> {
+    const refreshToken = args.positional[0] || (args.options.token as string);
+    if (!refreshToken) {
+      // No token provided, nothing to do. The validation in `execute` will catch this.
+      return;
+    }
+
+    try {
+      // Check if config file exists
+      try {
+        await fs.access(configPath);
+        // Config file exists, update it with the token
+        await updateConfigWithToken(configPath, refreshToken);
+        logger.info('Updated config file with refresh token before validation');
+      } catch {
+        // Config file doesn't exist, create it with default structure
+        const defaultConfig = generateDefaultConfig();
+        defaultConfig.pixiv.refreshToken = refreshToken;
+        // Ensure directory exists
+        const configDir = path.dirname(configPath);
+        await fs.mkdir(configDir, { recursive: true });
+        await fs.writeFile(configPath, JSON.stringify(defaultConfig, null, 2), 'utf-8');
+        logger.info('Created config file with refresh token');
+      }
+    } catch (error) {
+      // If updating config fails, log warning but continue.
+      // The refresh command will still work with the provided token.
+      logger.warn('Failed to update config file with refresh token, continuing anyway', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
 
   validate(args: CommandArgs): { valid: boolean; errors: string[] } {
     const errors: string[] = [];
@@ -95,56 +144,3 @@ Examples:
   pixivflow refresh <refresh_token> --json`;
   }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

@@ -3,6 +3,7 @@
  */
 
 import { BaseCommand } from './Command';
+import { CommandCategory } from './metadata';
 import { CommandArgs, CommandContext, CommandResult } from './types';
 import { existsSync, readdirSync, statSync, unlinkSync, mkdirSync, chmodSync } from 'fs';
 import { join, resolve } from 'path';
@@ -20,6 +21,11 @@ export class MaintainCommand extends BaseCommand {
   readonly name = 'maintain';
   readonly description = 'Automatic maintenance (cleanup logs, optimize database, etc.)';
   readonly aliases = ['maintenance', 'cleanup'];
+  readonly metadata = {
+    category: CommandCategory.MAINTENANCE,
+    requiresAuth: false,
+    longRunning: false,
+  };
 
   private readonly LOG_RETENTION_DAYS = 30;
   private readonly BACKUP_RETENTION_DAYS = 7;

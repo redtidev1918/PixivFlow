@@ -3,6 +3,7 @@
  */
 
 import { BaseCommand } from './Command';
+import { CommandCategory } from './metadata';
 import { CommandArgs, CommandContext, CommandResult } from './types';
 // Import SetupWizard - it's exported from setup-wizard.ts
 // We need to dynamically import it since it's a standalone script
@@ -14,6 +15,11 @@ export class SetupCommand extends BaseCommand {
   readonly name = 'setup';
   readonly description = 'Interactive configuration wizard for first-time setup';
   readonly aliases = ['init', 'wizard'];
+  readonly metadata = {
+    category: CommandCategory.CONFIGURATION,
+    requiresAuth: false,
+    longRunning: false,
+  };
 
   async execute(context: CommandContext, args: CommandArgs): Promise<CommandResult> {
     try {

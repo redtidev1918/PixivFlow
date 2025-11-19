@@ -3,6 +3,7 @@
  */
 
 import { BaseCommand } from './Command';
+import { CommandCategory } from './metadata';
 import { CommandContext, CommandArgs, CommandResult } from './types';
 import { getConfigPath, loadConfig } from '../config';
 import { Database } from '../storage/Database';
@@ -35,8 +36,13 @@ const POPULAR_NOVEL_TAGS = [
  */
 export class RandomDownloadCommand extends BaseCommand {
   readonly name = 'random';
-  readonly description = 'Login (if needed) and download a random image';
-  readonly aliases = ['rd'];
+  readonly description = 'Download a random image from a popular tag';
+  readonly aliases: string[] = ['rd'];
+  readonly metadata = {
+    category: CommandCategory.DOWNLOAD,
+    requiresAuth: true,
+    longRunning: false,
+  };
 
   async execute(context: CommandContext, args: CommandArgs): Promise<CommandResult> {
     try {

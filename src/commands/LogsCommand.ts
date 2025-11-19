@@ -3,6 +3,7 @@
  */
 
 import { BaseCommand } from './Command';
+import { CommandCategory } from './metadata';
 import { CommandArgs, CommandContext, CommandResult } from './types';
 import * as fs from 'fs/promises';
 import { existsSync } from 'fs';
@@ -15,6 +16,11 @@ export class LogsCommand extends BaseCommand {
   readonly name = 'logs';
   readonly description = 'Show recent log entries';
   readonly aliases = ['log'];
+  readonly metadata = {
+    category: CommandCategory.MONITORING,
+    requiresAuth: false,
+    longRunning: false,
+  };
 
   async execute(context: CommandContext, args: CommandArgs): Promise<CommandResult> {
     const logPath = './data/pixiv-downloader.log';

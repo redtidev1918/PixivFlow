@@ -5,12 +5,15 @@
 所有核心功能已成功移植为 CLI 命令，可通过 `pixivflow` 全局命令使用：
 
 ### 核心功能命令
-- ✅ `pixivflow login` - 登录 Pixiv 账号
+- ✅ `pixivflow login` - 登录 Pixiv 账号（交互式）
+- ✅ `pixivflow login-headless` - 无头登录（需要用户名和密码）
+- ✅ `pixivflow refresh` - 使用 refresh token 登录（适合无 GUI 服务器）
 - ✅ `pixivflow download` - 执行下载任务
 - ✅ `pixivflow random` - 随机下载作品
 - ✅ `pixivflow scheduler` - 启动定时任务
 - ✅ `pixivflow normalize` - 整理文件
 - ✅ `pixivflow migrate-config` - 迁移配置
+- ✅ `pixivflow webui` - 启动 WebUI 服务器
 
 ### 监控和维护命令
 - ✅ `pixivflow health` / `pixivflow check` - 健康检查
@@ -21,6 +24,8 @@
 - ✅ `pixivflow maintain` - 自动维护（清理日志、优化数据库等）
 - ✅ `pixivflow monitor` - 实时监控进程状态和性能指标
 - ✅ `pixivflow setup` - 交互式配置向导（首次使用）
+- ✅ `pixivflow dirs` - 显示目录信息（文件保存位置）
+- ✅ `pixivflow version` - 显示版本信息
 
 ## 📋 关于 Shell 脚本的处理建议
 
@@ -107,7 +112,9 @@
 ```bash
 # 首次使用
 pixivflow setup          # 配置向导
-pixivflow login          # 登录
+pixivflow login          # 交互式登录（打开浏览器）
+# 或
+pixivflow login-headless -u username -p password  # 无头登录
 
 # 日常使用
 pixivflow download       # 下载
@@ -116,7 +123,7 @@ pixivflow health         # 健康检查
 pixivflow config show    # 查看配置
 pixivflow backup         # 备份
 pixivflow maintain       # 维护
-pixivflow monitor       # 监控
+pixivflow monitor        # 监控
 ```
 
 ### 对于本地开发用户
@@ -137,7 +144,9 @@ pixivflow monitor       # 监控
 | 功能 | Shell 脚本 | CLI 命令 | 状态 |
 |------|-----------|----------|------|
 | 配置向导 | `easy-setup.sh` | `pixivflow setup` | ✅ 已移植 |
-| 登录 | `login.sh` | `pixivflow login` | ✅ 已移植 |
+| 交互式登录 | `login.sh` | `pixivflow login` | ✅ 已移植 |
+| 无头登录 | `login.sh --headless` | `pixivflow login-headless` | ✅ 已移植 |
+| Token 登录 | - | `pixivflow refresh` | ✅ 已移植 |
 | 下载 | `pixiv.sh download` | `pixivflow download` | ✅ 已移植 |
 | 随机下载 | `pixiv.sh random` | `pixivflow random` | ✅ 已移植 |
 | 定时任务 | `pixiv.sh run` | `pixivflow scheduler` | ✅ 已移植 |
@@ -148,6 +157,9 @@ pixivflow monitor       # 监控
 | 自动备份 | `auto-backup.sh` | `pixivflow backup` | ✅ 已移植 |
 | 自动维护 | `auto-maintain.sh` | `pixivflow maintain` | ✅ 已移植 |
 | 自动监控 | `auto-monitor.sh` | `pixivflow monitor` | ✅ 已移植 |
+| WebUI 服务器 | - | `pixivflow webui` | ✅ 已移植 |
+| 目录信息 | - | `pixivflow dirs` | ✅ 已移植 |
+| 版本信息 | - | `pixivflow version` | ✅ 已移植 |
 
 ## ✨ 总结
 

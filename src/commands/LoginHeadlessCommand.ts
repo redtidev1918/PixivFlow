@@ -4,6 +4,7 @@
 
 import * as path from 'path';
 import { BaseCommand } from './Command';
+import { CommandCategory } from './metadata';
 import { CommandContext, CommandArgs, CommandResult } from './types';
 import { TerminalLogin, LoginInfo } from '../terminal-login';
 import { updateConfigWithToken } from '../utils/login-helper';
@@ -33,6 +34,12 @@ export class LoginHeadlessCommand extends BaseCommand {
   readonly name = 'login-headless';
   readonly description = 'Login in headless mode (requires -u and -p)';
   readonly aliases = ['lh'];
+  readonly requiresToken = false;
+  readonly metadata = {
+    category: CommandCategory.AUTHENTICATION,
+    requiresAuth: false,
+    longRunning: false,
+  };
 
   validate(args: CommandArgs): { valid: boolean; errors: string[] } {
     const errors: string[] = [];

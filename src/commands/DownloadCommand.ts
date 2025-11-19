@@ -3,6 +3,7 @@
  */
 
 import { BaseCommand } from './Command';
+import { CommandCategory } from './metadata';
 import { CommandContext, CommandArgs, CommandResult } from './types';
 import { getConfigPath, loadConfig } from '../config';
 import { Database } from '../storage/Database';
@@ -20,7 +21,12 @@ import { AuthenticationError, ConfigError } from '../utils/errors';
 export class DownloadCommand extends BaseCommand {
   readonly name = 'download';
   readonly description = 'Run download job once';
-  readonly aliases: string[] = [];
+  readonly aliases: string[] = ['d'];
+  readonly metadata = {
+    category: CommandCategory.DOWNLOAD,
+    requiresAuth: true,
+    longRunning: false,
+  };
 
   async execute(context: CommandContext, args: CommandArgs): Promise<CommandResult> {
     try {

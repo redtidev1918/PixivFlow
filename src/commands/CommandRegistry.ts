@@ -4,6 +4,8 @@
 
 import { Command } from './Command';
 import { CommandArgs, CommandContext, CommandResult } from './types';
+import { findSimilarCommands, formatSuggestions } from './suggestions';
+import { CommandCategory } from './metadata';
 
 /**
  * Command registry that manages all available commands
@@ -140,6 +142,58 @@ export class CommandRegistry {
    */
   clear(): void {
     this.commands.clear();
+  }
+
+  /**
+   * Get all command names (primary names only, excluding aliases)
+   * @returns Array of command names
+   */
+  getAllNames(): string[] {
+    return this.getAll().map((cmd) => cmd.name);
+  }
+
+  /**
+   * Find similar commands for a given input
+   * @param input User input
+   * @param maxSuggestions Maximum number of suggestions
+   * @returns Array of suggested command names
+   */
+  findSimilarCommands(input: string, maxSuggestions: number = 3): string[] {
+    const allNames = this.getAllNames();
+    return findSimilarCommands(input, allNames, maxSuggestions);
+  }
+
+  /**
+   * Get formatted suggestions for an invalid command
+   * @param input User input
+   * @returns Formatted suggestion string
+   */
+  getSuggestions(input: string): string {
+    const suggestions = this.findSimilarCommands(input);
+    return formatSuggestions(suggestions);
+  }
+
+  /**
+   * Get commands grouped by category
+   * @returns Record of category to commands
+   */
+  getCommandsByCategory(): Record<CommandCategory, Command[]> {
+    const result: Record<CommandCategory, Command[]> = {
+      [CommandCategory.AUTHENTICATION]: [],
+      [CommandCategory.DOWNLOAD]: [],
+      [CommandCategory.CONFIGURATION]: [],
+      [CommandCategory.MONITORING]: [],
+      [CommandCategory.MAINTENANCE]: [],
+      [CommandCategory.UTILITY]: [],
+    };
+
+    for (const command of this.getAll()) {
+      const metadata = 'getMetadata' in command ? (command as any).getMetadata() : undefined;
+      const category: CommandCategory = metadata?.category || CommandCategory.UTILITY;
+      result[category].push(command);
+    }
+
+    return result;
   }
 }
 

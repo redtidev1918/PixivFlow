@@ -3,6 +3,7 @@
  */
 
 import { BaseCommand } from './Command';
+import { CommandCategory } from './metadata';
 import { CommandArgs, CommandContext, CommandResult } from './types';
 import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, statSync } from 'fs';
 import { join, resolve } from 'path';
@@ -15,6 +16,11 @@ export class ConfigCommand extends BaseCommand {
   readonly name = 'config';
   readonly description = 'Configuration management tool (view/edit/backup/restore)';
   readonly aliases = ['cfg', 'conf'];
+  readonly metadata = {
+    category: CommandCategory.CONFIGURATION,
+    requiresAuth: false,
+    longRunning: false,
+  };
 
   async execute(context: CommandContext, args: CommandArgs): Promise<CommandResult> {
     const subcommand = args.positional[0] || 'show';

@@ -1,55 +1,43 @@
-# 配置指南
+# 配置手册
 
-PixivFlow 的配置文件位于 `config/standalone.config.json`。本文档详细说明所有配置选项。
+配置文件路径：`config/standalone.config.json`
 
----
+## 快速管理
 
-## 📋 配置文件位置
-
-- **默认路径**：`config/standalone.config.json`
-- **示例文件**：`config/standalone.config.example.json`
-
-首次使用可以复制示例文件：
-
+### 初始化
+首次使用请复制示例文件：
 ```bash
 cp config/standalone.config.example.json config/standalone.config.json
 ```
 
-### 使用命令行管理配置
-
-除了手动编辑配置文件，还可以使用命令行工具快速管理配置：
+### 命令行工具
+无需手动编辑 JSON，使用 CLI 即可修改配置：
 
 ```bash
-# 查看配置
+# 查看当前配置
 pixivflow config show
 
-# 设置配置项（会自动备份原配置）
+# 修改配置（自动备份）
 pixivflow config set storage.downloadDirectory ./my-downloads
 pixivflow config set storage.illustrationDirectory ./my-illustrations
 
-# 验证配置
+# 校验配置格式
 pixivflow config validate
 
-# 备份配置
+# 备份与恢复
 pixivflow config backup
-
-# 恢复配置
 pixivflow config restore
 ```
 
-**查看目录信息**：
-
+查看目录详情：
 ```bash
-# 查看所有目录路径
-pixivflow dirs
-
-# 查看详细目录信息
-pixivflow dirs --verbose
+pixivflow dirs          # 路径列表
+pixivflow dirs --verbose # 详细信息
 ```
 
 ---
 
-## 🔐 认证配置
+## 认证 (Auth)
 
 ```json
 {
@@ -63,38 +51,16 @@ pixivflow dirs --verbose
 }
 ```
 
-#### 示例 1b：多标签 OR 搜索（逐个标签检索并合并）
-
-```json
-{
-  "targets": [
-    {
-      "type": "novel",
-      "tag": "風景 イラスト オリジナル",  
-      "tagRelation": "or",
-      "limit": 10,
-      "mode": "search",
-      "searchTarget": "partial_match_for_tags",
-      "sort": "popular_desc"
-    }
-  ]
-}
-```
-
-**说明**：
-- `refreshToken`：通过 `npm run login` 自动获取，无需手动填写
-- `clientId` 和 `clientSecret`：Pixiv API 凭证，通常不需要修改
-- `deviceToken`：设备令牌，默认值为 `"pixiv"`，通常不需要修改
-- `userAgent`：用户代理字符串，通常不需要修改
+- `refreshToken`: 运行 `npm run login` 自动获取。
+- 其他字段通常保持默认即可。
 
 ---
 
-## 📥 下载目标配置
+## 下载目标 (Targets)
 
-`targets` 数组定义了要下载的内容。每个目标是一个对象：
+`targets` 数组定义下载任务。
 
-### 基础配置
-
+### 基础示例
 ```json
 {
   "targets": [
@@ -107,187 +73,116 @@ pixivflow dirs --verbose
 }
 ```
 
-### 配置选项
+### 核心参数
 
-| 选项 | 类型 | 说明 | 示例 |
-|------|------|------|------|
-| `type` | string | 内容类型 | `"illustration"`（插画）或 `"novel"`（小说） |
-| `tag` | string | 搜索标签 | `"風景"` 或 `"明日方舟 アークナイツ"`（多标签用空格分隔） |
-| `tagRelation` | string | 标签关系 | `"and"`（必须同时包含，默认）或 `"or"`（包含任意一个） |
-| `limit` | number | 下载数量限制 | `20`（建议范围 1-1000） |
-| `mode` | string | 下载模式 | `"search"`（搜索）或 `"ranking"`（排行榜） |
-| `searchTarget` | string | 搜索范围 | `"partial_match_for_tags"`（部分匹配）<br>`"exact_match_for_tags"`（精确匹配）<br>`"title_and_caption"`（标题和说明） |
-| `sort` | string | 排序方式 | `"date_desc"`（最新）<br>`"popular_desc"`（最受欢迎）<br>`"date_asc"`（最旧） |
-| `minBookmarks` | number | 最低收藏数 | `500` |
-| `startDate` / `endDate` | string | 日期范围 | `"2024-01-01"`（YYYY-MM-DD 格式） |
-| `random` | boolean | 随机选择 | `true` 表示从搜索结果中随机选择 |
-| `restrict` | string | 限制类型 | `"public"`（公开）或 `"private"`（私有） |
+| 参数 | 说明 | 示例 |
+|------|------|------|
+| `type` | `illustration` (插画) / `novel` (小说) | - |
+| `tag` | 搜索关键词，多标签用空格分隔 | `"明日方舟 アークナイツ"` |
+| `tagRelation` | `and` (全匹配, 默认) / `or` (任意匹配) | - |
+| `limit` | 下载数量限制 | `20` |
+| `mode` | `search` (搜索) / `ranking` (排行榜) | - |
+| `searchTarget` | `partial_match_for_tags` (标签部分匹配)<br>`exact_match_for_tags` (标签精确匹配)<br>`title_and_caption` (标题/简介) | - |
+| `sort` | `date_desc` (最新)<br>`popular_desc` (热门)<br>`date_asc` (最旧) | - |
+| `minBookmarks` | 最小收藏数过滤 | `500` |
+| `startDate`/`endDate` | 日期范围 (YYYY-MM-DD) | `"2024-01-01"` |
+| `random` | `true` 表示随机从结果中选取 | - |
+| `restrict` | `public` (公开) / `private` (私密) | - |
 
-> 关于 `tagRelation`：
-> - `and`（默认）：把整串 `tag` 作为同时匹配的多个标签（空格分隔），要求作品同时包含所有标签。
-> - `or`：会把 `tag` 按空格拆分为多个标签，按标签逐个串行检索；各标签结果会被合并并按作品 `id` 去重，然后再按 `sort` 排序并按 `limit` 截断。
-> - 为降低速率限制风险，`or` 模式会在相邻标签检索之间加入延迟（使用 `download.requestDelay`）。建议把该值设置为 1500~3000ms。
+> **关于 `or` 模式**：
+> `or` 模式会将标签拆分后逐个搜索，最后合并去重。
+> 建议配合 `download.requestDelay` (1500~3000ms) 使用，以防触发限流。
 
-### 排行榜配置（仅当 `mode="ranking"` 时）
+### 排行榜 (`mode="ranking"`)
 
-| 选项 | 类型 | 说明 | 示例 |
-|------|------|------|------|
-| `rankingMode` | string | 排行榜模式 | `"day"`（日榜）<br>`"week"`（周榜）<br>`"month"`（月榜）<br>`"day_male"`（男性向日榜）<br>`"day_female"`（女性向日榜）<br>`"day_ai"`（AI 日榜）<br>`"week_original"`（原创周榜）<br>`"week_rookie"`（新人周榜）<br>`"day_r18"`（R18 日榜）<br>`"day_male_r18"`（男性向 R18 日榜）<br>`"day_female_r18"`（女性向 R18 日榜） |
-| `rankingDate` | string | 排行榜日期 | `"2024-01-01"`（YYYY-MM-DD 格式）或 `"YESTERDAY"`（昨天） |
-| `filterTag` | string \| null | 过滤标签 | `"風景"` 或 `null`（不过滤） |
+| 参数 | 说明 |
+|------|------|
+| `rankingMode` | `day`, `week`, `month`, `day_male`, `day_female`, `day_ai`, `week_original`, `week_rookie`, `day_r18` 等 |
+| `rankingDate` | 日期 (YYYY-MM-DD) 或 `"YESTERDAY"` |
+| `filterTag` | 结果中二次过滤标签，`null` 为不过滤 |
 
-### 单作品下载配置
+### 定向下载 (ID/User)
 
-| 选项 | 类型 | 说明 | 示例 |
-|------|------|------|------|
-| `illustId` | number | 单个插画ID | `12345678`（从 URL `https://www.pixiv.net/artworks/12345678` 中获取） |
-| `novelId` | number | 单篇小说ID | `26132156`（从 URL `https://www.pixiv.net/novel/show.php?id=26132156` 中获取） |
-| `seriesId` | number | 小说系列ID | `14690617`（从 URL `https://www.pixiv.net/novel/series/14690617` 中获取） |
-| `userId` | string | 用户ID | `"123456"`（从 URL `https://www.pixiv.net/users/123456` 中获取，下载该用户的所有作品） |
+支持直接下载指定 ID 或画师作品。此时 `tag` 字段可随意填写（建议设为 `"single"` 或 `"user-xxx"` 以便识别）。
 
-**注意**：使用单作品下载或用户下载时，`tag` 字段是可选的（可以设置为 `"single"` 或 `"user-{userId}"` 作为标识）。
+| 参数 | 说明 | URL 示例 |
+|------|------|----------|
+| `illustId` | 插画 ID | `artworks/12345678` |
+| `novelId` | 小说 ID | `novel/show.php?id=26132156` |
+| `seriesId` | 小说系列 ID | `novel/series/14690617` |
+| `userId` | 画师 ID (下载全集) | `users/123456` |
 
-### 小说专用配置
+### 小说专用
 
-| 选项 | 类型 | 说明 | 示例 |
-|------|------|------|------|
-| `languageFilter` | string | 语言过滤 | `"chinese"`（仅中文）<br>`"non-chinese"`（仅非中文）<br>不设置则下载所有语言 |
-| `detectLanguage` | boolean | 启用语言检测 | `true`（默认）或 `false` |
+| 参数 | 说明 |
+|------|------|
+| `languageFilter` | `chinese` (仅中文) / `non-chinese` (非中文)。留空则不限。 |
+| `detectLanguage` | 是否启用语言检测 (默认 `true`) |
 
-### 配置示例
+---
 
-#### 示例 1：多标签搜索
+## 常用配置组合
 
+### 组合搜索
+搜索同时包含 "明日方舟" 和 "阿米娅" 的插画，下载 30 张。
 ```json
 {
-  "targets": [
-    {
-      "type": "illustration",
-      "tag": "明日方舟 アークナイツ アーミヤ",
-      "tagRelation": "and",
-      "limit": 30,
-      "mode": "search",
-      "searchTarget": "partial_match_for_tags"
-    }
-  ]
+  "type": "illustration",
+  "tag": "明日方舟 アーミヤ",
+  "tagRelation": "and",
+  "limit": 30,
+  "mode": "search",
+  "searchTarget": "partial_match_for_tags"
 }
 ```
 
-#### 示例 2：按收藏数筛选
-
+### 收藏数筛选
+搜索 "风景" 且收藏数 > 1000 的热门图。
 ```json
 {
-  "targets": [
-    {
-      "type": "illustration",
-      "tag": "風景",
-      "limit": 50,
-      "mode": "search",
-      "minBookmarks": 1000,
-      "sort": "popular_desc"
-    }
-  ]
+  "type": "illustration",
+  "tag": "風景",
+  "limit": 50,
+  "mode": "search",
+  "minBookmarks": 1000,
+  "sort": "popular_desc"
 }
 ```
 
-#### 示例 3：排行榜下载
-
+### 每日排行
+下载昨日插画日榜前 10 名。
 ```json
 {
-  "targets": [
-    {
-      "type": "illustration",
-      "mode": "ranking",
-      "rankingMode": "day",
-      "rankingDate": "YESTERDAY",
-      "limit": 10
-    }
-  ]
+  "type": "illustration",
+  "mode": "ranking",
+  "rankingMode": "day",
+  "rankingDate": "YESTERDAY",
+  "limit": 10
 }
 ```
 
-#### 示例 4：小说系列下载
-
+### 画师全集
 ```json
 {
-  "targets": [
-    {
-      "type": "novel",
-      "seriesId": 14690617,
-      "limit": 50
-    }
-  ]
+  "type": "illustration",
+  "tag": "user",
+  "userId": "123456",
+  "limit": 100  // 不填默认 30
 }
 ```
 
-#### 示例 5：单插画下载
-
+### 中文小说
 ```json
 {
-  "targets": [
-    {
-      "type": "illustration",
-      "tag": "single",
-      "illustId": 12345678
-    }
-  ]
-}
-```
-
-**说明**：从 URL `https://www.pixiv.net/artworks/12345678` 中提取插画ID `12345678`。
-
-#### 示例 6：单篇小说下载
-
-```json
-{
-  "targets": [
-    {
-      "type": "novel",
-      "tag": "single",
-      "novelId": 26132156
-    }
-  ]
-}
-```
-
-**说明**：从 URL `https://www.pixiv.net/novel/show.php?id=26132156` 中提取小说ID `26132156`。
-
-#### 示例 7：下载用户的所有作品
-
-```json
-{
-  "targets": [
-    {
-      "type": "illustration",
-      "tag": "user",
-      "userId": "123456",
-      "limit": 100
-    }
-  ]
-}
-```
-
-**说明**：从 URL `https://www.pixiv.net/users/123456` 中提取用户ID `123456`。`limit` 字段可选，如果不设置则默认下载 30 个作品。
-
-#### 示例 8：语言过滤（仅中文小说）
-
-```json
-{
-  "targets": [
-    {
-      "type": "novel",
-      "tag": "原神",
-      "limit": 20,
-      "languageFilter": "chinese",
-      "detectLanguage": true
-    }
-  ]
+  "type": "novel",
+  "tag": "原神",
+  "languageFilter": "chinese"
 }
 ```
 
 ---
 
-## 🌐 网络配置
+## 网络设置 (Network)
 
 ```json
 {
@@ -299,29 +194,20 @@ pixivflow dirs --verbose
       "enabled": false,
       "host": "127.0.0.1",
       "port": 7890,
-      "protocol": "http",
-      "username": "",
-      "password": ""
+      "protocol": "http" // http, https, socks4, socks5
     }
   }
 }
 ```
 
-**说明**：
-- `timeoutMs`：请求超时时间（毫秒），默认 30000（30秒）
-- `retries`：失败重试次数，默认 3
-- `retryDelay`：重试延迟（毫秒），默认 1000（1秒）
-- `proxy`：代理配置（可选）
-  - `protocol`：支持 `http`、`https`、`socks4`、`socks5`
-
-**提示**：也可以通过环境变量设置代理，优先级更高：
+也可直接使用环境变量（优先级更高）：
 ```bash
 export all_proxy=socks5://127.0.0.1:6153
 ```
 
 ---
 
-## 💾 存储配置
+## 存储路径 (Storage)
 
 ```json
 {
@@ -336,135 +222,53 @@ export all_proxy=socks5://127.0.0.1:6153
 }
 ```
 
-**快速设置目录路径**：
-
-可以使用命令行快速设置目录路径，无需手动编辑配置文件：
-
+CLI 快捷设置：
 ```bash
-# 设置下载目录
-pixivflow config set storage.downloadDirectory ./my-downloads
-
-# 设置插画目录
-pixivflow config set storage.illustrationDirectory ./my-illustrations
-
-# 设置小说目录
-pixivflow config set storage.novelDirectory ./my-novels
-
-# 设置数据库路径
-pixivflow config set storage.databasePath ./data/my-db.db
+pixivflow config set storage.downloadDirectory ./new-path
 ```
 
-**查看目录信息**：
+### 目录结构 (`organization`)
 
-```bash
-# 查看所有目录路径
-pixivflow dirs
-
-# 查看详细目录信息（包括绝对路径、是否存在等）
-pixivflow dirs --verbose
-```
-
-### 目录组织方式
-
-| 模式 | 说明 | 目录结构示例 |
-|------|------|-------------|
-| `flat` | 扁平结构（默认） | `illustrations/123456_标题_1.jpg` |
-| `byAuthor` | 按作者组织 | `illustrations/作者名/123456_标题_1.jpg` |
-| `byTag` | 按标签组织 | `illustrations/标签名/123456_标题_1.jpg` |
-| `byDate` | 按作品创建日期组织（YYYY-MM） | `illustrations/2024-12/123456_标题_1.jpg` |
-| `byDay` | 按作品创建日期组织（YYYY-MM-DD） | `illustrations/2024-12-25/123456_标题_1.jpg` |
-| `byDownloadDate` | 按下载日期组织（YYYY-MM） | `illustrations/2024-12/123456_标题_1.jpg` |
-| `byDownloadDay` | 按下载日期组织（YYYY-MM-DD） | `illustrations/2024-12-25/123456_标题_1.jpg` |
-| `byAuthorAndTag` | 按作者和标签 | `illustrations/作者名/标签名/123456_标题_1.jpg` |
-| `byDateAndAuthor` | 按作品创建日期和作者 | `illustrations/2024-12/作者名/123456_标题_1.jpg` |
-| `byDayAndAuthor` | 按作品创建日期和作者 | `illustrations/2024-12-25/作者名/123456_标题_1.jpg` |
-| `byDownloadDateAndAuthor` | 按下载日期和作者 | `illustrations/2024-12/作者名/123456_标题_1.jpg` |
-| `byDownloadDayAndAuthor` | 按下载日期和作者 | `illustrations/2024-12-25/作者名/123456_标题_1.jpg` |
+| 模式 | 路径示例 |
+|------|----------|
+| `flat` (默认) | `illustrations/123456_title_p0.jpg` |
+| `byAuthor` | `illustrations/AuthorName/123456_title_p0.jpg` |
+| `byTag` | `illustrations/TagName/123456_title_p0.jpg` |
+| `byDate` | `illustrations/2024-12/123456_title_p0.jpg` |
+| `byDay` | `illustrations/2024-12-25/123456_title_p0.jpg` |
+| `byAuthorAndTag` | `illustrations/AuthorName/TagName/...` |
 
 ---
 
-## ⏰ 定时任务配置
+## 定时任务 (Scheduler)
 
 ```json
 {
   "scheduler": {
     "enabled": true,
-    "cron": "0 3 * * *",
-    "timezone": "Asia/Shanghai",
-    "maxExecutions": null,
-    "minInterval": null,
-    "timeout": null,
-    "maxConsecutiveFailures": null,
-    "failureRetryDelay": null
+    "cron": "0 3 * * *", // 每天凌晨 3 点
+    "timezone": "Asia/Shanghai"
   }
 }
 ```
 
-**说明**：
-- `enabled`：是否启用定时任务，默认 `false`
-- `cron`：Cron 表达式，默认 `"0 3 * * *"`（每天凌晨3点）
-- `timezone`：时区，默认 `"Asia/Shanghai"`
-
-### Cron 表达式速查
-
-| 表达式 | 说明 |
-|--------|------|
-| `0 * * * *` | 每小时执行 |
-| `0 */6 * * *` | 每 6 小时执行 |
-| `0 2 * * *` | 每天 2:00 执行 |
-| `0 0 * * 0` | 每周日 0:00 执行 |
-| `0 0 1 * *` | 每月 1 号 0:00 执行 |
+常用 Cron：
+- `0 * * * *`: 每小时
+- `0 */6 * * *`: 每 6 小时
+- `0 2 * * *`: 每天 02:00
 
 ---
 
-## 📥 下载配置
+## 下载控制 (Download)
 
 ```json
 {
   "download": {
-    "concurrency": 3,
-    "requestDelay": 500,
-    "dynamicConcurrency": true,
-    "minConcurrency": 1,
+    "concurrency": 3,         // 并发数 (建议 1-10)
+    "requestDelay": 500,      // API 请求间隔 (ms)
+    "dynamicConcurrency": true, // 遇 429 自动降速
     "maxRetries": 3,
-    "retryDelay": 2000,
     "timeout": 60000
   }
 }
 ```
-
-**说明**：
-- `concurrency`：最大并发下载数，默认 3（建议范围 1-10）
-- `requestDelay`：API 请求之间的最小延迟（毫秒），默认 500（0.5秒）
-- `dynamicConcurrency`：是否启用动态并发调整，默认 `true`
-  - 当检测到速率限制（429错误）时，自动降低并发数
-- `minConcurrency`：动态调整时的最小并发数，默认 1
-- `maxRetries`：每个下载的最大重试次数，默认 3
-- `retryDelay`：重试延迟（毫秒），默认 2000（2秒）
-- `timeout`：下载超时时间（毫秒），默认 60000（60秒）
-
-> 速率限制建议：若使用 `tagRelation: "or"`（会对多个标签顺序检索并在标签之间施加延迟），推荐将 `requestDelay` 适当调高（例如 1500~3000ms），以进一步降低 429 的概率。
-
----
-
-## 🔧 其他配置
-
-```json
-{
-  "logLevel": "info",
-  "initialDelay": 0
-}
-```
-
-**说明**：
-- `logLevel`：日志级别，可选 `"debug"`、`"info"`、`"warn"`、`"error"`，默认 `"info"`
-- `initialDelay`：启动延迟（毫秒），用于测试或延迟启动，默认 0
-
----
-
-## 📚 相关文档
-
-- [快速开始指南](./QUICKSTART.md)
-- [使用指南](./USAGE.md)
-- [登录指南](./LOGIN.md)
-

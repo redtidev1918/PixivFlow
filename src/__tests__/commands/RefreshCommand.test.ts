@@ -45,11 +45,11 @@ describe('RefreshCommand', () => {
     });
 
     it('should have correct description', () => {
-      expect(command.description).toBe('Refresh access token using refresh token');
+      expect(command.description).toBe('Login with an existing refresh token or refresh access token (suitable for headless servers)');
     });
 
     it('should have correct aliases', () => {
-      expect(command.aliases).toEqual(['r']);
+      expect(command.aliases).toEqual(['r', 'login-token', 'token-login', 'set-token', 'lt']);
     });
   });
 

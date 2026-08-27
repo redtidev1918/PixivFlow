@@ -35,6 +35,7 @@ import { loadConfig, getConfigPath } from '../../config';
 
 // WebSocket handlers
 import { setupLogStream } from '../websocket/LogStream';
+import { setupDownloadStatus } from '../websocket/DownloadStatus';
 
 // Server setup modules
 import { setupMiddleware, errorHandler } from './server-middleware';
@@ -89,21 +90,42 @@ export class WebUIServer {
 
     // Setup WebSocket handlers
     setupLogStream(this.io);
+    setupDownloadStatus(this.io);
   }
 
   public async start(): Promise<number> {
     return new Promise(async (resolve, reject) => {
       let actualPort = this.port;
 
-      // Try to start on the requested port
-      this.server.listen(this.port, this.host, () => {
+      // Opt-in automatic port fallback: PIXIV_WEBUI_AUTO_PORT=true picks the
+      // next free port instead of failing on EADDRINUSE.
+      if (process.env.PIXIV_WEBUI_AUTO_PORT === 'true') {
+        try {
+          const available = await findAvailablePort(this.port, this.host);
+          if (available !== this.port) {
+            logger.warn(`Port ${this.port} busy; falling back to ${available} (PIXIV_WEBUI_AUTO_PORT)`, {
+              requestedPort: this.port,
+              actualPort: available,
+            });
+          }
+          actualPort = available;
+          this.port = available;
+        } catch (error) {
+          logServerError(error instanceof Error ? error.message : String(error));
+          reject(error);
+          return;
+        }
+      }
+
+      // Try to start on the resolved port
+      this.server.listen(actualPort, this.host, () => {
         logServerStart(this.host, actualPort);
         resolve(actualPort);
       });
 
       this.server.on('error', (err: NodeJS.ErrnoException) => {
         if (err.code === 'EADDRINUSE') {
-          const errorMsg = `Port ${this.port} is already in use. Please free up the port or specify another one.`;
+          const errorMsg = `Port ${this.port} is already in use. Free the port, pass --port/-e PORT, or set PIXIV_WEBUI_AUTO_PORT=true to pick the next free port automatically.`;
           logger.error(errorMsg);
           logServerError(errorMsg);
           reject(new Error(errorMsg));

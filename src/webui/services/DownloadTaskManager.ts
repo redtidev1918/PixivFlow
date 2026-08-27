@@ -5,6 +5,7 @@ import { Database } from '../../storage/Database';
 import { FileService } from '../../download/FileService';
 import { StandaloneConfig, loadConfig, getConfigPath } from '../../config';
 import { logger } from '../../logger';
+import { isOperationCancelled } from '../../utils/errors';
 
 export interface TaskLogEntry {
   timestamp: Date;
@@ -35,8 +36,43 @@ export class DownloadTaskManager {
     manager: DownloadManager;
     database: Database;
     promise: Promise<void>;
-    abortController: AbortController;
   } | null = null;
+
+  /**
+   * Change notification so realtime layers (websocket) can push updates
+   * without polling REST endpoints.
+   */
+  private changeListeners = new Set<() => void>();
+  private notifyTimer: NodeJS.Timeout | null = null;
+
+  /** Subscribe to coarse-grained change events; returns an unsubscribe fn. */
+  public subscribe(listener: () => void): () => void {
+    this.changeListeners.add(listener);
+    return () => {
+      this.changeListeners.delete(listener);
+    };
+  }
+
+  /** Test-only isolation hook: wipe in-memory task maps. */
+  public clearAllForTests?(): void {
+    this.tasks.clear();
+    this.taskLogs.clear();
+  }
+
+  /** Coalesced notification (max ~7/sec) so bursts of per-file progress are cheap. */
+  private notifyChange(): void {
+    if (this.notifyTimer) return;
+    this.notifyTimer = setTimeout(() => {
+      this.notifyTimer = null;
+      for (const listener of this.changeListeners) {
+        try {
+          listener();
+        } catch {
+          // A failing listener must never affect task execution.
+        }
+      }
+    }, 150);
+  }
 
   /**
    * Start a download task
@@ -116,7 +152,6 @@ export class DownloadTaskManager {
 
     await downloadManager.initialise();
 
-    const abortController = new AbortController();
     const taskStatus: TaskStatus = {
       taskId,
       status: 'running',
@@ -126,6 +161,7 @@ export class DownloadTaskManager {
     };
     this.tasks.set(taskId, taskStatus);
     this.taskLogs.set(taskId, []);
+    this.notifyChange();
     
     // Save task history to database
     try {
@@ -146,56 +182,84 @@ export class DownloadTaskManager {
         this.addLog(taskId, 'info', '开始执行下载任务...');
         logger.info(`Starting download task ${taskId}`);
         await downloadManager.runAllTargets();
-        
-        taskStatus.status = 'completed';
-        taskStatus.endTime = new Date();
-        
-        // Update task history in database
-        try {
-          database.saveTaskHistory(taskId, {
-            status: 'completed',
-            startTime: taskStatus.startTime,
-            endTime: taskStatus.endTime,
-            progressCurrent: taskStatus.progress?.current,
-            progressTotal: taskStatus.progress?.total,
-            progressMessage: taskStatus.progress?.message,
-          });
-        } catch (error) {
-          logger.warn('Failed to update task history in database', { taskId, error });
+
+        if (taskStatus.status === 'running') {
+          taskStatus.status = 'completed';
+          taskStatus.endTime = new Date();
+
+          try {
+            database.saveTaskHistory(taskId, {
+              status: 'completed',
+              startTime: taskStatus.startTime,
+              endTime: taskStatus.endTime,
+              progressCurrent: taskStatus.progress?.current,
+              progressTotal: taskStatus.progress?.total,
+              progressMessage: taskStatus.progress?.message,
+            });
+          } catch (error) {
+            logger.warn('Failed to update task history in database', { taskId, error });
+          }
+
+          this.addLog(taskId, 'info', '下载任务完成');
+          logger.info(`Download task ${taskId} completed`);
         }
-        
-        this.addLog(taskId, 'info', '下载任务完成');
-        logger.info(`Download task ${taskId} completed`);
       } catch (error) {
-        taskStatus.status = 'failed';
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        taskStatus.error = errorMessage;
-        taskStatus.endTime = new Date();
-        
-        // Update task history in database
-        try {
-          database.saveTaskHistory(taskId, {
-            status: 'failed',
-            startTime: taskStatus.startTime,
-            endTime: taskStatus.endTime,
-            error: errorMessage,
-            progressCurrent: taskStatus.progress?.current,
-            progressTotal: taskStatus.progress?.total,
-            progressMessage: taskStatus.progress?.message,
-          });
-        } catch (dbError) {
-          logger.warn('Failed to update task history in database', { taskId, error: dbError });
+        if (taskStatus.status !== 'running' || isOperationCancelled(error)) {
+          // User requested a stop (status already set by stopTask) or the run
+          // was cancelled cooperatively. Record it without failing the task.
+          if (taskStatus.status === 'running') {
+            taskStatus.status = 'stopped';
+            taskStatus.endTime = new Date();
+          }
+          try {
+            database.saveTaskHistory(taskId, {
+              status: taskStatus.status,
+              startTime: taskStatus.startTime,
+              endTime: taskStatus.endTime,
+              error: taskStatus.status === 'stopped' ? 'Task stopped by user' : undefined,
+              progressCurrent: taskStatus.progress?.current,
+              progressTotal: taskStatus.progress?.total,
+              progressMessage: taskStatus.progress?.message,
+            });
+          } catch (dbError) {
+            logger.warn('Failed to update task history in database', { taskId, error: dbError });
+          }
+          this.addLog(taskId, 'warn', `任务已终止(${isOperationCancelled(error) ? error.message : '用户停止'})`);
+        } else {
+          taskStatus.status = 'failed';
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          taskStatus.error = errorMessage;
+          taskStatus.endTime = new Date();
+
+          try {
+            database.saveTaskHistory(taskId, {
+              status: 'failed',
+              startTime: taskStatus.startTime,
+              endTime: taskStatus.endTime,
+              error: errorMessage,
+              progressCurrent: taskStatus.progress?.current,
+              progressTotal: taskStatus.progress?.total,
+              progressMessage: taskStatus.progress?.message,
+            });
+          } catch (dbError) {
+            logger.warn('Failed to update task history in database', { taskId, error: dbError });
+          }
+
+          this.addLog(taskId, 'error', `下载任务失败: ${errorMessage}`);
+          if (error instanceof Error && error.stack) {
+            this.addLog(taskId, 'error', `错误堆栈: ${error.stack}`);
+          }
+          logger.error(`Download task ${taskId} failed`, { error });
+          throw error;
         }
-        
-        this.addLog(taskId, 'error', `下载任务失败: ${errorMessage}`);
-        if (error instanceof Error && error.stack) {
-          this.addLog(taskId, 'error', `错误堆栈: ${error.stack}`);
-        }
-        logger.error(`Download task ${taskId} failed`, { error });
-        throw error;
       } finally {
-        database.close();
+        try {
+          database.close();
+        } catch (closeError) {
+          logger.warn('Error while closing task database', { taskId, error: closeError });
+        }
         this.activeTask = null;
+        this.notifyChange();
       }
     })();
 
@@ -204,7 +268,6 @@ export class DownloadTaskManager {
       manager: downloadManager,
       database,
       promise,
-      abortController,
     };
 
     // Don't await - let it run in background
@@ -228,11 +291,11 @@ export class DownloadTaskManager {
 
     if (this.activeTask && this.activeTask.taskId === taskId) {
       const database = this.activeTask.database;
-      
-      // Update task history in database BEFORE closing
+
+      task.status = 'stopped';
+      task.endTime = new Date();
+
       try {
-        task.status = 'stopped';
-        task.endTime = new Date();
         database.saveTaskHistory(taskId, {
           status: 'stopped',
           startTime: task.startTime,
@@ -245,17 +308,16 @@ export class DownloadTaskManager {
       } catch (error) {
         logger.warn('Failed to update task history in database', { taskId, error });
       }
-      
-      // Signal abort
-      this.activeTask.abortController.abort();
-      
-      // Close database
-      database.close();
-      
+
+      // Cooperatively cancel the run: the in-flight item finishes, remaining
+      // targets/items are skipped, then runAllTargets() throws and the runner
+      // finalizes state + closes the database.
+      this.activeTask.manager.cancel('stopped by user');
+
       this.addLog(taskId, 'warn', '下载任务已停止');
-      this.activeTask = null;
-      
       logger.info(`Download task ${taskId} stopped`);
+    } else {
+      throw new Error(`Task ${taskId} is not the active task`);
     }
   }
 
@@ -315,6 +377,7 @@ export class DownloadTaskManager {
           logger.debug('Failed to update task progress in database', { taskId });
         }
       }
+      this.notifyChange();
     }
   }
 
@@ -382,6 +445,8 @@ export class DownloadTaskManager {
         logger.error(logMessage, { taskId });
         break;
     }
+
+    this.notifyChange();
   }
 
   /**

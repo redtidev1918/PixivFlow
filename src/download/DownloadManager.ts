@@ -12,6 +12,7 @@ import { DownloadPlanner } from './plan/DownloadPlanner';
 import { DownloadExecutor } from './exec/DownloadExecutor';
 import { DefaultErrorRecovery, ErrorRecoveryStrategy } from './recovery/ErrorRecovery';
 import { DownloadPipeline } from './pipeline/DownloadPipeline';
+import { OperationCancelledError } from '../utils/errors';
 import { IllustrationTargetHandler } from './handlers/IllustrationTargetHandler';
 import { NovelTargetHandler } from './handlers/NovelTargetHandler';
 
@@ -49,6 +50,27 @@ export class DownloadManager implements IDownloadManager {
   private readonly pipeline: DownloadPipeline;
   private readonly illustrationHandler: IllustrationTargetHandler;
   private readonly novelHandler: NovelTargetHandler;
+
+  // Cooperative cancellation state (see cancel())
+  private cancelled = false;
+  private cancelReason = '';
+
+  /**
+   * Request cooperative cancellation of the current run. In-flight item
+   * finishes; no further targets/items are started. runAllTargets() will
+   * throw OperationCancelledError once drained.
+   */
+  public cancel(reason: string = 'cancelled'): void {
+    if (!this.cancelled) {
+      this.cancelled = true;
+      this.cancelReason = reason;
+      logger.warn(`Download cancellation requested: ${reason}`);
+    }
+  }
+
+  public isCancelled(): boolean {
+    return this.cancelled;
+  }
 
   constructor(
     private readonly config: StandaloneConfig,
@@ -90,6 +112,7 @@ export class DownloadManager implements IDownloadManager {
       executor: this.executor,
       progressReporter: this.progressReporter,
       recovery: this.errorRecovery,
+      isCancelled: () => this.cancelled,
     });
 
     this.illustrationHandler = new IllustrationTargetHandler(
@@ -129,6 +152,11 @@ export class DownloadManager implements IDownloadManager {
     const errors: Array<{ target: string; error: string }> = [];
 
     for (const target of this.config.targets) {
+      if (this.cancelled) {
+        logger.warn(`Skipping remaining ${totalTargets - currentTarget + 1} target(s): ${this.cancelReason}`);
+        break;
+      }
+
       currentTarget++;
       const targetName = target.filterTag || target.tag || 'unknown';
       this.updateProgress(currentTarget, totalTargets, `处理目标: ${targetName} (${target.type})`);
@@ -140,6 +168,10 @@ export class DownloadManager implements IDownloadManager {
         errors.push({ target: `${targetName} (${target.type})`, error: errorMessage });
         logger.error(`Target ${targetName} (${target.type}) failed, continuing with next target`, { error: errorMessage });
       }
+    }
+
+    if (this.cancelled) {
+      throw new OperationCancelledError(`下载已取消: ${this.cancelReason || '用户停止'}`);
     }
 
     this.progressReporter.complete(totalTargets, '所有目标处理完成');

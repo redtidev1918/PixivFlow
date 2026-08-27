@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>部署指南 — PixivFlow</title>
+  <meta name="description" content="PixivFlow 部署指南：Docker Compose、PM2 与 systemd 三种方案的完整步骤。">
+  <link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+
+<header class="hero">
+  <div class="container">
+    <h1>🐳 部署指南</h1>
+    <p class="tagline">Docker Compose（推荐）、PM2 与 systemd —— 从单机到服务器的完整方案。</p>
+  </div>
+</header>
+
+<nav class="topbar">
+  <ul>
+    <li><a href="index.html">首页</a></li>
+    <li><a href="guide.html">使用教程</a></li>
+    <li><a href="config.html">配置参考</a></li>
+    <li><a href="deployment.html">部署指南</a></li>
+    <li><a href="faq.html">常见问题</a></li>
+    <li><a href="https://github.com/redtidev1918/PixivFlow/releases">Releases</a></li>
+  </ul>
+</nav>
+
+<main class="container">
+
+  <section class="card-block">
+    <h2 class="section-title">🐳 Docker Compose 部署（推荐）</h2>
+
+    <h3>快速开始</h3>
+    <pre><code>git clone https://github.com/redtidev1918/PixivFlow.git
+cd PixivFlow
+cp docker-env.example .env      # 按需修改配置
+docker compose up -d</code></pre>
+
+    <h3>首次登录 Pixiv 账号</h3>
+    <pre><code>docker compose exec app pixivflow login-headless</code></pre>
+
+    <h3>常用运维命令</h3>
+    <table>
+      <tr><th>命令</th><th>作用</th></tr>
+      <tr><td><code>docker compose logs -f app</code></td><td>实时查看下载日志</td></tr>
+      <tr><td><code>docker compose restart app</code></td><td>重启服务</td></tr>
+      <tr><td><code>docker compose stop</code></td><td>停止全部服务</td></tr>
+      <tr><td><code>docker compose exec app pixivflow status</code></td><td>查看下载统计</td></tr>
+    </table>
+
+    <div class="alert alert-info">
+      下载目录建议通过 volume 挂载到 NAS / 网盘同步文件夹，实现多端共享收藏。
+    </div>
+  </section>
+
+  <section class="card-block">
+    <h2 class="section-title">🔁 方式 1：PM2 管理（无 Docker）</h2>
+    <pre><code>npm install -g pm2
+npm install -g pixivflow
+
+pm2 start pixivflow --name pixivflow -- scheduler
+pm2 save && pm2 startup   # 开机自启
+pm2 logs pixivflow        # 查看日志</code></pre>
+  </section>
+
+  <section class="card-block">
+    <h2 class="section-title">🔁 方式 2：systemd 服务</h2>
+    <p>创建服务单元文件：</p>
+    <pre><code># /etc/systemd/system/pixivflow.service
+[Unit]
+Description=PixivFlow Scheduler
+After=network-online.target
+
+[Service]
+Type=simple
+User=youruser
+WorkingDirectory=/opt/pixivflow
+ExecStart=/usr/bin/node dist/index.js scheduler
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target</code></pre>
+    <pre><code>sudo systemctl daemon-reload
+sudo systemctl enable --now pixivflow
+journalctl -u pixivflow -f    # 查看日志</code></pre>
+  </section>
+
+  <section class="card-block">
+    <h2 class="section-title">⏰ 时区提示</h2>
+    <div class="alert alert-warning">
+      Cron 定时任务依赖容器/系统时区。Docker 用户请在 docker-compose.yml 中设置：
+      <code>TZ=Asia/Shanghai</code>，否则调度会按 UTC 时间执行。
+    </div>
+  </section>
+
+  <section class="card-block">
+    <h2 class="section-title">🧭 相关页面</h2>
+    <div class="entry-grid">
+      <a class="entry-card" href="config.html"><h4>⚙️ 配置参考</h4><p>Cron 表达式与目录配置。</p></a>
+      <a class="entry-card" href="faq.html"><h4>❓ 常见问题</h4><p>定时任务不运行等排查。</p></a>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="container">
+    <p>Made with ❤️ by <a href="https://github.com/redtidev1918">redtidev1918</a> ·
+      <a href="https://github.com/redtidev1918/PixivFlow">PixivFlow</a></p>
+  </div>
+</footer>
+
+</body>
+</html>

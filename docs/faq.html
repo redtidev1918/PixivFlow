@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>常见问题 — PixivFlow</title>
+  <meta name="description" content="PixivFlow 常见问题：登录失败、Token 过期、找不到作品、下载慢、定时任务不运行等的排查与解决。">
+  <link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+
+<header class="hero">
+  <div class="container">
+    <h1>❓ 常见问题</h1>
+    <p class="tagline">按症状定位问题：每条都给出原因与解决路径。</p>
+  </div>
+</header>
+
+<nav class="topbar">
+  <ul>
+    <li><a href="index.html">首页</a></li>
+    <li><a href="guide.html">使用教程</a></li>
+    <li><a href="config.html">配置参考</a></li>
+    <li><a href="deployment.html">部署指南</a></li>
+    <li><a href="faq.html">常见问题</a></li>
+    <li><a href="https://github.com/redtidev1918/PixivFlow/releases">Releases</a></li>
+  </ul>
+</nav>
+
+<main class="container">
+
+  <section class="card-block">
+    <h2 class="section-title">🔐 登录相关</h2>
+
+    <h3>登录失败？</h3>
+    <p>确认账号可正常访问 Pixiv 网页版；网络受限时先在配置中设置代理，
+       再重新执行 <code>pixivflow login</code>。</p>
+
+    <h3>认证失败或 Token 过期？</h3>
+    <p>refresh token 失效时会明确提示。重新运行
+       <code>pixivflow login</code>（或服务器上的
+       <code>pixivflow login-headless</code>）即可；token 的自动刷新在有效期内由 App 自己完成，
+       无需人工干预。</p>
+  </section>
+
+  <section class="card-block">
+    <h2 class="section-title">📥 下载相关</h2>
+
+    <h3>找不到匹配的作品？</h3>
+    <ul>
+      <li>检查标签拼写是否与 Pixiv 完全一致（注意全半角）；</li>
+      <li>降低 minBookmarks 或放宽日期范围；</li>
+      <li>用 URL 直接下载验证目标作品本身可访问。</li>
+    </ul>
+
+    <h3>下载速度慢或经常失败？</h3>
+    <ul>
+      <li>单次 limit 不要设得过大，配合 delay 让请求更平滑；</li>
+      <li>受限网络建议配置 HTTP 代理；</li>
+      <li>反复失败的作品会被自动跳过并记录，不会阻塞整个队列。</li>
+    </ul>
+
+    <h3>遇到已删除或私有的作品？</h3>
+    <p>这类作品会被识别为「不可下载」并智能跳过，不影响其余下载任务；
+       这是预期行为而非故障。</p>
+  </section>
+
+  <section class="card-block">
+    <h2 class="section-title">⏰ 定时任务相关</h2>
+
+    <h3>定时任务没有运行？</h3>
+    <ul>
+      <li><strong>时区</strong>：容器内默认 UTC，请通过 TZ 环境变量设置为本地时区；</li>
+      <li><strong>进程存活</strong>：<code>pixivflow scheduler</code> 必须持续运行
+          （Docker / PM2 / systemd 任选其一托管）；</li>
+      <li><strong>Cron 表达式</strong>：检查是否使用了不存在的字段组合。</li>
+    </ul>
+  </section>
+
+  <section class="card-block">
+    <h2 class="section-title">🧭 更多帮助</h2>
+    <div class="entry-grid">
+      <a class="entry-card" href="guide.html"><h4>📖 使用教程</h4><p>命令与筛选条件详解。</p></a>
+      <a class="entry-card" href="https://github.com/redtidev1918/PixivFlow/issues"><h4>🐛 提交 Issue</h4><p>按模板填写环境信息与复现步骤。</p></a>
+      <a class="entry-card" href="https://github.com/redtidev1918/PixivFlow/blob/master/docs/API.md"><h4>🔌 API 文档</h4><p>Pixiv 客户端接口参考。</p></a>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="container">
+    <p>Made with ❤️ by <a href="https://github.com/redtidev1918">redtidev1918</a> ·
+      <a href="https://github.com/redtidev1918/PixivFlow">PixivFlow</a></p>
+  </div>
+</footer>
+
+</body>
+</html>

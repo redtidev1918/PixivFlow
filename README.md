@@ -391,6 +391,7 @@ PixivFlow 提供了丰富的脚本工具，所有脚本直接调用内置 CLI，
 | [ARCHITECTURE](docs/ARCHITECTURE.md) | **架构说明** - 项目架构和技术实现细节 |
 | [CLI_MIGRATION](docs/CLI_MIGRATION_SUMMARY.md) | **CLI 命令移植总结** - CLI 命令迁移和功能对照 |
 | [CHANGELOG](docs/project/CHANGELOG.md) | 版本更新日志 |
+| [RELEASING](docs/RELEASING.md) | **npm 发版指南** - 打 tag 自动发布到 npm |
 | [CONTRIBUTING](docs/project/CONTRIBUTING.md) | 贡献指南 |
 
 ---
@@ -521,7 +522,7 @@ pixivflow config edit
 | 💬 **社区交流** | [Discussions](https://github.com/redtidev1918/PixivFlow/discussions) | 与其他用户交流 |
 
 **提问前请先**：
-1. 🔍 查看 [常见问题](#常见问题) 章节
+1. 🔍 查看 [常见问题](#-常见问题) 章节
 2. 📖 阅读相关文档
 3. ✅ 运行健康检查 `./scripts/pixiv.sh health`
 4. 📋 查看运行日志 `./scripts/pixiv.sh logs`
@@ -607,7 +608,7 @@ Made with ❤️ by [redtidev1918](https://github.com/redtidev1918)
 
 **PixivFlow** - 让 Pixiv 作品收集变得优雅而高效
 
-[⬆ 回到顶部](#pixivflow)
+[⬆ 回到顶部](#-pixivflow)
 
 ---
 

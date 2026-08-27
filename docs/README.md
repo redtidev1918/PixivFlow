@@ -4,12 +4,14 @@ PixivFlow 是一个独立运行的 Pixiv 自动化下载工具。无需浏览器
 
 ## 核心文档
 
-- **[快速开始](./QUICKSTART.md)**: 3分钟上手。
-- **[配置手册](./CONFIG.md)**: 完整配置参数说明。
-- **[使用指南](./USAGE.md)**: 功能详解。
+- **[快速开始](./QUICKSTART.md)**: 3分钟上手。（含 English overview）
+- **[配置手册](./CONFIG.md)**: 完整配置参数说明。（含 English overview）
+- **[使用指南](./USAGE.md)**: 功能详解。（含 English overview）
 - **[登录指南](./LOGIN.md)**: 账号登录相关。
-- **[Docker 部署](./DOCKER.md)**: 容器化部署方案。
+- **[Docker 部署](./DOCKER.md)**: 容器化部署方案。（含 English overview）
+- **[Termux 安装](./TERMUX_INSTALL.md)**: Android 设备安装指南。（含 English overview）
 - **[发版指南](./RELEASING.md)**: npm 发布流程与版本管理。
+- **[API 文档](./API.md)**: RESTful 接口参考（双语逐段对照）。
 
 ## 进阶文档
 

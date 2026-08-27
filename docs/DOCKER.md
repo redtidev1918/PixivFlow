@@ -1,5 +1,13 @@
 # Docker 部署指南
 
+
+> **English**: Docker deployment guide — PixivFlow runs in containers without
+> installing Node.js, Python, or other host dependencies. Covers the compose
+> quick start (`docker compose up -d`), helper scripts, service descriptions,
+> first-time login inside the container, volume mappings, and timezone notes.
+
+# Docker 部署指南
+
 PixivFlow 完全支持 Docker 部署，无需在主机上安装 Node.js、Python 或其他依赖。
 
 ---

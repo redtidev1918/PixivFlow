@@ -35,7 +35,8 @@
 2. 安装 Node.js 24(actions/setup-node@v7,registry 指向 npmjs.org);
 3. `npm ci`;
 4. `npm run build --if-present`;
-5. `npm publish --access public`,凭据来自 GitHub OIDC(工作流声明 `id-token: write`),npm 侧校验仓库与工作流文件名,无长期 token。
+5. `npm publish --access public`,凭据来自 GitHub OIDC(工作流声明 `id-token: write`),npm 侧校验仓库与工作流文件名,无长期 token;
+6. 创建 GitHub Release(softprops/action-gh-release@v2),开启 `generate_release_notes: true` 自动汇总 Release Notes。
 
 操作:
 
@@ -49,12 +50,23 @@ git push origin master vX.Y.Z
 
 标签到达远端即触发 Publish 工作流,无需其他动作。
 
+### 方式 B:Actions 一键发版(workflow_dispatch)
+
+GitHub 仓库页 → Actions → **Publish** → Run workflow → 选择 `patch` / `minor` / `major` → 运行。工作流自动完成:
+
+1. 升级 `package.json` 版本号并提交(github-actions[bot]);
+2. 打 `v*` 标签并推送;
+3. 构建、发布 npm;
+4. 创建带自动 Release Notes 的 GitHub Release。
+
+全程无需本地命令;适合"改完想立刻发"的场景。
+
 **前置条件(一次性,npm 后台完成)**:
 
 - redtidev1918 是 pixivflow 的 maintainer(`npm owner ls pixivflow` 可验证);
 - npm 包管理页 → Settings → Trusted Publishers 登记 Provider 为 GitHub Actions、Owner/User `redtidev1918`、Repository `PixivFlow`、Workflow filename `release.yml`(与 release.yml 头部注释一致)。
 
-注意:Publish 工作流不含"版本已存在则跳过"的守卫,也不会回写版本号——确保你推的正是包含新版本号的那个提交。
+注意:Publish 工作流不含"版本已存在则跳过"的守卫,也不会回写版本号——确保你推的正是包含新版本号的那个提交;方式 B(workflow_dispatch)则会自动回写版本号、打标签并创建 Release。
 
 ## 兜底路径一:publish.sh 本地全流程
 

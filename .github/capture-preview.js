@@ -113,7 +113,7 @@ async function capturePreview() {
     console.log(`✅ 预览图片已生成: ${outputPath}`);
     console.log('');
     console.log('📤 下一步:');
-    console.log('   1. 访问: https://github.com/zoidberg-xgd/pixivflow/settings');
+    console.log('   1. 访问: https://github.com/redtidev1918/PixivFlow/settings');
     console.log('   2. 找到 "Social preview" 部分');
     console.log('   3. 上传生成的图片: social-preview.png');
     

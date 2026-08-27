@@ -94,7 +94,7 @@ tmp/
 temp/
 
 # WebUI
-# 前端已分离到独立仓库: https://github.com/zoidberg-xgd/pixivflow-webui
+# 前端已分离到独立仓库: https://github.com/redtidev1918/pixivflow-webui
 # Frontend has been moved to separate repository
 
 # Backend build output

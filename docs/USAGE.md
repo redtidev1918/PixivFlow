@@ -1,5 +1,13 @@
 # 使用指南
 
+
+> **English**: Full usage reference for every command — `download`,
+> `random`, `scheduler`, `config`, `status`, `health`, and URL-based
+> downloads — with runnable examples for each. Written in Chinese; command
+> names and flags are universal.
+
+# 使用指南
+
 ## 基础命令
 
 支持全局 CLI (`pixivflow`) 或源码脚本 (`npm run`)。

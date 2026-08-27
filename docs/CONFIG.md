@@ -1,5 +1,14 @@
 # 配置手册
 
+
+> **English**: Configuration reference — config file location
+> (`config/standalone.config.json`), copying and editing it, CLI-based config
+> management (`pixivflow config`), download targets, scheduler cron settings,
+> storage paths, performance tuning, and network/proxy options. Examples below
+> are in Chinese; all JSON keys and commands are language-neutral.
+
+# 配置手册
+
 配置文件路径：`config/standalone.config.json`
 
 ## 快速管理

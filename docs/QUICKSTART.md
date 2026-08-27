@@ -1,5 +1,13 @@
 # 快速开始
 
+
+> **English**: A 3-minute quick start — install PixivFlow globally with
+> `npm install -g pixivflow`, sign in with `pixivflow login`, run
+> `pixivflow download` (or use `download --url <link>` for a single item),
+> and verify the setup with `pixivflow health`. Detailed steps below.
+
+# 快速开始
+
 3 分钟上手指南。
 
 ## 环境要求

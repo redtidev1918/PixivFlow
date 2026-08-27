@@ -1,5 +1,13 @@
 # 📱 Android/Termux 安装指南
 
+
+> **English**: How to install and run PixivFlow on Android using Termux.
+> Note that better-sqlite3 requires a native build step, so extra tooling may
+> be needed. The guide covers Termux setup, required packages, project
+> installation, and troubleshooting. Steps are illustrated in Chinese.
+
+# 📱 Android/Termux 安装指南
+
 本指南介绍如何在 Android 设备上使用 Termux 安装和运行 PixivFlow。
 
 > ⚠️ **注意**：Termux 环境下的安装可能需要额外的构建工具，因为 `better-sqlite3` 需要原生编译。

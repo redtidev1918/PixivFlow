@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>配置参考 — PixivFlow</title>
+  <meta name="description" content="PixivFlow 配置参考：认证、下载目标、定时任务 Cron、存储、下载性能与网络配置。">
+  <link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+
+<header class="hero">
+  <div class="container">
+    <h1>⚙️ 配置参考</h1>
+    <p class="tagline">PixivFlow 的全部配置项：认证、下载目标、Cron 定时、存储与性能。</p>
+  </div>
+</header>
+
+<nav class="topbar">
+  <ul>
+    <li><a href="index.html">首页</a></li>
+    <li><a href="guide.html">使用教程</a></li>
+    <li><a href="config.html">配置参考</a></li>
+    <li><a href="deployment.html">部署指南</a></li>
+    <li><a href="faq.html">常见问题</a></li>
+    <li><a href="https://github.com/redtidev1918/PixivFlow/releases">Releases</a></li>
+  </ul>
+</nav>
+
+<main class="container">
+
+  <section class="card-block">
+    <h2 class="section-title">🔐 认证配置</h2>
+    <p>Pixiv API 需要 OAuth refresh token。获取方式：</p>
+    <pre><code>pixivflow login             # 有图形界面（浏览器交互）
+pixivflow login-headless    # 无图形界面 / 服务器</code></pre>
+    <div class="alert alert-info">token 过期时会自动刷新；连续失败会提示重新登录，且不会误删有效凭据。</div>
+  </section>
+
+  <section class="card-block">
+    <h2 class="section-title">🎯 下载目标配置</h2>
+    <p>每个下载目标（target）定义「从哪抓什么、抓多少」：</p>
+    <table>
+      <tr><th>字段</th><th>说明</th><th>示例</th></tr>
+      <tr><td>tags</td><td>标签数组（多标签为 OR 关系）</td><td><code>["水彩", "厚涂"]</code></td></tr>
+      <tr><td>limit</td><td>单次下载数量上限</td><td><code>50</code></td></tr>
+      <tr><td>minBookmarks</td><td>最低收藏数筛选</td><td><code>2000</code></td></tr>
+      <tr><td>startDate / endDate</td><td>发布日期范围</td><td><code>"2025-01-01"</code></td></tr>
+      <tr><td>random</td><td>启用随机模式</td><td><code>{ "maxAttempts": 50 }</code></td></tr>
+      <tr><td>languageFilter</td><td>语言过滤（小说）</td><td><code>"zh-cn"</code></td></tr>
+    </table>
+    <div class="alert alert-info">随机模式从可用队列中抽取最多 maxAttempts 个作品（默认 50），适合探索式收集。</div>
+  </section>
+
+  <section class="card-block">
+    <h2 class="section-title">⏰ 定时任务配置（Cron 速查）</h2>
+    <table>
+      <tr><th>Cron 表达式</th><th>含义</th></tr>
+      <tr><td><code>0 8 * * *</code></td><td>每天早上 8:00</td></tr>
+      <tr><td><code>0 */6 * * *</code></td><td>每 6 小时一次</td></tr>
+      <tr><td><code>30 21 * * *</code></td><td>每天晚上 21:30</td></tr>
+      <tr><td><code>0 9 * * 1</code></td><td>每周一早上 9:00</td></tr>
+      <tr><td><code>0 0 1 * *</code></td><td>每月 1 日 00:00</td></tr>
+    </table>
+    <div class="alert alert-warning">服务器时区影响调度时间——Docker 部署时通过 TZ 环境变量设置时区（见部署指南）。</div>
+  </section>
+
+  <section class="card-block">
+    <h2 class="section-title">💾 存储配置</h2>
+    <p>各类内容的保存目录均可在配置中调整：</p>
+    <ul>
+      <li><strong>downloadDirectory</strong> — 下载根目录；</li>
+      <li><strong>illustrationDirectory</strong> — 插画保存目录；</li>
+      <li><strong>novelDirectory</strong> — 小说保存目录。</li>
+    </ul>
+    <p>快速查看与修改：</p>
+    <pre><code>pixivflow dirs                          # 查看所有目录路径
+pixivflow config set downloadDirectory /data/pixiv
+pixivflow config                        # 查看完整配置（自动备份原配置）</code></pre>
+  </section>
+
+  <section class="card-block">
+    <h2 class="section-title">⚡ 下载性能配置</h2>
+    <ul>
+      <li>批量模式自动翻页，页面间隔遵循 API 速率限制；</li>
+      <li>已下载作品基于 SQLite 历史自动跳过，支持断点续传；</li>
+      <li>数字 GIF / 图片按显示尺寸解码，降低内存与 GPU 占用（桌面端）。</li>
+    </ul>
+  </section>
+
+  <section class="card-block">
+    <h2 class="section-title">🌐 网络配置</h2>
+    <ul>
+      <li>支持 HTTP(S) 代理环境变量（<code>http_proxy</code> / <code>https_proxy</code>）；</li>
+      <li>Docker 部署时在 docker-compose.yml 中注入代理变量即可让容器内请求走代理；</li>
+      <li>网络层自带超时与有界指数退避重试；429 会读取 Retry-After 响应头等待。</li>
+    </ul>
+  </section>
+
+  <section class="card-block">
+    <h2 class="section-title">🖥️ CLI 配置管理命令</h2>
+    <table>
+      <tr><th>命令</th><th>作用</th></tr>
+      <tr><td><code>pixivflow config</code></td><td>查看当前完整配置</td></tr>
+      <tr><td><code>pixivflow config set &lt;key&gt; &lt;value&gt;</code></td><td>设置单项配置（自动备份原文件）</td></tr>
+      <tr><td><code>pixivflow status</code></td><td>下载统计 + 最近记录</td></tr>
+      <tr><td><code>pixivflow health</code></td><td>检查配置完整性、目录可写性、连通性</td></tr>
+    </table>
+  </section>
+
+  <section class="card-block">
+    <h2 class="section-title">🧭 相关页面</h2>
+    <div class="entry-grid">
+      <a class="entry-card" href="guide.html"><h4>📖 使用教程</h4><p>URL 下载、筛选与应用场景。</p></a>
+      <a class="entry-card" href="deployment.html"><h4>🐳 部署指南</h4><p>Docker / PM2 / systemd。</p></a>
+      <a class="entry-card" href="faq.html"><h4>❓ 常见问题</h4><p>故障排查与解决路径。</p></a>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="container">
+    <p>Made with ❤️ by <a href="https://github.com/redtidev1918">redtidev1918</a> ·
+      <a href="https://github.com/redtidev1918/PixivFlow">PixivFlow</a></p>
+  </div>
+</footer>
+
+</body>
+</html>

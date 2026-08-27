@@ -4,13 +4,13 @@
   "description": "🎨 智能的 Pixiv 自动化下载工具 - 支持批量下载插画和小说、定时任务、Docker部署 | Intelligent Pixiv Automation Downloader with batch download, scheduler, and Docker support",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/zoidberg-xgd/PixivFlow.git"
+    "url": "git+https://github.com/redtidev1918/PixivFlow.git"
   },
-  "homepage": "https://zoidberg-xgd.github.io/PixivFlow/",
+  "homepage": "https://redtidev1918.github.io/PixivFlow/",
   "bugs": {
-    "url": "https://github.com/zoidberg-xgd/PixivFlow/issues"
+    "url": "https://github.com/redtidev1918/PixivFlow/issues"
   },
-  "author": "zoidberg-xgd",
+  "author": "redtidev1918",
   "license": "GPL-3.0-or-later",
   "main": "dist/index.js",
   "bin": {

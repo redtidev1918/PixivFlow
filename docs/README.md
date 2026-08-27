@@ -55,5 +55,5 @@ npm install -g pixivflow
 
 ## 帮助与支持
 
-- [GitHub Issues](https://github.com/zoidberg-xgd/pixivflow/issues)
-- [GitHub Discussions](https://github.com/zoidberg-xgd/pixivflow/discussions)
+- [GitHub Issues](https://github.com/redtidev1918/PixivFlow/issues)
+- [GitHub Discussions](https://github.com/redtidev1918/PixivFlow/discussions)

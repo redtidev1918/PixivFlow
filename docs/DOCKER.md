@@ -72,7 +72,7 @@ docker-compose up -d
   - `/api/stats` - 统计信息
   - `/api/logs` - 日志查看（WebSocket）
   - `/api/files` - 文件管理
-- **前端集成**：前端已分离到独立仓库 [pixivflow-webui](https://github.com/zoidberg-xgd/pixivflow-webui)，可通过 API 与后端通信
+- **前端集成**：前端已分离到独立仓库 [pixivflow-webui](https://github.com/redtidev1918/PixivFlow-webui)，可通过 API 与后端通信
 - **健康检查**：自动检查 API 服务器是否可访问
 
 ---

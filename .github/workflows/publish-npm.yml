@@ -156,7 +156,7 @@ jobs:
           echo "- **Version**: ${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Package**: pixivflow" >> $GITHUB_STEP_SUMMARY
           echo "- **Registry**: https://www.npmjs.com/package/pixivflow" >> $GITHUB_STEP_SUMMARY
-          echo "- **GitHub**: https://github.com/zoidberg-xgd/PixivFlow" >> $GITHUB_STEP_SUMMARY
+          echo "- **GitHub**: https://github.com/redtidev1918/PixivFlow" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 📊 Sync Status" >> $GITHUB_STEP_SUMMARY
           echo "- ✅ package.json: ${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY

@@ -139,7 +139,7 @@ npm install -g pixivflow --build-from-source
 
 ```bash
 # 1. 克隆仓库
-git clone https://github.com/zoidberg-xgd/pixivflow.git
+git clone https://github.com/redtidev1918/PixivFlow.git
 cd pixivflow
 
 # 2. 安装依赖（本地编译）
@@ -376,7 +376,7 @@ chmod +x ~/start-pixivflow.sh
 如果遇到问题：
 
 1. 查看本文档的故障排除部分
-2. 查看 [GitHub Issues](https://github.com/zoidberg-xgd/pixivflow/issues)
+2. 查看 [GitHub Issues](https://github.com/redtidev1918/PixivFlow/issues)
 3. 提交新的 Issue（请包含 Termux 版本和错误日志）
 
 ---

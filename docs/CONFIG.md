@@ -1,6 +1,5 @@
 # 配置手册
 
-
 > **English**: Configuration reference — config file location
 > (`config/standalone.config.json`), copying and editing it, CLI-based config
 > management (`pixivflow config`), download targets, scheduler cron settings,

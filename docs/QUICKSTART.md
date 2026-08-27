@@ -1,54 +1,54 @@
 # 快速开始
 
-
-> **English**: A 3-minute quick start — install PixivFlow globally with
-> `npm install -g pixivflow`, sign in with `pixivflow login`, run
-> `pixivflow download` (or use `download --url <link>` for a single item),
-> and verify the setup with `pixivflow health`. Detailed steps below.
-
-# 快速开始
-
-3 分钟上手指南。
+> **English**: Install globally with `npm install -g pixivflow`, sign in with
+> `pixivflow login`, then run `pixivflow download` or use
+> `pixivflow download --url <link>` for a single item. Verify the setup with
+> `pixivflow health`.
 
 ## 环境要求
 
-- **Node.js**: 18.0.0+
-- **npm**: 9.0.0+
-- **Pixiv 账号**
+- Node.js 18 及以上版本（推荐 LTS）
+- npm 9+
+- Pixiv 账号
 
-## 推荐方式 (NPM)
-
-直接通过 npm 全局安装是最快捷的方式。
+## 安装
 
 ```bash
-# 1. 安装
 npm install -g pixivflow
-
-# 2. 登录 (交互式)
-pixivflow login
-
-# 3. 下载
-pixivflow download
+pixivflow --help    # 验证安装
 ```
 
-## 源码方式
+源码安装与其他方式见 [BUILD_GUIDE.md](BUILD_GUIDE.md)。
+
+## 登录
 
 ```bash
-# 1. 安装依赖
-npm install
-
-# 2. 登录
-npm run login
-
-# 3. 下载
-npm run download
+pixivflow login
 ```
+
+按提示完成 Pixiv 授权，凭据会保存在本地配置中，之后无需重复登录。
+服务器等无图形界面环境使用 `pixivflow login-headless`。
+
+## 开始下载
+
+```bash
+# 直接粘贴作品链接（插画 / 小说 / 用户主页均可识别）
+pixivflow download --url https://www.pixiv.net/artworks/123456789
+
+# 或按配置文件中的下载目标批量执行
+pixivflow download
+
+# 长期挂机自动收集
+pixivflow scheduler
+```
+
+下载结果保存在配置指定的目录下，默认按画师和标题归档。
 
 ## 基础配置
 
 配置文件：`config/standalone.config.json`
 
-下载 "风景" 标签的 20 张插画：
+下载「風景」标签的 20 张插画：
 
 ```json
 {
@@ -62,13 +62,13 @@ npm run download
 }
 ```
 
-更多配置详见 [配置手册](./CONFIG.md)。
+完整字段说明见 [配置手册](./CONFIG.md)。
 
-## 常用命令
+## 检查环境
 
-| 功能 | NPM (全局) | 源码 |
-|------|------------|------|
-| **登录** | `pixivflow login` | `npm run login` |
-| **下载** | `pixivflow download` | `npm run download` |
-| **随机体验** | `pixivflow random` | `npm run random` |
-| **定时任务** | `pixivflow scheduler` | `npm run scheduler` |
+```bash
+pixivflow health
+```
+
+该命令会检查配置完整性、目录可写性和到 Pixiv 的连通性，
+首次部署后建议先运行一次。

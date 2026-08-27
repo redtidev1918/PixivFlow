@@ -1,5 +1,10 @@
 # 登录指南
 
+> **English**: Sign-in guide — three login adapters (Node.js token getter by
+> default, Puppeteer fallback, Python gppt as last resort), interactive and
+> headless flows, and token safety notes.
+
+
 ## 登录方式优先级
 
 1. **pixiv-token-getter** (默认): Node.js 库，无需依赖。

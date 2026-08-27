@@ -306,7 +306,7 @@ export class WebUICommand extends BaseCommand {
     context.logger.info('');
     context.logger.info('Option 1: Clone the source code repository');
     context.logger.info('  1. Clone the repository:');
-    context.logger.info('     git clone https://github.com/zoidberg-xgd/pixivflow.git');
+    context.logger.info('     git clone https://github.com/redtidev1918/PixivFlow.git');
     context.logger.info('     cd pixivflow');
     context.logger.info('  2. Run the command from the project directory:');
     context.logger.info('     pixivflow webui');

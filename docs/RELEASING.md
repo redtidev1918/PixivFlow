@@ -80,7 +80,6 @@ OIDC 未配置或需要本地直发时使用:
 两点须知:
 
 - 推送标签同样会触发 Publish 工作流;若该版本已由本地发布成功,npm 对重复版本号的发布会报错,以本地结果为准即可。
-- 脚本结尾打印的 GitHub 链接仍是旧账号 zoidberg-xgd/PixivFlow,已过期,以 redtidev1918/PixivFlow 为准。
 
 不需要 CI 的最小手工等价路径:
 
@@ -97,7 +96,7 @@ npm publish --access public
 
 `create-release.sh`:检查 gh CLI 与登录状态 → 要求远程已存在对应标签(可现场推送)→ 从 docs/project/CHANGELOG.md 提取 `## [<version>]` 块作为说明 → 交互确认后创建或更新 Release。批量补历史标签用 `create-releases-for-tags.sh`。
 
-已知问题:脚本内 REPO 变量硬编码为 `zoidberg-xgd/PixivFlow`,仓库迁移到 redtidev1918 后该脚本会把 Release 建到错误仓库(若无权限则直接失败)。在修复前,手动执行:
+脚本内 REPO 变量已修正为 `redtidev1918/PixivFlow`,直接运行即可在正确仓库创建 Release。也可跳过脚本:
 
 
 或直接在 Releases 页面 Draft a new release,正文粘贴 CHANGELOG 对应章节(推荐,免转义)。

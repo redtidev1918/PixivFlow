@@ -4,7 +4,7 @@
  * This module provides login functionality using the pixiv-token-getter library.
  * It wraps the library to match the project's LoginInfo interface.
  * 
- * Library: https://github.com/zoidberg-xgd/pixiv-token-getter
+ * Library: https://github.com/redtidev1918/pixiv-token-getter
  */
 
 import { getTokenInteractive, getTokenHeadless, TokenInfo } from 'pixiv-token-getter';

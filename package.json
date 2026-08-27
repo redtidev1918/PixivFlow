@@ -11,7 +11,7 @@
     "url": "https://github.com/redtidev1918/PixivFlow/issues"
   },
   "author": "redtidev1918",
-  "license": "GPL-3.0-or-later",
+  "license": "MIT",
   "main": "dist/index.js",
   "bin": {
     "pixivflow": "dist/index.js"

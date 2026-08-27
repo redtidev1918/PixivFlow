@@ -7,7 +7,7 @@ Built with TypeScript and Node.js; runs on Windows, macOS, Linux and Docker.
 
 [![Version](https://img.shields.io/npm/v/pixivflow?style=flat-square)](https://www.npmjs.com/package/pixivflow)
 [![Node](https://img.shields.io/badge/Node.js-18%2B_LTS-green.svg?style=flat-square&logo=node.js)](https://nodejs.org/)
-[![License](https://img.shields.io/badge/License-GPL--3.0-blue.svg?style=flat-square)](LICENSE)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](LICENSE)
 [![Documentation](https://img.shields.io/badge/Docs-redtidev1918.github.io-6366f1?style=flat-square)](https://redtidev1918.github.io/PixivFlow/)
 
 ## Install
@@ -114,4 +114,4 @@ secrets before sharing). Security issues are handled privately — see
 
 ## License
 
-[GPL-3.0-or-later](LICENSE)
+[MIT](LICENSE)

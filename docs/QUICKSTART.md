@@ -18,7 +18,9 @@ npm install -g pixivflow
 pixivflow --help    # 验证安装
 ```
 
-源码安装与其他方式见 [BUILD_GUIDE.md](BUILD_GUIDE.md)。
+从源码运行：克隆仓库后依次执行 `npm install`、`npm run login`、
+`npm run download`（详见仓库根目录 [README.md](../README.md) 的「快速开始」一节），
+或在 [Docker](DOCKER.md) 中直接使用。
 
 ## 登录
 

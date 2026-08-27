@@ -5,6 +5,12 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [2.1.1] - 2026-08-27
+
+### 变更
+- 📦 依赖升级：pixiv-token-getter 2.0.0 → 2.1.0（登录库，地板升至 ^2.1.0）。全量测试 461/461 通过。
+
+---
 ## [2.1.0] - 2026-08-27
 
 ### 新增

@@ -6,7 +6,7 @@ Pixiv 批量下载与定时收集工具。支持插画和小说的批量下载�
 
 [![Version](https://img.shields.io/npm/v/pixivflow?style=flat-square)](https://www.npmjs.com/package/pixivflow)
 [![Node](https://img.shields.io/badge/Node.js-18%2B_LTS-green.svg?style=flat-square&logo=node.js)](https://nodejs.org/)
-[![License](https://img.shields.io/badge/License-GPL--3.0-blue.svg?style=flat-square)](LICENSE)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](LICENSE)
 [![Documentation](https://img.shields.io/badge/Docs-redtidev1918.github.io-6366f1?style=flat-square)](https://redtidev1918.github.io/PixivFlow/)
 
 ## 安装
@@ -110,4 +110,4 @@ Bug 与功能建议请提交到
 
 ## 许可证
 
-[GPL-3.0-or-later](LICENSE)
+[MIT](LICENSE)

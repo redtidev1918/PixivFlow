@@ -19,9 +19,9 @@ jobs:
     permissions:
       contents: write
       id-token: write
-    env:
-      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-    
+    # 发布凭据：仓库 Secret NPM_TOKEN。请使用 Granular Access Token
+    # （限定 pixivflow 包、Read and write 权限）；classic token 自 npm
+    # 2025 年末政策起对已有包的发布受限。详见 docs/RELEASING.md 故障诊断节。
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -33,7 +33,6 @@ jobs:
         with:
           node-version: '18'
           registry-url: 'https://registry.npmjs.org'
-          always-auth: true
 
       - name: Install dependencies
         run: npm ci

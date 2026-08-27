@@ -1,5 +1,7 @@
 # PixivFlow
 
+**English** | [中文](https://github.com/redtidev1918/PixivFlow/blob/master/README.md)
+
 Pixiv batch download and scheduled collection tool. Bulk-download
 illustrations and novels, search by tag, filter by bookmarks and dates,
 and run recurring collection jobs on a schedule. CLI and WebUI included.

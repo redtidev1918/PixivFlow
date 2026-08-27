@@ -1,5 +1,7 @@
 # PixivFlow
 
+[English](https://github.com/redtidev1918/PixivFlow/blob/master/README_EN.md) | **中文**
+
 Pixiv 批量下载与定时收集工具。支持插画和小说的批量下载、标签搜索、
 多维度筛选和 Cron 定时任务，提供命令行与 WebUI 两种使用方式。
 基于 TypeScript 和 Node.js，可在 Windows、macOS、Linux 及 Docker 中运行。

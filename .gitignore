@@ -129,8 +129,10 @@ $RECYCLE.BIN/
 ._*
 
 # Security reports (may contain sensitive information)
-# Note: docs/SECURITY.md is allowed (it's documentation, not a report)
-*SECURITY*.md
+# Security *reports* may contain sensitive info, but the policy file
+# (SECURITY.md) and docs/SECURITY.md are intentionally tracked.
+*SECURITY_REPORT*.md
+!SECURITY.md
 !docs/SECURITY.md
 
 # Internal work documents (refactoring plans, progress reports, analysis, etc.)

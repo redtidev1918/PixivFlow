@@ -6,23 +6,40 @@ name: Publish
 #   Owner/User: redtidev1918  Repository: PixivFlow
 #   Workflow filename: release.yml
 # 且 redtidev1918 已是 pixivflow 的 maintainer。
+#
+# 两种触发方式：
+#   A. 推送 v* 标签（本地已用 npm version 升好版本号）→ 构建 + 发布 + 创建 GitHub Release
+#   B. 手动 workflow_dispatch：选择 patch/minor/major，本工作流自动
+#      升版本号 → 提交并打 tag → 构建 + 发布 → 创建 GitHub Release（含自动 Release Notes）
 
 on:
   push:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      bump:
+        description: '版本升级类型'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
 
 permissions:
-  contents: read
+  contents: write # 推送版本提交 / 打 tag / 创建 GitHub Release
   id-token: write # npm OIDC trusted publishing 所必需
 
 jobs:
-  publish:
+  release:
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v7
         with:
@@ -30,9 +47,38 @@ jobs:
           registry-url: https://registry.npmjs.org
           package-manager-cache: false
 
+      # 方式 B：自动升级版本号并打 tag
+      - name: Bump version (manual dispatch only)
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          BUMP: ${{ inputs.bump }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          NEW_VERSION=$(npm version "$BUMP" --no-git-tag-version)
+          echo "version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+          git commit -am "chore(release): $NEW_VERSION"
+          git tag -a "$NEW_VERSION" -m "PixivFlow $NEW_VERSION"
+          git push origin HEAD "$NEW_VERSION"
+
+      - name: Resolve release tag
+        id: rel
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=v$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          fi
+
       - run: npm ci
 
       - run: npm run build --if-present
 
       - name: Publish to npm
         run: npm publish --access public
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.rel.outputs.tag }}
+          generate_release_notes: true

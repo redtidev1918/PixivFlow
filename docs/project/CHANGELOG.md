@@ -5,6 +5,25 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [2.1.0] - 2026-08-27
+
+### 新增
+- ✨ WebUI 实时任务推送：新增 Socket.IO `download` 事件（活动任务快照 + 最近 40 条日志，150ms 合并去抖），前端直写缓存，进度/状态更新降至亚秒
+- ✨ `GET /health` 别名路由，便于容器健康检查与反向代理探测
+- ✨ `PIXIV_WEBUI_AUTO_PORT=true` 时 WebUI 自动改用下一个空闲端口
+- ✨ WebUI URL 端点接入共享解析器，支持全部 10 种链接形态（此前系列/用户页等会返回 400）
+
+### 修复
+- 🐛 WebUI 停止任务此前仅触发无人监听的 AbortController，下载不会真正中断；现改为协作式取消，状态正确落库为 stopped
+- 🐛 调度器 `items_downloaded` 恒为 0：改为以数据库基线差值统计
+- 🐛 调度器 `timeout` 现会真正中断作业，且不再误报为 failed
+- 🐛 docker-compose webui 健康检查探测错误端点且参数形式错误，恒为 unhealthy
+
+### 变更
+- 📦 Dockerfile 前端缺失时自动浅克隆 pixivflow-webui；`SKIP_WEBUI_BUILD=true` 可产出 API-only 镜像
+- 🧹 发布脚本仓库地址修正为 redtidev1918/PixivFlow
+- 📚 文档站全面重写（信息架构 + 视觉 + 双向交叉链接）
+
 ---
 
 ## [2.0.20] - 2025-11-12

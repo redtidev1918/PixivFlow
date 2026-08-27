@@ -163,9 +163,9 @@ services:
       pixivflow:
         condition: service_healthy
     
-    # 健康检查
+    # 健康检查（探测 /api/health；shell 形式确保 || 生效）
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/health", "||", "exit", "1"]
+      test: ["CMD-SHELL", "wget -q --tries=1 --spider http://127.0.0.1:3000/api/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3

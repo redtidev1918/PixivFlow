@@ -11,11 +11,13 @@ FROM node:18-alpine AS builder
 # 设置工作目录
 WORKDIR /app
 
-# 安装构建依赖（Python、编译工具等）
+# 安装构建依赖（Python、编译工具等；git 用于在前端目录缺失时自动拉取 WebUI 源码）
 RUN apk add --no-cache \
     python3 \
     make \
     g++ \
+    git \
+    ca-certificates \
     && rm -rf /var/cache/apk/*
 
 # 复制 package 文件（利用 Docker 缓存层）
@@ -34,12 +36,29 @@ COPY src ./src
 # 构建后端项目
 RUN npm run build
 
-# 构建前端项目（如果存在）
+# ---------------------------------------------------------------------------
+# 可选前端：按优先级获取 webui-frontend
+#   1) 构建上下文中已存在完整源码 -> 直接使用
+#   2) 缺失时浅克隆官方前端仓库 pixivflow-webui（保证开箱即用、闭环构建）
+#   3) SKIP_WEBUI_BUILD=true 时跳过前端，产出仅含后端 API 的镜像
+# ---------------------------------------------------------------------------
 COPY webui-frontend ./webui-frontend
-RUN if [ -f "webui-frontend/package.json" ]; then \
-        cd webui-frontend && \
-        npm ci && \
-        npm run build; \
+RUN if [ ! -f "webui-frontend/package.json" ]; then \
+        echo "[webui] local frontend missing; cloning redtidev1918/pixivflow-webui"; \
+        git clone --depth 1 https://github.com/redtidev1918/pixivflow-webui.git /tmp/webui-src \
+            && rm -rf webui-frontend \
+            && mv /tmp/webui-src webui-frontend \
+            && rm -rf webui-frontend/.git; \
+    fi
+
+ARG SKIP_WEBUI_BUILD=false
+RUN if [ "$SKIP_WEBUI_BUILD" = "true" ]; then \
+        echo "[webui] SKIP_WEBUI_BUILD=true -> API-only image"; \
+        mkdir -p webui-frontend/dist \
+            && printf '<!doctype html><meta charset="utf-8"><title>PixivFlow</title><p>镜像未包含 WebUI 前端(SkipWebuiBuild)，仅提供 API。</p>' > webui-frontend/dist/index.html; \
+    else \
+        npm ci --prefix webui-frontend --no-audit --fund=false \
+            && npm run build --prefix webui-frontend; \
     fi
 
 # ============================================================================

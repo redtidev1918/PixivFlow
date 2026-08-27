@@ -1,391 +1,251 @@
-# 📱 Android/Termux 安装指南
+# Android（Termux）安装指南
 
+> **English:** This guide explains how to run PixivFlow on Android with Termux:
+> obtaining the correct Termux distribution, installing the package toolchain needed
+> by the native better-sqlite3 module, installing the CLI globally, injecting your
+> Pixiv refresh token without a desktop browser, editing configuration for phone
+> storage limits, keeping the scheduler alive in the background with tmux or nohup,
+> and a troubleshooting table for build, permission, and process-killing issues.
 
-> **English**: How to install and run PixivFlow on Android using Termux.
-> Note that better-sqlite3 requires a native build step, so extra tooling may
-> be needed. The guide covers Termux setup, required packages, project
-> installation, and troubleshooting. Steps are illustrated in Chinese.
+本文档面向想在 Android 手机上长期挂机收集的用户：没有桌面浏览器、有更严格的文件权限与后台存活限制。
+Termux 场景只覆盖 CLI 用法；WebUI 与 Docker 部署不在本文范围（后者见 [DOCKER.md](./DOCKER.md)，仅限服务器）。
 
-# 📱 Android/Termux 安装指南
+## 适用场景
 
-本指南介绍如何在 Android 设备上使用 Termux 安装和运行 PixivFlow。
+在没有常开电脑的情况下，用手机挂机跑定时下载。局限性同样明确：better-sqlite3 需要本地编译，登录的浏览器自动化链路受限，系统会积极回收后台进程。
+若有一台能装 Docker 的机器，优先选 Docker 部署，可省去本章全部环境适配。
 
-> ⚠️ **注意**：Termux 环境下的安装可能需要额外的构建工具，因为 `better-sqlite3` 需要原生编译。
+## 前置要求
 
----
+### 获取 Termux
 
-## 📋 前置要求
+以下两个渠道任选其一：
 
-### 1. 安装 Termux
+- F-Droid：<https://f-droid.org/packages/com.termux/>（推荐）
+- GitHub Releases：<https://github.com/termux/termux-app/releases>
 
-从以下渠道之一安装 Termux：
+不要使用 Google Play 版本。该版本已停止维护，且与上述渠道的环境不能混用。
 
-- **F-Droid**（推荐）：https://f-droid.org/packages/com.termux/
-- **GitHub Releases**：https://github.com/termux/termux-app/releases
-
-> ⚠️ **重要**：不要从 Google Play 安装 Termux，该版本已停止维护。
-
-### 2. 更新 Termux 包
+### 安装工具链
 
 ```bash
+# 更新包索引与基础组件
 pkg update && pkg upgrade
-```
 
-### 3. 安装基础工具
+# Node.js 运行时与 npm
+pkg install -y nodejs npm
 
-```bash
-# 安装 Node.js 和 npm
-pkg install nodejs npm
+# 编译工具链：better-sqlite3 是原生模块，必须本地编译
+pkg install -y python3 make clang
 
-# 安装构建工具（编译 better-sqlite3 必需）
-pkg install python3 make clang
-
-# 验证安装
-node --version   # 应显示 v18.0.0 或更高
-npm --version    # 应显示 9.0.0 或更高
+# 版本核验
+node -v               # 需要 v18.14+，18 / 20 / 22 均受支持
+npm -v                # 9 以上
 python3 --version
-make --version
-clang --version
+make --version | head -1
+clang --version | head -1
 ```
 
----
-
-## 🚀 安装 PixivFlow
-
-### 方式 1：本地安装（推荐 ⭐）
-
-在 Termux 中，推荐使用本地安装而不是全局安装，以避免权限和路径问题：
+如需把下载结果写到手机公共存储（相册可见的位置），先做一次存储授权：
 
 ```bash
-# 1. 创建项目目录
-mkdir -p ~/pixivflow
-cd ~/pixivflow
-
-# 2. 安装 PixivFlow
-npm install pixivflow
-
-# 3. 验证安装
-npx pixivflow --help
+termux-setup-storage   # 弹出系统授权框，同意后生成 ~/storage/shared 等链接
 ```
 
-**使用方式**：
+## 分步安装
+
+### 全局安装（推荐）
 
 ```bash
-# 在项目目录中运行
-cd ~/pixivflow
-npx pixivflow login
-npx pixivflow download
-```
-
-### 方式 2：全局安装（需要解决编译问题）
-
-如果必须全局安装，需要先解决 `better-sqlite3` 的编译问题：
-
-#### 步骤 1：设置环境变量
-
-```bash
-# 设置 Python 路径
-export PYTHON=$(which python3)
-
-# 设置构建工具路径
-export PATH=$PATH:/data/data/com.termux/files/usr/bin
-```
-
-#### 步骤 2：安装全局包
-
-```bash
-# 尝试全局安装
 npm install -g pixivflow
+pixivflow --help      # 打印帮助即安装成功
 ```
 
-#### 步骤 3：如果仍然失败
-
-如果遇到 `android_ndk_path` 错误，可以尝试：
-
-```bash
-# 方法 1：设置 node-gyp 配置
-npm config set python $(which python3)
-
-# 方法 2：手动编译 better-sqlite3
-npm install -g better-sqlite3 --build-from-source
-
-# 然后再安装 pixivflow
-npm install -g pixivflow
-```
-
----
-
-## 🔧 解决编译问题
-
-### 问题：`gyp: Undefined variable android_ndk_path`
-
-这是 `better-sqlite3` 在 Android 环境下编译时的常见问题。
-
-#### 解决方案 1：使用预编译版本（如果可用）
+npm 找不到匹配的预编译二进制时会现场编译 better-sqlite3，耗时数分钟、CPU 占满属正常现象。
+编译报错（典型为 gyp 提示 `android_ndk_path` 未定义）时按顺序处理：
 
 ```bash
-# 检查是否有预编译的二进制文件
-npm install better-sqlite3 --prefer-offline
-
-# 如果失败，继续使用方案 2
-```
-
-#### 解决方案 2：手动配置 node-gyp
-
-```bash
-# 创建 node-gyp 配置目录
-mkdir -p ~/.cache/node-gyp
-
-# 设置环境变量
-export npm_config_node_gyp=$(npm prefix -g)/lib/node_modules/npm/node_modules/node-gyp/bin/node-gyp.js
-
-# 尝试安装
+pkg reinstall -y python3 make clang    # 确认三件套齐全
+npm cache clean --force
 npm install -g pixivflow --build-from-source
 ```
 
-#### 解决方案 3：从源码安装
+仍失败时退回源码方案：
 
 ```bash
-# 1. 克隆仓库
-git clone https://github.com/redtidev1918/PixivFlow.git
-cd pixivflow
-
-# 2. 安装依赖（本地编译）
+git clone https://github.com/redtidev1918/PixivFlow.git ~/PixivFlow
+cd ~/PixivFlow
 npm install
-
-# 3. 构建项目
 npm run build
-
-# 4. 使用本地构建的版本
-npm start
+npm link               # 把构建产物注册为全局 pixivflow 命令
 ```
 
----
+本文所有示例统一使用 `pixivflow <命令>` 形式；命令全集见[快速开始](./QUICKSTART.md)。
 
-## 📝 配置和使用
+## 登录
 
-### 1. 登录账号
+Termux 里登录有一条硬约束：没有可弹出的桌面 Chrome 窗口，交互式 `pixivflow login` 通常卡在拉起浏览器这一步（登录优先级为 pixiv-token-getter → Puppeteer → Python gppt，Puppeteer 在 Android 上基本不可用）。
+推荐先在一台有浏览器的设备上完成认证，再把 token 注入手机：
+
+### 方式一：跨设备注入 token（推荐）
 
 ```bash
-# 本地安装方式
-cd ~/pixivflow
-npx pixivflow login
-
-# 或全局安装方式
+# 在电脑上执行，登录成功后从输出或其配置文件中取 refresh_token；细节见 LOGIN.md
 pixivflow login
+
+# 回到 Termux，把 token 写入本机配置并验证
+pixivflow refresh <你的_refresh_token>
+pixivflow health       # 认证项通过即成功
 ```
 
-### 2. 配置下载目标
+`refresh` 命令专为无图形界面环境设计，会把 token 自动写入当前生效的配置文件。
 
-编辑配置文件（通常在 `~/pixivflow/config/standalone.config.json` 或 `~/.config/pixivflow/standalone.config.json`）：
+### 方式二：无头登录（备用）
 
 ```bash
-# 使用 nano 编辑器
-nano ~/.config/pixivflow/standalone.config.json
+pixivflow login-headless -u 用户名 -p 密码
 ```
 
-配置示例：
+该方式依赖浏览器自动化，Android 上是否可用取决于具体环境，失败就改走方式一。
+开启了两步验证的账号暂不支持自动化登录，详见[登录指南](./LOGIN.md)。
+
+security 提醒：refresh token 等同账号密码，不要发到群聊，不要提交进 Git。
+
+## 配置与下载
+
+### 生成配置
+
+交互式向导会生成完整模板，适合第一次使用：
+
+```bash
+pixivflow setup
+```
+
+也可以手工写最小配置。先用 `pixivflow dirs` 确认实际路径，再编辑对应位置的 `standalone.config.json`：
 
 ```json
 {
   "targets": [
-    {
-      "type": "illustration",
-      "tag": "風景",
-      "limit": 20
-    }
+    { "type": "illustration", "tag": "風景", "limit": 20 }
   ]
 }
 ```
 
-### 3. 开始下载
+全部字段说明见[配置手册](./CONFIG.md)；常用键也可以用 CLI 修改：
 
 ```bash
-# 本地安装方式
-cd ~/pixivflow
-npx pixivflow download
-
-# 或全局安装方式
-pixivflow download
+pixivflow config show
+pixivflow config set storage.downloadDirectory ~/downloads
 ```
 
----
+### 存放位置建议
 
-## ⚠️ 已知限制
+- 首选放在 Termux 私有目录内（如 `~/downloads`）：读写快，不受 Android 存储限制。
+- 写公共存储前必须执行过 `termux-setup-storage`，路径形如 `~/storage/shared/PixivFlow`（内部存储根目录下的文件夹）。
+- 数据库路径保持默认或指向私有目录；SQLite 放在 FAT 类公共卷上可能出锁定问题。
 
-### 1. Puppeteer 支持
+常用的公共存储链接（`termux-setup-storage` 执行后生成）：
 
-Termux 环境下，Puppeteer（无头浏览器）可能无法正常工作，因为：
+| 链接 | 实际位置 |
+| --- | --- |
+| `~/storage/shared` | 内部存储根目录 `/sdcard` |
+| `~/storage/downloads` | 公共下载目录 `/sdcard/Download` |
+| `~/storage/dcim` | 相册目录 `/sdcard/DCIM` |
+### 定时任务配置
 
-- Android 系统限制
-- 缺少必要的系统库
-- Chromium 无法在 Android 上运行
-
-**解决方案**：使用 `pixiv-token-getter`（Node.js 库）进行登录，这是默认方式，不需要 Puppeteer。
-
-### 2. 文件系统权限
-
-Termux 的文件系统访问可能受到 Android 系统限制：
-
-- 只能访问 Termux 的私有目录（`~/`）
-- 需要 Android 11+ 的存储访问权限才能访问外部存储
-
-**建议**：将下载目录设置在 Termux 目录内：
+`targets` 就绪后，可把调度开关写进配置文件，配合 `pixivflow scheduler` 使用：
 
 ```json
 {
-  "storage": {
-    "illustrationDir": "~/downloads/illustrations",
-    "novelDir": "~/downloads/novels"
+  "scheduler": {
+    "enabled": true,
+    "cron": "0 3 * * *",
+    "timezone": "Asia/Shanghai"
   }
 }
 ```
 
-### 3. 后台运行
+- `cron` 为标准五段式表达式，默认 `0 3 * * *` 即每天凌晨三点执行一轮全部 `targets`。
+- `timezone` 控制该表达式的解释时区，默认 Asia/Shanghai。
+- 手动跑一轮不想等定时，直接执行 `pixivflow download`。
 
-Termux 应用被系统杀死后，后台任务会停止。
-
-**解决方案**：
+### 试跑下载
 
 ```bash
-# 使用 nohup 运行
-nohup npx pixivflow scheduler > ~/pixivflow.log 2>&1 &
+# 单作品验证：直接粘贴任意 Pixiv 链接
+pixivflow download --url https://www.pixiv.net/artworks/123456789
 
-# 或使用 tmux（推荐）
-pkg install tmux
-tmux new -s pixivflow
-# 在 tmux 中运行
-npx pixivflow scheduler
-# 按 Ctrl+B 然后 D 分离会话
+# 按 targets 配置批量下载
+pixivflow download
+
+# 环境自检：配置完整性、目录可写性、Pixiv 连通性
+pixivflow health
+pixivflow dirs         # 列出数据库、日志、插画、小说的实际位置
 ```
+
+## 保持后台运行
+
+配好 `targets` 后启动定时调度，默认每天 03:00（Asia/Shanghai 时区）执行一轮：
+
+```bash
+pixivflow scheduler
+```
+
+长期挂着要解决两件事：终端会话断开后进程不死，屏幕熄灭后进程不被冻结。两种验证可行的方案：
+
+### 方案 A：tmux（推荐）
+
+```bash
+pkg install -y tmux
+tmux new -s pf                    # 创建名为 pf 的会话
+pixivflow scheduler               # 在会话内启动
+                                  # Ctrl+B 再按 D 分离，进程继续在后台跑
+tmux attach -t pf                 # 重新接入查看输出
+tmux kill-session -t pf           # 彻底结束
+```
+
+### 方案 B：nohup 后台运行
+
+```bash
+nohup pixivflow scheduler > $HOME/pixivflow.log 2>&1 &
+echo $! > $HOME/pixivflow.pid     # 记下 PID 便于管理
+kill $(cat $HOME/pixivflow.pid)   # 停止
+```
+
+### 系统保活配合
+
+- 锁屏前申请唤醒锁抑制休眠：`termux-wake-lock`（恢复用 `termux-wake-unlock`）。
+- 系统设置里把 Termux 加入电池优化豁免名单，否则 Doze 模式会冻结网络与定时器。
+- 保留通知栏常驻通知（保持前台状态），可显著降低被查杀的概率。
+- 新版 Android 会清理大量子进程（Phantom Process Killer）。调度器莫名消失而手动运行正常时，优先怀疑此机制。
+
+日常检查命令：
+
+```bash
+pixivflow status      # 下载统计与最近记录
+pixivflow logs        # 查看运行日志
+```
+
+## 常见问题
+
+| 问题 | 现象 | 处理 |
+| --- | --- | --- |
+| 全局安装 EACCES 报错 | `npm install -g` 权限不足 | 本地安装替代：`mkdir -p ~/pf && cd ~/pf && npm install pixivflow`，再设别名 `alias pixivflow="npx pixivflow"` 并重开 shell；之后所有命令照常以 `pixivflow` 开头 |
+| gyp 报 android_ndk_path | better-sqlite3 编译阶段失败 | 补齐 `pkg install python3 make clang`，清理 npm 缓存后带 `--build-from-source` 重试；仍失败改走上文源码路线 |
+| command not found: pixivflow | PATH 缺少 npm 全局 bin 目录 | 先试 `npx pixivflow --help`；或长期用别名方案 |
+| 外部存储写入失败 | EACCES / 文件系统只读 | 执行 `termux-setup-storage` 并重新授权；个别卷不支持高级特性，重要数据放回私有目录 |
+| 数据库初始化失败 | Failed to initialize database | 确认目标目录存在且可写；查看剩余空间 `df -h ~` |
+| 登录失败 | Authentication Error | 核对账号密码；开了两步验证暂不支持；Termux 上改用「方式一」注入 token |
+| Token 过期 | API 返回 401 Unauthorized | 重新获取 token 后 `pixivflow refresh` 更新；详见[登录指南](./LOGIN.md) |
+| 息屏后任务停摆 | 定时不再触发、无新日志 | `termux-wake-lock` 加电池优化白名单加前台常驻（见「系统保活配合」） |
+| 校园网/公司网连不上 Pixiv | 网络阻断 | 配代理：配置文件 `network.proxy` 字段，见[配置手册 · network](./CONFIG.md) |
 
 ---
 
-## 🐛 故障排除
+## 相关文档
 
-### 问题 1：编译失败
-
-**症状**：`gyp ERR! configure error` 或 `android_ndk_path` 错误
-
-**解决方案**：
-
-```bash
-# 1. 确保安装了所有构建工具
-pkg install python3 make clang
-
-# 2. 清理 npm 缓存
-npm cache clean --force
-
-# 3. 删除 node_modules 重新安装
-rm -rf node_modules package-lock.json
-npm install
-```
-
-### 问题 2：权限错误
-
-**症状**：`EACCES` 或权限被拒绝
-
-**解决方案**：
-
-```bash
-# 使用本地安装而不是全局安装
-mkdir ~/pixivflow && cd ~/pixivflow
-npm install pixivflow
-```
-
-### 问题 3：找不到命令
-
-**症状**：`command not found: pixivflow`
-
-**解决方案**：
-
-```bash
-# 使用 npx 运行
-npx pixivflow --help
-
-# 或创建别名
-echo 'alias pixivflow="npx pixivflow"' >> ~/.bashrc
-source ~/.bashrc
-```
-
-### 问题 4：数据库初始化失败
-
-**症状**：`Failed to initialize database`
-
-**解决方案**：
-
-```bash
-# 确保有写入权限
-mkdir -p ~/.config/pixivflow
-chmod 755 ~/.config/pixivflow
-
-# 检查磁盘空间
-df -h ~
-```
-
----
-
-## 💡 最佳实践
-
-### 1. 使用本地安装
-
-在 Termux 中，推荐使用本地安装：
-
-```bash
-mkdir ~/pixivflow && cd ~/pixivflow
-npm install pixivflow
-```
-
-### 2. 使用 tmux 管理会话
-
-```bash
-# 安装 tmux
-pkg install tmux
-
-# 创建新会话
-tmux new -s pixivflow
-
-# 在会话中运行
-npx pixivflow scheduler
-
-# 分离会话（Ctrl+B 然后 D）
-# 重新连接：tmux attach -t pixivflow
-```
-
-### 3. 配置自动启动（可选）
-
-创建启动脚本 `~/start-pixivflow.sh`：
-
-```bash
-#!/data/data/com.termux/files/usr/bin/bash
-cd ~/pixivflow
-npx pixivflow scheduler
-```
-
-添加执行权限：
-
-```bash
-chmod +x ~/start-pixivflow.sh
-```
-
----
-
-## 📚 相关文档
-
-- [快速开始指南](./QUICKSTART.md)
-- [配置指南](./CONFIG.md)
-- [登录指南](./LOGIN.md)
-- [使用指南](./USAGE.md)
-
----
-
-## 🆘 获取帮助
-
-如果遇到问题：
-
-1. 查看本文档的故障排除部分
-2. 查看 [GitHub Issues](https://github.com/redtidev1918/PixivFlow/issues)
-3. 提交新的 Issue（请包含 Termux 版本和错误日志）
-
----
-
+- [快速开始](./QUICKSTART.md) — 命令速览与首次运行流程
+- [登录指南](./LOGIN.md) — 三种登录方式与 token 维护
+- [配置手册](./CONFIG.md) — targets、存储路径、代理等全部字段
+- [使用指南](./USAGE.md) — 下载模式与子命令全集
+- [README](../README.md) — 项目概览与文档索引

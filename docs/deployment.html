@@ -4,114 +4,161 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>部署指南 — PixivFlow</title>
-  <meta name="description" content="PixivFlow 部署指南：Docker Compose、PM2 与 systemd 三种方案的完整步骤。">
+  <meta name="description" content="PixivFlow 部署指南:npm 全局安装、Docker Compose 双服务(定时下载 + WebUI)与 Android Termux 三条部署路线,含环境变量参考、数据持久化、升级方法与故障排查表。">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐱</text></svg>">
   <link rel="stylesheet" href="assets/site.css">
+  <script>document.documentElement.setAttribute("data-theme", localStorage.getItem("pf-theme") || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"));</script>
+  <script src="assets/site.js" defer></script>
 </head>
 <body>
-
-<header class="hero">
-  <div class="container">
-    <h1>🐳 部署指南</h1>
-    <p class="tagline">Docker Compose（推荐）、PM2 与 systemd —— 从单机到服务器的完整方案。</p>
+<header class="topbar">
+  <div class="bar">
+    <a class="brand" href="index.html"><span class="logo">🐱</span>PixivFlow</a>
+    <ul class="nav-links">
+      <li><a href="index.html">首页</a></li>
+      <li><a href="guide.html">使用教程</a></li>
+      <li><a href="config.html">配置参考</a></li>
+      <li><a href="deployment.html" class="active">部署指南</a></li>
+      <li><a href="faq.html">常见问题</a></li>
+      <li><a href="tutorial-full.html">完整教程</a></li>
+    </ul>
+    <div class="top-actions">
+      <button class="icon-btn js-theme-toggle" aria-label="切换主题">🌙</button>
+      <a class="icon-btn" href="https://github.com/redtidev1918/PixivFlow" target="_blank" rel="noopener" title="GitHub 仓库">⭐</a>
+    </div>
   </div>
 </header>
-
-<nav class="topbar">
-  <ul>
-    <li><a href="index.html">首页</a></li>
-    <li><a href="guide.html">使用教程</a></li>
-    <li><a href="config.html">配置参考</a></li>
-    <li><a href="deployment.html">部署指南</a></li>
-    <li><a href="faq.html">常见问题</a></li>
-    <li><a href="https://github.com/redtidev1918/PixivFlow/releases">Releases</a></li>
-  </ul>
-</nav>
-
 <main class="container">
+  <div class="page-head">
+    <h1>🚢 部署指南</h1>
+    <p class="lede">按环境选路线:个人电脑用 npm 即可;服务器长期挂机首选 Docker Compose;安卓手机走 Termux。完整字段定义见 <a href="https://github.com/redtidev1918/PixivFlow/blob/master/docs/DOCKER.md" target="_blank" rel="noopener">Docker 文档</a>与<a href="https://github.com/redtidev1918/PixivFlow/blob/master/docs/TERMUX_INSTALL.md" target="_blank" rel="noopener">Termux 文档</a>。</p>
+  </div>
 
-  <section class="card-block">
-    <h2 class="section-title">🐳 Docker Compose 部署（推荐）</h2>
+  <div class="card-grid">
+    <a class="card" href="#docker"><div class="card-icon">🐳</div><h3>Docker Compose(服务器推荐)</h3><p>定时下载与 WebUI 双容器,健康检查、自动重启、数据卷持久化。<span class="arrow">查看 →</span></p></a>
+    <a class="card" href="#npm"><div class="card-icon">📦</div><h3>npm 全局安装</h3><p>个人电脑与轻量场景,一条命令安装,配合 tmux/nohup 常驻。<span class="arrow">查看 →</span></p></a>
+    <a class="card" href="#termux" id="termux"><div class="card-icon">📱</div><h3>Termux(Android)</h3><p>旧手机变身收集机,走 Termux 专用安装流程。<span class="arrow">查看 →</span></p></a>
+  </div>
 
-    <h3>快速开始</h3>
+  <section class="card-block" id="docker">
+    <h2 class="section-title">Docker Compose 部署<span class="anchor-hint">#</span></h2>
+
+    <h3>1. 准备</h3>
     <pre><code>git clone https://github.com/redtidev1918/PixivFlow.git
 cd PixivFlow
-cp docker-env.example .env      # 按需修改配置
+cp docker-env.example .env</code></pre>
+    <p>编辑 <code>.env</code>:至少确认 <code>TZ</code>、存储路径(默认即可);需要代理的话填 <code>HTTP_PROXY</code> / <code>ALL_PROXY</code>。</p>
+    <div class="callout"><span class="callout-title">构建前置(已闭环)</span>主仓库只带 <code>webui-frontend/.gitkeep</code> 占位目录;Dockerfile 构建时若发现前端源码缺失,会自动浅克隆 <a href="https://github.com/redtidev1918/pixivflow-webui" target="_blank" rel="noopener">pixivflow-webui</a> 官方仓库并打包进镜像,无需手动克隆(要求构建机可访问 GitHub)。空气隔离环境可用 <code>docker compose build --build-arg SKIP_WEBUI_BUILD=true</code> 跳过前端、产出仅含 API 的镜像。</div>
+    <h3>2. 准备凭据</h3>
+    <p>容器内无法交互式登录(<code>PIXIV_SKIP_AUTO_LOGIN=true</code>)。两条路任选:</p>
+    <ul>
+      <li><strong>推荐</strong>:宿主机上 <code>npm install -g pixivflow && pixivflow login</code>,然后把生成的 <code>pixiv.refreshToken</code> 填进 <code>config/standalone.config.json</code>(容器只读挂载该目录,宿主机编辑即可);</li>
+      <li>或在 <code>.env</code> 里设置 <code>PIXIV_REFRESH_TOKEN=...</code>(环境变量优先级高于 JSON)。</li>
+    </ul>
+
+    <h3>3. 启动</h3>
+    <pre><code>docker compose up -d pixivflow           <span class="cmt"># 定时下载服务</span>
+docker compose up -d pixivflow-webui     <span class="cmt"># WebUI(可选,端口 3000)</span>
+docker compose ps                        <span class="cmt"># 等待 healthy</span>
+docker compose logs -f pixivflow         <span class="cmt"># 观察首次运行日志</span></code></pre>
+
+    <h3>4. 双服务拓扑</h3>
+    <div class="table-scroll"><table>
+      <thead><tr><th>服务</th><th>职责</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td><code>pixivflow</code></td><td>Cron 定时下载</td><td>禁用自动登录;<code>PIXIV_SCHEDULER_ENABLED=true</code></td></tr>
+        <tr><td><code>pixivflow-webui</code></td><td>Web 管理台</td><td>宿主机端口 <code>WEBUI_PORT</code>(默认 3000)→ 容器 3000;静态前端 + API</td></tr>
+      </tbody>
+    </table></div>
+    <p>两服务共享数据卷,互不冲突:</p>
+    <div class="table-scroll"><table>
+      <thead><tr><th>宿主机目录</th><th>容器内</th><th>内容</th></tr></thead>
+      <tbody>
+        <tr><td><code>./config</code></td><td><code>/app/config</code>(只读)</td><td>配置文件</td></tr>
+        <tr><td><code>./data</code></td><td><code>/app/data</code></td><td>SQLite 数据库、日志</td></tr>
+        <tr><td><code>./downloads</code></td><td><code>/app/downloads</code></td><td>下载成果</td></tr>
+      </tbody>
+    </table></div>
+    <div class="callout"><span class="callout-title">只读配置的影响</span><code>./config</code> 以只读方式挂载:在 WebUI 界面里修改并保存配置<strong>不会</strong>回写到宿主机文件。要持久化配置改动,请在宿主机直接编辑 <code>config/</code> 下的 JSON。</div>
+
+    <h3 id="env">环境变量参考</h3>
+    <div class="table-scroll"><table>
+      <thead><tr><th>变量</th><th>默认</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td><code>TZ</code></td><td><code>Asia/Shanghai</code></td><td>时区</td></tr>
+        <tr><td><code>PIXIV_REFRESH_TOKEN</code></td><td>—</td><td>凭据注入(优先于配置 JSON)</td></tr>
+        <tr><td><code>PIXIV_CLIENT_ID</code> / <code>PIXIV_CLIENT_SECRET</code></td><td>—</td><td>OAuth 凭据覆盖</td></tr>
+        <tr><td><code>PIXIV_DATABASE_PATH</code></td><td><code>/app/data/pixiv-downloader.db</code></td><td>数据库路径(容器内)</td></tr>
+        <tr><td><code>PIXIV_DOWNLOAD_DIR</code></td><td><code>/app/downloads</code></td><td>下载目录</td></tr>
+        <tr><td><code>PIXIV_ILLUSTRATION_DIR</code> / <code>PIXIV_NOVEL_DIR</code></td><td><code>/app/downloads/...</code></td><td>类型子目录</td></tr>
+        <tr><td><code>PIXIV_LOG_LEVEL</code></td><td>info</td><td>debug / info / warn / error</td></tr>
+        <tr><td><code>PIXIV_SCHEDULER_ENABLED</code></td><td>true</td><td>调度开关</td></tr>
+        <tr><td><code>HTTP_PROXY</code> / <code>HTTPS_PROXY</code> / <code>ALL_PROXY</code>(含小写)</td><td>—</td><td>代理;宿主机代理用 <code>host.docker.internal</code>,Linux 可用 <code>172.17.0.1</code></td></tr>
+        <tr><td><code>WEBUI_PORT</code></td><td>3000</td><td>WebUI 宿主机端口</td></tr>
+        <tr><td><code>PORT</code> / <code>HOST</code> / <code>STATIC_PATH</code></td><td>3000 / 0.0.0.0 / <code>/app/webui-frontend/dist</code></td><td>WebUI 容器内监听参数</td></tr>
+      </tbody>
+    </table></div>
+
+    <h3>5. 升级与回滚</h3>
+    <pre><code>git pull
+docker compose build
 docker compose up -d</code></pre>
+    <p>数据在卷里,重建容器不丢。升级前建议 <code>pixivflow backup</code>(或直接复制 <code>data/</code>)。</p>
 
-    <h3>首次登录 Pixiv 账号</h3>
-    <pre><code>docker compose exec app pixivflow login-headless</code></pre>
+    <h3>6. 故障排查</h3>
+    <div class="table-scroll"><table>
+      <thead><tr><th>现象</th><th>检查点</th></tr></thead>
+      <tbody>
+        <tr><td>容器反复重启</td><td><code>docker compose logs pixivflow</code> 看退出原因;常见为配置缺失或 refreshToken 无效</td></tr>
+        <tr><td>WebUI 一直显示 unhealthy</td><td><code>start_period</code>(40 秒)内属正常宽限。超期仍异常才需排查:<code>curl localhost:3000/api/health</code> 应返回 ok;后端已注册 <code>/health</code> 别名,compose 探测的就是它</td></tr>
+        <tr><td>定时服务 healthcheck 不通过</td><td>等 <code>start_period</code>(40s)过完;仍失败则检查 <code>/app/data</code> 可写性与数据库初始化日志</td></tr>
+        <tr><td>登录失败</td><td>容器内不能交互登录;确认 refreshToken 已通过配置或 .env 注入</td></tr>
+        <tr><td>下载 0 个</td><td>先看 targets 是否过严;网络是否需要代理(见 <code>.env</code> 代理段)</td></tr>
+        <tr><td>WebUI 打不开</td><td>确认映射端口与 <code>WEBUI_PORT</code>;防火墙放行;远程访问建议挂反代 + 认证</td></tr>
+        <tr><td>代理不生效</td><td>小写变量(<code>all_proxy</code>)也要填;检查宿主机代理是否监听 0.0.0.0</td></tr>
+      </tbody>
+    </table></div>
+  </section>
 
-    <h3>常用运维命令</h3>
-    <table>
-      <tr><th>命令</th><th>作用</th></tr>
-      <tr><td><code>docker compose logs -f app</code></td><td>实时查看下载日志</td></tr>
-      <tr><td><code>docker compose restart app</code></td><td>重启服务</td></tr>
-      <tr><td><code>docker compose stop</code></td><td>停止全部服务</td></tr>
-      <tr><td><code>docker compose exec app pixivflow status</code></td><td>查看下载统计</td></tr>
-    </table>
-
-    <div class="alert alert-info">
-      下载目录建议通过 volume 挂载到 NAS / 网盘同步文件夹，实现多端共享收藏。
-    </div>
+  <section class="card-block" id="npm">
+    <h2 class="section-title">npm 全局安装(桌面 / 轻量服务器)<span class="anchor-hint">#</span></h2>
+    <pre><code>npm install -g pixivflow
+pixivflow login                <span class="cmt"># 一次性授权</span>
+pixivflow setup                <span class="cmt"># 生成配置(可选)</span>
+pixivflow scheduler            <span class="cmt"># 常驻定时</span></code></pre>
+    <p>验证:<code>pixivflow health</code> 全绿即可放心挂机。</p>
+    <div class="callout"><span class="callout-title">常驻运行</span>Linux/macOS 服务器上可用 tmux、nohup 或 systemd 等常规手段托管 <code>pixivflow scheduler</code> 进程;更省心的方案是上面的 Docker Compose(自带重启与健康检查)。Windows 建议任务计划程序或 Docker Desktop。</div>
   </section>
 
   <section class="card-block">
-    <h2 class="section-title">🔁 方式 1：PM2 管理（无 Docker）</h2>
-    <pre><code>npm install -g pm2
+    <h2 class="section-title">Termux(Android)<span class="anchor-hint">#</span></h2>
+    <p>四步概览,逐条命令与踩坑说明见<a href="https://github.com/redtidev1918/PixivFlow/blob/master/docs/TERMUX_INSTALL.md" target="_blank" rel="noopener">完整 Termux 文档</a>:</p>
+    <pre><code>pkg update && pkg install nodejs-lts git
+termux-setup-storage            <span class="cmt"># 授权文件访问</span>
 npm install -g pixivflow
-
-pm2 start pixivflow --name pixivflow -- scheduler
-pm2 save && pm2 startup   # 开机自启
-pm2 logs pixivflow        # 查看日志</code></pre>
+pixivflow login &amp;&amp; pixivflow download</code></pre>
+    <p>注意:Android 厂商的后台查杀可能导致调度器休眠,建议在系统设置中给 Termux 关闭电池优化;详细方案见 Termux 文档的「保持后台运行」一节。</p>
   </section>
 
-  <section class="card-block">
-    <h2 class="section-title">🔁 方式 2：systemd 服务</h2>
-    <p>创建服务单元文件：</p>
-    <pre><code># /etc/systemd/system/pixivflow.service
-[Unit]
-Description=PixivFlow Scheduler
-After=network-online.target
-
-[Service]
-Type=simple
-User=youruser
-WorkingDirectory=/opt/pixivflow
-ExecStart=/usr/bin/node dist/index.js scheduler
-Restart=on-failure
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target</code></pre>
-    <pre><code>sudo systemctl daemon-reload
-sudo systemctl enable --now pixivflow
-journalctl -u pixivflow -f    # 查看日志</code></pre>
-  </section>
-
-  <section class="card-block">
-    <h2 class="section-title">⏰ 时区提示</h2>
-    <div class="alert alert-warning">
-      Cron 定时任务依赖容器/系统时区。Docker 用户请在 docker-compose.yml 中设置：
-      <code>TZ=Asia/Shanghai</code>，否则调度会按 UTC 时间执行。
-    </div>
-  </section>
-
-  <section class="card-block">
-    <h2 class="section-title">🧭 相关页面</h2>
-    <div class="entry-grid">
-      <a class="entry-card" href="config.html"><h4>⚙️ 配置参考</h4><p>Cron 表达式与目录配置。</p></a>
-      <a class="entry-card" href="faq.html"><h4>❓ 常见问题</h4><p>定时任务不运行等排查。</p></a>
-    </div>
-  </section>
-
+<div class="backtop container"><a href="#">↑ 回到顶部</a></div>
 </main>
 
-<footer>
-  <div class="container">
-    <p>Made with ❤️ by <a href="https://github.com/redtidev1918">redtidev1918</a> ·
-      <a href="https://github.com/redtidev1918/PixivFlow">PixivFlow</a></p>
+<footer class="site-footer">
+  <div class="container cols">
+    <div><strong>🐱 PixivFlow</strong><p style="margin:.3rem 0 0">Pixiv 批量下载与定时收集工具<br>CLI 与 WebUI 双形态 · MIT License</p></div>
+    <div><strong>文档</strong><ul>
+      <li><a href="index.html">首页</a></li><li><a href="guide.html">使用教程</a></li><li><a href="config.html">配置参考</a></li>
+      <li><a href="deployment.html">部署指南</a></li><li><a href="faq.html">常见问题</a></li><li><a href="tutorial-full.html">完整教程</a></li>
+    </ul></div>
+    <div><strong>项目</strong><ul>
+      <li><a href="https://github.com/redtidev1918/PixivFlow">GitHub 仓库</a></li>
+      <li><a href="https://github.com/redtidev1918/PixivFlow/releases">Releases</a></li>
+      <li><a href="https://www.npmjs.com/package/pixivflow">npm 包</a></li>
+      <li><a href="https://github.com/redtidev1918/PixivFlow/issues">问题反馈</a></li>
+      <li><a href="https://github.com/redtidev1918/pixivflow-webui">WebUI 前端仓库</a></li>
+    </ul></div>
   </div>
+  <div class="container foot-note">以 MIT 协议开源 · 请遵守 Pixiv 服务条款理性收藏,尊重创作者版权</div>
 </footer>
-
 </body>
 </html>

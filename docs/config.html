@@ -4,127 +4,273 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>配置参考 — PixivFlow</title>
-  <meta name="description" content="PixivFlow 配置参考：认证、下载目标、定时任务 Cron、存储、下载性能与网络配置。">
+  <meta name="description" content="PixivFlow 配置参考:配置文件位置与优先级、targets 下载目标全字段、存储目录 12 种组织方式、scheduler 定时参数、网络代理与性能调优、环境变量覆盖与日期占位符。">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐱</text></svg>">
   <link rel="stylesheet" href="assets/site.css">
+  <script>document.documentElement.setAttribute("data-theme", localStorage.getItem("pf-theme") || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"));</script>
+  <script src="assets/site.js" defer></script>
 </head>
 <body>
-
-<header class="hero">
-  <div class="container">
-    <h1>⚙️ 配置参考</h1>
-    <p class="tagline">PixivFlow 的全部配置项：认证、下载目标、Cron 定时、存储与性能。</p>
+<header class="topbar">
+  <div class="bar">
+    <a class="brand" href="index.html"><span class="logo">🐱</span>PixivFlow</a>
+    <ul class="nav-links">
+      <li><a href="index.html">首页</a></li>
+      <li><a href="guide.html">使用教程</a></li>
+      <li><a href="config.html" class="active">配置参考</a></li>
+      <li><a href="deployment.html">部署指南</a></li>
+      <li><a href="faq.html">常见问题</a></li>
+      <li><a href="tutorial-full.html">完整教程</a></li>
+    </ul>
+    <div class="top-actions">
+      <button class="icon-btn js-theme-toggle" aria-label="切换主题">🌙</button>
+      <a class="icon-btn" href="https://github.com/redtidev1918/PixivFlow" target="_blank" rel="noopener" title="GitHub 仓库">⭐</a>
+    </div>
   </div>
 </header>
-
-<nav class="topbar">
-  <ul>
-    <li><a href="index.html">首页</a></li>
-    <li><a href="guide.html">使用教程</a></li>
-    <li><a href="config.html">配置参考</a></li>
-    <li><a href="deployment.html">部署指南</a></li>
-    <li><a href="faq.html">常见问题</a></li>
-    <li><a href="https://github.com/redtidev1918/PixivFlow/releases">Releases</a></li>
-  </ul>
-</nav>
-
 <main class="container">
+  <div class="page-head">
+    <h1>⚙️ 配置参考</h1>
+    <p class="lede">一份配置决定「收什么、存哪、什么时候跑」。逐项对照字段;只想先跑起来,看<a href="guide.html">使用教程</a>即可。可直接复制 <a href="https://github.com/redtidev1918/PixivFlow/tree/master/config/examples" target="_blank" rel="noopener">官方示例配置</a> 起步。</p>
+  </div>
 
-  <section class="card-block">
-    <h2 class="section-title">🔐 认证配置</h2>
-    <p>Pixiv API 需要 OAuth refresh token。获取方式：</p>
-    <pre><code>pixivflow login             # 有图形界面（浏览器交互）
-pixivflow login-headless    # 无图形界面 / 服务器</code></pre>
-    <div class="alert alert-info">token 过期时会自动刷新；连续失败会提示重新登录，且不会误删有效凭据。</div>
+  <ul class="toc-inline">
+    <li><a href="#where">文件位置与优先级</a></li>
+    <li><a href="#minimal">最小配置</a></li>
+    <li><a href="#targets">targets 下载目标</a></li>
+    <li><a href="#storage">storage 存储与目录</a></li>
+    <li><a href="#scheduler">scheduler 定时</a></li>
+    <li><a href="#network">network 网络</a></li>
+    <li><a href="#perf">download 调优</a></li>
+    <li><a href="#env">环境变量覆盖</a></li>
+    <li><a href="#placeholders">日期占位符</a></li>
+  </ul>
+
+  <section class="card-block" id="where">
+    <h2 class="section-title">文件位置与优先级<span class="anchor-hint">#</span></h2>
+    <p>默认配置文件:<code>config/standalone.config.json</code>。实际查找顺序:</p>
+    <ol>
+      <li>命令行参数 <code>--config &lt;path&gt;</code></li>
+      <li>环境变量 <code>PIXIV_DOWNLOADER_CONFIG</code></li>
+      <li>自动检测配置目录中的第一个可用文件</li>
+      <li>回退默认路径</li>
+    </ol>
+    <pre><code>pixivflow config      <span class="cmt"># 查看/编辑/备份/恢复,不用手找文件</span>
+pixivflow setup       <span class="cmt"># 交互式向导生成配置</span></code></pre>
+    <div class="callout danger"><span class="callout-title">安全</span>配置文件含 refreshToken 等认证信息,等同密码:不要提交进公开仓库,不要截图分享。JSON 里带 <code>_</code> 前缀的键会被忽略,可当注释用。</div>
   </section>
 
-  <section class="card-block">
-    <h2 class="section-title">🎯 下载目标配置</h2>
-    <p>每个下载目标（target）定义「从哪抓什么、抓多少」：</p>
-    <table>
-      <tr><th>字段</th><th>说明</th><th>示例</th></tr>
-      <tr><td>tags</td><td>标签数组（多标签为 OR 关系）</td><td><code>["水彩", "厚涂"]</code></td></tr>
-      <tr><td>limit</td><td>单次下载数量上限</td><td><code>50</code></td></tr>
-      <tr><td>minBookmarks</td><td>最低收藏数筛选</td><td><code>2000</code></td></tr>
-      <tr><td>startDate / endDate</td><td>发布日期范围</td><td><code>"2025-01-01"</code></td></tr>
-      <tr><td>random</td><td>启用随机模式</td><td><code>{ "maxAttempts": 50 }</code></td></tr>
-      <tr><td>languageFilter</td><td>语言过滤（小说）</td><td><code>"zh-cn"</code></td></tr>
-    </table>
-    <div class="alert alert-info">随机模式从可用队列中抽取最多 maxAttempts 个作品（默认 50），适合探索式收集。</div>
+  <section class="card-block" id="minimal">
+    <h2 class="section-title">最小可用配置<span class="anchor-hint">#</span></h2>
+    <pre><code>{
+  "logLevel": "info",
+  "scheduler": { "enabled": false },
+  "targets": [
+    { "type": "illustration", "tag": "風景", "limit": 20 }
+  ]
+}</code></pre>
+    <p><code>pixiv</code> 认证段由 <code>login</code> / <code>refresh</code> 命令自动写入,通常无需手改。</p>
   </section>
 
-  <section class="card-block">
-    <h2 class="section-title">⏰ 定时任务配置（Cron 速查）</h2>
-    <table>
-      <tr><th>Cron 表达式</th><th>含义</th></tr>
-      <tr><td><code>0 8 * * *</code></td><td>每天早上 8:00</td></tr>
-      <tr><td><code>0 */6 * * *</code></td><td>每 6 小时一次</td></tr>
-      <tr><td><code>30 21 * * *</code></td><td>每天晚上 21:30</td></tr>
-      <tr><td><code>0 9 * * 1</code></td><td>每周一早上 9:00</td></tr>
-      <tr><td><code>0 0 1 * *</code></td><td>每月 1 日 00:00</td></tr>
-    </table>
-    <div class="alert alert-warning">服务器时区影响调度时间——Docker 部署时通过 TZ 环境变量设置时区（见部署指南）。</div>
+  <section class="card-block" id="targets">
+    <h2 class="section-title">targets 下载目标<span class="anchor-hint">#</span></h2>
+    <p>数组,每项是一类要收集的内容,同一项内条件为 AND。按模式分组:</p>
+
+    <h3>公共字段</h3>
+    <div class="table-scroll"><table>
+      <thead><tr><th>字段</th><th>类型</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td><code>type</code></td><td>必填</td><td><code>illustration</code>(插画)或 <code>novel</code>(小说)</td></tr>
+        <tr><td><code>limit</code></td><td>number</td><td>单次执行最多下载多少个</td></tr>
+        <tr><td><code>minBookmarks</code></td><td>number</td><td>最低收藏数门槛</td></tr>
+        <tr><td><code>startDate</code> / <code>endDate</code></td><td>string</td><td>发布日期范围 <code>YYYY-MM-DD</code>,支持占位符(见文末)</td></tr>
+      </tbody>
+    </table></div>
+
+    <h3>搜索模式(<code>mode: "search"</code>,默认)</h3>
+    <div class="table-scroll"><table>
+      <thead><tr><th>字段</th><th>取值</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td><code>tag</code></td><td>string</td><td>搜索标签;空格分隔即多标签</td></tr>
+        <tr><td><code>tagRelation</code></td><td><code>and</code> / <code>or</code></td><td>多标签要求全部包含(默认)或任一命中</td></tr>
+        <tr><td><code>searchTarget</code></td><td><code>partial_match_for_tags</code> / <code>exact_match_for_tags</code> / <code>title_and_caption</code></td><td>匹配方式</td></tr>
+        <tr><td><code>sort</code></td><td><code>date_desc</code> / <code>date_asc</code> / <code>popular_desc</code></td><td>结果排序</td></tr>
+        <tr><td><code>restrict</code></td><td><code>public</code> / <code>private</code></td><td>作品可见性范围</td></tr>
+        <tr><td><code>random</code></td><td>boolean</td><td>从搜索结果中随机选一个下载</td></tr>
+      </tbody>
+    </table></div>
+
+    <h3>排行榜模式(<code>mode: "ranking"</code>)</h3>
+    <div class="table-scroll"><table>
+      <thead><tr><th>字段</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td><code>rankingMode</code></td><td><code>day</code> · <code>week</code> · <code>month</code> · <code>day_male</code> · <code>day_female</code> · <code>day_ai</code> · <code>week_original</code> · <code>week_rookie</code> · <code>day_r18</code> · <code>day_male_r18</code> · <code>day_female_r18</code></td></tr>
+        <tr><td><code>rankingDate</code></td><td>榜单日期 <code>YYYY-MM-DD</code>,缺省为今天;支持 <code>YESTERDAY</code> 占位符</td></tr>
+        <tr><td><code>filterTag</code></td><td>只保留榜内含该标签的作品</td></tr>
+      </tbody>
+    </table></div>
+
+    <h3>定向 ID(跳过搜索,精确下载)</h3>
+    <div class="table-scroll"><table>
+      <thead><tr><th>字段</th><th>适用类型</th><th>含义</th></tr></thead>
+      <tbody>
+        <tr><td><code>illustId</code></td><td>illustration</td><td>单幅插画,如 <code>artworks/12345678</code> 中的数字</td></tr>
+        <tr><td><code>novelId</code></td><td>novel</td><td>单本小说,如 <code>novel/show.php?id=26132156</code></td></tr>
+        <tr><td><code>seriesId</code></td><td>novel</td><td>整个小说系列 <code>novel/series/{id}</code></td></tr>
+        <tr><td><code>userId</code></td><td>两者</td><td>该用户的全部插画或小说</td></tr>
+      </tbody>
+    </table></div>
+    <p>与 URL 直链等价——不确定时用 <a href="guide.html#url"><code>download --url</code></a> 最省事。</p>
+
+    <h3>小说专用</h3>
+    <div class="table-scroll"><table>
+      <thead><tr><th>字段</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td><code>languageFilter</code></td><td><code>chinese</code> 只收中文小说,<code>non-chinese</code> 反之;不足 50 字符无法可靠判断的作品默认放行</td></tr>
+        <tr><td><code>detectLanguage</code></td><td>检测语言并写入元数据,默认 true</td></tr>
+      </tbody>
+    </table></div>
   </section>
 
-  <section class="card-block">
-    <h2 class="section-title">💾 存储配置</h2>
-    <p>各类内容的保存目录均可在配置中调整：</p>
+  <section class="card-block" id="storage">
+    <h2 class="section-title">storage 存储与目录<span class="anchor-hint">#</span></h2>
+    <div class="table-scroll"><table>
+      <thead><tr><th>字段</th><th>默认值</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td><code>databasePath</code></td><td><code>./data/pixiv-downloader.db</code></td><td>SQLite 数据库位置</td></tr>
+        <tr><td><code>downloadDirectory</code></td><td><code>./downloads</code></td><td>下载根目录</td></tr>
+        <tr><td><code>illustrationDirectory</code></td><td><code>{根}/illustrations</code></td><td>插画目录(相对或绝对路径)</td></tr>
+        <tr><td><code>novelDirectory</code></td><td><code>{根}/novels</code></td><td>小说目录</td></tr>
+        <tr><td><code>illustrationOrganization</code></td><td><code>flat</code></td><td>插画目录组织方式,见下表</td></tr>
+        <tr><td><code>novelOrganization</code></td><td><code>flat</code></td><td>小说目录组织方式</td></tr>
+      </tbody>
+    </table></div>
+
+    <h3>12 种目录组织模式</h3>
+    <div class="table-scroll"><table>
+      <thead><tr><th>模式</th><th>目录结构</th><th>模式</th><th>目录结构</th></tr></thead>
+      <tbody>
+        <tr><td><code>flat</code></td><td>平铺一层</td><td><code>byAuthorAndTag</code></td><td>画师 → 标签</td></tr>
+        <tr><td><code>byAuthor</code></td><td>按画师</td><td><code>byDateAndAuthor</code></td><td>创建月 → 画师</td></tr>
+        <tr><td><code>byTag</code></td><td>按首个标签</td><td><code>byDayAndAuthor</code></td><td>创建日 → 画师</td></tr>
+        <tr><td><code>byDate</code></td><td>按作品创建月 <code>YYYY-MM</code></td><td><code>byDownloadDateAndAuthor</code></td><td>下载月 → 画师</td></tr>
+        <tr><td><code>byDay</code></td><td>按作品创建日</td><td><code>byDownloadDayAndAuthor</code></td><td>下载日 → 画师</td></tr>
+        <tr><td><code>byDownloadDate</code></td><td>按下载月</td><td><code>byDownloadDay</code></td><td>按下载日</td></tr>
+      </tbody>
+    </table></div>
+    <div class="callout warn"><span class="callout-title">换组织方式后</span>已有文件不会自动搬家。执行 <code>pixivflow normalize</code> 按新规则归位;<code>pixivflow dirs</code> 随时查看真实落盘路径。</div>
+  </section>
+
+  <section class="card-block" id="scheduler">
+    <h2 class="section-title">scheduler 定时任务<span class="anchor-hint">#</span></h2>
+    <div class="table-scroll"><table>
+      <thead><tr><th>字段</th><th>默认</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td><code>enabled</code></td><td>false</td><td>true 时,裸命令 <code>pixivflow</code> 直接进入调度器</td></tr>
+        <tr><td><code>cron</code></td><td><code>0 3 * * *</code></td><td>标准 cron 表达式</td></tr>
+        <tr><td><code>timezone</code></td><td><code>Asia/Shanghai</code></td><td>IANA 时区名</td></tr>
+        <tr><td><code>maxExecutions</code></td><td>不限</td><td>总执行次数上限,达到即退出</td></tr>
+        <tr><td><code>minInterval</code></td><td>0</td><td>两次执行最小间隔(ms),触发过密则跳过</td></tr>
+        <tr><td><code>timeout</code></td><td>不限</td><td>单次任务超时(ms)</td></tr>
+        <tr><td><code>maxConsecutiveFailures</code></td><td>不限</td><td>连续失败 N 次后停止调度器</td></tr>
+        <tr><td><code>failureRetryDelay</code></td><td>0</td><td>失败后的等待间隔(ms)</td></tr>
+      </tbody>
+    </table></div>
+    <div class="table-scroll"><table>
+      <thead><tr><th>常用 cron</th><th>含义</th><th>常用 cron</th><th>含义</th></tr></thead>
+      <tbody>
+        <tr><td><code>0 3 * * *</code></td><td>每天 03:00</td><td><code>0 */6 * * *</code></td><td>每 6 小时</td></tr>
+        <tr><td><code>30 21 * * *</code></td><td>每天 21:30</td><td><code>0 9 * * 1</code></td><td>每周一 09:00</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section class="card-block" id="network">
+    <h2 class="section-title">network 网络与代理<span class="anchor-hint">#</span></h2>
+    <div class="table-scroll"><table>
+      <thead><tr><th>字段</th><th>默认</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td><code>timeoutMs</code></td><td>30000</td><td>API 请求超时(ms)</td></tr>
+        <tr><td><code>retries</code></td><td>3</td><td>失败重试次数</td></tr>
+        <tr><td><code>retryDelay</code></td><td>1000</td><td>重试间隔(ms)</td></tr>
+        <tr><td><code>proxy.*</code></td><td>—</td><td><code>enabled / host / port / protocol(http·https·socks4·socks5) / username / password</code></td></tr>
+      </tbody>
+    </table></div>
+    <div class="callout"><span class="callout-title">环境变量代理</span>未显式启用 <code>network.proxy</code> 时,程序自动读取 <code>ALL_PROXY / all_proxy</code> &gt; <code>HTTPS_PROXY</code> &gt; <code>HTTP_PROXY</code>(取第一个非空值),支持 http 与 socks 协议。Docker 场景下用 <code>host.docker.internal</code> 指向宿主机代理(Linux 用 <code>172.17.0.1</code>),详见<a href="deployment.html#env">部署指南</a>。</div>
+  </section>
+
+  <section class="card-block" id="perf">
+    <h2 class="section-title">download 性能调优<span class="anchor-hint">#</span></h2>
+    <div class="table-scroll"><table>
+      <thead><tr><th>字段</th><th>默认</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td><code>concurrency</code></td><td>3</td><td>并发下载数</td></tr>
+        <tr><td><code>requestDelay</code></td><td>500</td><td>相邻 API 请求最小间隔(ms),防限流</td></tr>
+        <tr><td><code>dynamicConcurrency</code></td><td>true</td><td>触发限流自动降并发</td></tr>
+        <tr><td><code>minConcurrency</code></td><td>1</td><td>动态调整下限</td></tr>
+        <tr><td><code>maxRetries</code></td><td>3</td><td>单文件最大重试</td></tr>
+        <tr><td><code>retryDelay</code></td><td>2000</td><td>文件级重试间隔(ms)</td></tr>
+        <tr><td><code>timeout</code></td><td>60000</td><td>单文件下载超时(ms)</td></tr>
+      </tbody>
+    </table></div>
+    <div class="callout warn"><span class="callout-title">调优建议</span>遇到大量 429 限流时,优先加大 <code>requestDelay</code> 而不是堆并发——Pixiv 服务端对高频请求很敏感。</div>
+  </section>
+
+  <section class="card-block" id="env">
+    <h2 class="section-title">环境变量覆盖<span class="anchor-hint">#</span></h2>
+    <p>同名环境变量优先级高于 JSON,容器部署正是基于这套机制:</p>
+    <div class="table-scroll"><table>
+      <thead><tr><th>变量</th><th>覆盖目标</th></tr></thead>
+      <tbody>
+        <tr><td><code>PIXIV_REFRESH_TOKEN</code></td><td><code>pixiv.refreshToken</code></td></tr>
+        <tr><td><code>PIXIV_CLIENT_ID</code> / <code>PIXIV_CLIENT_SECRET</code></td><td>OAuth 凭据</td></tr>
+        <tr><td><code>PIXIV_DOWNLOAD_DIR</code></td><td><code>storage.downloadDirectory</code></td></tr>
+        <tr><td><code>PIXIV_DATABASE_PATH</code></td><td><code>storage.databasePath</code></td></tr>
+        <tr><td><code>PIXIV_ILLUSTRATION_DIR</code> / <code>PIXIV_NOVEL_DIR</code></td><td>类型子目录</td></tr>
+        <tr><td><code>PIXIV_LOG_LEVEL</code></td><td><code>logLevel</code>(debug/info/warn/error)</td></tr>
+        <tr><td><code>PIXIV_SCHEDULER_ENABLED</code></td><td><code>scheduler.enabled</code>(true/false)</td></tr>
+        <tr><td><code>PIXIV_DOWNLOADER_CONFIG</code></td><td>直接指定配置文件路径</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section class="card-block" id="placeholders">
+    <h2 class="section-title">日期占位符<span class="anchor-hint">#</span></h2>
+    <p><code>startDate</code>、<code>endDate</code>、<code>rankingDate</code> 支持两个占位符,每次执行时替换为实际日期:</p>
     <ul>
-      <li><strong>downloadDirectory</strong> — 下载根目录；</li>
-      <li><strong>illustrationDirectory</strong> — 插画保存目录；</li>
-      <li><strong>novelDirectory</strong> — 小说保存目录。</li>
+      <li><code>"YESTERDAY"</code> — 昨天(「每天收昨日新作」的推荐写法)</li>
+      <li><code>"TODAY"</code> — 今天</li>
     </ul>
-    <p>快速查看与修改：</p>
-    <pre><code>pixivflow dirs                          # 查看所有目录路径
-pixivflow config set downloadDirectory /data/pixiv
-pixivflow config                        # 查看完整配置（自动备份原配置）</code></pre>
+    <pre><code>{
+  "type": "illustration",
+  "tag": "風景",
+  "startDate": "YESTERDAY",
+  "endDate": "YESTERDAY",
+  "limit": 30
+}</code></pre>
+    <p>配合 <code>scheduler</code> 每天执行,「昨天的日榜 / 昨日新作」无需改配置。</p>
+    <p>更多完整组合直接抄 <a href="https://github.com/redtidev1918/PixivFlow/tree/master/config/examples" target="_blank" rel="noopener">config/examples/</a>:多标签 OR、中文小说过滤、昨日排行、定向下载等场景都有现成文件。</p>
   </section>
 
-  <section class="card-block">
-    <h2 class="section-title">⚡ 下载性能配置</h2>
-    <ul>
-      <li>批量模式自动翻页，页面间隔遵循 API 速率限制；</li>
-      <li>已下载作品基于 SQLite 历史自动跳过，支持断点续传；</li>
-      <li>数字 GIF / 图片按显示尺寸解码，降低内存与 GPU 占用（桌面端）。</li>
-    </ul>
-  </section>
-
-  <section class="card-block">
-    <h2 class="section-title">🌐 网络配置</h2>
-    <ul>
-      <li>支持 HTTP(S) 代理环境变量（<code>http_proxy</code> / <code>https_proxy</code>）；</li>
-      <li>Docker 部署时在 docker-compose.yml 中注入代理变量即可让容器内请求走代理；</li>
-      <li>网络层自带超时与有界指数退避重试；429 会读取 Retry-After 响应头等待。</li>
-    </ul>
-  </section>
-
-  <section class="card-block">
-    <h2 class="section-title">🖥️ CLI 配置管理命令</h2>
-    <table>
-      <tr><th>命令</th><th>作用</th></tr>
-      <tr><td><code>pixivflow config</code></td><td>查看当前完整配置</td></tr>
-      <tr><td><code>pixivflow config set &lt;key&gt; &lt;value&gt;</code></td><td>设置单项配置（自动备份原文件）</td></tr>
-      <tr><td><code>pixivflow status</code></td><td>下载统计 + 最近记录</td></tr>
-      <tr><td><code>pixivflow health</code></td><td>检查配置完整性、目录可写性、连通性</td></tr>
-    </table>
-  </section>
-
-  <section class="card-block">
-    <h2 class="section-title">🧭 相关页面</h2>
-    <div class="entry-grid">
-      <a class="entry-card" href="guide.html"><h4>📖 使用教程</h4><p>URL 下载、筛选与应用场景。</p></a>
-      <a class="entry-card" href="deployment.html"><h4>🐳 部署指南</h4><p>Docker / PM2 / systemd。</p></a>
-      <a class="entry-card" href="faq.html"><h4>❓ 常见问题</h4><p>故障排查与解决路径。</p></a>
-    </div>
-  </section>
-
+<div class="backtop container"><a href="#">↑ 回到顶部</a></div>
 </main>
 
-<footer>
-  <div class="container">
-    <p>Made with ❤️ by <a href="https://github.com/redtidev1918">redtidev1918</a> ·
-      <a href="https://github.com/redtidev1918/PixivFlow">PixivFlow</a></p>
+<footer class="site-footer">
+  <div class="container cols">
+    <div><strong>🐱 PixivFlow</strong><p style="margin:.3rem 0 0">Pixiv 批量下载与定时收集工具<br>CLI 与 WebUI 双形态 · MIT License</p></div>
+    <div><strong>文档</strong><ul>
+      <li><a href="index.html">首页</a></li><li><a href="guide.html">使用教程</a></li><li><a href="config.html">配置参考</a></li>
+      <li><a href="deployment.html">部署指南</a></li><li><a href="faq.html">常见问题</a></li><li><a href="tutorial-full.html">完整教程</a></li>
+    </ul></div>
+    <div><strong>项目</strong><ul>
+      <li><a href="https://github.com/redtidev1918/PixivFlow">GitHub 仓库</a></li>
+      <li><a href="https://github.com/redtidev1918/PixivFlow/releases">Releases</a></li>
+      <li><a href="https://www.npmjs.com/package/pixivflow">npm 包</a></li>
+      <li><a href="https://github.com/redtidev1918/PixivFlow/issues">问题反馈</a></li>
+      <li><a href="https://github.com/redtidev1918/pixivflow-webui">WebUI 前端仓库</a></li>
+    </ul></div>
   </div>
+  <div class="container foot-note">以 MIT 协议开源 · 请遵守 Pixiv 服务条款理性收藏,尊重创作者版权</div>
 </footer>
-
 </body>
 </html>

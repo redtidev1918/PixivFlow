@@ -5,6 +5,7 @@ import { Database } from '../../../storage/Database';
 import { loadConfig, getConfigPath } from '../../../config';
 import { join } from 'path';
 import { ErrorCode } from '../../utils/error-codes';
+import { serializeTaskStatus } from '../../utils/task-serialize';
 
 /**
  * Convert host file path to container path if needed
@@ -48,21 +49,7 @@ function convertFilePathToContainerPath(filePath: string, config: any): string {
   return filePath;
 }
 
-/**
- * Helper function to serialize TaskStatus for JSON response
- */
-function serializeTaskStatus(task: any) {
-  if (!task) return null;
-  return {
-    ...task,
-    startTime: task.startTime instanceof Date ? task.startTime.toISOString() : task.startTime,
-    endTime: task.endTime instanceof Date ? task.endTime.toISOString() : task.endTime,
-    logs: task.logs?.map((log: any) => ({
-      ...log,
-      timestamp: log.timestamp instanceof Date ? log.timestamp.toISOString() : log.timestamp,
-    })),
-  };
-}
+// serializeTaskStatus is provided by ../../utils/task-serialize (shared with websocket layer)
 
 /**
  * POST /api/download/start

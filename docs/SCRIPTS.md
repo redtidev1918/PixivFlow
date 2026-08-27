@@ -1,5 +1,11 @@
 # 脚本指南
 
+> **English**: Helper scripts for local runs — `scripts/pixiv.sh` wraps
+> every core command (setup, login, run, once, status, logs), plus build and
+> maintenance helpers. The full reference table is below.
+
+
+
 PixivFlow 提供了丰富的脚本工具，让你无需记忆复杂的 npm 命令。
 
 ---

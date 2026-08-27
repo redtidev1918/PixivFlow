@@ -54,6 +54,15 @@
 | [RELEASING](RELEASING.md) | 版本管理与 npm 发版流程 |
 | [CHANGELOG](project/CHANGELOG.md) | 版本更新记录 |
 
+## 🖥️ WebUI 前端
+
+| 文档 | 内容 |
+| --- | --- |
+| [pixivflow-webui 仓库](https://github.com/redtidev1918/pixivflow-webui) | React 18 + Ant Design 5 前端源码与文档入口 |
+| [开发指南](https://github.com/redtidev1918/pixivflow-webui/blob/master/docs/DEVELOPMENT_GUIDE.md) | 环境搭建、脚本、状态与 i18n 约定 |
+| [组件目录](https://github.com/redtidev1918/pixivflow-webui/blob/master/docs/COMPONENT_GUIDE.md) | 全量组件职责与组合套路 |
+| [构建选项](https://github.com/redtidev1918/pixivflow-webui/blob/master/docs/BUILD_OPTIONS.md) | 静态托管 / Docker 一体化两条路线 |
+
 ## 🔗 其他入口
 
 - 项目主页:<https://github.com/redtidev1918/PixivFlow>

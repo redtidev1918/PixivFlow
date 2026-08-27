@@ -40,7 +40,7 @@ else
 fi
 
 TAG_NAME="v$VERSION"
-REPO="zoidberg-xgd/PixivFlow"
+REPO="redtidev1918/PixivFlow"
 CHANGELOG_PATH="docs/project/CHANGELOG.md"
 
 log_info "准备为版本 $VERSION 创建 GitHub Release"

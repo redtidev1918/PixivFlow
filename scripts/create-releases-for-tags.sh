@@ -29,7 +29,7 @@ log_error() {
     echo -e "${RED}❌ $1${NC}"
 }
 
-REPO="zoidberg-xgd/PixivFlow"
+REPO="redtidev1918/PixivFlow"
 
 log_info "批量为现有标签创建 GitHub Release"
 

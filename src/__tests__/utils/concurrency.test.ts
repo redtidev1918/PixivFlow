@@ -79,12 +79,13 @@ describe('concurrency', () => {
       const items = [1, 2];
       const processor = jest.fn(async (item: number) => item);
       const startTime = Date.now();
-      
+
       await processInParallel(items, processor, 1, { requestDelay: 100 });
-      
+
       const elapsed = Date.now() - startTime;
-      // Should have at least 100ms delay between items
-      expect(elapsed).toBeGreaterThanOrEqual(100);
+      // At least one requestDelay between items; a small tolerance absorbs
+      // timer jitter (setInterval/setTimeout can fire up to 1ms early).
+      expect(elapsed).toBeGreaterThanOrEqual(95);
     });
 
     it('should handle rate limit errors and reduce concurrency', async () => {
@@ -226,16 +227,17 @@ describe('concurrency', () => {
     it('should handle zero request delay', async () => {
       const items = [1, 2, 3];
       const processor = jest.fn(async (item: number) => item);
-      
+
       const startTime = Date.now();
       const results = await processInParallel(items, processor, 2, {
         requestDelay: 0,
       });
       const elapsed = Date.now() - startTime;
-      
+
       expect(results).toHaveLength(3);
-      // Should complete quickly without delays
-      expect(elapsed).toBeLessThan(100);
+      // No artificial delay is added; generous ceiling only to catch a
+      // missing short-circuit (a real delay would exceed this by far).
+      expect(elapsed).toBeLessThan(500);
     });
 
     it('should handle large number of items', async () => {

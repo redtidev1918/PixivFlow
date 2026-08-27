@@ -1,6 +1,6 @@
 {
   "name": "pixivflow",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "🎨 智能的 Pixiv 自动化下载工具 - 支持批量下载插画和小说、定时任务、Docker部署 | Intelligent Pixiv Automation Downloader with batch download, scheduler, and Docker support",
   "repository": {
     "type": "git",
@@ -109,7 +109,7 @@
     "franc-min": "^6.2.0",
     "https-proxy-agent": "^7.0.6",
     "node-cron": "^3.0.3",
-    "pixiv-token-getter": "^2.0.0",
+    "pixiv-token-getter": "^2.1.0",
     "socket.io": "^4.6.1",
     "socks-proxy-agent": "^8.0.5",
     "undici": "^6.19.8"

@@ -70,6 +70,22 @@ export class DatabaseError extends PixivFlowError {
 }
 
 /**
+ * Raised when a long-running operation is cooperatively cancelled
+ * (WebUI user stop or scheduler timeout). Callers can distinguish it
+ * from genuine failures and record an appropriate final status.
+ */
+export class OperationCancelledError extends PixivFlowError {
+  constructor(message: string, cause?: Error) {
+    super(message, 'OPERATION_CANCELLED', 499, cause);
+    this.name = 'OperationCancelledError';
+  }
+}
+
+export function isOperationCancelled(error: unknown): error is OperationCancelledError {
+  return error instanceof OperationCancelledError;
+}
+
+/**
  * A special error-like class to signal a version request.
  * This is used for early exit without a full error stack.
  */

@@ -23,6 +23,11 @@ export interface DownloadPipelineDependencies {
   executor: DownloadExecutor;
   progressReporter: ProgressReporter;
   recovery: ErrorRecoveryStrategy;
+  /**
+   * Cooperative cancellation check. When provided and returning true,
+   * remaining items become no-ops so the current batch drains quickly.
+   */
+  isCancelled?: () => boolean;
 }
 
 export class DownloadPipeline {
@@ -31,6 +36,7 @@ export class DownloadPipeline {
   private readonly executor: DownloadExecutor;
   private readonly progressReporter: ProgressReporter;
   private readonly recovery: ErrorRecoveryStrategy;
+  private readonly isRunCancelled: () => boolean;
 
   constructor(deps: DownloadPipelineDependencies) {
     this.config = deps.config;
@@ -38,6 +44,7 @@ export class DownloadPipeline {
     this.executor = deps.executor;
     this.progressReporter = deps.progressReporter;
     this.recovery = deps.recovery;
+    this.isRunCancelled = deps.isCancelled ?? (() => false);
   }
 
   async run<T extends DownloadItem>(
@@ -114,7 +121,7 @@ export class DownloadPipeline {
       recovery: this.recovery,
       contextProvider: () => ({ itemType }),
       task: async (item) => {
-        if (state.downloaded >= targetLimit) {
+        if (state.downloaded >= targetLimit || this.isRunCancelled()) {
           return;
         }
 
@@ -182,7 +189,7 @@ export class DownloadPipeline {
       recovery: this.recovery,
       contextProvider: () => ({ itemType }),
       task: async (item) => {
-        if (state.downloaded >= targetLimit) {
+        if (state.downloaded >= targetLimit || this.isRunCancelled()) {
           return;
         }
         await downloadFn(item, tagForLog);

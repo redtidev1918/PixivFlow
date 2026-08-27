@@ -126,6 +126,8 @@ pixivflow webui     # 监听 3000 端口,浏览器打开 http://localhost:3000
 
 提供仪表盘统计、下载任务管理、URL 下载、文件浏览预览、历史记录、实时日志和配置编辑。REST 与 WebSocket 接口细节见 [API](API.md),前端源码在独立仓库 [pixivflow-webui](https://github.com/redtidev1918/pixivflow-webui)。Docker 场景直接启用 compose 中的 `pixivflow-webui` 服务即可。
 
+交互组件地图与实时链路说明见前端仓库的 [开发指南](https://github.com/redtidev1918/pixivflow-webui/blob/master/docs/DEVELOPMENT_GUIDE.md) 与 [组件目录](https://github.com/redtidev1918/pixivflow-webui/blob/master/docs/COMPONENT_GUIDE.md)。
+
 ## 全部命令速查
 
 共 20 个命令,分类与 `pixivflow help` 输出一致:

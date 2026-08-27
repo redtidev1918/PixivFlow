@@ -42,14 +42,14 @@ Make Pixiv artwork collection elegant and efficient | 让 Pixiv 作品收集变�
 - [🚀 Quick Start](#quick-start)
   - [📋 Requirements](#requirements)
   - [🎬 Quick Start (Recommended)](#quick-start-recommended)
-  - [🎯 Manual Setup](#manual-setup)
+  - [🎯 Manual Setup](#-manual-setup)
   - [🌐 API Server (Optional)](#api-server-optional)
   - [🐳 Using Docker (Recommended)](#using-docker-recommended)
 
 **Tools & Documentation**
 - [🎨 CLI Commands](#cli-commands)
   - [🚀 Core Commands](#core-commands)
-  - [⚙️ Configuration Management](#configuration-management)
+  - [⚙️ Configuration Management](#-configuration-management)
   - [📊 Monitoring and Maintenance](#monitoring-and-maintenance)
 - [🛠️ Script Tools](#script-tools)
   - [🎯 Main Control Script (Most Used)](#main-control-script-most-used)
@@ -57,8 +57,8 @@ Make Pixiv artwork collection elegant and efficient | 让 Pixiv 作品收集变�
   - [🐳 Docker Management](#docker-management)
 - [📚 Documentation](#documentation)
   - [🌟 Must Read for Beginners](#must-read-for-beginners)
-  - [📘 Advanced Documentation](#advanced-documentation)
-  - [🐳 Docker Documentation](#docker-documentation)
+  - [📘 Advanced Docs](https://redtidev1918.github.io/PixivFlow/)
+  - [🐳 Docker Guide](docs/DOCKER.md)
   - [📄 Project Documentation](#project-documentation)
 
 **Usage & Configuration**
@@ -68,7 +68,7 @@ Make Pixiv artwork collection elegant and efficient | 让 Pixiv 作品收集变�
   - [Scenario 3: Quick Experience](#scenario-3-quick-experience---random-download)
   - [Scenario 4: One-Time Batch Download](#scenario-4-onetime-batch-download)
 - [📁 Project Structure](#project-structure)
-- [⚙️ Core Configuration](#core-configuration)
+- [⚙️ Core Configuration](#-core-configuration)
   - [Authentication Configuration](#authentication-configuration)
   - [Download Targets](#download-targets)
   - [Scheduled Tasks](#scheduled-tasks)
@@ -84,12 +84,12 @@ Make Pixiv artwork collection elegant and efficient | 让 Pixiv 作品收集变�
   - [Using Proxy](docs/USAGE.md)
 
 **Project Information**
-- [📄 Open Source License](#open-source-license)
-- [🙏 Acknowledgments](#acknowledgments)
-- [📮 Get Help](#get-help)
-- [📈 Project Statistics](#project-statistics)
-- [🤝 Contributing](#contributing)
-- [📝 Changelog](#changelog)
+- [📄 Open Source License](#-open-source-license)
+- [🙏 Acknowledgments](#-acknowledgments)
+- [📮 Get Help](#-get-help)
+- [📈 Project Statistics](#-project-statistics)
+- [🤝 Contributing](#-contributing)
+- [📝 Changelog](#-changelog)
 - [Support the Project](#support-the-project)
 
 </details>

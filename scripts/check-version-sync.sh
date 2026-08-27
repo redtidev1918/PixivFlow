@@ -184,7 +184,7 @@ fi
 echo ""
 echo "🔗 相关链接:"
 echo "   - npm: https://www.npmjs.com/package/pixivflow"
-echo "   - GitHub: https://github.com/zoidberg-xgd/PixivFlow"
-echo "   - Releases: https://github.com/zoidberg-xgd/PixivFlow/releases"
+echo "   - GitHub: https://github.com/redtidev1918/PixivFlow"
+echo "   - Releases: https://github.com/redtidev1918/PixivFlow/releases"
 echo ""
 

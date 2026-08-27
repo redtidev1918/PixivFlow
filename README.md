@@ -1,623 +1,113 @@
-# 🎨 PixivFlow
+# PixivFlow
 
-<div align="center">
+Pixiv 批量下载与定时收集工具。支持插画和小说的批量下载、标签搜索、
+多维度筛选和 Cron 定时任务，提供命令行与 WebUI 两种使用方式。
+基于 TypeScript 和 Node.js，可在 Windows、macOS、Linux 及 Docker 中运行。
 
-**智能的 Pixiv 自动化下载工具 | Intelligent Pixiv Automation Downloader**
+[![Version](https://img.shields.io/npm/v/pixivflow?style=flat-square)](https://www.npmjs.com/package/pixivflow)
+[![Node](https://img.shields.io/badge/Node.js-18%2B_LTS-green.svg?style=flat-square&logo=node.js)](https://nodejs.org/)
+[![License](https://img.shields.io/badge/License-GPL--3.0-blue.svg?style=flat-square)](LICENSE)
+[![Documentation](https://img.shields.io/badge/Docs-redtidev1918.github.io-6366f1?style=flat-square)](https://redtidev1918.github.io/PixivFlow/)
 
-让 Pixiv 作品收集变得优雅而高效 | Make Pixiv artwork collection elegant and efficient
+## 安装
 
-> 🎯 **PixivFlow** 是一个专业的 Pixiv 批量下载工具，支持插画和小说下载、定时任务、Docker 部署。适用于个人用户和服务器自动化场景。
-
-> 📖 **[查看完整教程文档](https://redtidev1918.github.io/PixivFlow/)** - 包含详细的使用教程、配置说明、部署指南和最佳实践
-
-<!-- SEO Keywords: pixiv downloader, pixiv批量下载, pixiv自动化下载, pixiv批量下载工具, pixiv下载器, pixiv artwork downloader, pixiv novel downloader, pixiv cli tool, pixiv scheduler, pixiv automation, pixiv批量下载脚本, pixiv下载工具, pixiv作品下载, pixiv插画下载, pixiv小说下载, pixiv定时下载, pixiv爬虫, pixiv api client, pixiv命令行工具, pixiv服务器部署, pixiv docker, pixiv webui, pixiv管理界面 -->
-
-[![GitHub stars](https://img.shields.io/github/stars/redtidev1918/pixivflow?style=for-the-badge&logo=github)](https://github.com/redtidev1918/PixivFlow/stargazers)
-[![GitHub forks](https://img.shields.io/github/forks/redtidev1918/pixivflow?style=for-the-badge&logo=github)](https://github.com/redtidev1918/PixivFlow/network/members)
-[![GitHub issues](https://img.shields.io/github/issues/redtidev1918/pixivflow?style=for-the-badge&logo=github)](https://github.com/redtidev1918/PixivFlow/issues)
-[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg?style=for-the-badge)](https://www.gnu.org/licenses/gpl-3.0)
-
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.6+-blue.svg?style=flat-square&logo=typescript)](https://www.typescriptlang.org/)
-[![Node.js](https://img.shields.io/badge/Node.js-18%2B%20LTS-green.svg?style=flat-square&logo=node.js)](https://nodejs.org/)
-[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg?style=flat-square)](https://github.com/redtidev1918/PixivFlow)
-[![Maintenance](https://img.shields.io/badge/Maintained-yes-green.svg?style=for-the-badge)](https://github.com/redtidev1918/PixivFlow/graphs/commit-activity)
-
-[📖 完整教程文档](https://redtidev1918.github.io/PixivFlow/) | [English](README_EN.md) | [中文](README.md)
-
-</div>
-
----
-
-## 快速导航
-
-[功能特性](#功能特性) • [快速开始](#快速开始) • [使用指南](#cli-命令行工具) • [配置说明](#核心配置) • [完整文档](docs/README.md)
-
----
-
-<a id="什么是-pixivflow"></a>
-## 什么是 PixivFlow？
-
-**PixivFlow** 是一个**完全独立运行**的 Pixiv 作品批量下载工具，专为自动化设计。无需浏览器扩展，可在命令行或服务器上自动化运行，支持定时任务、智能去重、断点续传等功能。
-
-作为一款专业的 **Pixiv 下载器**，PixivFlow 提供批量下载、URL 直接下载、定时任务、Docker 部署等核心功能，无论是个人使用还是服务器部署，都能帮助你高效地收集和管理 Pixiv 作品。
-
-<a id="为什么选择-pixivflow"></a>
-### 为什么选择 PixivFlow？
-
-与其他 Pixiv 下载工具相比，PixivFlow 专注于**自动化**和**服务器部署**场景：
-
-| 优势 | 说明 |
-|------|------|
-| **完全独立运行** | 无需浏览器扩展，纯命令行工具，可在任何环境运行（服务器、Docker、CI/CD） |
-| **真正的自动化** | 设置一次，永久运行。支持 Cron 定时任务，无需人工干预 |
-| **服务器友好** | 专为服务器设计，支持后台运行、进程管理、日志轮转 |
-| **安全可靠** | 采用 OAuth 2.0 PKCE 标准流程，保障账号安全，避免密码泄露风险 |
-| **轻量级部署** | 资源占用低，无需额外服务（如数据库、Redis），SQLite 即可 |
-| **开箱即用** | 丰富的脚本工具和配置向导，3 步即可开始使用 |
-
-<a id="核心理念"></a>
-### 核心理念
-
-- **自动化优先**：设置一次，自动运行，无需人工干预
-- **智能化管理**：自动去重、断点续传、错误重试
-- **简单易用**：3 步开始使用，配置向导引导完成
-- **开箱即用**：丰富的脚本工具，无需记忆复杂命令
-
----
-
-<a id="功能特性"></a>
-## 功能特性
-
-<a id="核心功能"></a>
-### 核心功能
-
-| 功能 | 说明 |
-|------|------|
-| **批量下载** | 支持插画和小说批量下载，可配置下载数量、筛选条件 |
-| **标签搜索** | 按标签搜索作品，支持精确匹配、部分匹配等多种模式 |
-| **随机下载** | 一键下载随机热门标签作品，快速体验工具功能 |
-| **定时任务** | Cron 表达式配置，支持每天、每周、每月定时自动下载 |
-| **智能筛选** | 按收藏数、日期范围、作品类型等多维度筛选 |
-| **语言检测** | 自动检测小说语言，支持按语言过滤（仅中文/仅非中文） |
-| **自动去重** | SQLite 数据库记录历史，自动跳过已下载作品 |
-| **断点续传** | 下载中断后自动恢复，无需重新开始 |
-| **错误处理** | 自动重试、错误恢复、智能跳过已删除/私有作品 |
-| **统计报告** | 详细的运行日志和下载统计报告 |
-
-<a id="额外优势"></a>
-### 额外优势
-
-- **完全独立**：无需浏览器，纯命令行工具
-- **跨平台支持**：Windows / macOS / Linux，可在任何环境运行
-- **轻量级**：资源占用低，适合服务器长期运行
-- **开源免费**：GPL-3.0 许可证，可自由定制和分发
-- **类型安全**：TypeScript 编写，类型提示完善
-- **文档完善**：详细的中文文档和教程
-
----
-
-<a id="快速开始"></a>
-## 快速开始
-
-<a id="环境要求"></a>
-### 环境要求
-
-- **Node.js 18+** 和 **npm 9+**（推荐使用 LTS 版本：18.x, 20.x, 22.x 或 24.x）
-- **Pixiv 账号**
-- **Windows 用户**：推荐使用 WSL（`wsl --install`）或 Git Bash
-- **Android/Termux 用户**：需要安装构建工具，详见 [Termux 安装指南](docs/TERMUX_INSTALL.md)
-
-> **Node.js 版本说明**：
-> - 推荐使用 **LTS（长期支持）版本**：18.x, 20.x, 22.x 或 24.x
-> - 避免使用奇数版本（如 19.x, 21.x, 23.x），这些版本可能不被所有依赖包支持
-> - 如果看到 `EBADENGINE` 警告，建议切换到 LTS 版本
-> 
-> **登录说明**：项目默认使用 Node.js 库进行登录，**无需 Python**。Python gppt 仅作为后备方案（可选）。  
-> **详细指南**：查看 [快速开始指南](docs/QUICKSTART.md)
-
-<a id="快速安装推荐"></a>
-### 快速安装（推荐）
-
-#### 方式 1：从 npm 安装（最简单）
+需要 Node.js 18 或更高版本（LTS）。
 
 ```bash
-# 全局安装
 npm install -g pixivflow
-
-# 验证安装
 pixivflow --help
-
-# 登录账号
-pixivflow login
-
-# 开始下载
-pixivflow download
 ```
 
-> 👇 也可以直接指定配置文件路径运行：
+服务器部署推荐 Docker Compose，见 [DOCKER.md](docs/DOCKER.md)；
+从源码构建：
 
 ```bash
-# 使用 --config 指定配置
-pixivflow download --config "$(pwd)/config/standalone.config.json"
-
-# 或使用环境变量（对所有命令生效）
-export PIXIV_DOWNLOADER_CONFIG="$(pwd)/config/standalone.config.json"
-pixivflow download
-```
-
-#### 方式 2：从源码安装
-
-```bash
-# 1. 克隆仓库
 git clone https://github.com/redtidev1918/PixivFlow.git
-cd pixivflow
-
-# 2. 安装依赖
+cd PixivFlow
 npm install
-
-# 3. 登录账号
-npm run login
-
-# 4. 开始下载
-npm run download
+npm run build
 ```
 
-**或使用一键脚本**（自动完成所有设置）：
+Termux / Android 环境见 [TERMUX_INSTALL.md](docs/TERMUX_INSTALL.md)。
+
+## 快速上手
+
+登录 Pixiv 账号（生成 OAuth 凭据，只需一次）：
 
 ```bash
-./scripts/quick-start.sh
+pixivflow login                 # 本机有浏览器
+pixivflow login-headless        # 无图形界面的服务器
 ```
 
----
-
-> **提示**：
-> - 配置文件位于 `~/.pixivflow/config/standalone.config.json`，或使用 `--config` 指定路径
-> - 首次使用需要运行 `pixivflow login` 进行登录
-> - **更多安装方式**：从源码安装、Docker 部署等，请查看 [快速开始指南](docs/QUICKSTART.md)
-> - **配置文件管理**：查看 [配置指南](docs/CONFIG.md) 了解配置文件的使用方法
-
----
-
-### WebUI 后端 API（可选）
-
-PixivFlow 提供了 WebUI 后端 API 服务，支持通过 RESTful API 和 WebSocket 进行管理：
+下载一个作品——直接粘贴任意 Pixiv 链接（插画、小说、系列、用户主页均可识别）：
 
 ```bash
-# 启动 WebUI 后端 API 服务
-pixivflow webui                    # 默认端口 3000
-
-# 或使用环境变量指定端口
-PORT=8080 pixivflow webui
+pixivflow download --url https://www.pixiv.net/artworks/123456789
 ```
 
-**主要功能**：
-- **认证 API**：登录、登出、Token 管理
-- **配置管理 API**：查看、编辑、备份、恢复配置
-- **下载管理 API**：启动/停止下载、查看任务状态
-- **统计 API**：下载统计、文件列表
-- **日志 API**：查看运行日志（支持 WebSocket 实时推送）
-- **文件管理 API**：文件列表、预览、操作
-
-> **说明**：
-> - PixivFlow 只提供后端 API，不包含前端界面
-> - **前端项目**：现代化的 React 前端界面请查看 [pixivflow-webui](https://github.com/redtidev1918/PixivFlow-webui)
-> - 可以通过 API 直接调用，或连接其他前端项目
-> - **API 文档**：查看 [使用指南](docs/USAGE.md) 了解详细的 API 使用方法
-
----
-
-### Docker 部署（推荐）
-
-Docker 部署无需安装 Node.js 环境：
+按配置批量下载并启动定时任务：
 
 ```bash
-# 快速开始
-cp config/standalone.config.example.json config/standalone.config.json
-npm run login                    # 在主机上登录
-docker-compose up -d             # 启动服务
+pixivflow download
+pixivflow scheduler             # 按 cron 配置长期挂机自动收集
 ```
 
-> **详细说明**：查看 [Docker 使用指南](docs/DOCKER.md) 了解完整的部署方法和常见问题
+## 下载目标
 
----
+在配置文件的 `targets` 中定义要收集的内容，多个条件可以组合：
 
-## CLI 命令行工具
+| 字段 | 说明 | 示例 |
+| --- | --- | --- |
+| `type` | 内容类型：`illustration` 或 `novel` | `illustration` |
+| `tag` | 搜索标签，支持多标签 OR | `"風景"` / `["水彩","厚涂"]` |
+| `limit` | 单次下载数量上限 | `20` |
+| `minBookmarks` | 最低收藏数 | `500` |
+| `startDate` / `endDate` | 发布日期范围 | `"2025-01-01"` |
 
-> **推荐使用**：全局安装后可直接使用 `pixivflow` 命令，无需依赖项目目录中的脚本。
+已下载的作品由 SQLite 数据库记录并自动跳过；文件存在但缺少记录时会自动补齐，
+两者互不冲突。
 
-<a id="核心命令"></a>
-### 核心命令
+交互式配置向导：`pixivflow setup`。
 
-```bash
-# 全局安装后使用
-pixivflow login                      # 登录 Pixiv 账号
-pixivflow download                   # 执行下载
-pixivflow download --url <url>       # 通过 URL 直接下载（支持插画/小说/系列）
-pixivflow random                     # 随机下载
-pixivflow scheduler                  # 启动定时任务
-pixivflow normalize                  # 整理文件
-pixivflow migrate-config             # 迁移配置
-pixivflow health                     # 健康检查（推荐）
-pixivflow status                     # 查看下载统计和最近记录
-pixivflow logs                       # 查看运行日志
-pixivflow setup                      # 交互式配置向导（首次使用）
-pixivflow dirs                       # 查看目录信息（文件保存位置）
-```
-
-**URL 下载示例**：
-```bash
-# 下载插画
-pixivflow download --url "https://www.pixiv.net/artworks/12345678"
-
-# 下载小说
-pixivflow download --url "https://www.pixiv.net/novel/show.php?id=26132156"
-
-# 下载小说系列
-pixivflow download --url "https://www.pixiv.net/novel/series/14690617"
-
-# 下载用户的所有作品
-pixivflow download --url "https://www.pixiv.net/users/123456"
-```
-
-#### 无图形界面服务器的登录方式（使用现有 refresh token）
-
-```bash
-# 直接使用 refresh token 登录（会自动写入配置文件）
-pixivflow refresh <your_refresh_token>
-
-# 等价别名：
-pixivflow login-token <your_refresh_token>
-pixivflow set-token <your_refresh_token>
-```
-
-> 适用于没有图形浏览器的服务器；若没有 token，可在本地运行 `pixivflow login` 获取后复制到服务器。
-
-<a id="配置管理"></a>
-### 配置管理
-
-```bash
-pixivflow config                     # 配置管理（查看/编辑/备份/恢复）
-pixivflow config show                # 查看配置
-pixivflow config set <key> <value>   # 设置配置项（如：storage.downloadDirectory）
-pixivflow config backup              # 备份配置
-pixivflow config restore             # 恢复配置
-pixivflow config validate            # 验证配置
-pixivflow config edit                # 编辑配置
-```
-
-**配置设置示例**：
-```bash
-# 设置下载目录
-pixivflow config set storage.downloadDirectory ./my-downloads
-
-# 设置插画目录
-pixivflow config set storage.illustrationDirectory ./my-illustrations
-
-# 设置小说目录
-pixivflow config set storage.novelDirectory ./my-novels
-```
-
-<a id="监控与维护"></a>
-### 监控与维护
-
-```bash
-pixivflow monitor                    # 实时监控进程状态和性能指标
-pixivflow maintain                   # 自动维护（清理日志、优化数据库等）
-pixivflow backup                     # 自动备份配置和数据
-```
-
-> 📖 **详细说明**：查看 [脚本使用指南](docs/SCRIPTS.md)
-
----
-
-## 脚本工具
-
-<a id="脚本工具"></a>
-
-PixivFlow 提供了丰富的脚本工具，所有脚本直接调用内置 CLI，性能更好、响应更快。
-
-> **说明**：PixivFlow 完全独立，可在任何环境运行（服务器、Docker、CI/CD）。所有功能都可通过命令行使用。
-
-### 主控脚本（最常用）
-
-```bash
-./scripts/pixiv.sh <command>
-```
+## 常用命令
 
 | 命令 | 说明 |
-|------|------|
-| `setup` | 交互式配置向导（首次必须运行） |
-| `login` | 登录 Pixiv 账号（交互式，直接调用内置CLI） |
-| `test` | 测试下载（下载少量作品验证配置） |
-| `once` | 执行一次下载 |
-| `random` | 随机下载一个热门标签作品（支持 `--novel` 下载小说） |
-| `run` | 启动定时任务（后台持续运行） |
-| `stop` | 停止运行的定时任务 |
-| `status` | 查看当前运行状态 |
-| `check` | 环境检查（支持 `--fix` 自动修复） |
-| `update` | 一键更新和修复（更新代码、依赖、修复错误） |
-| `health` | 健康检查（检查配置、网络等）<br>**全局安装后使用**: `pixivflow health` |
-| `status` | 查看下载统计和最近记录<br>**全局安装后使用**: `pixivflow status`  |
-| `logs` | 查看运行日志<br>**全局安装后使用**: `pixivflow logs`  |
-| `config` | 配置管理工具（查看/编辑/备份/恢复）<br>**全局安装后使用**: `pixivflow config` |
-| `backup` | 自动备份配置和数据<br>**全局安装后使用**: `pixivflow backup` |
-| `maintain` | 自动维护（清理日志、优化数据库等）<br>**全局安装后使用**: `pixivflow maintain` |
-| `monitor` | 实时监控进程状态和性能指标<br>**全局安装后使用**: `pixivflow monitor` |
-| `setup` | 交互式配置向导（首次使用）<br>**全局安装后使用**: `pixivflow setup` |
+| --- | --- |
+| `pixivflow download` | 按配置执行下载 |
+| `pixivflow download --url <url>` | 通过 URL 直接下载 |
+| `pixivflow random` | 随机下载热门作品 |
+| `pixivflow scheduler` | 启动定时任务 |
+| `pixivflow config` | 配置管理（查看 / 编辑 / 备份 / 恢复） |
+| `pixivflow status` | 下载统计与最近记录 |
+| `pixivflow health` | 健康检查：配置、目录可写性、连通性 |
 
-### 其他工具
+其他用法见 [CLI_MIGRATION_SUMMARY.md](docs/CLI_MIGRATION_SUMMARY.md)。
 
-```bash
-# 环境检查和修复
-./scripts/pixiv.sh check --fix       # 自动修复环境问题
-./scripts/pixiv.sh update            # 一键更新和修复
-```
+## 文档
 
-> 📖 **详细说明**：查看 [脚本使用指南](docs/SCRIPTS.md)
-
----
-
-<a id="文档导航"></a>
-## 文档导航
-
-> **完整文档索引**: 查看 [文档导航](docs/README.md) 获取所有文档的完整列表和分类
-
-### 新手必读（按顺序阅读）
+完整教程站点：<https://redtidev1918.github.io/PixivFlow/>
 
 | 文档 | 说明 |
-|------|------|
-| [QUICKSTART](docs/QUICKSTART.md) | **3 分钟快速上手** - 最快开始使用 |
-| [LOGIN](docs/LOGIN.md) | **登录流程详解** - 登录问题解决方案 |
-| [USAGE](docs/USAGE.md) | **使用指南** - 功能使用说明 |
-
-### 功能指南
-
-| 文档 | 说明 |
-|------|------|
-| [CONFIG](docs/CONFIG.md) | **配置文件使用指南** - 所有配置选项详解 |
-| [SCRIPTS](docs/SCRIPTS.md) | **脚本使用指南** - 所有脚本详细说明 |
-
-### 部署和环境
-
-| 文档 | 说明 |
-|------|------|
-| [DOCKER](docs/DOCKER.md) | **Docker 使用指南** - Docker 部署和使用（包含常见问题解决方案） |
-| [TERMUX](docs/TERMUX_INSTALL.md) | **Termux/Android 安装指南** - Android 设备上的安装和使用 |
-
-### 项目文档
-
-| 文档 | 说明 |
-|------|------|
-| [ARCHITECTURE](docs/ARCHITECTURE.md) | **架构说明** - 项目架构和技术实现细节 |
-| [CLI_MIGRATION](docs/CLI_MIGRATION_SUMMARY.md) | **CLI 命令移植总结** - CLI 命令迁移和功能对照 |
+| --- | --- |
+| [QUICKSTART](docs/QUICKSTART.md) | 三分钟上手 |
+| [CONFIG](docs/CONFIG.md) | 全部配置项说明 |
+| [USAGE](docs/USAGE.md) | 功能详解 |
+| [LOGIN](docs/LOGIN.md) | 账号登录相关 |
+| [DOCKER](docs/DOCKER.md) | 容器化部署方案 |
+| [ARCHITECTURE](docs/ARCHITECTURE.md) | 架构与技术实现 |
+| [RELEASING](docs/RELEASING.md) | npm 发版流程 |
 | [CHANGELOG](docs/project/CHANGELOG.md) | 版本更新日志 |
-| [RELEASING](docs/RELEASING.md) | **npm 发版指南** - 打 tag 自动发布到 npm |
-| [CONTRIBUTING](docs/project/CONTRIBUTING.md) | 贡献指南 |
 
----
+English version: [README_EN.md](README_EN.md).
 
-<a id="使用场景"></a>
-## 使用场景
+## 问题反馈
 
-### 常见使用方式
+Bug 与功能建议请提交到
+[Issues](https://github.com/redtidev1918/PixivFlow/issues)，
+提交前建议先运行 `pixivflow health` 并附上输出（注意删除 token 等敏感信息，
+配置文件中包含认证信息，请勿直接分享）。安全漏洞的处理方式见
+[SECURITY.md](SECURITY.md)。
 
-| 场景 | 命令 | 说明 |
-|------|------|------|
-| **快速体验** | `pixivflow random` | 随机下载热门作品，快速上手 |
-| **一次性下载** | `pixivflow download` | 按配置文件执行一次下载 |
-| **定时自动化** | `pixivflow scheduler` | 启动定时任务，自动化收集 |
-| **URL 下载** | `pixivflow download --url <url>` | 直接下载指定作品或用户 |
+## 许可证
 
-> 💡 **详细配置示例**：查看 [配置文件使用指南](docs/CONFIG.md) 了解各种使用场景的完整配置方法
-
----
-
-
-<a id="核心配置"></a>
-## 核心配置
-
-### 快速配置
-
-```bash
-# 首次使用 - 交互式配置向导
-pixivflow setup
-
-# 或手动编辑配置文件
-pixivflow config edit
-```
-
-### 基本配置结构
-
-```json
-{
-  "targets": [
-    {
-      "type": "illustration",     // 内容类型：illustration 或 novel
-      "tag": "風景",              // 搜索标签
-      "limit": 20,                // 下载数量
-      "minBookmarks": 500         // 最低收藏数（可选）
-    }
-  ],
-  "scheduler": {
-    "enabled": true,              // 启用定时任务
-    "cron": "0 2 * * *"          // 每天 2:00 执行
-  }
-}
-```
-
-> 📚 **完整配置说明**：查看 [配置文件使用指南](docs/CONFIG.md) 了解所有配置选项和详细示例
-
----
-
-## 使用建议
-
-- 首次使用运行 `pixivflow setup` 进行配置
-- 使用 `pixivflow health` 检查配置和网络状态
-- 定期使用 `pixivflow backup` 备份数据
-
----
-
-## 🐛 常见问题
-
-遇到问题？试试这些快速解决方案：
-
-| 问题 | 解决方法 |
-|------|----------|
-| **登录失败** | `pixivflow login` 重新登录 |
-| **找不到作品** | 检查标签拼写，降低 `minBookmarks` 值 |
-| **下载失败** | `pixivflow health` 检查网络和配置 |
-| **定时任务异常** | `pixivflow status` 查看运行状态 |
-
-> 📖 **详细故障排除**：查看 [使用指南](docs/USAGE.md) 了解完整的问题解决方案
-
----
-
-## 安全提示
-
-⚠️ **重要**：配置文件包含敏感的认证信息，请勿分享或提交到代码仓库。如需帮助，请删除敏感信息后再分享配置内容。
-
----
-
-## 进阶使用
-
-需要服务器部署、代理配置、多任务管理等高级功能？
-
-> 📖 **完整指南**：查看 [使用指南](docs/USAGE.md) 和 [Docker 部署指南](docs/DOCKER.md) 了解详细的进阶使用方法
-
----
-
-<a id="开源许可"></a>
-## 开源许可
-
-本项目采用 [GPL-3.0-or-later](LICENSE) 许可证开源。
-
-**这意味着：**
-- ✅ 可以自由使用、修改和分发
-- ✅ 修改后的代码也必须开源
-- ✅ 需要保留原作者信息和许可证声明
-
----
-
-<a id="致谢"></a>
-## 致谢
-
-### 灵感来源
-
-- [PixivBatchDownloader](https://github.com/xuejianxianzun/PixivBatchDownloader) - 浏览器扩展版本
-- [get-pixivpy-token](https://github.com/eggplants/get-pixivpy-token) - OAuth 认证实现参考
-
-### 感谢所有贡献者 🎉
-
----
-
-<a id="获取帮助"></a>
-## 获取帮助
-
-| 类型 | 渠道 | 说明 |
-|------|------|------|
-| 🐛 **Bug 反馈** | [GitHub Issues](https://github.com/redtidev1918/PixivFlow/issues) | 报告问题和错误 |
-| 💡 **功能建议** | [GitHub Discussions](https://github.com/redtidev1918/PixivFlow/discussions) | 提出新功能想法 |
-| 📖 **使用问题** | [查看文档](docs/README.md) | 查阅完整文档 |
-| ✅ **环境检查** | `./scripts/pixiv.sh health` | 运行健康检查 |
-| 💬 **社区交流** | [Discussions](https://github.com/redtidev1918/PixivFlow/discussions) | 与其他用户交流 |
-
-**提问前请先**：
-1. 🔍 查看 [常见问题](#-常见问题) 章节
-2. 📖 阅读相关文档
-3. ✅ 运行健康检查 `./scripts/pixiv.sh health`
-4. 📋 查看运行日志 `./scripts/pixiv.sh logs`
-
----
-
-<a id="项目统计"></a>
-## 项目统计
-
-<div align="center">
-
-### 项目数据
-
-![GitHub repo size](https://img.shields.io/github/repo-size/redtidev1918/pixivflow?style=flat-square)
-![GitHub language count](https://img.shields.io/github/languages/count/redtidev1918/pixivflow?style=flat-square)
-![GitHub top language](https://img.shields.io/github/languages/top/redtidev1918/pixivflow?style=flat-square)
-![GitHub last commit](https://img.shields.io/github/last-commit/redtidev1918/pixivflow?style=flat-square)
-
-</div>
-
-### 性能指标
-
-- ⚡ **启动速度**：< 2 秒
-- 📦 **包大小**：< 5 MB（不含依赖）
-- 💾 **内存占用**：< 100 MB（运行时）
-- 🔄 **下载速度**：支持并发下载，智能限流和动态并发调整
-- 📊 **数据库**：SQLite，轻量级，无需额外服务
-
----
-
-<a id="贡献"></a>
-## 贡献
-
-我们欢迎所有形式的贡献！无论是报告 Bug、提出功能建议，还是提交代码，都非常感谢。
-
-### 如何贡献
-
-1. **Fork 项目**
-2. **创建特性分支** (`git checkout -b feature/AmazingFeature`)
-3. **提交更改** (`git commit -m 'Add some AmazingFeature'`)
-4. **推送到分支** (`git push origin feature/AmazingFeature`)
-5. **开启 Pull Request**
-
-### 贡献指南
-
-详细的贡献指南请查看 [CONTRIBUTING.md](docs/project/CONTRIBUTING.md)，包含：
-- 行为准则
-- 开发环境设置
-- 代码规范
-- 提交规范
-- Pull Request 流程
-
----
-
-<a id="更新日志"></a>
-## 更新日志
-
-查看 [CHANGELOG.md](docs/project/CHANGELOG.md) 了解详细的版本更新记录。
-
----
-
-<a id="支持项目"></a>
-## 支持项目
-
-如果这个项目对你有帮助，请考虑：
-
-- ⭐ **给项目一个 Star** - 让更多人发现这个项目
-- 🍴 **Fork 项目** - 创建你自己的版本
-- 🐛 **报告 Bug** - 帮助我们改进
-- 💡 **提出建议** - 分享你的想法
-- 📢 **分享给更多人** - 让更多人受益
-- 💻 **贡献代码** - 参与项目开发
-
-<div align="center">
-
-### ⭐ Star 这个项目
-
-**[⭐ Star on GitHub](https://github.com/redtidev1918/PixivFlow)** - 让更多人发现 PixivFlow！
-
----
-
-Made with ❤️ by [redtidev1918](https://github.com/redtidev1918)
-
-**PixivFlow** - 让 Pixiv 作品收集变得优雅而高效
-
-[⬆ 回到顶部](#-pixivflow)
-
----
-
-**相关链接**：
-- [npm 包](https://www.npmjs.com/package/pixivflow)
-- [GitHub 仓库](https://github.com/redtidev1918/PixivFlow)
-- [前端项目 (pixivflow-webui)](https://github.com/redtidev1918/PixivFlow-webui)
-- [完整文档](docs/README.md)
-- [问题反馈](https://github.com/redtidev1918/PixivFlow/issues)
-- [讨论区](https://github.com/redtidev1918/PixivFlow/discussions)
-
-</div>
+[GPL-3.0-or-later](LICENSE)

@@ -1,49 +1,105 @@
 # 登录指南
 
-> **English**: Sign-in guide — three login adapters (Node.js token getter by
-> default, Puppeteer fallback, Python gppt as last resort), interactive and
-> headless flows, and token safety notes.
+> **English:** How PixivFlow authenticates. Three login paths: interactive
+> `login` (browser-based, via the pixiv-token-getter library with Puppeteer
+> fallback), `login-headless -u -p` for servers without a GUI, and
+> `refresh <token>` when you already hold a refresh token. Credentials are
+> stored in your local config file — never share it.
 
+PixivFlow 通过 Pixiv 的 OAuth 接口获取凭据。登录一次,refresh token
+写入本地配置文件,之后所有命令自动使用,无需重复登录。
 
-## 登录方式优先级
+## 三种登录方式
 
-1. **pixiv-token-getter** (默认): Node.js 库，无需依赖。
-2. **Puppeteer**: 自动回退方案。
-3. **Python gppt**: 仅作最后的备选。
+| 方式 | 命令 | 适用场景 |
+| --- | --- | --- |
+| 交互式登录 | `pixivflow login` | 有浏览器的桌面环境(默认推荐) |
+| 无头登录 | `pixivflow login-headless -u <用户名> -p <密码>` | 服务器、容器等无图形界面环境 |
+| Token 注入 | `pixivflow refresh <refresh_token>` | 已有 refresh token(如在别的机器上登过) |
 
-> 推荐使用 Node.js 方式，**无需安装 Python**。
-
-## 快速登录
-
-### 交互式 (CLI)
-
-```bash
-pixivflow login
-```
-
-按提示输入用户名和密码即可。Token 会自动保存到 `config/standalone.config.json`。
-
-### 静默登录 (Headless)
-
-适合 CI/CD 或无头环境：
+### 交互式登录
 
 ```bash
-pixivflow login-headless
+pixivflow login                 # 打开浏览器完成授权
+pixivflow login -u 用户名 -p 密码 # 也可以直接带账号参数
 ```
 
-## 常见问题
+底层优先使用 [pixiv-token-getter](https://www.npmjs.com/package/pixiv-token-getter)
+(Node.js 实现,零额外依赖);失败时回退到 Puppeteer 自动化;Python gppt
+仅作为最后备选,正常情况下**不需要安装 Python**。
 
-**Q: 登录失败 (认证错误)**
-A: 检查账号密码。若开启了两步验证，暂不支持，请使用 cookie 方式（如支持）或暂时关闭 2FA。
+### 无头登录
 
-**Q: Token 过期 (401 Unauthorized)**
-A: 运行 `pixivflow login` 重新登录。`refresh_token` 会自动刷新，但若长期未使用可能失效。
+```bash
+pixivflow login-headless -u user@example.com -p 密码
+```
 
-**Q: 必须安装 Python 吗？**
-A: 不需要。只有当 Node.js 登录方式全部失效时，才需要 Python + `gppt`。
+`-u` 和 `-p` 均为必填。加上 `-j` 可以让输出变成 JSON,
+方便脚本解析。
 
-## 安全须知
+### Token 注入
 
-- `refresh_token` 等同于密码，**切勿泄露**。
-- 配置文件 `config/standalone.config.json` 应加入 `.gitignore`。
-- 如泄露，请立即在 Pixiv 修改密码。
+```bash
+pixivflow refresh <refresh_token>
+```
+
+把一个已有的 refresh token 写入配置并刷新访问令牌,适合:
+
+- 把桌面机器的 token 迁移到服务器;
+- Docker 部署时在宿主机准备好凭据(见 [DOCKER · 凭据](DOCKER.md))。
+
+该命令有别名 `login-token` 和 `set-token`,行为一致。
+
+## 凭据存在哪里
+
+登录成功后,凭据写进当前使用的配置文件(通常是
+`config/standalone.config.json`)的 `pixiv` 段:
+
+```json
+{
+  "pixiv": {
+    "clientId": "...",
+    "clientSecret": "...",
+    "deviceToken": "pixiv",
+    "refreshToken": "<你的 token>",
+    "userAgent": "..."
+  }
+}
+```
+
+注意两点:
+
+1. **这个文件等同密码**,不要提交到 git、不要截图分享。
+   `config/` 默认已被 .gitignore 排除。
+2. 多份配置文件(`pixivflow config` 管理)各自保存各自的凭据。
+
+## Token 过期处理
+
+refresh token 失效时,任何需要认证的命令会报错并提示重新登录:
+
+```
+❌ Authentication Error
+   Your refresh token may have expired or is invalid.
+   Please login again to get a new refresh token:
+     • Interactive login:  pixivflow login
+     • Headless login:     pixivflow login-headless
+```
+
+处理方式二选一:
+
+- 重新执行 `login` / `login-headless`;
+- 若在其他设备上有有效 token,`refresh <token>` 直接注入。
+
+## 安全清单
+
+- 配置文件含认证信息,提 Issue 或求助前务必删除 refreshToken 段。
+- 用 `refresh` 而非账号密码方式部署到服务器,可以避免密码落盘。
+- 账号密码只出现在登录那一刻,不会持久化。
+
+---
+
+## 相关文档
+
+- [QUICKSTART](QUICKSTART.md) — 从安装开始的完整流程
+- [DOCKER](DOCKER.md) — 容器场景下的凭据配置
+- [CONFIG](CONFIG.md) — 配置文件结构与 pixiv 字段说明

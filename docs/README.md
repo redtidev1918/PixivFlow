@@ -1,62 +1,70 @@
-# PixivFlow 文档
+# PixivFlow 文档中心
 
-PixivFlow 是一个独立运行的 Pixiv 自动化下载工具。无需浏览器插件，配置一次即可长期自动运行。
+> **English:** This is the documentation hub for PixivFlow, a Pixiv batch
+> downloader with CLI and WebUI. New here? Follow [Quick Start](QUICKSTART.md)
+> → [Login](LOGIN.md). Server deployment goes through
+> [Docker](DOCKER.md); developers will find architecture notes and the full
+> WebUI HTTP API under "For Developers".
 
-## 核心文档
+这里汇聚 PixivFlow 的全部文档。按你的目标选择一条路线:
 
-- **[快速开始](./QUICKSTART.md)**: 3分钟上手。（含 English overview）
-- **[配置手册](./CONFIG.md)**: 完整配置参数说明。（含 English overview）
-- **[使用指南](./USAGE.md)**: 功能详解。（含 English overview）
-- **[登录指南](./LOGIN.md)**: 账号登录相关。
-- **[Docker 部署](./DOCKER.md)**: 容器化部署方案。（含 English overview）
-- **[Termux 安装](./TERMUX_INSTALL.md)**: Android 设备安装指南。（含 English overview）
-- **[发版指南](./RELEASING.md)**: npm 发布流程与版本管理。
-- **[API 文档](./API.md)**: RESTful 接口参考（双语逐段对照）。
+## 🧭 按任务找文档
 
-## 进阶文档
+| 你想做什么 | 路线 |
+| --- | --- |
+| 第一次使用,跑通第一个下载 | [快速开始](QUICKSTART.md) → [账号登录](LOGIN.md) |
+| 了解每种下载方式和全部命令 | [功能与命令](USAGE.md) |
+| 精细控制下载内容(标签、收藏数、日期、排行) | [配置参考](CONFIG.md) + [示例合集](../config/examples/) |
+| 部署到服务器长期挂机 | [Docker 部署](DOCKER.md) |
+| 在 Android 手机上运行 | [Termux 安装](TERMUX_INSTALL.md) |
+| 从 v1 升级到 v2 | [迁移指南](CLI_MIGRATION_SUMMARY.md) |
+| 二次开发、改代码、查接口 | [架构说明](ARCHITECTURE.md) → [WebUI API](API.md) |
 
-- [脚本工具](./SCRIPTS.md): 实用维护脚本。
-- [架构设计](./ARCHITECTURE.md): 系统架构与 API。
-- [API 参考](./API.md): RESTful 接口文档。
-- [Termux 安装](./TERMUX_INSTALL.md): Android 手机运行指南。
+## 📚 全部文档
+
+### 开始使用
+
+| 文档 | 内容 |
+| --- | --- |
+| [QUICKSTART](QUICKSTART.md) | 安装、登录、第一次下载、验证环境,十分钟走完全流程 |
+| [LOGIN](LOGIN.md) | 三种登录方式、凭据存储位置、token 过期处理 |
+
+### 使用手册
+
+| 文档 | 内容 |
+| --- | --- |
+| [USAGE](USAGE.md) | 六种下载模式、URL 直链格式、去重与断点续传、定时任务行为、全命令速查 |
+| [CONFIG](CONFIG.md) | 配置文件逐项说明:targets 全字段、存储目录组织、调度器参数、代理与环境变量 |
+| [SCRIPTS](SCRIPTS.md) | `scripts/` 目录下辅助脚本的用途与用法 |
+
+### 部署运行
+
+| 文档 | 内容 |
+| --- | --- |
+| [DOCKER](DOCKER.md) | docker compose 双服务部署、环境变量参考、数据持久化、故障排查 |
+| [TERMUX_INSTALL](TERMUX_INSTALL.md) | Android/Termux 环境从零安装 |
+
+### 开发者
+
+| 文档 | 内容 |
+| --- | --- |
+| [ARCHITECTURE](ARCHITECTURE.md) | 模块地图、命令注册机制、下载管线、存储层设计 |
+| [API](API.md) | WebUI 后端 REST 接口与 Socket.IO 实时事件 |
+| [CONTRIBUTING](project/CONTRIBUTING.md) | 参与贡献的流程与规范 |
+| [RELEASING](RELEASING.md) | 版本管理与 npm 发版流程 |
+| [CHANGELOG](project/CHANGELOG.md) | 版本更新记录 |
+
+## 🔗 其他入口
+
+- 项目主页:<https://github.com/redtidev1918/PixivFlow>
+- 教程站点(HTML):<https://redtidev1918.github.io/PixivFlow/>
+- npm 包:<https://www.npmjs.com/package/pixivflow>
+- 问题反馈:[Issues](https://github.com/redtidev1918/PixivFlow/issues)(安全漏洞请看 [SECURITY.md](../SECURITY.md))
 
 ---
 
-## 快速开始
+## 相关文档
 
-### 安装
-
-推荐使用 npm 全局安装：
-
-```bash
-npm install -g pixivflow
-```
-
-### 运行
-
-1. **登录**
-   ```bash
-   pixivflow login
-   ```
-
-2. **下载**
-   ```bash
-   pixivflow download
-   ```
-
-详细流程请参考 [快速开始](./QUICKSTART.md)。
-
----
-
-## 功能特性
-
-- **独立运行**: 纯命令行工具，无需浏览器。
-- **自动化**: 支持 Cron 定时任务。
-- **高性能**: 异步并发下载，自动处理限流。
-- **多模式**: 支持搜索、排行榜、画师全集、小说系列等。
-- **API 支持**: 提供 RESTful API 和 WebSocket，方便二次开发。
-
-## 帮助与支持
-
-- [GitHub Issues](https://github.com/redtidev1918/PixivFlow/issues)
-- [GitHub Discussions](https://github.com/redtidev1918/PixivFlow/discussions)
+- [QUICKSTART](QUICKSTART.md) — 还没跑起来?从这里开始
+- [USAGE](USAGE.md) — 已能运行?了解全部能力
+- [CONFIG](CONFIG.md) — 想精确控制下载什么?读这份

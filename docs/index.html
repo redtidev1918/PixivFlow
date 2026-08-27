@@ -4,137 +4,148 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PixivFlow — 智能的 Pixiv 自动化下载工具</title>
-  <meta name="description" content="PixivFlow 是一个专业的 Pixiv 批量下载工具，支持插画和小说下载、定时任务、Docker 部署。适用于个人用户和服务器自动化场景。">
+  <meta name="description" content="PixivFlow 是一个开源的 Pixiv 批量下载工具:URL 直链下载、标签搜索、排行榜抓取、Cron 定时任务、自动去重与断点续传,提供 CLI 与 WebUI,Docker 一键部署。">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐱</text></svg>">
   <link rel="stylesheet" href="assets/site.css">
+  <script>document.documentElement.setAttribute("data-theme", localStorage.getItem("pf-theme") || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"));</script>
+  <script src="assets/site.js" defer></script>
 </head>
 <body>
-
-<header class="hero">
-  <div class="container">
-    <h1>🐱 PixivFlow</h1>
-    <p class="tagline">智能的 Pixiv 自动化下载工具 —— 支持批量下载插画与小说、定时任务、Docker 部署。适用于个人收藏与服务器自动化。</p>
-    <div class="cta">
-      <a class="btn btn-primary" href="guide.html">开始使用</a>
-      <a class="btn btn-outline" href="https://github.com/redtidev1918/PixivFlow">GitHub 仓库</a>
-      <a class="btn btn-outline" href="https://www.npmjs.com/package/pixivflow">npm</a>
+<header class="topbar">
+  <div class="bar">
+    <a class="brand" href="index.html"><span class="logo">🐱</span>PixivFlow</a>
+    <ul class="nav-links">
+      <li><a href="index.html" class="active">首页</a></li>
+      <li><a href="guide.html">使用教程</a></li>
+      <li><a href="config.html">配置参考</a></li>
+      <li><a href="deployment.html">部署指南</a></li>
+      <li><a href="faq.html">常见问题</a></li>
+      <li><a href="tutorial-full.html">完整教程</a></li>
+    </ul>
+    <div class="top-actions">
+      <button class="icon-btn js-theme-toggle" aria-label="切换主题">🌙</button>
+      <a class="icon-btn" href="https://github.com/redtidev1918/PixivFlow" target="_blank" rel="noopener" title="GitHub 仓库">⭐</a>
     </div>
-    <p style="margin-top:1.4rem;font-size:.9rem;opacity:.85">
-      Node.js 18+ · TypeScript · MIT
-    </p>
   </div>
 </header>
-
-<nav class="topbar">
-  <ul>
-    <li><a href="index.html">首页</a></li>
-    <li><a href="guide.html">使用教程</a></li>
-    <li><a href="config.html">配置参考</a></li>
-    <li><a href="deployment.html">部署指南</a></li>
-    <li><a href="faq.html">常见问题</a></li>
-    <li><a href="https://github.com/redtidev1918/PixivFlow/releases">Releases</a></li>
-  </ul>
-</nav>
+<div class="hero">
+  <div class="container">
+    <h1>🐱 PixivFlow</h1>
+    <p class="tagline">把「刷 Pixiv 手动存图」变成一条命令。批量下载插画与小说,按标签、收藏数、日期筛选,Cron 定时自动收集——CLI 与 WebUI 双形态,Docker 部署即开即用。</p>
+    <div class="cta">
+      <a class="btn btn-primary" href="tutorial-full.html">📖 五分钟上手教程</a>
+      <a class="btn btn-outline" href="guide.html">⌨️ 直接看用法</a>
+      <a class="btn btn-outline" href="https://www.npmjs.com/package/pixivflow" target="_blank" rel="noopener">📦 npm</a>
+      <a class="btn btn-outline" href="https://github.com/redtidev1918/PixivFlow" target="_blank" rel="noopener">🐙 GitHub</a>
+    </div>
+    <p class="meta-line">Node.js 18+ · TypeScript · MIT License · Windows / macOS / Linux / Docker / Android(Termux)</p>
+  </div>
+</div>
 
 <main class="container">
 
-  <section class="card-block">
-    <h2 class="section-title">核心能力一览</h2>
-    <table>
-      <tr><td><strong>🔗 URL 直接下载</strong></td><td>输入 Pixiv URL 即可下载（插画 / 小说 / 用户作品页，v2.0.37+）</td></tr>
-      <tr><td><strong>🎯 单作品下载</strong></td><td>通过作品 ID 或 URL 精确下载单个插画或小说</td></tr>
-      <tr><td><strong>🏷️ 标签搜索</strong></td><td>按标签搜索，支持精确匹配、部分匹配等多种模式</td></tr>
-      <tr><td><strong>🎲 随机下载</strong></td><td>一键下载随机热门标签作品，快速上手体验</td></tr>
-      <tr><td><strong>⏰ 定时任务</strong></td><td>Cron 表达式配置：每天 / 每周 / 每月自动下载</td></tr>
-      <tr><td><strong>🔍 智能筛选</strong></td><td>按收藏数、日期范围、作品类型等多维度筛选</td></tr>
-      <tr><td><strong>💾 自动去重</strong></td><td>SQLite 记录下载历史，自动跳过已下载作品</td></tr>
-      <tr><td><strong>🔄 断点续传</strong></td><td>中断后自动恢复，无需从头开始</td></tr>
-      <tr><td><strong>🛡️ 错误处理</strong></td><td>自动重试、错误恢复，智能跳过已删除 / 私有作品</td></tr>
-    </table>
-  </section>
-
-  <section class="card-block">
-    <h2 class="section-title">🚀 三步上手</h2>
-    <ol class="steps">
-      <li>
-        <h3>安装</h3>
-        <pre><code>npm install -g pixivflow          # 全局 CLI
-pixivflow --help                  # 验证安装</code></pre>
-        <p>也可以直接使用 <a href="deployment.html">Docker 部署</a>（推荐服务器场景）。</p>
-      </li>
-      <li>
-        <h3>登录 Pixiv 账号</h3>
-        <pre><code>pixivflow login</code></pre>
-        <p>或无图形界面环境使用 <code>pixivflow login-headless</code>。</p>
-      </li>
-      <li>
-        <h3>开始下载</h3>
-        <pre><code># 最简单的方式：粘贴任意 Pixiv 链接
-pixivflow download --url https://www.pixiv.net/artworks/123456789
-
-# 按配置文件中的下载目标执行
-pixivflow download
-
-# 启动定时任务
-pixivflow scheduler</code></pre>
-      </li>
-    </ol>
-    <p>完整的命令列表、URL 类型支持说明见
-      <a href="guide.html"><strong>使用教程</strong></a>；配置项详见
-      <a href="config.html"><strong>配置参考</strong></a>。</p>
-  </section>
-
-  <section class="card-block">
-    <h2 class="section-title">📚 文档导航</h2>
-    <div class="entry-grid">
-      <a class="entry-card" href="guide.html">
-        <h4>📖 使用教程</h4>
-        <p>基础操作、URL 下载、单作品与小说下载、智能筛选与实际应用场景。</p>
-      </a>
-      <a class="entry-card" href="config.html">
-        <h4>⚙️ 配置参考</h4>
-        <p>认证、下载目标、定时任务（Cron）、存储、性能与网络配置详解。</p>
-      </a>
-      <a class="entry-card" href="deployment.html">
-        <h4>🐳 部署指南</h4>
-        <p>Docker Compose 一键部署、PM2 与 systemd 服务器方案。</p>
-      </a>
-      <a class="entry-card" href="faq.html">
-        <h4>❓ 常见问题</h4>
-        <p>登录失败、Token 过期、找不到作品、下载慢等问题的定位与解决。</p>
-      </a>
-      <a class="entry-card" href="https://github.com/redtidev1918/PixivFlow/blob/master/docs/API.md">
-        <h4>🔌 API 文档</h4>
-        <p>Pixiv 客户端 API 接口参考。</p>
-      </a>
-      <a class="entry-card" href="https://github.com/redtidev1918/PixivFlow/blob/master/themes/THEME_GUIDE.md">
-        <h4>🎨 主题指南</h4>
-        <p>主题目录结构与 theme.json 字段说明。</p>
-      </a>
+  <section class="plain" style="margin-top:34px">
+    <h2 class="section-title">核心能力</h2>
+    <div class="card-grid">
+      <div class="card"><div class="card-icon">🔗</div><h3>任意链接直下</h3><p>插画、小说、系列、用户主页……粘贴 URL 或裸 ID 即可下载,10 种地址形态全部识别。</p></div>
+      <div class="card"><div class="card-icon">🏷️</div><h3>标签搜索与多维筛选</h3><p>标签匹配方式、排序、最低收藏数、发布日期窗口自由组合。</p></div>
+      <div class="card"><div class="card-icon">🏆</div><h3>排行榜模式</h3><p>日榜 / 周榜 / 月榜 / R18 榜直接抓取,先上榜后过滤。</p></div>
+      <div class="card"><div class="card-icon">🎲</div><h3>随机发现</h3><p>从结果中随机挑选下载,每天给它一个小惊喜。</p></div>
+      <div class="card"><div class="card-icon">⏰</div><h3>Cron 定时收集</h3><p>每天凌晨自动收昨日新作;<code>YESTERDAY</code> 占位符免改配置。</p></div>
+      <div class="card"><div class="card-icon">💾</div><h3>去重与断点续传</h3><p>SQLite 记录下载历史,重复执行安全跳过,中断接着传。</p></div>
+      <div class="card"><div class="card-icon">🗂️</div><h3>12 种目录组织</h3><p>按画师、标签、创建日、下载日……任何维度归档,<code>normalize</code> 一键重排。</p></div>
+      <div class="card"><div class="card-icon">🖥️</div><h3>WebUI 管理台</h3><p>统计仪表盘、任务管理、实时日志、在线改配置,端口 3000 开箱即用。</p></div>
+      <div class="card"><div class="card-icon">🐳</div><h3>Docker 双服务</h3><p>定时任务与 WebUI 各自独立容器,健康检查、自动重启、共享数据卷。</p></div>
     </div>
   </section>
 
-  <section class="card-block">
-    <h2 class="section-title">📦 安装方式汇总</h2>
-    <table>
-      <tr><th>方式</th><th>命令 / 获取途径</th><th>适合</th></tr>
-      <tr><td>全局 CLI（推荐）</td><td><code>npm install -g pixivflow</code></td><td>本机长期使用</td></tr>
-      <tr><td>npx 临时运行</td><td><code>npx pixivflow --help</code></td><td>快速试用</td></tr>
-      <tr><td>Docker</td><td><a href="deployment.html">docker compose up -d</a></td><td>服务器 / NAS 自动化</td></tr>
-      <tr><td>源码构建</td><td>克隆仓库 → <code>npm install && npm run build</code></td><td>开发者</td></tr>
-    </table>
-    <p style="font-size:.92rem;color:var(--text-light)">
-      需要环境：Node.js 18+ LTS 与 Pixiv 账号。Windows 用户建议在 WSL 或 Git Bash 中运行。
-    </p>
+  <section class="plain">
+    <h2 class="section-title">三步跑起来</h2>
+    <ol class="steps">
+      <li>
+        <h3>安装 CLI</h3>
+        <pre><code>npm install -g pixivflow
+pixivflow --help   <span class="cmt"># 出现帮助信息即成功</span></code></pre>
+        <p>服务器推荐 <a href="deployment.html">Docker Compose</a>;Android 用户走 <a href="deployment.html#termux">Termux 路线</a>。</p>
+      </li>
+      <li>
+        <h3>登录一次 Pixiv 账号</h3>
+        <pre><code>pixivflow login                 <span class="cmt"># 桌面环境,浏览器授权</span>
+pixivflow login-headless -u 用户名 -p 密码   <span class="cmt"># 无图形界面的服务器</span></code></pre>
+        <p>凭据写入本地配置,之后所有命令复用,详见 <a href="https://github.com/redtidev1918/PixivFlow/blob/master/docs/LOGIN.md" target="_blank" rel="noopener">登录指南</a>。</p>
+      </li>
+      <li>
+        <h3>粘贴链接,直接下载</h3>
+        <pre><code>pixivflow download --url https://www.pixiv.net/artworks/123456789
+
+<span class="cmt"># 或者按配置批量收集:</span>
+pixivflow download
+<span class="cmt"># 挂机自动化:</span>
+pixivflow scheduler</code></pre>
+        <p>文件默认保存在 <code>./downloads</code>,运行 <code>pixivflow dirs</code> 查看实际位置。</p>
+      </li>
+    </ol>
   </section>
 
+  <section class="card-block">
+    <h2 class="section-title">两种形态,一套能力</h2>
+    <table>
+      <thead><tr><th style="width:32%">能力</th><th>CLI</th><th>WebUI(:3000)</th></tr></thead>
+      <tbody>
+        <tr><td>执行下载</td><td><code>download</code> / 定时调度</td><td>任务面板,可启停</td></tr>
+        <tr><td>URL 直链下载</td><td><code>--url</code> 参数</td><td>专用输入框,支持批量粘贴</td></tr>
+        <tr><td>修改配置</td><td><code>config</code> / 编辑 JSON</td><td>表单编辑器 + JSON 高亮 + 历史版本回滚</td></tr>
+        <tr><td>查看成果</td><td><code>status</code> / <code>dirs</code></td><td>统计图表与文件预览缩略图</td></tr>
+        <tr><td>日志</td><td><code>logs</code></td><td>实时滚动 WebSocket 推送</td></tr>
+        <tr><td>适合场景</td><td>脚本化、无人值守、ssh 环境</td><td>日常浏览管理、远程操作</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="plain">
+    <h2 class="section-title">从这里继续</h2>
+    <div class="card-grid">
+      <a class="card" href="guide.html"><div class="card-icon">⌨️</div><h3>使用教程</h3><p>六种下载模式逐个演示,附全部 20 条命令速查。<span class="arrow">进入 →</span></p></a>
+      <a class="card" href="config.html"><div class="card-icon">⚙️</div><h3>配置参考</h3><p>targets 全字段、12 种目录组织、环境变量覆盖速查。<span class="arrow">进入 →</span></p></a>
+      <a class="card" href="deployment.html"><div class="card-icon">🚢</div><h3>部署指南</h3><p>npm / Docker Compose / Termux 三条路线任选。<span class="arrow">进入 →</span></p></a>
+      <a class="card" href="faq.html"><div class="card-icon">❓</div><h3>常见问题</h3><p>登录失效、零结果、限流降速……先查这里再提 Issue。<span class="arrow">进入 →</span></p></a>
+      <a class="card" href="tutorial-full.html"><div class="card-icon">📖</div><h3>完整教程</h3><p>从安装到全自动挂机的端到端长文。<span class="arrow">进入 →</span></p></a>
+      <a class="card" href="https://github.com/redtidev1918/PixivFlow/issues" target="_blank" rel="noopener"><div class="card-icon">💬</div><h3>反馈与讨论</h3><p>遇到文档没覆盖的问题?欢迎提 Issue。<span class="arrow">前往 →</span></p></a>
+    </div>
+  </section>
+
+<div class="backtop container"><a href="#">↑ 回到顶部</a></div>
 </main>
 
-<footer>
-  <div class="container">
-    <p>Made with ❤️ by <a href="https://github.com/redtidev1918">redtidev1918</a> ·
-      <a href="https://github.com/redtidev1918/PixivFlow">PixivFlow</a> — 让 Pixiv 作品收集变得优雅而高效</p>
+<footer class="site-footer">
+  <div class="container cols">
+    <div>
+      <strong>🐱 PixivFlow</strong>
+      <p style="margin:.3rem 0 0">Pixiv 批量下载与定时收集工具<br>CLI 与 WebUI 双形态 · MIT License</p>
+    </div>
+    <div>
+      <strong>文档</strong>
+      <ul>
+        <li><a href="index.html">首页</a></li>
+        <li><a href="guide.html">使用教程</a></li>
+        <li><a href="config.html">配置参考</a></li>
+        <li><a href="deployment.html">部署指南</a></li>
+        <li><a href="faq.html">常见问题</a></li>
+        <li><a href="tutorial-full.html">完整教程</a></li>
+      </ul>
+    </div>
+    <div>
+      <strong>项目</strong>
+      <ul>
+        <li><a href="https://github.com/redtidev1918/PixivFlow">GitHub 仓库</a></li>
+        <li><a href="https://github.com/redtidev1918/PixivFlow/releases">Releases</a></li>
+        <li><a href="https://www.npmjs.com/package/pixivflow">npm 包</a></li>
+        <li><a href="https://github.com/redtidev1918/PixivFlow/issues">问题反馈</a></li>
+        <li><a href="https://github.com/redtidev1918/pixivflow-webui">WebUI 前端仓库</a></li>
+      </ul>
+    </div>
   </div>
+  <div class="container foot-note">以 MIT 协议开源 · 请遵守 Pixiv 服务条款理性收藏,尊重创作者版权</div>
 </footer>
-
 </body>
 </html>

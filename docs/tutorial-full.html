@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>完整教程 — PixivFlow</title>
+  <meta name="description" content="PixivFlow 端到端完整教程:从认识工具、安装登录、第一次下载,到编写下载目标、排行榜与随机模式、Cron 定时挂机、文件管理、WebUI 与 Docker 服务器部署,最后附故障排查速查。">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐱</text></svg>">
+  <link rel="stylesheet" href="assets/site.css">
+  <script>document.documentElement.setAttribute("data-theme", localStorage.getItem("pf-theme") || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"));</script>
+  <script src="assets/site.js" defer></script>
+</head>
+<body>
+<header class="topbar">
+  <div class="bar">
+    <a class="brand" href="index.html"><span class="logo">🐱</span>PixivFlow</a>
+    <ul class="nav-links">
+      <li><a href="index.html">首页</a></li>
+      <li><a href="guide.html">使用教程</a></li>
+      <li><a href="config.html">配置参考</a></li>
+      <li><a href="deployment.html">部署指南</a></li>
+      <li><a href="faq.html">常见问题</a></li>
+      <li><a href="tutorial-full.html" class="active">完整教程</a></li>
+    </ul>
+    <div class="top-actions">
+      <button class="icon-btn js-theme-toggle" aria-label="切换主题">🌙</button>
+      <a class="icon-btn" href="https://github.com/redtidev1918/PixivFlow" target="_blank" rel="noopener" title="GitHub 仓库">⭐</a>
+    </div>
+  </div>
+</header>
+<main class="container">
+  <div class="page-head">
+    <h1>📖 完整教程:从安装到全自动挂机</h1>
+    <p class="lede">一章一个台阶,全部示例可直接复制。快速查询请用左侧导航:<a href="guide.html">使用教程</a>看用法,<a href="config.html">配置参考</a>查字段,本页负责把整条路走通。</p>
+  </div>
+
+  <ul class="toc-inline">
+    <li><a href="#s1">1 认识 PixivFlow</a></li>
+    <li><a href="#s2">2 安装</a></li>
+    <li><a href="#s3">3 登录</a></li>
+    <li><a href="#s4">4 第一次下载</a></li>
+    <li><a href="#s5">5 定义下载目标</a></li>
+    <li><a href="#s6">6 进阶组合</a></li>
+    <li><a href="#s7">7 定时挂机</a></li>
+    <li><a href="#s8">8 文件与数据管理</a></li>
+    <li><a href="#s9">9 WebUI 上手</a></li>
+    <li><a href="#s10">10 部署到服务器</a></li>
+    <li><a href="#s11">11 故障排查</a></li>
+    <li><a href="#s12">12 下一步</a></li>
+  </ul>
+
+  <section class="card-block" id="s1">
+    <h2 class="section-title">1 · 认识 PixivFlow<span class="anchor-hint">#</span></h2>
+    <p>PixivFlow 做一件事:把你挑图、存图、整理、重下的循环交给程序。它是一个 npm 包,提供两种形态:</p>
+    <ul>
+      <li><strong>CLI</strong>——命令行里执行下载、调度定时任务、体检维护;</li>
+      <li><strong>WebUI</strong>——浏览器里看统计、管任务、改配置,实时日志滚动。</li>
+    </ul>
+    <p>底层是 Pixiv 官方 App 的 API(不是爬网页),所以需要用你的账号登录一次换取访问令牌;下载行为全部由一份 JSON 配置驱动,改需求不改代码。三种典型用法:</p>
+    <div class="table-scroll"><table>
+      <thead><tr><th>场景</th><th>推荐形态</th><th>路线</th></tr></thead>
+      <tbody>
+        <tr><td>个人电脑偶尔收图</td><td>CLI</td><td>npm 安装,<code>download --url</code> 用完即走</td></tr>
+        <tr><td>长期自动收集</td><td>CLI + scheduler</td><td>cron 配置 + Docker 托管</td></tr>
+        <tr><td>可视化管理、远程操作</td><td>WebUI</td><td>端口 3000,浏览器全搞定</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section class="card-block" id="s2">
+    <h2 class="section-title">2 · 安装<span class="anchor-hint">#</span></h2>
+    <p>前置只有一样:<strong>Node.js 18+</strong>(推荐 LTS)。确认 <code>node -v</code> 后二选一:</p>
+    <pre><code><span class="cmt"># 方式 A:全局安装(推荐)</span>
+npm install -g pixivflow
+pixivflow --help
+
+<span class="cmt"># 方式 B:从源码运行</span>
+git clone https://github.com/redtidev1918/PixivFlow.git
+cd PixivFlow &amp;&amp; npm install &amp;&amp; npm run build
+node dist/index.js --help</code></pre>
+    <p>Windows / macOS / Linux 均可;Android 用 Termux,<a href="deployment.html#termux">见部署指南</a>。</p>
+  </section>
+
+  <section class="card-block" id="s3">
+    <h2 class="section-title">3 · 登录一次账号<span class="anchor-hint">#</span></h2>
+    <pre><code>pixivflow login     <span class="cmt"># 桌面环境:弹出浏览器授权</span></code></pre>
+    <p>登录成功后 refresh token 自动写入 <code>config/standalone.config.json</code>,之后所有命令复用,无需重复登录。没有浏览器的环境:</p>
+    <pre><code>pixivflow login-headless -u 用户名 -p 密码   <span class="cmt"># 服务器</span>
+pixivflow refresh &lt;refresh_token&gt;           <span class="cmt"># 已有 token 直接注入</span></code></pre>
+    <div class="callout danger"><span class="callout-title">安全提醒</span>配置文件里的 <code>refreshToken</code> 等同密码:不提交仓库、不截图、不整文件分享。细节见<a href="https://github.com/redtidev1918/PixivFlow/blob/master/docs/LOGIN.md" target="_blank" rel="noopener">登录指南</a>。</div>
+  </section>
+
+  <section class="card-block" id="s4">
+    <h2 class="section-title">4 · 第一次下载<span class="anchor-hint">#</span></h2>
+    <pre><code>pixivflow download --url https://www.pixiv.net/artworks/123456789</code></pre>
+    <p>链接可以是你在 Pixiv 上复制的任何作品地址——插画、小说、小说系列、用户主页都会被自动识别并选择对应策略,甚至支持旧版短链 <code>pixiv.net/i/{id}</code> 和裸 ID。跑完后:</p>
+    <pre><code>pixivflow dirs      <span class="cmt"># 查看文件实际保存位置</span>
+pixivflow status    <span class="cmt"># 看下载记录</span></code></pre>
+    <p>默认布局:<code>./downloads/illustrations</code>(插画)、<code>./downloads/novels</code>(小说)、<code>./data/</code>(SQLite 数据库)。同一幅图重复下载会被数据库记录拦下——放心反复执行。</p>
+  </section>
+
+  <section class="card-block" id="s5">
+    <h2 class="section-title">5 · 定义你的下载目标<span class="anchor-hint">#</span></h2>
+    <p>真正的生产力来自配置文件里的 <code>targets</code>。打开 <code>config/standalone.config.json</code>,从最简形态开始:</p>
+    <pre><code>"targets": [
+  { "type": "illustration", "tag": "風景", "limit": 20 }
+]</code></pre>
+    <pre><code>pixivflow download</code></pre>
+    <p>然后按需加过滤器——每加一项都在缩小范围:</p>
+    <pre><code>"targets": [
+  {
+    "type": "illustration",
+    "tag": "風景",
+    "limit": 20,
+    "minBookmarks": 500,          <span class="cmt"># 只要有人气的</span>
+    "sort": "popular_desc",       <span class="cmt"># 按收藏数排序</span>
+    "startDate": "2025-01-01"     <span class="cmt"># 只要今年的</span>
+  }
+]</code></pre>
+    <p>字段语义与全部取值见<a href="config.html#targets">配置参考</a>;不想手写 JSON 就跑 <code>pixivflow setup</code> 向导。</p>
+  </section>
+
+  <section class="card-block" id="s6">
+    <h2 class="section-title">6 · 进阶组合<span class="anchor-hint">#</span></h2>
+    <h3>多标签「任一命中」</h3>
+    <pre><code>{
+  "type": "illustration",
+  "tag": "水彩 厚涂",
+  "tagRelation": "or",      <span class="cmt"># 默认 and,要求同时含全部标签</span>
+  "limit": 30
+}</code></pre>
+    <h3>排行榜模式</h3>
+    <pre><code>{
+  "type": "illustration",
+  "mode": "ranking",
+  "rankingMode": "week",
+  "filterTag": "オリジナル",
+  "limit": 15
+}</code></pre>
+    <p>先拉周榜,再只留带「オリジナル」标签的。<code>rankingMode</code> 另有 day / month / R18 系列等取值。</p>
+    <h3>随机与单发</h3>
+    <pre><code>pixivflow random                                   <span class="cmt"># 热门标签随机一张</span>
+pixivflow download --url "123456789"               <span class="cmt"># 裸 ID 当插画下</span>
+pixivflow download --targets '[{"type":"novel","seriesId":14690617}]'  <span class="cmt"># 临时收一部系列</span></code></pre>
+    <p>小说还有整系列(<code>seriesId</code>)与语言过滤(<code>languageFilter: "chinese"</code>)两个专属能力。</p>
+  </section>
+
+  <section class="card-block" id="s7">
+    <h2 class="section-title">7 · 定时挂机<span class="anchor-hint">#</span></h2>
+    <pre><code>{
+  "scheduler": {
+    "enabled": true,
+    "cron": "0 3 * * *",
+    "timezone": "Asia/Shanghai",
+    "maxConsecutiveFailures": 5,
+    "timeout": 3600000
+  },
+  "targets": [
+    {
+      "type": "illustration",
+      "tag": "風景",
+      "limit": 30,
+      "startDate": "YESTERDAY",
+      "endDate": "YESTERDAY"
+    }
+  ]
+}</code></pre>
+    <pre><code>pixivflow scheduler</code></pre>
+    <p>上面的组合含义:每天 03:00 收一遍「昨天发布的風景插画」。占位符 <code>YESTERDAY</code> / <code>TODAY</code> 在每次执行时替换成真实日期,所以这份配置可以永远不改。调度细节(限次、最小间隔、失败熔断)见<a href="config.html#scheduler">配置参考</a>。</p>
+    <div class="callout"><span class="callout-title">验证</span>先把 cron 改成一两分钟后(<code>0 12 15 * *</code> 之类)观察一轮日志,确认无误再调回正式时间,是调试定时任务的好习惯。</div>
+  </section>
+
+  <section class="card-block" id="s8">
+    <h2 class="section-title">8 · 文件与数据管理<span class="anchor-hint">#</span></h2>
+    <p>目录组织由 <code>storage.*Organization</code> 决定,12 种模式按画师、标签、创建日、下载日等维度归档。个人收藏推荐 <code>byAuthor</code>(按画师找图直觉);按时间轴欣赏选 <code>byDownloadDay</code>。</p>
+    <pre><code>{
+  "storage": {
+    "downloadDirectory": "/data/pixiv",
+    "illustrationOrganization": "byAuthorAndTag"
+  }
+}</code></pre>
+    <ul>
+      <li>改组织方式后:<code>pixivflow normalize</code> 把已有文件搬进新结构;</li>
+      <li>不确定文件在哪:<code>pixivflow dirs</code>;</li>
+      <li>改配置前手动备份:<code>pixivflow backup</code>;</li>
+      <li>挂机数月后:<code>pixivflow maintain</code> 清日志、优化数据库。</li>
+    </ul>
+  </section>
+
+  <section class="card-block" id="s9">
+    <h2 class="section-title">9 · WebUI 上手<span class="anchor-hint">#</span></h2>
+    <pre><code>pixivflow webui     <span class="cmt"># http://localhost:3000</span></code></pre>
+    <p>页面地图:</p>
+    <ul>
+      <li><strong>仪表盘</strong>——累计下载、插画/小说占比、最近动态;</li>
+      <li><strong>下载</strong>——启动/停止任务、URL 直链输入框(支持批量粘贴)、断点任务恢复;</li>
+      <li><strong>文件</strong>——网格预览已收作品,直接预览插画与小说文本;</li>
+      <li><strong>历史</strong>——下载记录检索与导出;</li>
+      <li><strong>日志</strong>——WebSocket 实时滚动;</li>
+      <li><strong>配置</strong>——表单编辑器 + JSON 视图 + 历史版本回滚。</li>
+    </ul>
+    <p>接口全部有据可查:REST 52 个端点 + <code>logs</code> 实时事件,见<a href="https://github.com/redtidev1918/PixivFlow/blob/master/docs/API.md" target="_blank" rel="noopener">API 文档</a>。</p>
+  </section>
+
+  <section class="card-block" id="s10">
+    <h2 class="section-title">10 · 部署到服务器(Docker)<span class="anchor-hint">#</span></h2>
+    <pre><code>git clone https://github.com/redtidev1918/PixivFlow.git &amp;&amp; cd PixivFlow
+<span class="cmt"># 前端代码需先就位(构建镜像需要 webui-frontend/)</span>
+git clone https://github.com/redtidev1918/pixivflow-webui.git webui-frontend
+cp docker-env.example .env
+<span class="cmt"># 编辑 .env:时区、代理;凭据二选一:</span>
+<span class="cmt">#   a) 宿主机登录后把 refreshToken 写进 config/standalone.config.json</span>
+<span class="cmt">#   b) .env 里 PIXIV_REFRESH_TOKEN=...</span>
+docker compose up -d pixivflow pixivflow-webui
+docker compose logs -f pixivflow</code></pre>
+    <p>得到:一个跑 Cron 的容器 + 一个 3000 端口的 WebUI,共享 <code>./downloads</code> 与 <code>./data</code>。完整的环境变量表、升级方法与排查表见<a href="deployment.html">部署指南</a>。</p>
+    <div class="callout warn"><span class="callout-title">公网暴露</span>3000 端口对公网开放前,务必套反代并加访问认证——WebUI 能操作你的下载器与配置。</div>
+  </section>
+
+  <section class="card-block" id="s11">
+    <h2 class="section-title">11 · 故障排查速查<span class="anchor-hint">#</span></h2>
+    <div class="table-scroll"><table>
+      <thead><tr><th>症状</th><th>第一步</th><th>典型原因</th></tr></thead>
+      <tbody>
+        <tr><td>Authentication Error</td><td><code>pixivflow login</code> 重新登录</td><td>refresh token 过期/无效</td></tr>
+        <tr><td>下载 0 个</td><td><code>pixivflow health</code></td><td>标签拼写不符、条件过严、网络不通</td></tr>
+        <tr><td>大量 429</td><td>加大 <code>requestDelay</code></td><td>请求过密触发限流</td></tr>
+        <tr><td>文件找不到</td><td><code>pixivflow dirs</code></td><td>改过 storage 路径,旧文件未 <code>normalize</code></td></tr>
+        <tr><td>scheduler 不跑</td><td>看 <code>scheduler.enabled</code></td><td>未启用 / cron 写错 / 进程被杀(用 Docker 托管)</td></tr>
+        <tr><td>WebUI 打不开</td><td><code>curl :3000/api/health</code></td><td>端口未映射 / 防火墙 / 服务未起</td></tr>
+        <tr><td>Docker 构建 failed</td><td>检查 <code>webui-frontend/</code></td><td>前端代码未克隆,见部署指南</td></tr>
+        <tr><td>配置改了没生效</td><td>确认改的是当前配置文件</td><td>多配置切换 / Docker 只读挂载不回写</td></tr>
+      </tbody>
+    </table></div>
+    <p>更完整的 Q&amp;A 在<a href="faq.html">常见问题</a>页。</p>
+  </section>
+
+  <section class="card-block" id="s12">
+    <h2 class="section-title">12 · 下一步<span class="anchor-hint">#</span></h2>
+    <div class="card-grid">
+      <a class="card" href="config.html"><div class="card-icon">⚙️</div><h3>配置参考</h3><p>把每个字段吃透,下载策略再上一个台阶。<span class="arrow">进入 →</span></p></a>
+      <a class="card" href="https://github.com/redtidev1918/PixivFlow/blob/master/docs/API.md" target="_blank" rel="noopener"><div class="card-icon">🔌</div><h3>API 文档</h3><p>52 个 REST 端点,做自己的自动化。<span class="arrow">进入 →</span></p></a>
+      <a class="card" href="https://github.com/redtidev1918/PixivFlow/blob/master/docs/ARCHITECTURE.md" target="_blank" rel="noopener"><div class="card-icon">🏗️</div><h3>架构说明</h3><p>想贡献代码?从这里理解工程结构。<span class="arrow">进入 →</span></p></a>
+      <a class="card" href="https://github.com/redtidev1918/PixivFlow/issues" target="_blank" rel="noopener"><div class="card-icon">💬</div><h3>反馈渠道</h3><p>Bug 与建议,欢迎来 Issues。<span class="arrow">前往 →</span></p></a>
+    </div>
+    <p>祝收藏愉快——理性下载,尊重每一位创作者。</p>
+  </section>
+
+<div class="backtop container"><a href="#">↑ 回到顶部</a></div>
+</main>
+
+<footer class="site-footer">
+  <div class="container cols">
+    <div><strong>🐱 PixivFlow</strong><p style="margin:.3rem 0 0">Pixiv 批量下载与定时收集工具<br>CLI 与 WebUI 双形态 · MIT License</p></div>
+    <div><strong>文档</strong><ul>
+      <li><a href="index.html">首页</a></li><li><a href="guide.html">使用教程</a></li><li><a href="config.html">配置参考</a></li>
+      <li><a href="deployment.html">部署指南</a></li><li><a href="faq.html">常见问题</a></li><li><a href="tutorial-full.html">完整教程</a></li>
+    </ul></div>
+    <div><strong>项目</strong><ul>
+      <li><a href="https://github.com/redtidev1918/PixivFlow">GitHub 仓库</a></li>
+      <li><a href="https://github.com/redtidev1918/PixivFlow/releases">Releases</a></li>
+      <li><a href="https://www.npmjs.com/package/pixivflow">npm 包</a></li>
+      <li><a href="https://github.com/redtidev1918/PixivFlow/issues">问题反馈</a></li>
+      <li><a href="https://github.com/redtidev1918/pixivflow-webui">WebUI 前端仓库</a></li>
+    </ul></div>
+  </div>
+  <div class="container foot-note">以 MIT 协议开源 · 请遵守 Pixiv 服务条款理性收藏,尊重创作者版权</div>
+</footer>
+</body>
+</html>

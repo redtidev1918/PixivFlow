@@ -2,94 +2,51 @@ import { Request, Response } from 'express';
 import { logger } from '../../../logger';
 import { downloadTaskManager } from '../../services/DownloadTaskManager';
 import { ErrorCode } from '../../utils/error-codes';
+import {
+  parsePixivUrl,
+  parsedUrlToTargetConfig,
+  ParsedPixivUrl,
+} from '../../../utils/pixiv-url-parser';
 
 /**
- * Parse Pixiv URL to extract work ID and type
- * Supported formats:
- * - https://www.pixiv.net/artworks/123456
- * - https://www.pixiv.net/en/artworks/123456
- * - https://www.pixiv.net/member_illust.php?mode=medium&illust_id=123456
- * - https://www.pixiv.net/novel/show.php?id=123456
- * - https://pixiv.net/artworks/123456
- * - https://pixiv.net/i/123456 (short format)
- * - Direct ID: 123456
+ * Convert a shared-parser result into a target config plus a human label.
+ * Delegates to the SAME parser used by the CLI (`pixivflow download --url`)
+ * so WebUI and CLI accept an identical set of URL forms:
+ *
+ * artworks / en-artworks / i-short / member_illust legacy / novel show / 
+ * novel series / users/{uid} / users/{uid}/artworks|novels/{id} / bare ID.
  */
-function parsePixivUrl(url: string): { id: string; type: 'illustration' | 'novel' } | null {
-  try {
-    const trimmedUrl = url.trim();
-    
-    // If it's just a number, treat as illustration ID
-    if (/^\d+$/.test(trimmedUrl)) {
-      return { id: trimmedUrl, type: 'illustration' };
-    }
+function toTarget(parsed: ParsedPixivUrl) {
+  return parsedUrlToTargetConfig(parsed);
+}
 
-    // Try to parse as URL
-    let urlObj: URL;
-    try {
-      urlObj = new URL(trimmedUrl);
-    } catch {
-      // If URL parsing fails, try adding https://
-      try {
-        urlObj = new URL(`https://${trimmedUrl}`);
-      } catch {
-        // If still fails, it's not a valid URL format
-        return null;
-      }
-    }
-
-    // Check if it's a Pixiv domain (support www.pixiv.net, pixiv.net, etc.)
-    const hostname = urlObj.hostname.toLowerCase();
-    if (!hostname.includes('pixiv.net') && !hostname.includes('pixiv.org')) {
-      return null;
-    }
-
-    // Extract ID from different URL formats
-    const pathname = urlObj.pathname.toLowerCase();
-    const searchParams = urlObj.searchParams;
-
-    // Format: /artworks/123456 or /en/artworks/123456 or /zh-cn/artworks/123456
-    const artworksMatch = pathname.match(/\/artworks\/(\d+)/);
-    if (artworksMatch) {
-      return { id: artworksMatch[1], type: 'illustration' };
-    }
-
-    // Format: /i/123456 (short format for illustrations)
-    const shortIllustMatch = pathname.match(/^\/i\/(\d+)$/);
-    if (shortIllustMatch) {
-      return { id: shortIllustMatch[1], type: 'illustration' };
-    }
-
-    // Format: /member_illust.php?illust_id=123456 or ?mode=medium&illust_id=123456
-    const illustId = searchParams.get('illust_id');
-    if (illustId && /^\d+$/.test(illustId)) {
-      return { id: illustId, type: 'illustration' };
-    }
-
-    // Format: /novel/show.php?id=123456
-    if (pathname.includes('/novel/')) {
-      const novelId = searchParams.get('id');
-      if (novelId && /^\d+$/.test(novelId)) {
-        return { id: novelId, type: 'novel' };
-      }
-    }
-
-    // Format: /users/123456/artworks/789012 (user's artwork page)
-    const userArtworkMatch = pathname.match(/\/users\/\d+\/artworks\/(\d+)/);
-    if (userArtworkMatch) {
-      return { id: userArtworkMatch[1], type: 'illustration' };
-    }
-
-    return null;
-  } catch (error) {
-    logger.error('Failed to parse Pixiv URL', { url, error });
-    return null;
+function describeTarget(target: {
+  type: 'illustration' | 'novel';
+  illustId?: number;
+  novelId?: number;
+  seriesId?: number;
+  userId?: string;
+}): { workId?: string; workType: 'illustration' | 'novel'; label: string } {
+  if (target.userId) {
+    return {
+      workId: target.userId,
+      workType: target.type,
+      label: `user ${target.userId} (${target.type} works)`,
+    };
   }
+  if (target.seriesId) {
+    return {
+      workType: 'novel',
+      label: `novel series ${target.seriesId}`,
+    };
+  }
+  const id = String(target.illustId ?? target.novelId ?? '');
+  return { workId: id || undefined, workType: target.type, label: `${target.type} ${id}` };
 }
 
 /**
  * POST /api/download/url
- * Download from Pixiv URL or ID
- * Body: { url: string }
+ * Download from Pixiv URL or ID. Body: { url: string }
  */
 export async function downloadFromUrl(req: Request, res: Response): Promise<void> {
   try {
@@ -103,17 +60,16 @@ export async function downloadFromUrl(req: Request, res: Response): Promise<void
       return;
     }
 
-    // Parse URL to extract work ID and type
     const parsed = parsePixivUrl(url);
-    if (!parsed) {
+    if (!parsed || (!parsed.id && !parsed.seriesId && !parsed.userId)) {
       res.status(400).json({
         errorCode: ErrorCode.INVALID_REQUEST,
-        message: 'Invalid Pixiv URL or ID. Supported formats: https://www.pixiv.net/artworks/123456 or just 123456',
+        message:
+          'Invalid Pixiv URL or ID. Supported formats include https://www.pixiv.net/artworks/123456, https://www.pixiv.net/novel/series/123456, https://www.pixiv.net/users/123456 or a bare ID such as 123456',
       });
       return;
     }
 
-    // Check if there's already an active task
     if (downloadTaskManager.hasActiveTask()) {
       res.status(409).json({
         errorCode: ErrorCode.DOWNLOAD_TASK_ALREADY_RUNNING,
@@ -123,23 +79,10 @@ export async function downloadFromUrl(req: Request, res: Response): Promise<void
     }
 
     const taskId = `url_task_${Date.now()}`;
+    const target = toTarget(parsed);
+    const tempConfig = { targets: [target] };
+    const info = describeTarget(target);
 
-    // Create a temporary config for this specific download
-    const tempConfig = {
-      targets: [
-        parsed.type === 'illustration'
-          ? {
-              type: 'illustration' as const,
-              illustId: parseInt(parsed.id, 10),
-            }
-          : {
-              type: 'novel' as const,
-              novelId: parseInt(parsed.id, 10),
-            },
-      ],
-    };
-
-    // Start task in background
     downloadTaskManager.startTask(taskId, undefined, tempConfig).catch((error) => {
       logger.error('Background URL download task error', { error, taskId, url, parsed });
     });
@@ -147,9 +90,9 @@ export async function downloadFromUrl(req: Request, res: Response): Promise<void
     res.json({
       success: true,
       taskId,
-      workId: parsed.id,
-      workType: parsed.type,
-      message: `Started downloading ${parsed.type} ${parsed.id}`,
+      ...(info.workId ? { workId: info.workId } : {}),
+      workType: info.workType,
+      message: `Started downloading ${info.label}`,
       errorCode: ErrorCode.DOWNLOAD_START_SUCCESS,
     });
   } catch (error) {
@@ -163,8 +106,7 @@ export async function downloadFromUrl(req: Request, res: Response): Promise<void
 
 /**
  * POST /api/download/batch-url
- * Download multiple URLs at once
- * Body: { urls: string[] }
+ * Download multiple URLs at once. Body: { urls: string[] }
  */
 export async function downloadFromBatchUrls(req: Request, res: Response): Promise<void> {
   try {
@@ -178,12 +120,18 @@ export async function downloadFromBatchUrls(req: Request, res: Response): Promis
       return;
     }
 
-    // Parse all URLs
-    const parsed = urls
-      .map((url) => ({ url, parsed: parsePixivUrl(url) }))
-      .filter((item) => item.parsed !== null);
+    const items = urls.map((url: unknown) => ({
+      url: url as string,
+      parsed:
+        typeof url === 'string'
+          ? parsePixivUrl(url)
+          : null,
+    }));
+    const valid = items.filter(
+      (item) => item.parsed && (item.parsed.id || item.parsed.seriesId || item.parsed.userId)
+    );
 
-    if (parsed.length === 0) {
+    if (valid.length === 0) {
       res.status(400).json({
         errorCode: ErrorCode.INVALID_REQUEST,
         message: 'No valid Pixiv URLs found',
@@ -191,7 +139,6 @@ export async function downloadFromBatchUrls(req: Request, res: Response): Promis
       return;
     }
 
-    // Check if there's already an active task
     if (downloadTaskManager.hasActiveTask()) {
       res.status(409).json({
         errorCode: ErrorCode.DOWNLOAD_TASK_ALREADY_RUNNING,
@@ -201,26 +148,9 @@ export async function downloadFromBatchUrls(req: Request, res: Response): Promis
     }
 
     const taskId = `batch_url_task_${Date.now()}`;
+    const targets = valid.map((item) => toTarget(item.parsed!));
+    const tempConfig = { targets };
 
-    // Create targets for all parsed URLs
-    const targets = parsed.map((item) => {
-      const parsedItem = item.parsed!;
-      return parsedItem.type === 'illustration'
-        ? {
-            type: 'illustration' as const,
-            illustId: parseInt(parsedItem.id, 10),
-          }
-        : {
-            type: 'novel' as const,
-            novelId: parseInt(parsedItem.id, 10),
-          };
-    });
-
-    const tempConfig = {
-      targets,
-    };
-
-    // Start task in background
     downloadTaskManager.startTask(taskId, undefined, tempConfig).catch((error) => {
       logger.error('Background batch URL download task error', { error, taskId, urls });
     });
@@ -229,14 +159,14 @@ export async function downloadFromBatchUrls(req: Request, res: Response): Promis
       success: true,
       taskId,
       totalUrls: urls.length,
-      validUrls: parsed.length,
-      invalidUrls: urls.length - parsed.length,
-      targets: parsed.map((item) => ({
-        url: item.url,
-        workId: item.parsed!.id,
-        workType: item.parsed!.type,
-      })),
-      message: `Started downloading ${parsed.length} works`,
+      validUrls: valid.length,
+      invalidUrls: urls.length - valid.length,
+      targets: valid.map((item) => {
+        const t = toTarget(item.parsed!);
+        const info = describeTarget(t);
+        return { url: item.url, workId: info.workId, workType: info.workType };
+      }),
+      message: `Started downloading ${valid.length} works`,
       errorCode: ErrorCode.DOWNLOAD_START_SUCCESS,
     });
   } catch (error) {
@@ -250,15 +180,13 @@ export async function downloadFromBatchUrls(req: Request, res: Response): Promis
 
 /**
  * POST /api/download/parse-url
- * Parse Pixiv URL without downloading (for preview)
- * Body: { url: string }
+ * Parse Pixiv URL without downloading (for preview). Body: { url: string }
  */
 export async function parseUrl(req: Request, res: Response): Promise<void> {
   try {
     const { url } = req.body;
 
     if (!url || typeof url !== 'string') {
-      // 返回 200 状态码，但 success: false，以便前端统一处理
       res.status(200).json({
         data: {
           success: false,
@@ -270,35 +198,47 @@ export async function parseUrl(req: Request, res: Response): Promise<void> {
     }
 
     const parsed = parsePixivUrl(url);
-    if (!parsed) {
-      // 返回 200 状态码，但 success: false，以便前端统一处理
+    if (!parsed || (!parsed.id && !parsed.seriesId && !parsed.userId)) {
       res.status(200).json({
         data: {
           success: false,
           errorCode: ErrorCode.INVALID_REQUEST,
-          message: 'Invalid Pixiv URL or ID. Supported formats:\n' +
+          message:
+            'Invalid Pixiv URL or ID. Supported formats:\n' +
             '- https://www.pixiv.net/artworks/123456\n' +
             '- https://www.pixiv.net/en/artworks/123456\n' +
             '- https://www.pixiv.net/member_illust.php?illust_id=123456\n' +
+            '- https://www.pixiv.net/i/123456\n' +
             '- https://www.pixiv.net/novel/show.php?id=123456\n' +
-            '- https://pixiv.net/i/123456\n' +
+            '- https://www.pixiv.net/novel/series/123456\n' +
+            '- https://www.pixiv.net/users/123456\n' +
             '- Direct ID: 123456',
         },
       });
       return;
     }
 
+    let target;
+    try {
+      target = toTarget(parsed);
+    } catch (error) {
+      target = undefined;
+      logger.warn('Parsed URL could not be converted to a target', { url, error });
+    }
+    const info = target ? describeTarget(target) : undefined;
+
     res.status(200).json({
       data: {
         success: true,
-        workId: parsed.id,
-        workType: parsed.type,
+        type: parsed.type,
+        ...(info?.workId ? { workId: info.workId } : {}),
+        workType: info?.workType,
+        identifier: info?.label,
         originalUrl: url,
       },
     });
   } catch (error) {
     logger.error('Failed to parse URL', { error });
-    // 返回 200 状态码，但 success: false，以便前端统一处理
     res.status(200).json({
       data: {
         success: false,
@@ -308,4 +248,3 @@ export async function parseUrl(req: Request, res: Response): Promise<void> {
     });
   }
 }
-

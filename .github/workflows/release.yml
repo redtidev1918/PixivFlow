@@ -1,0 +1,38 @@
+name: Publish
+
+# npm Trusted Publishing（OIDC）：无长期 token。
+# 前置条件：npm 包管理页 → Settings → Trusted Publishers 已配置
+#   Provider: GitHub Actions
+#   Owner/User: redtidev1918  Repository: PixivFlow
+#   Workflow filename: release.yml
+# 且 redtidev1918 已是 pixivflow 的 maintainer。
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write # npm OIDC trusted publishing 所必需
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+
+      - run: npm ci
+
+      - run: npm run build --if-present
+
+      - name: Publish to npm
+        run: npm publish --access public

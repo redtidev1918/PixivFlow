@@ -7,20 +7,28 @@
 | 项目 | 状态 | 说明 |
 | --- | --- | --- |
 | npm 包名 `pixivflow` | ✅ 已存在（2.0.0 起） | [npmjs.com/package/pixivflow](https://www.npmjs.com/package/pixivflow) |
-| GitHub Secret `NPM_TOKEN` | ✅ 已配置 | 用于 CI 自动发布 |
+| npm Trusted Publisher | ⚠️ 需在 npm 网页配置 | 包管理页 → Settings → Trusted Publishers 填入 `redtidev1918 / PixivFlow / release.yml`（详见下方） |
 | Pages 部署 | ✅ docs/ → GitHub Pages | push 到 master 且改动 `docs/**` 时自动部署 |
 
-### ⚠️ npm 维护者迁移（重要）
+### ⚠️ npm 维护者归属（必须先完成）
 
-npm 包的历史维护者是旧账号。仓库已迁移至
-[redtidev1918/PixivFlow](https://github.com/redtidev1918/PixivFlow)，建议在
-[npm 包管理页](https://www.npmjs.com/package/pixivflow/access) 完成一次迁移：
+仓库已迁移至 [redtidev1918](https://github.com/redtidev1918/PixivFlow)。npm 的
+Granular token 权限不能超过创建者自身拥有的包权限，因此 **redtidev1918 必须先
+成为 `pixivflow` 的维护者**，其创建的任何 token 才有资格发布。
 
-- 用旧账号登录后执行 `npm owner add redtidev1918 pixivflow`，再
-  `npm owner rm <旧用户名> pixivflow`；
-- 或直接更新仓库 Secret `NPM_TOKEN` 为新账号的 Access Token（Publish 类型）。
+已有待接受的邀请（勿重复 `npm owner add`）：
 
-未完成前，CI 的发布步骤仍会用现有 token 以包的当前维护者身份推送（可正常工作）。
+1. 登录 **redtidev1918** →
+   [pixivflow/access 页](https://www.npmjs.com/package/pixivflow/access)
+   → 接受现有 maintainer 邀请；
+2. 用旧账号验证（预期看到两行，缺一行则邀请未生效）：
+   ```bash
+   npm owner ls pixivflow
+   # zoidberg-xgd <...>
+   # redtidev1918 <...>
+   ```
+
+在此之前，无论哪种发布方式（含 Trusted Publishing / Granular token）都会失败。
 
 ## 标准发版流程
 
@@ -48,14 +56,16 @@ git push --follow-tags
 git push origin v<版本号>
 ```
 
-`.github/workflows/publish-npm.yml` 会自动：
+``.github/workflows/release.yml` 会自动（**Trusted Publishing / OIDC，无
+长期 token**）：
 
-1. Node 18 环境安装依赖并运行测试；
+1. `npm ci` 安装依赖；
 2. `npm run build`（TypeScript 编译 + WebUI 打包）;
-3. 校验目标版本是否已发布（已发布则跳过）；
-4. `npm publish --access public`；
-5. 把 CI 更新的 package.json 版本回写到仓库；
-6. 验证 npm registry 上可见，并输出发布摘要。
+3. `npm publish --access public` —— 以 OIDC 身份验证，npm 侧校验
+   repository 与 workflow filename。
+
+要求：Node ≥ 24（自带支持 OIDC 的 npm 版本），且包管理页已配置好 Trusted
+Publisher（见上文前置条件）。
 
 ### 4. GitHub Release（可选）
 
@@ -73,58 +83,40 @@ npm 发布不会自动创建 GitHub Release。如需附带下载与说明页：
 - [ ] tag 与 package.json 版本一致（工作流会自动对齐并回写）
 
 
-## 🔍 常见发布故障：`PUT ... 404 Not Found`
+## 🔍 常见发布故障
 
-如果 publish 步骤报错：
+### `E404 Not Found (PUT ...)`
 
-```
-npm error 404 Not Found - PUT https://registry.npmjs.org/<包名> - Not found
-```
+token 无权访问此包的伪装错误。按顺序排查：
 
-这不是"包不存在"，而是 **token 缺乏对这个包的写权限**（npm 刻意把
-"无权发布已有包"也伪装成 404，防止枚举）。逐项排查：
+1. redtidev1918 是否已**接受** maintainer 邀请（见上文维护者归属）；
+2. 用旧账号 `npm owner ls pixivflow` 确认列表里有 redtidev1918；
+3. 若用 token 发布：确认该 Granular token 创建时勾选了 pixivflow 范围。
 
-0. **先确认 token 是谁、有没有勾对包**（最快的一步）：
-   在 GitHub Actions 临时加一步或本地运行：
-   ```bash
-   npm whoami --registry=https://registry.npmjs.org/   # 用 NPM_TOKEN 作为凭据
-   # 如果显示 zoidberg-xgd：token 属于旧账号 —— 去
-   #   https://www.npmjs.com/package/pixivflow/access
-   #   确认 redtidev1918 已被接受为 Maintainer（邀请需对方点击 Accept）
-   # 如果显示 redtidev1918：token 是新账号的 —— 检查它是否为
-   #   Granular Token 且在 Packages and scopes 中明确勾选了 pixivflow
-   ```
-1. **Token 类型与 2FA 兼容**：
-   - `E404 Not Found (PUT ...)`：token 无权访问此包（维护者缺失或范围未勾选）；
-   - `E403 Two-factor authentication or granular access token with bypass 2fa
-     enabled is required`：token 不是 Granular 型（或未启用 bypass 2FA）。
-     解决：[Generate New Token](https://www.npmjs.com/settings/~/tokens) →
-     选 **Granular Access Token** → 权限 Read and write → Packages and scopes
-     明确勾选 `pixivflow` → 勾选 bypass 2FA（CI 无法完成交互式验证）；
-     或者用 **Classic Token → Automation** 类型（专为 CI 设计，自带 bypass）。
-2. **维护者身份**：确认发布所用 npm 账号仍拥有 `pixivflow` 的维护者资格；
-   若已把仓库迁移到新 GitHub 账号，可在
-   [包管理页](https://www.npmjs.com/package/pixivflow/access)
-   将新账号加入 Maintainers 并移除旧账号；
-3. **更新仓库 Secret**：替换 `NPM_TOKEN` 为新 token（不要用有过期时间的）；
-4. 手动重跑：Actions → Publish to npm → Run workflow。
+### `E403 ... Two-factor authentication or granular access token with bypass 2fa enabled is required`
 
-### 更优解：OIDC Trusted Publishing（无 token）
+token 身份已被接受，但缺少发布所需的 2FA 免验资格。两种解法：
 
-完成上一步维护者归属后，还可以进一步移除静态 token：
+- **临时（过渡期）**：重新生成 Granular Access Token，创建时勾选
+  **Bypass two-factor authentication = ✓**、Packages and scopes 只选
+  `pixivflow`、Read and write。⚠️ 该选项只能在创建时设置，已建 token 无法
+  补勾；且 npm 计划于 2027 年初取消此类 token 的直接发布能力。
+- **推荐（一劳永逸）**：改用本仓库当前的
+  [Trusted Publishing 流程](#标准发版流程)（release.yml + OIDC，
+  无任何长期 token）。
 
-- npm 包管理页 → Settings → Trusted Publisher 填入：
-  repository `redtidev1918/PixivFlow`、workflow filename
-  `publish-npm.yml`、environment（如未使用则留空）；
-- workflow 已具备 `id-token: write` 权限并使用 setup-node 认证；
-- 注意：npm 要求发布 CLI 版本 ≥ 11.5.1 才支持 OIDC，必要时在工作流中先执行
-  `npm install -g npm@latest`。
+### 前提检查清单（任一失败先补这个）
 
+- [ ] redtidev1918 出现在 `npm owner ls pixivflow` 中；
+- [ ] npm 包页 → Settings → Trusted Publishers 已登记
+      `redtidev1918 / PixivFlow / release.yml`；
+- [ ] package.json 的 `repository.url` 指向当前真实维护仓库
+      （npm trusted publishing 会校验它）。
 
-## 手动发版（备用）
+## 手动触发（备用）
 
-Actions 页面 → **Publish to npm** → Run workflow → 输入目标版本号。
-适用于 tag 被误删、或需要重新触发校验流程的场景。
+Actions 页面 → **Publish** → Run workflow。适用于 tag 被误删、或需要重新
+触发发布流程的场景（对应版本未被占用时才会真正上传）。
 
 ## 用户侧安装
 

@@ -73,7 +73,12 @@ export class SchedulerCommand extends BaseCommand {
         context.logger.info('='.repeat(60));
       };
 
-      const scheduler = new Scheduler(config.scheduler!);
+      const scheduler = new Scheduler(config.scheduler!, database, {
+        beginRun: () => database.getOverviewStats().totalDownloads,
+        endRun: (baseline) =>
+          Promise.resolve(database.getOverviewStats().totalDownloads - baseline),
+        requestCancel: (reason) => downloadManager.cancel(reason),
+      });
       scheduler.start(runJob);
 
       const cleanup = () => {

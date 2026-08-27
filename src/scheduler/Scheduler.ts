@@ -2,7 +2,21 @@ import cron, { ScheduledTask } from 'node-cron';
 
 import { SchedulerConfig } from '../config';
 import { logger } from '../logger';
+import { isOperationCancelled } from '../utils/errors';
 import { Database } from '../storage/Database';
+
+/**
+ * Optional integration hooks allowing the host command to provide real
+ * accounting data and cooperative cancellation to the scheduler.
+ */
+export interface JobTelemetry {
+  /** Called right before each run; returns a baseline (e.g. total downloads so far). */
+  beginRun(): Promise<number> | number;
+  /** Called after a successful/failed-but-not-timed-out run; derives items from the baseline. */
+  endRun(baseline: number): Promise<number> | number;
+  /** Called when the configured timeout fires; should abort the in-flight job. */
+  requestCancel?(reason: string): void;
+}
 
 export class Scheduler {
   private task: ScheduledTask | null = null;
@@ -15,7 +29,8 @@ export class Scheduler {
 
   constructor(
     private readonly config: SchedulerConfig,
-    private readonly database?: Database
+    private readonly database?: Database,
+    private readonly telemetry?: JobTelemetry
   ) {}
 
   public start(job: () => Promise<void>) {
@@ -117,46 +132,83 @@ export class Scheduler {
     let itemsDownloaded = 0;
     let timeoutOccurred = false;
 
+    let baseline = 0;
+    let baselineValid = false;
+    const accountItems = async (): Promise<number> => {
+      if (!this.telemetry || !baselineValid) return 0;
+      try {
+        const after = Number(await this.telemetry.endRun(baseline)) || 0;
+        return after > baseline ? after - baseline : 0;
+      } catch (error) {
+        logger.debug('Telemetry endRun failed; keeping previous item count', { error });
+        return itemsDownloaded;
+      }
+    };
+
+    if (this.telemetry) {
+      try {
+        baseline = Number(await this.telemetry.beginRun()) || 0;
+        baselineValid = true;
+      } catch (error) {
+        logger.warn('Telemetry beginRun failed; item counting disabled for this run', { error });
+      }
+    }
+
     logger.info(`Starting scheduled Pixiv download job (execution #${executionNumber})`);
 
     // Set up timeout if configured
     if (this.config.timeout) {
       this.timeoutHandle = setTimeout(() => {
         if (this.running) {
-          logger.error(`Job execution timeout after ${this.config.timeout}ms`);
+          logger.error(`Job execution timeout after ${this.config.timeout}ms, requesting cancellation`);
           timeoutOccurred = true;
           status = 'timeout';
           errorMessage = `Execution timeout after ${this.config.timeout}ms`;
-          this.running = false;
+          try {
+            this.telemetry?.requestCancel?.('scheduler timeout');
+          } catch (cancelError) {
+            logger.warn('Failed to request job cancellation', { error: cancelError });
+          }
+          // Keep running=true until the aborted job actually settles so the
+          // concurrent-run guard stays correct during the drain window.
         }
       }, this.config.timeout);
     }
 
     try {
-      // Wrap job execution to track items downloaded
       await this.executeWithTracking(job, (count) => {
         itemsDownloaded = count;
       });
 
       if (timeoutOccurred) {
-        // Timeout occurred
         status = 'timeout';
         this.consecutiveFailures++;
       } else {
         status = 'success';
         this.consecutiveFailures = 0;
+        itemsDownloaded = await accountItems();
         logger.info(`Scheduled Pixiv download job completed (execution #${executionNumber})`, {
           itemsDownloaded,
         });
       }
     } catch (error) {
-      status = 'failed';
-      errorMessage = error instanceof Error ? error.message : String(error);
-      this.consecutiveFailures++;
-      logger.error(`Scheduled Pixiv download job failed (execution #${executionNumber})`, {
-        error: errorMessage,
-        consecutiveFailures: this.consecutiveFailures,
-      });
+      if (isOperationCancelled(error)) {
+        // Cancelled via telemetry.requestCancel (scheduler timeout or user).
+        // Keep the timeout accounting intact instead of reporting a failure.
+        if (!timeoutOccurred) {
+          errorMessage = error instanceof Error ? error.message : String(error);
+        }
+        logger.warn('Scheduled job was cancelled', { executionNumber, reason: errorMessage });
+        itemsDownloaded = await accountItems();
+      } else {
+        status = 'failed';
+        errorMessage = error instanceof Error ? error.message : String(error);
+        this.consecutiveFailures++;
+        logger.error(`Scheduled Pixiv download job failed (execution #${executionNumber})`, {
+          error: errorMessage,
+          consecutiveFailures: this.consecutiveFailures,
+        });
+      }
     } finally {
       // Clear timeout
       if (this.timeoutHandle) {
@@ -195,20 +247,15 @@ export class Scheduler {
   }
 
   /**
-   * Execute job with tracking of downloaded items
-   * This is a simplified version - in a real implementation, you might want to
-   * pass a callback to DownloadManager to track items as they're downloaded
+   * Execute the job. Item counting happens via JobTelemetry in executeJob,
+   * which queries a durable baseline before/after the run instead of trying
+   * to intercept individual download events.
    */
   private async executeWithTracking(
     job: () => Promise<void>,
     onItemsDownloaded: (count: number) => void
   ) {
-    // For now, we'll just execute the job
-    // In a more sophisticated implementation, we could track downloads
-    // by intercepting DownloadManager calls or using a shared counter
     await job();
-    // Note: itemsDownloaded tracking would need to be implemented
-    // by modifying DownloadManager to report counts, or by querying the database
   }
 
   public stop() {

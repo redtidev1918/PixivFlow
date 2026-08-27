@@ -84,10 +84,24 @@ npm error 404 Not Found - PUT https://registry.npmjs.org/<包名> - Not found
 这不是"包不存在"，而是 **token 缺乏对这个包的写权限**（npm 刻意把
 "无权发布已有包"也伪装成 404，防止枚举）。逐项排查：
 
-1. **Token 类型**：npm 自 2025 年末起限制 classic token 的发布能力——推荐改用
-   **Granular Access Token**（网站 → Access Tokens → Generate New Token →
-   Granular，权限勾选 Read and write，Packages and scopes 中明确选中
-   `pixivflow`）；
+0. **先确认 token 是谁、有没有勾对包**（最快的一步）：
+   在 GitHub Actions 临时加一步或本地运行：
+   ```bash
+   npm whoami --registry=https://registry.npmjs.org/   # 用 NPM_TOKEN 作为凭据
+   # 如果显示 zoidberg-xgd：token 属于旧账号 —— 去
+   #   https://www.npmjs.com/package/pixivflow/access
+   #   确认 redtidev1918 已被接受为 Maintainer（邀请需对方点击 Accept）
+   # 如果显示 redtidev1918：token 是新账号的 —— 检查它是否为
+   #   Granular Token 且在 Packages and scopes 中明确勾选了 pixivflow
+   ```
+1. **Token 类型与 2FA 兼容**：
+   - `E404 Not Found (PUT ...)`：token 无权访问此包（维护者缺失或范围未勾选）；
+   - `E403 Two-factor authentication or granular access token with bypass 2fa
+     enabled is required`：token 不是 Granular 型（或未启用 bypass 2FA）。
+     解决：[Generate New Token](https://www.npmjs.com/settings/~/tokens) →
+     选 **Granular Access Token** → 权限 Read and write → Packages and scopes
+     明确勾选 `pixivflow` → 勾选 bypass 2FA（CI 无法完成交互式验证）；
+     或者用 **Classic Token → Automation** 类型（专为 CI 设计，自带 bypass）。
 2. **维护者身份**：确认发布所用 npm 账号仍拥有 `pixivflow` 的维护者资格；
    若已把仓库迁移到新 GitHub 账号，可在
    [包管理页](https://www.npmjs.com/package/pixivflow/access)

@@ -72,6 +72,41 @@ npm 发布不会自动创建 GitHub Release。如需附带下载与说明页：
 - [ ] Docker 用户说明若受影响已同步（docker-compose.yml 的镜像标签）
 - [ ] tag 与 package.json 版本一致（工作流会自动对齐并回写）
 
+
+## 🔍 常见发布故障：`PUT ... 404 Not Found`
+
+如果 publish 步骤报错：
+
+```
+npm error 404 Not Found - PUT https://registry.npmjs.org/<包名> - Not found
+```
+
+这不是"包不存在"，而是 **token 缺乏对这个包的写权限**（npm 刻意把
+"无权发布已有包"也伪装成 404，防止枚举）。逐项排查：
+
+1. **Token 类型**：npm 自 2025 年末起限制 classic token 的发布能力——推荐改用
+   **Granular Access Token**（网站 → Access Tokens → Generate New Token →
+   Granular，权限勾选 Read and write，Packages and scopes 中明确选中
+   `pixivflow`）；
+2. **维护者身份**：确认发布所用 npm 账号仍拥有 `pixivflow` 的维护者资格；
+   若已把仓库迁移到新 GitHub 账号，可在
+   [包管理页](https://www.npmjs.com/package/pixivflow/access)
+   将新账号加入 Maintainers 并移除旧账号；
+3. **更新仓库 Secret**：替换 `NPM_TOKEN` 为新 token（不要用有过期时间的）；
+4. 手动重跑：Actions → Publish to npm → Run workflow。
+
+### 更优解：OIDC Trusted Publishing（无 token）
+
+完成上一步维护者归属后，还可以进一步移除静态 token：
+
+- npm 包管理页 → Settings → Trusted Publisher 填入：
+  repository `redtidev1918/PixivFlow`、workflow filename
+  `publish-npm.yml`、environment（如未使用则留空）；
+- workflow 已具备 `id-token: write` 权限并使用 setup-node 认证；
+- 注意：npm 要求发布 CLI 版本 ≥ 11.5.1 才支持 OIDC，必要时在工作流中先执行
+  `npm install -g npm@latest`。
+
+
 ## 手动发版（备用）
 
 Actions 页面 → **Publish to npm** → Run workflow → 输入目标版本号。

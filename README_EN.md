@@ -6,19 +6,19 @@
 
 Make Pixiv artwork collection elegant and efficient | 让 Pixiv 作品收集变得优雅而高效
 
-[![GitHub stars](https://img.shields.io/github/stars/zoidberg-xgd/pixivflow?style=for-the-badge&logo=github)](https://github.com/zoidberg-xgd/pixivflow/stargazers)
-[![GitHub forks](https://img.shields.io/github/forks/zoidberg-xgd/pixivflow?style=for-the-badge&logo=github)](https://github.com/zoidberg-xgd/pixivflow/network/members)
-[![GitHub issues](https://img.shields.io/github/issues/zoidberg-xgd/pixivflow?style=for-the-badge&logo=github)](https://github.com/zoidberg-xgd/pixivflow/issues)
+[![GitHub stars](https://img.shields.io/github/stars/redtidev1918/pixivflow?style=for-the-badge&logo=github)](https://github.com/redtidev1918/PixivFlow/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/redtidev1918/pixivflow?style=for-the-badge&logo=github)](https://github.com/redtidev1918/PixivFlow/network/members)
+[![GitHub issues](https://img.shields.io/github/issues/redtidev1918/pixivflow?style=for-the-badge&logo=github)](https://github.com/redtidev1918/PixivFlow/issues)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg?style=for-the-badge)](https://www.gnu.org/licenses/gpl-3.0)
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.6+-blue.svg?style=flat-square&logo=typescript)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-18%2B%20LTS-green.svg?style=flat-square&logo=node.js)](https://nodejs.org/)
-[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg?style=flat-square)](https://github.com/zoidberg-xgd/pixivflow)
-[![Maintenance](https://img.shields.io/badge/Maintained-yes-green.svg?style=flat-square)](https://github.com/zoidberg-xgd/pixivflow/graphs/commit-activity)
+[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg?style=flat-square)](https://github.com/redtidev1918/PixivFlow)
+[![Maintenance](https://img.shields.io/badge/Maintained-yes-green.svg?style=flat-square)](https://github.com/redtidev1918/PixivFlow/graphs/commit-activity)
 
 [Features](#features) • [Quick Start](#quick-start) • [CLI Commands](#cli-commands) • [Scripts](#script-tools) • [Use Cases](#use-cases)
 
-[📖 Full Documentation](https://zoidberg-xgd.github.io/PixivFlow/) | [English](README_EN.md) | [中文](README.md)
+[📖 Full Documentation](https://redtidev1918.github.io/PixivFlow/) | [English](README_EN.md) | [中文](README.md)
 
 </div>
 
@@ -207,7 +207,7 @@ pixivflow download
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/zoidberg-xgd/pixivflow.git
+git clone https://github.com/redtidev1918/PixivFlow.git
 cd pixivflow
 
 # 2. Install dependencies
@@ -243,7 +243,7 @@ npm install -g pixivflow
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/zoidberg-xgd/pixivflow.git
+git clone https://github.com/redtidev1918/PixivFlow.git
 cd pixivflow
 
 # 2. Install dependencies
@@ -260,7 +260,7 @@ npm install -g .
 
 ```bash
 # Install globally from GitHub repository
-npm install -g git+https://github.com/zoidberg-xgd/pixivflow.git
+npm install -g git+https://github.com/redtidev1918/PixivFlow.git
 
 # Note: After installation, you may need to build
 # Find the global installation directory (usually in npm root -g's parent directory/bin)
@@ -321,7 +321,7 @@ npm run build
 npm install -g .
 
 # Method 2: Update from GitHub
-npm install -g git+https://github.com/zoidberg-xgd/pixivflow.git
+npm install -g git+https://github.com/redtidev1918/PixivFlow.git
 ```
 
 > **💡 Tips**:
@@ -418,7 +418,7 @@ PORT=8080 pixivflow webui
 
 > **Note**:
 > - PixivFlow only provides backend API, does not include frontend interface
-> - **Frontend Project**: Modern React frontend interface, see [pixivflow-webui](https://github.com/zoidberg-xgd/pixivflow-webui)
+> - **Frontend Project**: Modern React frontend interface, see [pixivflow-webui](https://github.com/redtidev1918/PixivFlow-webui)
 > - Can be called directly via API, or connect to other frontend projects
 > - **API Documentation**: See [Usage Guide](docs/USAGE.md) for detailed API usage
 
@@ -1449,13 +1449,13 @@ Having issues? Here are multiple ways to get help:
 
 | Type | Channel | Description |
 |------|---------|-------------|
-| 🐛 **Bug Report** | [GitHub Issues](https://github.com/zoidberg-xgd/pixivflow/issues) | Report issues and bugs |
-| 💡 **Feature Suggestion** | [GitHub Discussions](https://github.com/zoidberg-xgd/pixivflow/discussions) | Propose new feature ideas |
+| 🐛 **Bug Report** | [GitHub Issues](https://github.com/redtidev1918/PixivFlow/issues) | Report issues and bugs |
+| 💡 **Feature Suggestion** | [GitHub Discussions](https://github.com/redtidev1918/PixivFlow/discussions) | Propose new feature ideas |
 | 📖 **Usage Questions** | [View Documentation](docs/README.md) | Read complete documentation |
 | 🔧 **Auto-Fix Issues** | `./scripts/pixiv.sh check --fix` | Auto-fix environment issues ⭐ New |
 | 🔄 **Update & Fix** | `./scripts/pixiv.sh update` | One-click update and fix ⭐ New |
 | ✅ **Environment Check** | `./scripts/pixiv.sh health` | Run health check |
-| 💬 **Community Discussion** | [Discussions](https://github.com/zoidberg-xgd/pixivflow/discussions) | Discuss with other users |
+| 💬 **Community Discussion** | [Discussions](https://github.com/redtidev1918/PixivFlow/discussions) | Discuss with other users |
 | 🔍 **FAQ** | [FAQ](#-faq) | View FAQ |
 
 ### Search Keywords
@@ -1486,10 +1486,10 @@ If you're looking for similar tools, these keywords might help:
 
 ### Project Data
 
-![GitHub repo size](https://img.shields.io/github/repo-size/zoidberg-xgd/pixivflow?style=flat-square)
-![GitHub language count](https://img.shields.io/github/languages/count/zoidberg-xgd/pixivflow?style=flat-square)
-![GitHub top language](https://img.shields.io/github/languages/top/zoidberg-xgd/pixivflow?style=flat-square)
-![GitHub last commit](https://img.shields.io/github/last-commit/zoidberg-xgd/pixivflow?style=flat-square)
+![GitHub repo size](https://img.shields.io/github/repo-size/redtidev1918/pixivflow?style=flat-square)
+![GitHub language count](https://img.shields.io/github/languages/count/redtidev1918/pixivflow?style=flat-square)
+![GitHub top language](https://img.shields.io/github/languages/top/redtidev1918/pixivflow?style=flat-square)
+![GitHub last commit](https://img.shields.io/github/last-commit/redtidev1918/pixivflow?style=flat-square)
 
 </div>
 
@@ -1547,21 +1547,21 @@ If this project helps you, please consider:
 
 ### ⭐ Star This Project
 
-**[⭐ Star on GitHub](https://github.com/zoidberg-xgd/pixivflow)** - Let more people discover PixivFlow!
+**[⭐ Star on GitHub](https://github.com/redtidev1918/PixivFlow)** - Let more people discover PixivFlow!
 
 ---
 
 **Related Links**:
 - [npm Package](https://www.npmjs.com/package/pixivflow)
-- [GitHub Repository](https://github.com/zoidberg-xgd/PixivFlow)
-- [Frontend Project (pixivflow-webui)](https://github.com/zoidberg-xgd/pixivflow-webui)
+- [GitHub Repository](https://github.com/redtidev1918/PixivFlow)
+- [Frontend Project (pixivflow-webui)](https://github.com/redtidev1918/PixivFlow-webui)
 - [Full Documentation](docs/README.md)
-- [Issue Tracker](https://github.com/zoidberg-xgd/PixivFlow/issues)
-- [Discussions](https://github.com/zoidberg-xgd/PixivFlow/discussions)
+- [Issue Tracker](https://github.com/redtidev1918/PixivFlow/issues)
+- [Discussions](https://github.com/redtidev1918/PixivFlow/discussions)
 
 ---
 
-Made with ❤️ by [zoidberg-xgd](https://github.com/zoidberg-xgd)
+Made with ❤️ by [redtidev1918](https://github.com/redtidev1918)
 
 **PixivFlow** - Make Pixiv artwork collection elegant and efficient
 

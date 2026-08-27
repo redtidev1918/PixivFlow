@@ -10,7 +10,7 @@
 
 如果你发现了 Bug 或有功能建议，请：
 
-1. 查看 [GitHub Issues](https://github.com/zoidberg-xgd/pixivflow/issues) 确认问题未被报告
+1. 查看 [GitHub Issues](https://github.com/redtidev1918/PixivFlow/issues) 确认问题未被报告
 2. 创建新的 Issue，详细描述问题或建议
 3. 提供复现步骤（如果是 Bug）
 
@@ -84,8 +84,8 @@ chore: 其他更改
 
 如果你有任何问题，可以：
 
-- 查看 [GitHub Issues](https://github.com/zoidberg-xgd/pixivflow/issues)
-- 查看 [GitHub Discussions](https://github.com/zoidberg-xgd/pixivflow/discussions)
+- 查看 [GitHub Issues](https://github.com/redtidev1918/PixivFlow/issues)
+- 查看 [GitHub Discussions](https://github.com/redtidev1918/PixivFlow/discussions)
 - 创建新的 Issue 提问
 
 ---
@@ -96,5 +96,5 @@ chore: 其他更改
 
 ---
 
-Made with ❤️ by [zoidberg-xgd](https://github.com/zoidberg-xgd)
+Made with ❤️ by [redtidev1918](https://github.com/redtidev1918)
 

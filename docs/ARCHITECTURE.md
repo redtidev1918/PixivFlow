@@ -58,7 +58,7 @@ pixivflow webui                    # 纯 API 模式，不服务静态文件
 
 ### 前端项目（独立仓库）
 
-前端是一个独立的 React 项目，已分离到独立仓库：[**pixivflow-webui**](https://github.com/zoidberg-xgd/pixivflow-webui)
+前端是一个独立的 React 项目，已分离到独立仓库：[**pixivflow-webui**](https://github.com/redtidev1918/PixivFlow-webui)
 
 **特点：**
 - 独立的项目，有自己的 `package.json`
@@ -69,7 +69,7 @@ pixivflow webui                    # 纯 API 模式，不服务静态文件
 **开发方式：**
 ```bash
 # 克隆前端仓库
-git clone https://github.com/zoidberg-xgd/pixivflow-webui.git
+git clone https://github.com/redtidev1918/PixivFlow-webui.git
 cd pixivflow-webui
 
 npm install
@@ -78,7 +78,7 @@ npm run build  # 构建生产版本
 ```
 
 **部署方式：**
-1. 克隆前端仓库：`git clone https://github.com/zoidberg-xgd/pixivflow-webui.git`
+1. 克隆前端仓库：`git clone https://github.com/redtidev1918/PixivFlow-webui.git`
 2. 构建前端：`cd pixivflow-webui && npm install && npm run build`
 3. 将构建产物部署到静态文件服务器（如 Nginx、CDN 等）
 4. 配置反向代理，将 `/api/*` 请求代理到后端服务器
@@ -89,7 +89,7 @@ npm run build  # 构建生产版本
 
 ```bash
 # 克隆并构建前端
-git clone https://github.com/zoidberg-xgd/pixivflow-webui.git
+git clone https://github.com/redtidev1918/PixivFlow-webui.git
 cd pixivflow-webui && npm install && npm run build
 
 # 启动后端并指定静态文件路径
@@ -110,7 +110,7 @@ pixivflow webui --host 0.0.0.0 --port 3000
 **前端部署：**
 ```bash
 # 克隆并构建前端
-git clone https://github.com/zoidberg-xgd/pixivflow-webui.git
+git clone https://github.com/redtidev1918/PixivFlow-webui.git
 cd pixivflow-webui
 npm install
 npm run build
@@ -275,7 +275,7 @@ pixivflow webui                    # Pure API mode, no static files
 
 ### Frontend Project (Separate Repository)
 
-The frontend is an independent React project located in a separate repository: [**pixivflow-webui**](https://github.com/zoidberg-xgd/pixivflow-webui)
+The frontend is an independent React project located in a separate repository: [**pixivflow-webui**](https://github.com/redtidev1918/PixivFlow-webui)
 
 **Features:**
 - Independent project with its own `package.json`
@@ -286,7 +286,7 @@ The frontend is an independent React project located in a separate repository: [
 **Development:**
 ```bash
 # Clone frontend repository
-git clone https://github.com/zoidberg-xgd/pixivflow-webui.git
+git clone https://github.com/redtidev1918/PixivFlow-webui.git
 cd pixivflow-webui
 
 npm install
@@ -295,7 +295,7 @@ npm run build  # Build production version
 ```
 
 **Deployment:**
-1. Clone frontend repository: `git clone https://github.com/zoidberg-xgd/pixivflow-webui.git`
+1. Clone frontend repository: `git clone https://github.com/redtidev1918/PixivFlow-webui.git`
 2. Build frontend: `cd pixivflow-webui && npm install && npm run build`
 3. Deploy build artifacts to static file server (e.g., Nginx, CDN)
 4. Configure reverse proxy to forward `/api/*` requests to backend server
@@ -306,7 +306,7 @@ npm run build  # Build production version
 
 ```bash
 # Clone and build frontend
-git clone https://github.com/zoidberg-xgd/pixivflow-webui.git
+git clone https://github.com/redtidev1918/PixivFlow-webui.git
 cd pixivflow-webui && npm install && npm run build
 
 # Start backend with static file path
@@ -327,7 +327,7 @@ pixivflow webui --host 0.0.0.0 --port 3000
 **Frontend Deployment:**
 ```bash
 # Clone and build frontend
-git clone https://github.com/zoidberg-xgd/pixivflow-webui.git
+git clone https://github.com/redtidev1918/PixivFlow-webui.git
 cd pixivflow-webui
 npm install
 npm run build

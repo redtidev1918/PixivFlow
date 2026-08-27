@@ -146,9 +146,9 @@
 
 ## 链接
 
-- [GitHub Releases](https://github.com/zoidberg-xgd/PixivFlow/releases)
+- [GitHub Releases](https://github.com/redtidev1918/PixivFlow/releases)
 - [完整文档](../README.md)
 
 ---
 
-**注意**：详细的变更记录请查看 [GitHub Releases](https://github.com/zoidberg-xgd/PixivFlow/releases)。
+**注意**：详细的变更记录请查看 [GitHub Releases](https://github.com/redtidev1918/PixivFlow/releases)。

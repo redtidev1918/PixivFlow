@@ -142,4 +142,4 @@ Configuration validation failed in /path/to/config.json:
 
 ---
 
-**完整更新内容请查看**: [GitHub Releases](https://github.com/zoidberg-xgd/PixivFlow/releases/tag/v2.0.39)
+**完整更新内容请查看**: [GitHub Releases](https://github.com/redtidev1918/PixivFlow/releases/tag/v2.0.39)

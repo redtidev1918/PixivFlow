@@ -8,21 +8,21 @@
 
 > 🎯 **PixivFlow** 是一个专业的 Pixiv 批量下载工具，支持插画和小说下载、定时任务、Docker 部署。适用于个人用户和服务器自动化场景。
 
-> 📖 **[查看完整教程文档](https://zoidberg-xgd.github.io/PixivFlow/)** - 包含详细的使用教程、配置说明、部署指南和最佳实践
+> 📖 **[查看完整教程文档](https://redtidev1918.github.io/PixivFlow/)** - 包含详细的使用教程、配置说明、部署指南和最佳实践
 
 <!-- SEO Keywords: pixiv downloader, pixiv批量下载, pixiv自动化下载, pixiv批量下载工具, pixiv下载器, pixiv artwork downloader, pixiv novel downloader, pixiv cli tool, pixiv scheduler, pixiv automation, pixiv批量下载脚本, pixiv下载工具, pixiv作品下载, pixiv插画下载, pixiv小说下载, pixiv定时下载, pixiv爬虫, pixiv api client, pixiv命令行工具, pixiv服务器部署, pixiv docker, pixiv webui, pixiv管理界面 -->
 
-[![GitHub stars](https://img.shields.io/github/stars/zoidberg-xgd/pixivflow?style=for-the-badge&logo=github)](https://github.com/zoidberg-xgd/pixivflow/stargazers)
-[![GitHub forks](https://img.shields.io/github/forks/zoidberg-xgd/pixivflow?style=for-the-badge&logo=github)](https://github.com/zoidberg-xgd/pixivflow/network/members)
-[![GitHub issues](https://img.shields.io/github/issues/zoidberg-xgd/pixivflow?style=for-the-badge&logo=github)](https://github.com/zoidberg-xgd/pixivflow/issues)
+[![GitHub stars](https://img.shields.io/github/stars/redtidev1918/pixivflow?style=for-the-badge&logo=github)](https://github.com/redtidev1918/PixivFlow/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/redtidev1918/pixivflow?style=for-the-badge&logo=github)](https://github.com/redtidev1918/PixivFlow/network/members)
+[![GitHub issues](https://img.shields.io/github/issues/redtidev1918/pixivflow?style=for-the-badge&logo=github)](https://github.com/redtidev1918/PixivFlow/issues)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg?style=for-the-badge)](https://www.gnu.org/licenses/gpl-3.0)
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.6+-blue.svg?style=flat-square&logo=typescript)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-18%2B%20LTS-green.svg?style=flat-square&logo=node.js)](https://nodejs.org/)
-[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg?style=flat-square)](https://github.com/zoidberg-xgd/pixivflow)
-[![Maintenance](https://img.shields.io/badge/Maintained-yes-green.svg?style=for-the-badge)](https://github.com/zoidberg-xgd/pixivflow/graphs/commit-activity)
+[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg?style=flat-square)](https://github.com/redtidev1918/PixivFlow)
+[![Maintenance](https://img.shields.io/badge/Maintained-yes-green.svg?style=for-the-badge)](https://github.com/redtidev1918/PixivFlow/graphs/commit-activity)
 
-[📖 完整教程文档](https://zoidberg-xgd.github.io/PixivFlow/) | [English](README_EN.md) | [中文](README.md)
+[📖 完整教程文档](https://redtidev1918.github.io/PixivFlow/) | [English](README_EN.md) | [中文](README.md)
 
 </div>
 
@@ -149,7 +149,7 @@ pixivflow download
 
 ```bash
 # 1. 克隆仓库
-git clone https://github.com/zoidberg-xgd/pixivflow.git
+git clone https://github.com/redtidev1918/PixivFlow.git
 cd pixivflow
 
 # 2. 安装依赖
@@ -200,7 +200,7 @@ PORT=8080 pixivflow webui
 
 > **说明**：
 > - PixivFlow 只提供后端 API，不包含前端界面
-> - **前端项目**：现代化的 React 前端界面请查看 [pixivflow-webui](https://github.com/zoidberg-xgd/pixivflow-webui)
+> - **前端项目**：现代化的 React 前端界面请查看 [pixivflow-webui](https://github.com/redtidev1918/PixivFlow-webui)
 > - 可以通过 API 直接调用，或连接其他前端项目
 > - **API 文档**：查看 [使用指南](docs/USAGE.md) 了解详细的 API 使用方法
 
@@ -514,11 +514,11 @@ pixivflow config edit
 
 | 类型 | 渠道 | 说明 |
 |------|------|------|
-| 🐛 **Bug 反馈** | [GitHub Issues](https://github.com/zoidberg-xgd/pixivflow/issues) | 报告问题和错误 |
-| 💡 **功能建议** | [GitHub Discussions](https://github.com/zoidberg-xgd/pixivflow/discussions) | 提出新功能想法 |
+| 🐛 **Bug 反馈** | [GitHub Issues](https://github.com/redtidev1918/PixivFlow/issues) | 报告问题和错误 |
+| 💡 **功能建议** | [GitHub Discussions](https://github.com/redtidev1918/PixivFlow/discussions) | 提出新功能想法 |
 | 📖 **使用问题** | [查看文档](docs/README.md) | 查阅完整文档 |
 | ✅ **环境检查** | `./scripts/pixiv.sh health` | 运行健康检查 |
-| 💬 **社区交流** | [Discussions](https://github.com/zoidberg-xgd/pixivflow/discussions) | 与其他用户交流 |
+| 💬 **社区交流** | [Discussions](https://github.com/redtidev1918/PixivFlow/discussions) | 与其他用户交流 |
 
 **提问前请先**：
 1. 🔍 查看 [常见问题](#常见问题) 章节
@@ -535,10 +535,10 @@ pixivflow config edit
 
 ### 项目数据
 
-![GitHub repo size](https://img.shields.io/github/repo-size/zoidberg-xgd/pixivflow?style=flat-square)
-![GitHub language count](https://img.shields.io/github/languages/count/zoidberg-xgd/pixivflow?style=flat-square)
-![GitHub top language](https://img.shields.io/github/languages/top/zoidberg-xgd/pixivflow?style=flat-square)
-![GitHub last commit](https://img.shields.io/github/last-commit/zoidberg-xgd/pixivflow?style=flat-square)
+![GitHub repo size](https://img.shields.io/github/repo-size/redtidev1918/pixivflow?style=flat-square)
+![GitHub language count](https://img.shields.io/github/languages/count/redtidev1918/pixivflow?style=flat-square)
+![GitHub top language](https://img.shields.io/github/languages/top/redtidev1918/pixivflow?style=flat-square)
+![GitHub last commit](https://img.shields.io/github/last-commit/redtidev1918/pixivflow?style=flat-square)
 
 </div>
 
@@ -599,11 +599,11 @@ pixivflow config edit
 
 ### ⭐ Star 这个项目
 
-**[⭐ Star on GitHub](https://github.com/zoidberg-xgd/pixivflow)** - 让更多人发现 PixivFlow！
+**[⭐ Star on GitHub](https://github.com/redtidev1918/PixivFlow)** - 让更多人发现 PixivFlow！
 
 ---
 
-Made with ❤️ by [zoidberg-xgd](https://github.com/zoidberg-xgd)
+Made with ❤️ by [redtidev1918](https://github.com/redtidev1918)
 
 **PixivFlow** - 让 Pixiv 作品收集变得优雅而高效
 
@@ -613,10 +613,10 @@ Made with ❤️ by [zoidberg-xgd](https://github.com/zoidberg-xgd)
 
 **相关链接**：
 - [npm 包](https://www.npmjs.com/package/pixivflow)
-- [GitHub 仓库](https://github.com/zoidberg-xgd/PixivFlow)
-- [前端项目 (pixivflow-webui)](https://github.com/zoidberg-xgd/pixivflow-webui)
+- [GitHub 仓库](https://github.com/redtidev1918/PixivFlow)
+- [前端项目 (pixivflow-webui)](https://github.com/redtidev1918/PixivFlow-webui)
 - [完整文档](docs/README.md)
-- [问题反馈](https://github.com/zoidberg-xgd/PixivFlow/issues)
-- [讨论区](https://github.com/zoidberg-xgd/PixivFlow/discussions)
+- [问题反馈](https://github.com/redtidev1918/PixivFlow/issues)
+- [讨论区](https://github.com/redtidev1918/PixivFlow/discussions)
 
 </div>

@@ -70,12 +70,28 @@ export class PixivAuth {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), this.network.timeoutMs);
         try {
-          const response = await fetch(url, {
+          // Route the token refresh through the configured proxy when enabled:
+          // native fetch ignores HTTP(S)_PROXY env, so a plain fetch here would
+          // bypass the proxy on servers that can only reach Pixiv through it.
+          const fetchOptions: Record<string, unknown> = {
             method: 'POST',
             body,
             headers,
             signal: controller.signal,
-          });
+          };
+          const proxy = this.network?.proxy;
+          if (proxy?.enabled && proxy.host && proxy.port) {
+            const { ProxyAgent } = require('undici');
+            const proto = (proxy.protocol || 'http').toLowerCase();
+            const auth =
+              proxy.username && proxy.password
+                ? `${encodeURIComponent(proxy.username)}:${encodeURIComponent(proxy.password)}@`
+                : '';
+            fetchOptions.dispatcher = new ProxyAgent(
+              `${proto}://${auth}${proxy.host}:${proxy.port}`
+            );
+          }
+          const response = await fetch(url, fetchOptions as Parameters<typeof fetch>[1]);
 
           if (!response.ok) {
             // Check for authentication errors (401, 403) which indicate refresh token is invalid/expired

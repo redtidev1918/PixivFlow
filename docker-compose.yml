@@ -127,6 +127,9 @@ services:
       # 可选:WebUI Basic Auth(公网暴露时强烈建议开启;两变量都设置才生效)
       # - WEBUI_USERNAME=admin
       # - WEBUI_PASSWORD=changeme
+      # 可选:WebUI 原生 HTTPS(证书需挂载进容器,如 - ./certs:/app/certs:ro)
+      # - WEBUI_TLS_CERT=/app/certs/fullchain.pem
+      # - WEBUI_TLS_KEY=/app/certs/privkey.pem
       # Docker 容器内路径配置（必须使用容器内路径）
       - PIXIV_DATABASE_PATH=${PIXIV_DATABASE_PATH:-/app/data/pixiv-downloader.db}
       - PIXIV_DOWNLOAD_DIR=${PIXIV_DOWNLOAD_DIR:-/app/downloads}

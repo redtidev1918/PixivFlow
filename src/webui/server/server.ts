@@ -27,6 +27,8 @@
 
 import express, { Express } from 'express';
 import { createServer } from 'http';
+import { createServer as createHttpsServer } from 'https';
+import { readFileSync } from 'fs';
 import { Server as SocketServer } from 'socket.io';
 import path from 'path';
 import { logger } from '../../logger';
@@ -56,6 +58,7 @@ export class WebUIServer {
   private host: string;
   private basicAuthEnabled = false;
   private basicAuth?: { username: string; password: string };
+  private tlsScheme: 'http' | 'https' = 'http';
 
   public getPort(): number {
     return this.port;
@@ -64,6 +67,14 @@ export class WebUIServer {
   constructor(options: WebUIServerOptions = {}) {
     this.port = options.port || (process.env.PORT ? parseInt(process.env.PORT, 10) : PORTS.PROD_API);
     this.host = options.host || 'localhost';
+
+    // TLS opt-in via WEBUI_TLS_CERT / WEBUI_TLS_KEY (both required)
+    const tlsCertPath = process.env.WEBUI_TLS_CERT;
+    const tlsKeyPath = process.env.WEBUI_TLS_KEY;
+    if (tlsCertPath && tlsKeyPath) {
+      options = { ...options, tls: { certPath: tlsCertPath, keyPath: tlsKeyPath } };
+      this.tlsScheme = 'https';
+    }
 
     // Initialize Express app
     this.app = express();
@@ -102,8 +113,29 @@ export class WebUIServer {
     // Error handler (must be last)
     this.app.use(errorHandler);
 
-    // Create HTTP server
-    this.server = createServer(this.app);
+    // Create HTTP or HTTPS server (TLS opt-in via WEBUI_TLS_CERT/KEY)
+    if (options.tls) {
+      try {
+        this.server = createHttpsServer(
+          {
+            cert: readFileSync(options.tls.certPath),
+            key: readFileSync(options.tls.keyPath),
+          },
+          this.app
+        );
+        logger.info('WebUI TLS enabled', {
+          certPath: options.tls.certPath,
+          keyPath: options.tls.keyPath,
+        });
+      } catch (error) {
+        logServerError(
+          `Failed to load TLS certificate/key: ${error instanceof Error ? error.message : String(error)}`
+        );
+        throw error;
+      }
+    } else {
+      this.server = createServer(this.app);
+    }
 
     // Initialize Socket.IO
     this.io = new SocketServer(this.server, {
@@ -162,7 +194,7 @@ export class WebUIServer {
 
       // Try to start on the resolved port
       this.server.listen(actualPort, this.host, () => {
-        logServerStart(this.host, actualPort);
+        logServerStart(this.host, actualPort, this.tlsScheme);
         resolve(actualPort);
       });
 

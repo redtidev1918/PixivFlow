@@ -5,6 +5,13 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [2.2.1] - 2026-08-27
+
+### 修复
+- 🐛 健康检查的连通性探测现在遵循 `network.proxy`（此前用裸 `https.get`，代理环境下恒为误报 Timeout）
+- 🐛 登录令牌刷新（AuthClient）同样改走代理 dispatcher，修复代理服务器上 token 维护失败的问题
+
+---
 ## [2.2.0] - 2026-08-27
 
 ### 新增

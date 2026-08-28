@@ -137,8 +137,8 @@ pixivflow webui     # 监听 3000 端口,浏览器打开 http://localhost:3000
 | 命令 | 说明 |
 | --- | --- |
 | `login [-u -p]` | 交互式登录(浏览器授权,也可带账号参数) |
-| `login-headless -u -p` | 无图形界面环境登录,两参数必填 |
-| `refresh <token>` | 注入已有 refresh token(别名 login-token / set-token) |
+| `login-headless -u -p` | 无图形界面环境登录;`--password-stdin` 可让密码经 stdin 传入 |
+| `refresh <token>` | 注入已有 refresh token(别名 login-token / set-token);传 `-` 改从 stdin 读取 |
 
 ### 下载
 

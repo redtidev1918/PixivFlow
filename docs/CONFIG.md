@@ -174,7 +174,7 @@ pixivflow setup
 环境变量注入规则(容器部署常用):设置 `ALL_PROXY` / `all_proxy` >
 `HTTPS_PROXY` > `HTTP_PROXY`(取第一个非空值)且配置未显式启用代理时,
 程序自动解析并启用该代理,支持 http 与 socks 协议。详见
-[DOCKER · 环境变量](DOCKER.md#环境变量参考)。
+[DOCKER · 环境变量](DOCKER.md#环境变量参考)。健康检查的连通性探测与登录令牌刷新(2.2.1 起)同样遵循该代理。
 
 ## download 性能与稳定性调优
 

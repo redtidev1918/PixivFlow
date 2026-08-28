@@ -5,6 +5,12 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [2.4.0] - 2026-08-27
+
+### 新增
+- ✨ WebUI 可选 HTTP Basic Auth：同时设置 `WEBUI_USERNAME` / `WEBUI_PASSWORD` 后，静态页、API 与 Socket.IO 握手全部需要认证（`/api/health`、`/health` 例外）；未设置则维持原行为。公网部署不再裸奔
+
+---
 ## [2.3.0] - 2026-08-27
 
 ### 新增

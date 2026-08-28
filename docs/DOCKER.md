@@ -139,6 +139,7 @@ ports:
 要点：
 
 - `WEBUI_PORT` 只控制宿主机一侧映射。容器内监听端口由 compose 固定为 3000（`PORT`、`HOST`、`STATIC_PATH` 三个变量同样是固定值，见环境变量参考表），要改容器内端口需自行编辑 `docker-compose.yml` 的 `environment` 段。
+- **公网访问务必加认证**：在 `.env` 中同时设置 `WEBUI_USERNAME` 与 `WEBUI_PASSWORD`，即为 WebUI 全站（静态页、API、Socket.IO）启用 HTTP Basic Auth（`/api/health` 除外）；或在反向代理层做认证 + TLS。两者都不做时，任何能访问该端口的人都可以读取配置中的 Pixiv 凭据并操控下载。
 - 前端静态资源已构建进镜像内的 `/app/webui-frontend/dist`，无需额外挂载。
 - 配置只读挂载带来的限制见「服务组成」一节。
 
@@ -207,6 +208,7 @@ pixivflow refresh <refresh_token> --config "$(pwd)/config/standalone.config.json
 | --- | --- | --- | --- |
 | `TZ` | .env → 插值 | 容器时区 | `Asia/Shanghai` |
 | `WEBUI_PORT` | .env → 插值 | WebUI 宿主机映射端口 | `3000` |
+| `WEBUI_USERNAME` / `WEBUI_PASSWORD` | — | 两者同时设置即启用 WebUI Basic Auth（全站含 Socket.IO；`/api/health` 除外） |
 | `PORT` | compose 固定 | WebUI 容器内监听端口 | `3000` |
 | `HOST` | compose 固定 | WebUI 容器内监听地址 | `0.0.0.0` |
 | `STATIC_PATH` | compose 固定 | 前端静态资源目录（容器内） | `/app/webui-frontend/dist` |

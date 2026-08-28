@@ -36,6 +36,7 @@ import { loadConfig, getConfigPath } from '../../config';
 // WebSocket handlers
 import { setupLogStream } from '../websocket/LogStream';
 import { setupDownloadStatus } from '../websocket/DownloadStatus';
+import { createBasicAuthMiddleware, verifyBasicAuth } from './auth-middleware';
 
 // Server setup modules
 import { setupMiddleware, errorHandler } from './server-middleware';
@@ -53,6 +54,8 @@ export class WebUIServer {
   private io: SocketServer;
   private port: number;
   private host: string;
+  private basicAuthEnabled = false;
+  private basicAuth?: { username: string; password: string };
 
   public getPort(): number {
     return this.port;
@@ -67,6 +70,28 @@ export class WebUIServer {
 
     // Setup middleware
     setupMiddleware(this.app, options);
+
+    // Optional HTTP Basic Auth (opt-in via WEBUI_USERNAME + WEBUI_PASSWORD).
+    // Covers API routes, static files and Socket.IO handshakes; health checks
+    // stay open so container healthchecks keep working.
+    const authUser = process.env.WEBUI_USERNAME;
+    const authPass = process.env.WEBUI_PASSWORD;
+    if (authUser && authPass) {
+      this.basicAuthEnabled = true;
+      this.basicAuth = { username: authUser, password: authPass };
+      logger.info('WebUI basic auth enabled');
+      this.app.use(
+        createBasicAuthMiddleware({
+          username: authUser,
+          password: authPass,
+          exemptPaths: ['/api/health', '/health'],
+        })
+      );
+    } else {
+      logger.warn(
+        'WebUI authentication is DISABLED (set WEBUI_USERNAME and WEBUI_PASSWORD to enable basic auth)'
+      );
+    }
 
     // Setup API routes
     setupRoutes(this.app);
@@ -91,6 +116,24 @@ export class WebUIServer {
     // Setup WebSocket handlers
     setupLogStream(this.io);
     setupDownloadStatus(this.io);
+
+    // Socket.IO handshake guard (mirrors the HTTP basic auth above)
+    if (this.basicAuth) {
+      const ba = this.basicAuth;
+      this.io.use((socket, next) => {
+        if (
+          verifyBasicAuth(
+            socket.handshake.headers.authorization,
+            ba.username,
+            ba.password
+          )
+        ) {
+          next();
+        } else {
+          next(new Error('WebUI authentication required'));
+        }
+      });
+    }
   }
 
   public async start(): Promise<number> {

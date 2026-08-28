@@ -31,7 +31,9 @@ curl http://localhost:3000/api/health
 
 ## 鉴权说明
 
-**REST API 本身没有鉴权**:路由组未挂载任何登录态、API Key 或 JWT 中间件,凡是能访问到端口的客户端都可以调用。`/api/auth/*` 一组管理的是 **Pixiv 账号的 OAuth 令牌**(刷新令牌的获取/验证/清除),与保护本 API 无关。部署时请依赖端口绑定(本地默认 `localhost`;Docker 镜像内为 `0.0.0.0`,由端口映射决定暴露范围)做访问控制,CORS 默认放开(`origin: '*'`)。
+**REST API 默认没有鉴权**:路由组未挂载任何登录态、API Key 或 JWT 中间件,凡是能访问到端口的客户端都可以调用。`/api/auth/*` 一组管理的是 **Pixiv 账号的 OAuth 令牌**(刷新令牌的获取/验证/清除),与保护本 API 无关。部署时请依赖端口绑定(本地默认 `localhost`;Docker 镜像内为 `0.0.0.0`,由端口映射决定暴露范围)做访问控制,CORS 默认放开(`origin: '*'`)。
+
+**可选 Basic Auth(2.4.0 起)**:同时设置环境变量 `WEBUI_USERNAME` 与 `WEBUI_PASSWORD` 后,除 `/api/health`、`/health` 外的所有请求(含静态页与 Socket.IO 握手)都要求 HTTP Basic 认证。未设置则维持无鉴权行为。公网部署仍建议叠加反向代理与 TLS。
 
 Pixiv 登录流程涉及的端点:`GET /api/auth/status` 检查令牌是否有效 → `POST /api/auth/login`(浏览器授权)或 `POST /api/auth/login-with-token`(已有刷新令牌)→ 之后可随时 `POST /api/auth/refresh` 刷新、`POST /api/auth/logout` 清除。
 

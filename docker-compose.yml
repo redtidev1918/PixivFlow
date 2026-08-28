@@ -124,6 +124,9 @@ services:
       - PORT=3000
       - HOST=0.0.0.0
       - STATIC_PATH=/app/webui-frontend/dist
+      # 可选:WebUI Basic Auth(公网暴露时强烈建议开启;两变量都设置才生效)
+      # - WEBUI_USERNAME=admin
+      # - WEBUI_PASSWORD=changeme
       # Docker 容器内路径配置（必须使用容器内路径）
       - PIXIV_DATABASE_PATH=${PIXIV_DATABASE_PATH:-/app/data/pixiv-downloader.db}
       - PIXIV_DOWNLOAD_DIR=${PIXIV_DOWNLOAD_DIR:-/app/downloads}

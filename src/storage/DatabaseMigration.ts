@@ -112,6 +112,21 @@ export class DatabaseMigration {
         logger.warn('Failed to add is_active column (may already exist)', { error });
       }
 
+      // Scope scheduler counters/history by plan while keeping old rows valid.
+      try {
+        const tableInfo = this.db.prepare(`PRAGMA table_info(scheduler_executions)`).all() as Array<{ name: string }>;
+        if (!tableInfo.some(col => col.name === 'schedule_id')) {
+          this.db.prepare(
+            `ALTER TABLE scheduler_executions ADD COLUMN schedule_id TEXT NOT NULL DEFAULT 'default'`
+          ).run();
+        }
+        this.db.prepare(
+          `CREATE INDEX IF NOT EXISTS idx_scheduler_executions_schedule ON scheduler_executions(schedule_id, execution_number)`
+        ).run();
+      } catch (error) {
+        logger.warn('Failed to add scheduler plan scope (may already exist)', { error });
+      }
+
       // Add task_history table if it doesn't exist (for backward compatibility)
       try {
         const tableInfo = this.db.prepare(`PRAGMA table_info(task_history)`).all() as Array<{ name: string }>;
@@ -131,7 +146,6 @@ export class DatabaseMigration {
     }
   }
 }
-
 
 
 

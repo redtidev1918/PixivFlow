@@ -39,6 +39,7 @@ export interface SchedulerExecutionRecord {
   duration: number | null;
   errorMessage: string | null;
   itemsDownloaded: number;
+  scheduleId: string;
 }
 
 export class Database implements IDatabase {
@@ -59,7 +60,11 @@ export class Database implements IDatabase {
       this.db.pragma('journal_mode = WAL');
       // Optimize for read-heavy workloads
       this.db.pragma('synchronous = NORMAL');
-      this.db.pragma('cache_size = -64000'); // 64MB cache
+      const configuredCacheKb = Number.parseInt(process.env.PIXIV_DB_CACHE_KB || '8192', 10);
+      const cacheKb = Number.isFinite(configuredCacheKb)
+        ? Math.min(Math.max(configuredCacheKb, 1024), 65536)
+        : 8192;
+      this.db.pragma(`cache_size = -${cacheKb}`);
 
       // Initialize repositories
       this.migration = new DatabaseMigration(this.db);
@@ -170,8 +175,8 @@ export class Database implements IDatabase {
   }
 
   // Scheduler management - delegated to SchedulerRepository
-  public getNextExecutionNumber(): number {
-    return this.schedulerRepo.getNextExecutionNumber();
+  public getNextExecutionNumber(scheduleId?: string): number {
+    return this.schedulerRepo.getNextExecutionNumber(scheduleId);
   }
 
   public logSchedulerExecution(
@@ -181,7 +186,8 @@ export class Database implements IDatabase {
     endTime: Date | null,
     durationMs: number | null,
     errorMessage: string | null,
-    itemsDownloaded: number = 0
+    itemsDownloaded: number = 0,
+    scheduleId?: string
   ): void {
     this.schedulerRepo.logSchedulerExecution(
       executionNumber,
@@ -190,7 +196,8 @@ export class Database implements IDatabase {
       endTime,
       durationMs,
       errorMessage,
-      itemsDownloaded
+      itemsDownloaded,
+      scheduleId
     );
   }
 
@@ -214,7 +221,7 @@ export class Database implements IDatabase {
     );
   }
 
-  public getSchedulerStats(): {
+  public getSchedulerStats(scheduleId?: string): {
     totalExecutions: number;
     successfulExecutions: number;
     failedExecutions: number;
@@ -222,7 +229,7 @@ export class Database implements IDatabase {
     averageDuration: number | null;
     totalItemsDownloaded: number;
   } {
-    return this.schedulerRepo.getSchedulerStats();
+    return this.schedulerRepo.getSchedulerStats(scheduleId);
   }
 
   public getRecentSchedulerExecutions(limit: number = 10): SchedulerExecutionRecord[] {
@@ -233,8 +240,8 @@ export class Database implements IDatabase {
     return this.schedulerRepo.getSchedulerExecutions(limit);
   }
 
-  public getConsecutiveFailures(): number {
-    return this.schedulerRepo.getConsecutiveFailures();
+  public getConsecutiveFailures(scheduleId?: string): number {
+    return this.schedulerRepo.getConsecutiveFailures(scheduleId);
   }
 
   // Additional download methods - delegated to DownloadRepository
@@ -506,4 +513,3 @@ export class Database implements IDatabase {
     this.db.close();
   }
 }
-

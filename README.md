@@ -54,6 +54,33 @@ pixivflow download
 pixivflow scheduler             # 按 cron 配置长期挂机自动收集
 ```
 
+### 单进程多计划与配置热重载
+
+`schedules[]` 可以为不同 target 组设置各自的 Cron。所有计划由一个 Node
+进程托管，共享 Pixiv 客户端、SQLite 与文件服务；执行阶段使用有界串行队列，
+适合 512 MiB 小内存机器。配置文件默认被监听，SSH/同步工具替换文件后会先完整
+校验，再一次性替换全部调度项；无效 JSON、错误 Cron 或未知 target id 不会破坏
+当前运行中的计划。正在执行的任务继续使用旧快照，下一次任务使用新快照。
+
+```json
+{
+  "scheduler": { "enabled": false, "cron": "0 3 * * *" },
+  "schedules": [
+    { "id": "bot1", "enabled": true, "cron": "10 5 * * *", "targetIds": ["bot1-art", "bot1-novel"] },
+    { "id": "bot2", "enabled": true, "cron": "30 5 * * *", "targetIds": ["bot2-art", "bot2-novel"] }
+  ],
+  "targets": [
+    { "id": "bot1-art", "type": "illustration", "mode": "ranking", "rankingDate": "YESTERDAY" },
+    { "id": "bot1-novel", "type": "novel", "mode": "ranking", "rankingDate": "YESTERDAY" }
+  ]
+}
+```
+
+旧的单 `scheduler` 配置继续兼容。`pixiv`、`network`、`storage` 涉及长生命周期
+连接或路径，修改后需要重启；`schedules`、`targets`、`delivery`、`download` 可以
+热重载。完整双 Bot 缓存投递模板见
+[`config/fly-two-bots.example.json`](config/fly-two-bots.example.json)。
+
 ## 下载目标
 
 在配置文件的 `targets` 中定义要收集的内容，多个条件可以组合：

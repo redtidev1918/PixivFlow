@@ -1,0 +1,240 @@
+{
+  "logLevel": "info",
+  "pixiv": {
+    "clientId": "MOBrBDS8blbauoSck0ZfDbtuzpyT",
+    "clientSecret": "lsACyCD94FhDUtGTXi3QzcFE2uU1hqtDaKeqrdwj",
+    "deviceToken": "pixiv",
+    "refreshToken": "YOUR_REFRESH_TOKEN",
+    "userAgent": "PixivAndroidApp/5.0.234 (Android 11; Pixel 6)"
+  },
+  "network": {
+    "timeoutMs": 30000,
+    "retries": 3,
+    "retryDelay": 2000
+  },
+  "storage": {
+    "databasePath": "./pixivflow.db",
+    "downloadDirectory": "./cache",
+    "illustrationDirectory": "./cache/illustrations",
+    "novelDirectory": "./cache/novels"
+  },
+  "scheduler": {
+    "enabled": false,
+    "cron": "0 3 * * *",
+    "timezone": "Asia/Shanghai"
+  },
+  "schedules": [
+    {
+      "id": "bot1-daily",
+      "name": "Bot 1 daily ranking",
+      "enabled": false,
+      "cron": "10 5 * * *",
+      "timezone": "Asia/Shanghai",
+      "targetIds": [
+        "bot1-illust-tag-a",
+        "bot1-novel-tag-a",
+        "bot1-illust-tag-b",
+        "bot1-novel-tag-b"
+      ],
+      "timeout": 1200000,
+      "maxConsecutiveFailures": 5,
+      "failureRetryDelay": 30000
+    },
+    {
+      "id": "bot2-daily",
+      "name": "Bot 2 daily ranking",
+      "enabled": false,
+      "cron": "30 5 * * *",
+      "timezone": "Asia/Shanghai",
+      "targetIds": [
+        "bot2-illust-tag-c",
+        "bot2-novel-tag-c",
+        "bot2-illust-tag-d",
+        "bot2-novel-tag-d"
+      ],
+      "timeout": 1200000,
+      "maxConsecutiveFailures": 5,
+      "failureRetryDelay": 30000
+    }
+  ],
+  "schedulerRuntime": {
+    "watchConfig": true,
+    "reloadDebounceMs": 500,
+    "queueLimit": 2
+  },
+  "download": {
+    "concurrency": 1,
+    "requestDelay": 1000,
+    "dynamicConcurrency": false,
+    "minConcurrency": 1,
+    "maxRetries": 3,
+    "retryDelay": 3000,
+    "timeout": 90000
+  },
+  "delivery": {
+    "targets": {
+      "telepost-bot1": {
+        "type": "httpMultipart",
+        "url": "http://127.0.0.1:8080/api/bot1/v1/submissions",
+        "headers": {
+          "Authorization": "Bearer ${TELEPOST_BOT1_SUBMIT_TOKEN}"
+        },
+        "fileField": "files",
+        "fields": {
+          "title": "{{title}}",
+          "tags": [
+            "Pixiv",
+            "{{tag}}"
+          ],
+          "note": "Pixiv ID: {{pixivId}}",
+          "anonymous": true,
+          "idempotency_key": "pixiv:bot1:{{type}}:{{pixivId}}"
+        },
+        "success": {
+          "statuses": [
+            201
+          ],
+          "jsonPath": "ok",
+          "equals": true
+        },
+        "maxAttempts": 3,
+        "retryDelayMs": 3000
+      },
+      "telepost-bot2": {
+        "type": "httpMultipart",
+        "url": "http://127.0.0.1:8080/api/bot2/v1/submissions",
+        "headers": {
+          "Authorization": "Bearer ${TELEPOST_BOT2_SUBMIT_TOKEN}"
+        },
+        "fileField": "files",
+        "fields": {
+          "title": "{{title}}",
+          "tags": [
+            "Pixiv",
+            "{{tag}}"
+          ],
+          "note": "Pixiv ID: {{pixivId}}",
+          "anonymous": true,
+          "idempotency_key": "pixiv:bot2:{{type}}:{{pixivId}}"
+        },
+        "success": {
+          "statuses": [
+            201
+          ],
+          "jsonPath": "ok",
+          "equals": true
+        },
+        "maxAttempts": 3,
+        "retryDelayMs": 3000
+      }
+    },
+    "deleteAfterDelivery": true
+  },
+  "targets": [
+    {
+      "id": "bot1-illust-tag-a",
+      "type": "illustration",
+      "mode": "ranking",
+      "rankingMode": "day",
+      "rankingDate": "YESTERDAY",
+      "filterTag": "TAG_A",
+      "limit": 1,
+      "storageMode": "cache",
+      "delivery": {
+        "target": "telepost-bot1"
+      }
+    },
+    {
+      "id": "bot1-novel-tag-a",
+      "type": "novel",
+      "mode": "ranking",
+      "rankingMode": "day",
+      "rankingDate": "YESTERDAY",
+      "filterTag": "TAG_A",
+      "limit": 1,
+      "storageMode": "cache",
+      "delivery": {
+        "target": "telepost-bot1"
+      }
+    },
+    {
+      "id": "bot1-illust-tag-b",
+      "type": "illustration",
+      "mode": "ranking",
+      "rankingMode": "day",
+      "rankingDate": "YESTERDAY",
+      "filterTag": "TAG_B",
+      "limit": 1,
+      "storageMode": "cache",
+      "delivery": {
+        "target": "telepost-bot1"
+      }
+    },
+    {
+      "id": "bot1-novel-tag-b",
+      "type": "novel",
+      "mode": "ranking",
+      "rankingMode": "day",
+      "rankingDate": "YESTERDAY",
+      "filterTag": "TAG_B",
+      "limit": 1,
+      "storageMode": "cache",
+      "delivery": {
+        "target": "telepost-bot1"
+      }
+    },
+    {
+      "id": "bot2-illust-tag-c",
+      "type": "illustration",
+      "mode": "ranking",
+      "rankingMode": "day",
+      "rankingDate": "YESTERDAY",
+      "filterTag": "TAG_C",
+      "limit": 1,
+      "storageMode": "cache",
+      "delivery": {
+        "target": "telepost-bot2"
+      }
+    },
+    {
+      "id": "bot2-novel-tag-c",
+      "type": "novel",
+      "mode": "ranking",
+      "rankingMode": "day",
+      "rankingDate": "YESTERDAY",
+      "filterTag": "TAG_C",
+      "limit": 1,
+      "storageMode": "cache",
+      "delivery": {
+        "target": "telepost-bot2"
+      }
+    },
+    {
+      "id": "bot2-illust-tag-d",
+      "type": "illustration",
+      "mode": "ranking",
+      "rankingMode": "day",
+      "rankingDate": "YESTERDAY",
+      "filterTag": "TAG_D",
+      "limit": 1,
+      "storageMode": "cache",
+      "delivery": {
+        "target": "telepost-bot2"
+      }
+    },
+    {
+      "id": "bot2-novel-tag-d",
+      "type": "novel",
+      "mode": "ranking",
+      "rankingMode": "day",
+      "rankingDate": "YESTERDAY",
+      "filterTag": "TAG_D",
+      "limit": 1,
+      "storageMode": "cache",
+      "delivery": {
+        "target": "telepost-bot2"
+      }
+    }
+  ],
+  "initialDelay": 0
+}

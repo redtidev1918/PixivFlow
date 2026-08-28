@@ -134,11 +134,12 @@ pixivflow status    <span class="cmt"># 看下载记录</span></code></pre>
     <pre><code>{
   "type": "illustration",
   "mode": "ranking",
-  "rankingMode": "week",
+  "rankingMode": "day",
+  "rankingDate": "YESTERDAY",
   "filterTag": "オリジナル",
   "limit": 15
 }</code></pre>
-    <p>先拉周榜,再只留带「オリジナル」标签的。<code>rankingMode</code> 另有 day / month / R18 系列等取值。</p>
+    <p>抓取昨天发布的「オリジナル」标签作品，并在本地按热度排序。不设置 <code>filterTag</code> 时直接使用 Pixiv 榜单，<code>rankingMode</code> 可选 day / week / month / R18 系列等取值。</p>
     <h3>随机与单发</h3>
     <pre><code>pixivflow random                                   <span class="cmt"># 热门标签随机一张</span>
 pixivflow download --url "123456789"               <span class="cmt"># 裸 ID 当插画下</span>

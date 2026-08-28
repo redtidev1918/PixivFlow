@@ -77,8 +77,17 @@ export function validateConfig(config: Partial<StandaloneConfig>, location: stri
   if (!Array.isArray(config.targets)) {
     errors.push('targets: Must be an array');
   } else if (config.targets.length > 0) {
+    const targetIds = new Set<string>();
     // Only validate target structure if targets are provided
     config.targets.forEach((target, index) => {
+      if (target.id) {
+        if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(target.id)) {
+          errors.push(`targets[${index}].id: Must contain only letters, numbers, '_' or '-' (max 64 characters)`);
+        } else if (targetIds.has(target.id)) {
+          errors.push(`targets[${index}].id: Duplicate target id "${target.id}"`);
+        }
+        targetIds.add(target.id);
+      }
       // Tag is required for search mode, optional for ranking, series, single novel, single illustration, or user mode
       if (target.mode !== 'ranking' && !target.seriesId && !target.novelId && !target.illustId && !target.userId && (!target.tag || target.tag.trim() === '')) {
         errors.push(`targets[${index}].tag: Required field is missing or empty (required for search mode, optional for ranking/series/single novel/single illustration/user mode)`);
@@ -183,6 +192,46 @@ export function validateConfig(config: Partial<StandaloneConfig>, location: stri
     }
     if (config.scheduler.maxConsecutiveFailures !== undefined && config.scheduler.maxConsecutiveFailures < 1) {
       errors.push('scheduler.maxConsecutiveFailures: Must be greater than 0');
+    }
+  }
+
+  if (config.schedules !== undefined) {
+    if (!Array.isArray(config.schedules)) {
+      errors.push('schedules: Must be an array');
+    } else {
+      const scheduleIds = new Set<string>();
+      const targetIds = new Set((config.targets ?? []).flatMap(target => target.id ? [target.id] : []));
+      config.schedules.forEach((schedule, index) => {
+        const prefix = `schedules[${index}]`;
+        if (!schedule.id || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(schedule.id)) {
+          errors.push(`${prefix}.id: Required and must contain only letters, numbers, '_' or '-' (max 64 characters)`);
+        } else if (scheduleIds.has(schedule.id)) {
+          errors.push(`${prefix}.id: Duplicate schedule id "${schedule.id}"`);
+        }
+        scheduleIds.add(schedule.id);
+        if (schedule.enabled && !schedule.cron) errors.push(`${prefix}.cron: Required when enabled`);
+        if (schedule.cron && !cron.validate(schedule.cron)) {
+          errors.push(`${prefix}.cron: Invalid cron expression: ${schedule.cron}`);
+        }
+        for (const targetId of schedule.targetIds ?? []) {
+          if (!targetIds.has(targetId)) {
+            errors.push(`${prefix}.targetIds: Unknown target id "${targetId}"`);
+          }
+        }
+      });
+      if (config.scheduler?.enabled) {
+        warnings.push('scheduler: Legacy cron is ignored when schedules is present');
+      }
+    }
+  }
+
+  if (config.schedulerRuntime) {
+    const { reloadDebounceMs, queueLimit } = config.schedulerRuntime;
+    if (reloadDebounceMs !== undefined && reloadDebounceMs < 100) {
+      errors.push('schedulerRuntime.reloadDebounceMs: Must be at least 100');
+    }
+    if (queueLimit !== undefined && (!Number.isInteger(queueLimit) || queueLimit < 0 || queueLimit > 100)) {
+      errors.push('schedulerRuntime.queueLimit: Must be an integer between 0 and 100');
     }
   }
 

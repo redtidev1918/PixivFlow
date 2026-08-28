@@ -117,7 +117,7 @@ executeCommand():command.validate?(args) → command.execute(context, args)
 - `illustId`:单幅下载,先查 `hasDownloaded` 去重。
 - `userId`:调用 `client.getUserIllustrations` 后走管线。
 - 默认 search 模式:`client.searchIllustrations`,并按排序策略放大检索量(popular 排序且 `limit<=5` 时检索 `max(limit*20,100)` 条;其余为 `limit*2` 或 `max(limit*10,50)`)。
-- `mode='ranking'`:若设 `filterTag` 则退化为 popular 排序搜索;否则走 `RankingService.getRankingIllustrationsWithFallback(rankingMode, rankingDate, limit)`,`YESTERDAY` 占位符在此时解析。
+- `mode='ranking'`:若设 `filterTag`，以 `rankingDate` 为单日发布窗口搜索候选并在本地按收藏/浏览热度排序；否则走 `RankingService.getRankingIllustrationsWithFallback(rankingMode, rankingDate, limit)`。`YESTERDAY` 占位符在每次计划执行前解析。
 
 小说目标由 `NovelTargetHandler` 处理,同样经过 plan → pipeline → downloader 链路。
 

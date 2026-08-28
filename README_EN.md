@@ -56,6 +56,21 @@ pixivflow download
 pixivflow scheduler             # long-running cron collection
 ```
 
+### Multiple schedules and atomic hot reload
+
+`schedules[]` hosts independently timed target groups in one Node process.
+Plans share Pixiv authentication, SQLite, and file services, while a bounded
+serial queue prevents overlapping downloads from producing memory spikes.
+The active config is watched by default: replace it over SSH and PixivFlow
+fully validates the new snapshot before swapping the entire cron table. An
+invalid edit leaves the previous schedules running. In-flight work finishes
+on its old snapshot; the next run sees the new one.
+
+Legacy single-`scheduler` configs remain supported. `schedules`, `targets`,
+`delivery`, and `download` are hot-reloadable; changes to `pixiv`, `network`,
+or `storage` require a process restart. See the ready-to-edit
+[`config/fly-two-bots.example.json`](config/fly-two-bots.example.json) template.
+
 ## Download targets
 
 Define what to collect in the `targets` section of your config. Conditions

@@ -104,7 +104,7 @@
 
   <section class="card-block" id="ranking">
     <h2 class="section-title">排行榜与随机<span class="anchor-hint">#</span></h2>
-    <p>先上榜、后过滤——比如昨天日榜里带「風景」标签的前 10 张:</p>
+    <p>按发布日期取候选、再在本地按热度排序——比如昨天发布的「風景」标签作品前 10 张:</p>
     <pre><code>{
   "type": "illustration",
   "mode": "ranking",
@@ -113,7 +113,7 @@
   "filterTag": "風景",
   "limit": 10
 }</code></pre>
-    <p><code>rankingMode</code> 支持 day / week / month / day_male / day_female / day_ai / week_original / week_rookie 及对应 R18 榜。</p>
+    <p>不设 <code>filterTag</code> 时才直接使用 Pixiv 榜单，此时 <code>rankingMode</code> 支持 day / week / month / day_male / day_female / day_ai / week_original / week_rookie 及对应 R18 榜。</p>
     <p>换个口味——从热门结果中随机挑一张,保持每天的新鲜感:</p>
     <pre><code>{
   "type": "illustration",

@@ -7,6 +7,7 @@ import { registerAllCommands, RefreshCommand, DownloadCommand, SchedulerCommand,
 import { ArgumentParser } from './cli/ArgumentParser';
 import { AuthenticationError, ConfigError, VersionRequest, HelpRequest } from './utils/errors';
 import { CommandArgs, CommandContext } from './commands/types';
+import { resolveSchedules } from './scheduler/schedules';
 
 /**
  * Handles fatal errors, prints user-friendly messages, and exits the process.
@@ -95,7 +96,9 @@ async function executeCommand(registry: CommandRegistry, commandName: string, co
  * Executes the default behavior (download or scheduler) when no command is specified.
  */
 async function executeDefaultBehavior(context: CommandContext, args: CommandArgs): Promise<void> {
-  const commandName = context.config.scheduler?.enabled ? 'scheduler' : 'download';
+  const commandName = resolveSchedules(context.config).some(schedule => schedule.enabled)
+    ? 'scheduler'
+    : 'download';
   const command = new (commandName === 'scheduler' ? SchedulerCommand : DownloadCommand)();
   
   logger.info(`No command specified. Running default: ${commandName}`);

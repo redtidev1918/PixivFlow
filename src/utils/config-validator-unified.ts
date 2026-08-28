@@ -4,6 +4,7 @@
  */
 
 import { StandaloneConfig, TargetConfig } from '../config';
+import cron from 'node-cron';
 import { isPlaceholderToken, getBestAvailableToken } from './token-manager';
 import { ConfigError } from './errors';
 
@@ -103,8 +104,19 @@ export class ConfigValidator {
     // Validate targets (targets can be empty for URL-based downloads)
     // Only validate target structure if targets are provided
     if (config.targets && config.targets.length > 0) {
+      const targetIds = new Set<string>();
       config.targets.forEach((target, index) => {
         const targetPrefix = `targets[${index}]`;
+        if (target.id) {
+          if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(target.id) || targetIds.has(target.id)) {
+            errors.push({
+              code: 'CONFIG_VALIDATION_TARGET_ID_INVALID',
+              field: `${targetPrefix}.id`,
+              message: `Target ${index + 1}: Id must be unique and contain only letters, numbers, '_' or '-'`,
+            });
+          }
+          targetIds.add(target.id);
+        }
         
         if (!target.type) {
           errors.push({
@@ -262,6 +274,54 @@ export class ConfigValidator {
           });
         }
       }
+    }
+
+    if (config.schedules !== undefined) {
+      const scheduleIds = new Set<string>();
+      const targetIds = new Set((config.targets ?? []).flatMap(target => target.id ? [target.id] : []));
+      config.schedules.forEach((schedule, index) => {
+        const prefix = `schedules[${index}]`;
+        if (!schedule.id || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(schedule.id) || scheduleIds.has(schedule.id)) {
+          errors.push({
+            code: 'CONFIG_VALIDATION_SCHEDULE_ID_INVALID',
+            field: `${prefix}.id`,
+            message: `Schedule ${index + 1}: Id must be unique and contain only letters, numbers, '_' or '-'`,
+          });
+        }
+        scheduleIds.add(schedule.id);
+        if (schedule.enabled && (!schedule.cron || !cron.validate(schedule.cron))) {
+          errors.push({
+            code: 'CONFIG_VALIDATION_CRON_INVALID',
+            field: `${prefix}.cron`,
+            message: `Schedule ${index + 1}: Cron expression is invalid`,
+          });
+        }
+        for (const targetId of schedule.targetIds ?? []) {
+          if (!targetIds.has(targetId)) {
+            errors.push({
+              code: 'CONFIG_VALIDATION_SCHEDULE_TARGET_UNKNOWN',
+              field: `${prefix}.targetIds`,
+              message: `Schedule ${index + 1}: Unknown target id '${targetId}'`,
+            });
+          }
+        }
+      });
+    }
+
+    if (config.schedulerRuntime?.reloadDebounceMs !== undefined && config.schedulerRuntime.reloadDebounceMs < 100) {
+      errors.push({
+        code: 'CONFIG_VALIDATION_RELOAD_DEBOUNCE_INVALID',
+        field: 'schedulerRuntime.reloadDebounceMs',
+        message: 'Reload debounce must be at least 100ms',
+      });
+    }
+    if (config.schedulerRuntime?.queueLimit !== undefined &&
+        (!Number.isInteger(config.schedulerRuntime.queueLimit) || config.schedulerRuntime.queueLimit < 0 || config.schedulerRuntime.queueLimit > 100)) {
+      errors.push({
+        code: 'CONFIG_VALIDATION_QUEUE_LIMIT_INVALID',
+        field: 'schedulerRuntime.queueLimit',
+        message: 'Queue limit must be an integer between 0 and 100',
+      });
     }
 
     // Validate log level

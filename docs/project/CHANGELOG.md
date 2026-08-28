@@ -5,6 +5,21 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [2.7.0] - 2026-08-29
+
+### 新增
+- ✨ `schedules[]` 单进程多计划调度：每个计划拥有独立 Cron、时区、target 组、执行限制和历史计数
+- ✨ SSH 友好的配置热重载：文件监听或 `SIGHUP` 触发完整校验与原子调度表替换，无效更新自动回退旧快照
+- ✨ Fly 双 Bot 低内存缓存投递模板 `config/fly-two-bots.example.json`
+
+### 改进
+- 🔧 多计划共享 Pixiv 客户端、SQLite 与文件服务，全局有界串行队列避免并发下载造成内存峰值
+- 🔧 `YESTERDAY` / `TODAY` 改为每次计划执行前解析，长期运行不会冻结在启动日期
+- 🔧 SQLite 默认页缓存由 64 MiB 下调到 8 MiB，并支持 `PIXIV_DB_CACHE_KB` 覆盖
+- ✅ 调度历史按 schedule id 隔离，旧单 `scheduler` 配置保持兼容
+
+---
+
 ## [2.6.0] - 2026-08-28
 
 ### 新增

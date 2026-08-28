@@ -199,6 +199,10 @@ export function applyDefaults(config: Partial<StandaloneConfig>, basePath?: stri
       ...DEFAULT_CONFIG.scheduler,
       ...config.scheduler,
     },
+    schedulerRuntime: {
+      ...DEFAULT_CONFIG.schedulerRuntime,
+      ...config.schedulerRuntime,
+    },
     download: {
       ...DEFAULT_CONFIG.download,
       ...config.download,
@@ -221,4 +225,3 @@ export function applyDefaults(config: Partial<StandaloneConfig>, basePath?: stri
 
   return merged;
 }
-

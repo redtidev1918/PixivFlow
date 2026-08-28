@@ -65,20 +65,25 @@ export class NovelTargetHandler {
 
   private async fetchRankingNovels(target: TargetConfig): Promise<PixivNovel[]> {
     if (target.filterTag) {
-      logger.info(
-        `Using search API with popularity sort for tag: ${target.filterTag} (more efficient than ranking + filter)`
-      );
+      const rankingDate = target.rankingDate === 'YESTERDAY'
+        ? getYesterdayDate()
+        : target.rankingDate || getTodayDate();
+      const targetLimit = target.limit || 10;
+      logger.info(`Fetching ${rankingDate} novels for tag ${target.filterTag}, then ranking by popularity`);
       const searchTarget = {
         ...target,
         tag: target.filterTag,
-        sort: 'popular_desc' as const,
-        limit: Math.max((target.limit || 10) * 2, 50),
+        sort: 'date_desc' as const,
+        startDate: rankingDate,
+        endDate: rankingDate,
+        limit: Math.max(targetLimit * 20, 100),
       };
       let novels = await this.client.searchNovels(searchTarget);
-      logger.info(`Found ${novels.length} novel(s) from search API (sorted by popularity)`);
+      logger.info(`Found ${novels.length} novel(s) for ${rankingDate}`);
+      this.sortByPopularityAndLog(novels, targetLimit);
 
-      if (target.limit && novels.length > target.limit) {
-        novels = novels.slice(0, target.limit);
+      if (novels.length > targetLimit) {
+        novels = novels.slice(0, targetLimit);
         logger.info(`Selected top ${novels.length} novel(s) by popularity`);
       }
       return novels;

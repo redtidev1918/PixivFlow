@@ -20,6 +20,11 @@ export const DEFAULT_CONFIG = {
     cron: '0 3 * * *',
     timezone: 'Asia/Shanghai',
   },
+  schedulerRuntime: {
+    watchConfig: true,
+    reloadDebounceMs: 500,
+    queueLimit: 8,
+  },
   download: {
     concurrency: 3,
     requestDelay: 500,
@@ -48,6 +53,7 @@ export function generateDefaultConfig(): StandaloneConfig {
     network: DEFAULT_CONFIG.network,
     storage: DEFAULT_CONFIG.storage,
     scheduler: DEFAULT_CONFIG.scheduler,
+    schedulerRuntime: DEFAULT_CONFIG.schedulerRuntime,
     download: DEFAULT_CONFIG.download,
     targets: [
       {
@@ -60,7 +66,6 @@ export function generateDefaultConfig(): StandaloneConfig {
     initialDelay: DEFAULT_CONFIG.initialDelay,
   };
 }
-
 
 
 

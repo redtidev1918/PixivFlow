@@ -37,7 +37,17 @@
 | `./data` | `/app/data` | 读写 | SQLite 数据库、日志 |
 | `./downloads` | `/app/downloads` | 读写 | 下载产物 |
 
-注意：`./config` 以只读方式挂载，WebUI 界面里对配置的修改无法回写。修改配置请直接编辑宿主机的 `config/standalone.config.json`，然后执行 `docker compose restart`。字段含义见[配置手册](./CONFIG.md)。
+注意：`./config` 以只读方式挂载，所以 WebUI 不能回写；但宿主机可直接原子替换
+`config/standalone.config.json`。调度器会自动校验并热重载 Cron、targets、delivery
+和 download 设置，无需重启容器。`pixiv`、`network`、`storage` 变更仍需执行
+`docker compose restart pixivflow`。字段含义见[配置手册](./CONFIG.md)。
+
+推荐用临时文件加 `mv`，避免调度器看到编辑到一半的内容：
+
+```bash
+cp /path/to/new-config.json config/standalone.config.json.new
+mv config/standalone.config.json.new config/standalone.config.json
+```
 
 ## 前置要求
 
@@ -175,7 +185,9 @@ docker compose up -d   # .env 改动需要重建容器才生效
 }
 ```
 
-然后重启服务：`docker compose restart pixivflow`。`clientId`/`clientSecret` 用上方默认值即可，配置结构详见[配置手册](./CONFIG.md)。
+然后重启服务：`docker compose restart pixivflow`。认证与网络属于不可热更新字段；
+Cron、tag、交付地址等日常任务设置保存后会自动生效。`clientId`/`clientSecret`
+用上方默认值即可，配置结构详见[配置手册](./CONFIG.md)。
 
 ### 方式 C：宿主机先登录
 
@@ -218,6 +230,7 @@ pixivflow refresh <refresh_token> --config "$(pwd)/config/standalone.config.json
 | `PIXIV_ILLUSTRATION_DIR` | .env 可覆盖 | 插画子目录（容器内） | `/app/downloads/illustrations` |
 | `PIXIV_NOVEL_DIR` | .env 可覆盖 | 小说子目录（容器内） | `/app/downloads/novels` |
 | `PIXIV_LOG_LEVEL` | .env 可覆盖 | 日志级别：debug / info / warn / error | `info` |
+| `PIXIV_DB_CACHE_KB` | .env 可覆盖 | SQLite 页缓存，限制在 1024～65536 KiB | `8192` |
 | `PIXIV_SCHEDULER_ENABLED` | .env 可覆盖 | 调度开关，仅对 pixivflow 服务有意义 | `true` |
 | `PIXIV_SKIP_AUTO_LOGIN` | compose 固定 | 跳过容器内交互登录 | `true` |
 | `PIXIV_REFRESH_TOKEN` | .env 可选 | 覆盖配置的 `pixiv.refreshToken` | 空 |

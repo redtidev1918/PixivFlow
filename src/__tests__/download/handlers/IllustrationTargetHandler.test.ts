@@ -145,7 +145,9 @@ describe('IllustrationTargetHandler', () => {
       expect(mockClient.searchIllustrations).toHaveBeenCalledWith(
         expect.objectContaining({
           tag: 'test-tag',
-          sort: 'popular_desc',
+          sort: 'date_desc',
+          startDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+          endDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
         })
       );
     });
@@ -268,7 +270,7 @@ describe('IllustrationTargetHandler', () => {
       );
     });
 
-    it('should use search API when filterTag is provided', async () => {
+    it('should search the selected day and rank locally when filterTag is provided', async () => {
       const target: TargetConfig = {
         type: 'illustration',
         mode: 'ranking',
@@ -289,8 +291,10 @@ describe('IllustrationTargetHandler', () => {
       expect(mockClient.searchIllustrations).toHaveBeenCalledWith(
         expect.objectContaining({
           tag: 'test-tag',
-          sort: 'popular_desc',
-          limit: 50, // Math.max(10 * 2, 50) = 50
+          sort: 'date_desc',
+          startDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+          endDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+          limit: 200,
         })
       );
     });
@@ -315,7 +319,7 @@ describe('IllustrationTargetHandler', () => {
 
       expect(mockClient.searchIllustrations).toHaveBeenCalledWith(
         expect.objectContaining({
-          limit: 50, // Math.max(5 * 2, 50) = 50
+          limit: 100,
         })
       );
     });
@@ -628,4 +632,3 @@ describe('IllustrationTargetHandler', () => {
     });
   });
 });
-

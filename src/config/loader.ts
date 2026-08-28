@@ -53,7 +53,11 @@ export function getConfigPath(configPath?: string): string {
  * @param configPath - Path to config file
  * @param skipValidation - If true, skip configuration validation (useful for login commands)
  */
-export function loadConfig(configPath?: string, skipValidation: boolean = false): StandaloneConfig {
+export function loadConfig(
+  configPath?: string,
+  skipValidation: boolean = false,
+  resolveDynamicPlaceholders: boolean = true
+): StandaloneConfig {
   let resolvedPath = getConfigPath(configPath);
 
   // If config file doesn't exist, try to find or create one
@@ -215,7 +219,9 @@ export function loadConfig(configPath?: string, skipValidation: boolean = false)
   }
 
   // Process placeholders (e.g., YESTERDAY)
-  const finalConfig = processConfigPlaceholders(config);
+  // Long-running schedulers keep placeholders in their immutable snapshots
+  // and resolve TODAY/YESTERDAY immediately before each run.
+  const finalConfig = resolveDynamicPlaceholders ? processConfigPlaceholders(config) : config;
   
   // Display directory information on first load (only if config was just created)
   // This helps users know where files will be saved
@@ -234,7 +240,6 @@ export function loadConfig(configPath?: string, skipValidation: boolean = false)
   
   return finalConfig;
 }
-
 
 
 

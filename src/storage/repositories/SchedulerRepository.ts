@@ -8,11 +8,12 @@ export class SchedulerRepository extends BaseRepository {
   /**
    * Get the next execution number for the scheduler
    */
-  public getNextExecutionNumber(): number {
+  public getNextExecutionNumber(scheduleId?: string): number {
     const stmt = this.db.prepare(
-      `SELECT COALESCE(MAX(execution_number), 0) + 1 as next FROM scheduler_executions`
+      `SELECT COALESCE(MAX(execution_number), 0) + 1 as next FROM scheduler_executions
+       ${scheduleId ? 'WHERE schedule_id = ?' : ''}`
     );
-    const row = stmt.get() as { next: number };
+    const row = (scheduleId ? stmt.get(scheduleId) : stmt.get()) as { next: number };
     return row.next;
   }
 
@@ -26,12 +27,13 @@ export class SchedulerRepository extends BaseRepository {
     endTime: Date | null,
     durationMs: number | null,
     errorMessage: string | null,
-    itemsDownloaded: number = 0
+    itemsDownloaded: number = 0,
+    scheduleId: string = 'default'
   ): void {
     const stmt = this.db.prepare(
       `INSERT INTO scheduler_executions 
-       (execution_number, status, start_time, end_time, duration_ms, error_message, items_downloaded)
-       VALUES (@execution_number, @status, @start_time, @end_time, @duration_ms, @error_message, @items_downloaded)`
+       (execution_number, status, start_time, end_time, duration_ms, error_message, items_downloaded, schedule_id)
+       VALUES (@execution_number, @status, @start_time, @end_time, @duration_ms, @error_message, @items_downloaded, @schedule_id)`
     );
 
     stmt.run({
@@ -42,6 +44,7 @@ export class SchedulerRepository extends BaseRepository {
       duration_ms: durationMs ?? null,
       error_message: errorMessage ?? null,
       items_downloaded: itemsDownloaded,
+      schedule_id: scheduleId,
     });
   }
 
@@ -71,7 +74,7 @@ export class SchedulerRepository extends BaseRepository {
   /**
    * Get scheduler execution statistics
    */
-  public getSchedulerStats(): {
+  public getSchedulerStats(scheduleId?: string): {
     totalExecutions: number;
     successfulExecutions: number;
     failedExecutions: number;
@@ -87,10 +90,11 @@ export class SchedulerRepository extends BaseRepository {
         MAX(start_time) as last_execution,
         AVG(duration_ms) as avg_duration,
         SUM(items_downloaded) as total_items
-       FROM scheduler_executions`
+       FROM scheduler_executions
+       ${scheduleId ? 'WHERE schedule_id = ?' : ''}`
     );
 
-    const row = statsStmt.get() as {
+    const row = (scheduleId ? statsStmt.get(scheduleId) : statsStmt.get()) as {
       total: number;
       successful: number;
       failed: number;
@@ -122,7 +126,8 @@ export class SchedulerRepository extends BaseRepository {
         end_time,
         duration_ms,
         error_message,
-        items_downloaded
+       items_downloaded
+       ,schedule_id
        FROM scheduler_executions
        ORDER BY execution_number DESC
        LIMIT ?`
@@ -137,6 +142,7 @@ export class SchedulerRepository extends BaseRepository {
       duration_ms: number | null;
       error_message: string | null;
       items_downloaded: number;
+      schedule_id: string;
     }>;
 
     return rows.map((row) => ({
@@ -148,6 +154,7 @@ export class SchedulerRepository extends BaseRepository {
       duration: row.duration_ms,
       errorMessage: row.error_message,
       itemsDownloaded: row.items_downloaded,
+      scheduleId: row.schedule_id || 'default',
     }));
   }
 
@@ -161,14 +168,15 @@ export class SchedulerRepository extends BaseRepository {
   /**
    * Get consecutive failure count
    */
-  public getConsecutiveFailures(): number {
+  public getConsecutiveFailures(scheduleId?: string): number {
     const stmt = this.db.prepare(
       `SELECT status FROM scheduler_executions 
+       ${scheduleId ? 'WHERE schedule_id = ?' : ''}
        ORDER BY execution_number DESC 
        LIMIT 100`
     );
 
-    const rows = stmt.all() as Array<{ status: string }>;
+    const rows = (scheduleId ? stmt.all(scheduleId) : stmt.all()) as Array<{ status: string }>;
     let count = 0;
 
     for (const row of rows) {
@@ -182,7 +190,6 @@ export class SchedulerRepository extends BaseRepository {
     return count;
   }
 }
-
 
 
 

@@ -14,6 +14,11 @@ export interface TargetDeliveryConfig {
 }
 
 export interface TargetConfig {
+  /**
+   * Stable identifier used by schedules to select this target.
+   * Optional for legacy single-schedule configurations.
+   */
+  id?: string;
   type: TargetType;
   tag?: string;
   /**
@@ -44,7 +49,9 @@ export interface TargetConfig {
   /**
    * Download mode: 'search' (default) or 'ranking'
    * - 'search': Search by tag
-   * - 'ranking': Download from ranking, then filter by tag
+   * - 'ranking': Use the Pixiv ranking API when filterTag is absent. With
+   *   filterTag, search works published on rankingDate and rank them locally
+   *   by popularity.
    */
   mode?: 'search' | 'ranking';
   /**
@@ -61,8 +68,8 @@ export interface TargetConfig {
    */
   rankingDate?: string;
   /**
-   * Filter ranking results by tag (only used when mode='ranking')
-   * If specified, only downloads works that contain this tag
+   * Tag-scoped daily popularity (only used when mode='ranking'). The selected
+   * rankingDate becomes a one-day publication window.
    */
   filterTag?: string;
   /**
@@ -258,6 +265,34 @@ export interface SchedulerConfig {
   failureRetryDelay?: number;
 }
 
+/**
+ * An independently timed group of download targets. Multiple plans are
+ * hosted by one scheduler process and share the same Pixiv/runtime resources.
+ */
+export interface ScheduleConfig extends SchedulerConfig {
+  /** Stable unique identifier. */
+  id: string;
+  /** Human-readable label shown by the WebUI and in logs. */
+  name?: string;
+  /**
+   * Target ids to run. Omit or use an empty array to run every configured
+   * target, which also keeps legacy configurations concise.
+   */
+  targetIds?: string[];
+}
+
+export interface SchedulerRuntimeConfig {
+  /** Watch the active config and reload valid snapshots automatically. */
+  watchConfig?: boolean;
+  /** Debounce interval for atomic file replacements. Default: 500ms. */
+  reloadDebounceMs?: number;
+  /**
+   * Maximum number of distinct pending plans while another plan is running.
+   * One pending run per plan is retained; extra ticks are skipped.
+   */
+  queueLimit?: number;
+}
+
 export interface HttpMultipartSuccessConfig {
   /** 可接受的 HTTP 状态码；缺省接受全部 2xx */
   statuses?: number[];
@@ -312,6 +347,10 @@ export interface StandaloneConfig {
    * Scheduler configuration
    */
   scheduler?: SchedulerConfig;
+  /** Independent schedules. When present, these replace the legacy cron. */
+  schedules?: ScheduleConfig[];
+  /** Low-memory scheduler and hot-reload controls. */
+  schedulerRuntime?: SchedulerRuntimeConfig;
   /**
    * Download targets (tags to download)
    */
@@ -374,8 +413,6 @@ export interface StandaloneConfig {
     timeout?: number;
   };
 }
-
-
 
 
 

@@ -60,20 +60,27 @@ export class IllustrationTargetHandler {
 
   private async fetchRankingIllustrations(target: TargetConfig): Promise<PixivIllust[]> {
     if (target.filterTag) {
-      logger.info(
-        `Using search API with popularity sort for tag: ${target.filterTag} (more efficient than ranking + filter)`
-      );
+      const rankingDate = target.rankingDate === 'YESTERDAY'
+        ? getYesterdayDate()
+        : target.rankingDate || getTodayDate();
+      const targetLimit = target.limit || 10;
+      logger.info(`Fetching ${rankingDate} illustrations for tag ${target.filterTag}, then ranking by popularity`);
       const searchTarget = {
         ...target,
         tag: target.filterTag,
-        sort: 'popular_desc' as const,
-        limit: Math.max((target.limit || 10) * 2, 50),
+        // Date order lets pagination stop as soon as it leaves the selected
+        // day. We then rank that bounded day set locally by bookmarks/views.
+        sort: 'date_desc' as const,
+        startDate: rankingDate,
+        endDate: rankingDate,
+        limit: Math.max(targetLimit * 20, 100),
       };
       let illusts = await this.client.searchIllustrations(searchTarget);
-      logger.info(`Found ${illusts.length} illustration(s) from search API (sorted by popularity)`);
+      logger.info(`Found ${illusts.length} illustration(s) for ${rankingDate}`);
+      this.sortByPopularityAndLog(illusts, targetLimit, 'illustration');
 
-      if (target.limit && illusts.length > target.limit) {
-        illusts = illusts.slice(0, target.limit);
+      if (illusts.length > targetLimit) {
+        illusts = illusts.slice(0, targetLimit);
         logger.info(`Selected top ${illusts.length} illustration(s) by popularity`);
       }
       return illusts;

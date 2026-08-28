@@ -75,7 +75,8 @@ pixivflow download --targets '[{"type":"novel","tag":"アークナイツ","limit
 
 ## 排行榜模式
 
-`mode: "ranking"` 时先拉榜单、再按条件过滤:
+`mode: "ranking"` 且没有 `filterTag` 时直接拉 Pixiv 榜单；设置 `filterTag` 时，
+会抓取 `rankingDate` 当天发布的该 tag 作品并在本地按热度排序：
 
 ```json
 {

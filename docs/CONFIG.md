@@ -62,6 +62,7 @@ pixivflow setup
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
 | `type` | 必填 | `illustration`(插画)或 `novel`(小说) |
+| `id` | string | 多计划引用的稳定唯一 id；仅可用字母、数字、`_`、`-`，最长 64 字符 |
 | `limit` | number | 单次执行最多下载多少个 |
 | `minBookmarks` | number | 最低收藏数门槛 |
 | `startDate` / `endDate` | string | 发布日期范围 `YYYY-MM-DD`,支持占位符见[下文](#日期占位符) |
@@ -82,12 +83,16 @@ pixivflow setup
 | 字段 | 取值 | 说明 |
 | --- | --- | --- |
 | `rankingMode` | 见下 | 榜单类型 |
-| `rankingDate` | `YYYY-MM-DD` | 榜单日期,缺省为今天,支持 `YESTERDAY` 占位符 |
-| `filterTag` | string | 只保留含该标签的榜内作品 |
+| `rankingDate` | `YYYY-MM-DD` | 日期,缺省为今天,支持 `YESTERDAY` 占位符 |
+| `filterTag` | string | 可选；设置后搜索该日期发布的 tag 作品，并按收藏/浏览热度在本地排序 |
 
 `rankingMode` 全部取值:`day`、`week`、`month`、`day_male`、
 `day_female`、`day_ai`、`week_original`、`week_rookie`、`day_r18`、
 `day_male_r18`、`day_female_r18`。
+
+未设置 `filterTag` 时会调用 Pixiv 榜单 API，`rankingDate` 表示榜单日期。设置
+`filterTag` 时，为了得到“指定 tag 在昨天发布的最热作品”，会用 `rankingDate`
+作为单日发布窗口抓取候选，再按热度排序；此时 `rankingMode` 不参与查询。
 
 ### 定向 ID 字段
 
@@ -180,6 +185,8 @@ sidecar 和 outbox 清单。`delivery.deleteAfterDelivery: false` 可用于调�
 
 ## scheduler 定时任务
 
+### 单计划兼容格式
+
 | 字段 | 默认值 | 说明 |
 | --- | --- | --- |
 | `enabled` | false | 为 true 时裸命令 `pixivflow` 直接进入调度器 |
@@ -190,6 +197,47 @@ sidecar 和 outbox 清单。`delivery.deleteAfterDelivery: false` 可用于调�
 | `timeout` | 不限 | 单次任务超时时间(ms),超时终止本次任务 |
 | `maxConsecutiveFailures` | 不限 | 连续失败 N 次后停止调度器 |
 | `failureRetryDelay` | 0(ms) | 失败后的等待间隔 |
+
+### 多计划格式
+
+顶层 `schedules[]` 存在时取代旧 `scheduler.cron`。每项继承上表全部运行限制，
+并增加：
+
+| 字段 | 必填 | 说明 |
+| --- | --- | --- |
+| `id` | 是 | 计划唯一 id，同时用于日志与独立失败/执行计数 |
+| `name` | 否 | 便于辨认的显示名称 |
+| `targetIds` | 否 | 本次运行的 target id；省略或空数组代表全部 target |
+
+所有计划仍在一个 PixivFlow 进程内，共享认证、数据库和文件服务。计划同时触发时
+进入全局串行队列；同一计划最多保留一个待执行实例，防止故障期间形成无限积压。
+建议在 512 MiB 环境把 Cron 错开，并设置 `download.concurrency: 1`。
+
+```json
+{
+  "schedules": [
+    { "id": "bot1", "enabled": true, "cron": "10 5 * * *", "timezone": "Asia/Shanghai", "targetIds": ["bot1-art", "bot1-novel"] },
+    { "id": "bot2", "enabled": true, "cron": "30 5 * * *", "timezone": "Asia/Shanghai", "targetIds": ["bot2-art", "bot2-novel"] }
+  ]
+}
+```
+
+`schedulerRuntime` 控制常驻调度器：
+
+| 字段 | 默认值 | 说明 |
+| --- | --- | --- |
+| `watchConfig` | true | 监听当前配置文件并自动热重载 |
+| `reloadDebounceMs` | 500 | 文件替换后的去抖时间，最小 100ms |
+| `queueLimit` | 8 | 全局待执行计划上限；同一计划仍只保留一项 |
+
+热重载流程为“读入新快照 → 默认值/路径处理 → 完整校验 → 整表替换”。失败时旧计划
+继续运行。正在执行的任务不会被中断；`YESTERDAY` / `TODAY` 在每次真正执行前
+重新计算。可热更新 `schedules`、`targets`、`delivery`、`download`；修改
+`pixiv`、`network`、`storage` 后应重启进程。除文件监听外也可发送 `SIGHUP`：
+
+```bash
+kill -HUP <pixivflow-pid>
+```
 
 常用 cron 写法:
 

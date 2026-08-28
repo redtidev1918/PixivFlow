@@ -16,6 +16,8 @@ export type {
   OrganizationMode,
   StorageConfig,
   SchedulerConfig,
+  ScheduleConfig,
+  SchedulerRuntimeConfig,
   HttpMultipartSuccessConfig,
   HttpMultipartDeliveryConfig,
   DeliveryTargetConfig,

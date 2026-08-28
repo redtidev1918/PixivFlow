@@ -18,6 +18,15 @@ export interface JobTelemetry {
   requestCancel?(reason: string): void;
 }
 
+export interface JobLease {
+  release(): void;
+}
+
+/** Admission is acquired before timeout/accounting starts. */
+export interface JobAdmissionController {
+  acquire(scheduleId: string): Promise<JobLease | null>;
+}
+
 export class Scheduler {
   private task: ScheduledTask | null = null;
   private running = false;
@@ -26,11 +35,14 @@ export class Scheduler {
   private consecutiveFailures: number = 0;
   private timeoutHandle: NodeJS.Timeout | null = null;
   private stopped: boolean = false;
+  private pending: boolean = false;
 
   constructor(
     private readonly config: SchedulerConfig,
     private readonly database?: Database,
-    private readonly telemetry?: JobTelemetry
+    private readonly telemetry?: JobTelemetry,
+    private readonly scheduleId: string = 'default',
+    private readonly admission?: JobAdmissionController
   ) {}
 
   public start(job: () => Promise<void>) {
@@ -40,9 +52,9 @@ export class Scheduler {
 
     // Load initial execution count from database
     if (this.database) {
-      const stats = this.database.getSchedulerStats();
+      const stats = this.database.getSchedulerStats(this.scheduleId);
       this.executionCount = stats.totalExecutions;
-      this.consecutiveFailures = this.database.getConsecutiveFailures();
+      this.consecutiveFailures = this.database.getConsecutiveFailures(this.scheduleId);
     }
 
     logger.info('Scheduler initialised', {
@@ -54,6 +66,7 @@ export class Scheduler {
       maxConsecutiveFailures: this.config.maxConsecutiveFailures ?? 'unlimited',
       currentExecutionCount: this.executionCount,
       currentConsecutiveFailures: this.consecutiveFailures,
+      scheduleId: this.scheduleId,
     });
 
     this.task = cron.schedule(
@@ -69,7 +82,7 @@ export class Scheduler {
 
   private async executeJob(job: () => Promise<void>) {
     // Check if already running
-    if (this.running) {
+    if (this.running || this.pending) {
       logger.warn('Skipping scheduled job because previous run is still in progress');
       return;
     }
@@ -121,11 +134,26 @@ export class Scheduler {
       await new Promise((resolve) => setTimeout(resolve, this.config.failureRetryDelay!));
     }
 
+    this.pending = true;
+    const lease = this.admission ? await this.admission.acquire(this.scheduleId) : null;
+    this.pending = false;
+
+    if (this.stopped) {
+      lease?.release();
+      return;
+    }
+    if (this.admission && !lease) {
+      logger.warn('Skipping scheduled job because the shared scheduler queue is full', {
+        scheduleId: this.scheduleId,
+      });
+      return;
+    }
+
     this.running = true;
     this.lastExecutionTime = now;
     this.executionCount++;
 
-    const executionNumber = this.database?.getNextExecutionNumber() ?? this.executionCount;
+    const executionNumber = this.database?.getNextExecutionNumber(this.scheduleId) ?? this.executionCount;
     const startTime = new Date();
     let status: 'success' | 'failed' | 'timeout' | 'skipped' = 'success';
     let errorMessage: string | null = null;
@@ -154,7 +182,9 @@ export class Scheduler {
       }
     }
 
-    logger.info(`Starting scheduled Pixiv download job (execution #${executionNumber})`);
+    logger.info(`Starting scheduled Pixiv download job (execution #${executionNumber})`, {
+      scheduleId: this.scheduleId,
+    });
 
     // Set up timeout if configured
     if (this.config.timeout) {
@@ -229,10 +259,12 @@ export class Scheduler {
           duration,
           errorMessage,
           itemsDownloaded
+          ,this.scheduleId
         );
       }
 
       this.running = false;
+      lease?.release();
 
       // Check if we should stop after this execution
       if (
@@ -280,8 +312,9 @@ export class Scheduler {
       consecutiveFailures: this.consecutiveFailures,
       running: this.running,
       stopped: this.stopped,
+      pending: this.pending,
+      scheduleId: this.scheduleId,
       lastExecutionTime: this.lastExecutionTime,
     };
   }
 }
-

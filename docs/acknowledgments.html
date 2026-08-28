@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>参考与致谢 — PixivFlow</title>
+  <meta name="description" content="PixivFlow 的参考项目与致谢:gallery-dl、pixiv-api、pixiv-app-api、get-pixivpy-token 等 Pixiv App API 社区项目,核心开源依赖,以及使用规范声明。">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐱</text></svg>">
+  <link rel="stylesheet" href="assets/site.css">
+  <script>document.documentElement.setAttribute("data-theme", localStorage.getItem("pf-theme") || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"));</script>
+  <script src="assets/site.js" defer></script>
+</head>
+<body>
+<header class="topbar">
+  <div class="bar">
+    <a class="brand" href="index.html"><span class="logo">🐱</span>PixivFlow</a>
+    <ul class="nav-links">
+      <li><a href="index.html">首页</a></li>
+      <li><a href="guide.html">使用教程</a></li>
+      <li><a href="config.html">配置参考</a></li>
+      <li><a href="deployment.html">部署指南</a></li>
+      <li><a href="faq.html">常见问题</a></li>
+      <li><a href="tutorial-full.html">完整教程</a></li>
+      <li><a href="acknowledgments.html" class="active">致谢</a></li>
+    </ul>
+    <div class="top-actions">
+      <button class="icon-btn js-theme-toggle" aria-label="切换主题">🌙</button>
+      <a class="icon-btn" href="https://github.com/redtidev1918/PixivFlow" target="_blank" rel="noopener" title="GitHub 仓库">⭐</a>
+    </div>
+  </div>
+</header>
+
+<main class="container">
+  <div class="page-head">
+    <h1>🙏 参考与致谢</h1>
+    <p class="lede">PixivFlow 站在 Pixiv App API 逆向工程社区与开源生态的肩膀上。以下链接在撰写时逐一验证可用;所有商标归各自权利人所有。</p>
+  </div>
+
+  <section class="card-block">
+    <h2 class="section-title">灵感与参考<span class="anchor-hint">#</span></h2>
+    <div class="table-scroll"><table>
+      <thead><tr><th>项目</th><th>对 PixivFlow 的影响</th></tr></thead>
+      <tbody>
+        <tr><td><a href="https://github.com/mikf/gallery-dl" target="_blank" rel="noopener">mikf/gallery-dl</a></td><td>v2.3.0 的动图(ugoira)元数据 / zip 处理与小说正文 webview 回退直接参考其 pixiv 抽取器;多站点抽取器的容错组织方式也是范本</td></tr>
+        <tr><td><a href="https://github.com/azuline/pixiv-api" target="_blank" rel="noopener">azuline/pixiv-api</a></td><td>App API 端点文档最完整的实现之一,novel text / ranking 的语义参照</td></tr>
+        <tr><td><a href="https://github.com/akameco/pixiv-app-api" target="_blank" rel="noopener">akameco/pixiv-app-api</a></td><td>Promise 风格 App API 客户端,请求头与分页设计参考</td></tr>
+        <tr><td><a href="https://github.com/eggplants/get-pixivpy-token" target="_blank" rel="noopener">eggplants/get-pixivpy-token</a></td><td>OAuth(PKCE)登录流程的 Python 先行者;内置 gppt 兜底适配层即基于同一思路</td></tr>
+        <tr><td><a href="https://github.com/redtidev1918/pixiv-token-getter" target="_blank" rel="noopener">redtidev1918/pixiv-token-getter</a></td><td>自维护的登录库(默认登录适配层的底层实现),v2.1.0 起由 Trusted Publishing 发布</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section class="card-block">
+    <h2 class="section-title">核心依赖 · 后端(Node.js)<span class="anchor-hint">#</span></h2>
+    <div class="table-scroll"><table>
+      <thead><tr><th>依赖</th><th>用途</th></tr></thead>
+      <tbody>
+        <tr><td><a href="https://github.com/nodejs/undici" target="_blank" rel="noopener">undici</a></td><td>HTTP 客户端与代理 dispatcher(ProxyAgent)</td></tr>
+        <tr><td><a href="https://github.com/WiseLibs/better-sqlite3" target="_blank" rel="noopener">better-sqlite3</a></td><td>下载记录 / 去重 / 断点续传数据库</td></tr>
+        <tr><td><a href="https://github.com/expressjs/express" target="_blank" rel="noopener">express</a></td><td>WebUI 后端框架</td></tr>
+        <tr><td><a href="https://github.com/socketio/socket.io" target="_blank" rel="noopener">socket.io</a></td><td>日志与任务状态实时推送</td></tr>
+        <tr><td><a href="https://github.com/node-cron/node-cron" target="_blank" rel="noopener">node-cron</a></td><td>定时调度</td></tr>
+        <tr><td><a href="https://github.com/axios/axios" target="_blank" rel="noopener">axios</a></td><td>SOCKS 代理路径的 HTTP 客户端</td></tr>
+        <tr><td><a href="https://github.com/TooTallNate/proxy-agents" target="_blank" rel="noopener">https-proxy-agent / socks-proxy-agent</a></td><td>代理连接</td></tr>
+        <tr><td><a href="https://github.com/wooorm/franc" target="_blank" rel="noopener">franc-min</a></td><td>小说语言检测(中文过滤)</td></tr>
+        <tr><td><a href="https://github.com/redtidev1918/pixiv-token-getter" target="_blank" rel="noopener">pixiv-token-getter</a></td><td>登录令牌获取</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section class="card-block">
+    <h2 class="section-title">核心依赖 · WebUI 前端<span class="anchor-hint">#</span></h2>
+    <div class="table-scroll"><table>
+      <thead><tr><th>依赖</th><th>用途</th></tr></thead>
+      <tbody>
+        <tr><td><a href="https://github.com/facebook/react" target="_blank" rel="noopener">React 18</a> + <a href="https://github.com/ant-design/ant-design" target="_blank" rel="noopener">Ant Design 5</a></td><td>界面框架与组件库</td></tr>
+        <tr><td><a href="https://github.com/TanStack/query" target="_blank" rel="noopener">TanStack Query</a></td><td>服务端状态与缓存</td></tr>
+        <tr><td><a href="https://github.com/pmndrs/zustand" target="_blank" rel="noopener">Zustand</a></td><td>客户端状态</td></tr>
+        <tr><td><a href="https://github.com/socketio/socket.io-client" target="_blank" rel="noopener">Socket.IO Client</a></td><td>实时通道</td></tr>
+        <tr><td><a href="https://github.com/i18next/i18next" target="_blank" rel="noopener">i18next</a></td><td>中英双语</td></tr>
+        <tr><td><a href="https://github.com/vitejs/vite" target="_blank" rel="noopener">Vite</a></td><td>构建与开发服务器</td></tr>
+        <tr><td><a href="https://github.com/microsoft/playwright" target="_blank" rel="noopener">Playwright</a> + <a href="https://github.com/jestjs/jest" target="_blank" rel="noopener">Jest</a></td><td>端到端与单元测试</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section class="card-block">
+    <h2 class="section-title">使用规范<span class="anchor-hint">#</span></h2>
+    <ul>
+      <li>本项目与 Pixiv Inc.(ピクシブ株式会社)<strong>无任何关联</strong>;Pixiv 及相关商标归其权利人所有。</li>
+      <li>请遵守 Pixiv 服务条款:理性收藏、尊重创作者版权,不要将下载内容用于商业用途或二次分发。</li>
+      <li>所列依赖的商标与版权归属各自的权利人,一并致谢。</li>
+    </ul>
+  </section>
+
+  <div class="backtop" style="text-align:right;margin:30px 0 8px;font-size:.88rem"><a href="#">↑ 回到顶部</a></div>
+</main>
+
+<footer class="site-footer">
+  <div class="container cols">
+    <div><strong>🐱 PixivFlow</strong><p style="margin:.3rem 0 0">Pixiv 批量下载与定时收集工具<br>CLI 与 WebUI 双形态 · MIT License</p></div>
+    <div><strong>文档</strong><ul>
+      <li><a href="index.html">首页</a></li><li><a href="guide.html">使用教程</a></li><li><a href="config.html">配置参考</a></li>
+      <li><a href="deployment.html">部署指南</a></li><li><a href="faq.html">常见问题</a></li><li><a href="tutorial-full.html">完整教程</a></li>
+      <li><a href="acknowledgments.html">参考与致谢</a></li>
+    </ul></div>
+    <div><strong>项目</strong><ul>
+      <li><a href="https://github.com/redtidev1918/PixivFlow">GitHub 仓库</a></li>
+      <li><a href="https://github.com/redtidev1918/PixivFlow/releases">Releases</a></li>
+      <li><a href="https://www.npmjs.com/package/pixivflow">npm 包</a></li>
+      <li><a href="https://github.com/redtidev1918/PixivFlow/issues">问题反馈</a></li>
+      <li><a href="https://github.com/redtidev1918/pixivflow-webui">WebUI 前端仓库</a></li>
+    </ul></div>
+  </div>
+  <div class="container foot-note">以 MIT 协议开源 · 请遵守 Pixiv 服务条款理性收藏,尊重创作者版权</div>
+</footer>
+</body>
+</html>

@@ -115,6 +115,18 @@ Bugs and feature requests go to
 secrets before sharing). Security issues are handled privately — see
 [SECURITY.md](SECURITY.md).
 
+## 🙏 Acknowledgments
+
+PixivFlow stands on the shoulders of the Pixiv App API community and open source:
+
+- [mikf/gallery-dl](https://github.com/mikf/gallery-dl) — reference for ugoira handling and the novel webview text fallback
+- [azuline/pixiv-api](https://github.com/azuline/pixiv-api) · [akameco/pixiv-app-api](https://github.com/akameco/pixiv-app-api) — App API endpoint semantics
+- [eggplants/get-pixivpy-token](https://github.com/eggplants/get-pixivpy-token) — Python pioneer of the OAuth (PKCE) login flow
+- [pixiv-token-getter](https://github.com/redtidev1918/pixiv-token-getter) — built-in login library (self-maintained)
+- [pixivflow-webui](https://github.com/redtidev1918/pixivflow-webui) — official WebUI frontend
+
+Full credits and usage policy: [docs/ACKNOWLEDGMENTS.md](docs/ACKNOWLEDGMENTS.md).
+
 ## License
 
 [MIT](LICENSE)

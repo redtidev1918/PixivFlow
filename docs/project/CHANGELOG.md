@@ -5,6 +5,15 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [2.2.0] - 2026-08-27
+
+### 新增
+- ✨ `pixivflow refresh -`：支持从 stdin 读取 refreshToken（`cat token.txt | pixivflow refresh -`），不进 shell 历史与进程列表
+- ✨ `login-headless --password-stdin`：密码经 stdin 传入，避免进 shell 历史
+- ✨ `login` 成功后提示如何把 token 搬运到无浏览器服务器
+- ✨ 文档：LOGIN 补充无头服务器三种登录路径与安全建议
+
+---
 ## [2.1.1] - 2026-08-27
 
 ### 变更

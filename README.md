@@ -111,17 +111,15 @@ Bug 与功能建议请提交到
 配置文件中包含认证信息，请勿直接分享）。安全漏洞的处理方式见
 [SECURITY.md](SECURITY.md)。
 
-## 🙏 致谢与参考
+## 致谢
 
-PixivFlow 站在 Pixiv App API 逆向工程社区与开源生态的肩膀上:
+- [gallery-dl](https://github.com/mikf/gallery-dl) —— ugoira 与小说正文的实现参考
+- [pixiv-app-api](https://github.com/akameco/pixiv-app-api) · [pixiv-api](https://github.com/azuline/pixiv-api) —— App API 端点语义
+- [get-pixivpy-token](https://github.com/eggplants/get-pixivpy-token) —— OAuth 登录流程参考
+- [pixiv-token-getter](https://github.com/redtidev1918/pixiv-token-getter) —— 登录库
+- [pixivflow-webui](https://github.com/redtidev1918/pixivflow-webui) —— WebUI 前端
 
-- [mikf/gallery-dl](https://github.com/mikf/gallery-dl) —— 动图(ugoira)处理与小说正文 webview 回退的实现参考
-- [azuline/pixiv-api](https://github.com/azuline/pixiv-api) · [akameco/pixiv-app-api](https://github.com/akameco/pixiv-app-api) —— App API 端点语义参照
-- [eggplants/get-pixivpy-token](https://github.com/eggplants/get-pixivpy-token) —— OAuth(PKCE)登录流程的 Python 先行者
-- [pixiv-token-getter](https://github.com/redtidev1918/pixiv-token-getter) —— 内置登录库(自维护)
-- [pixivflow-webui](https://github.com/redtidev1918/pixivflow-webui) —— 官方 WebUI 前端
-
-完整致谢与使用规范见 [docs/ACKNOWLEDGMENTS.md](docs/ACKNOWLEDGMENTS.md)。
+本项目与 Pixiv Inc. 无关联。完整声明见 [docs/ACKNOWLEDGMENTS.md](docs/ACKNOWLEDGMENTS.md)。
 
 ## 许可证
 

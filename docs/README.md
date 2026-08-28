@@ -63,10 +63,9 @@
 | [组件目录](https://github.com/redtidev1918/pixivflow-webui/blob/master/docs/COMPONENT_GUIDE.md) | 全量组件职责与组合套路 |
 | [构建选项](https://github.com/redtidev1918/pixivflow-webui/blob/master/docs/BUILD_OPTIONS.md) | 静态托管 / Docker 一体化两条路线 |
 
-## 🙏 致谢与参考
+## 致谢
 
-PixivFlow 站在 Pixiv App API 逆向工程社区与开源生态的肩膀上。灵感来源、核心依赖与规范声明见
-[ACKNOWLEDGMENTS.md](ACKNOWLEDGMENTS.md)。
+灵感来源、核心依赖与规范声明见 [ACKNOWLEDGMENTS.md](ACKNOWLEDGMENTS.md)。
 
 ## 🔗 其他入口
 

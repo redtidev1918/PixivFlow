@@ -51,8 +51,8 @@ export async function findAvailablePort(
 /**
  * Log server startup message
  */
-export function logServerStart(host: string, port: number): void {
-  const message = `WebUI server started on http://${host}:${port}`;
+export function logServerStart(host: string, port: number, scheme: 'http' | 'https' = 'http'): void {
+  const message = `WebUI server started on ${scheme}://${host}:${port}`;
   logger.info(message);
   // Also output to stdout for Electron detection
   console.log(`[WebUI] ${message}`);

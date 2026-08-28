@@ -209,6 +209,7 @@ pixivflow refresh <refresh_token> --config "$(pwd)/config/standalone.config.json
 | `TZ` | .env → 插值 | 容器时区 | `Asia/Shanghai` |
 | `WEBUI_PORT` | .env → 插值 | WebUI 宿主机映射端口 | `3000` |
 | `WEBUI_USERNAME` / `WEBUI_PASSWORD` | — | 两者同时设置即启用 WebUI Basic Auth（全站含 Socket.IO；`/api/health` 除外） |
+| `WEBUI_TLS_CERT` / `WEBUI_TLS_KEY` | — | 同时设置即以 HTTPS 监听（证书需容器内可读，如挂载 `./certs:/app/certs:ro`）；仅设置其一视为配置错误并拒绝启动 |
 | `PORT` | compose 固定 | WebUI 容器内监听端口 | `3000` |
 | `HOST` | compose 固定 | WebUI 容器内监听地址 | `0.0.0.0` |
 | `STATIC_PATH` | compose 固定 | 前端静态资源目录（容器内） | `/app/webui-frontend/dist` |

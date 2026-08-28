@@ -5,6 +5,12 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [2.5.0] - 2026-08-27
+
+### 新增
+- ✨ WebUI 原生 HTTPS：设置 `WEBUI_TLS_CERT` / `WEBUI_TLS_KEY` 后以 TLS 监听，配合 Basic Auth 即可在无反代的情况下安全暴露（自签证书亦可）；仅设其一则拒绝启动
+
+---
 ## [2.4.0] - 2026-08-27
 
 ### 新增

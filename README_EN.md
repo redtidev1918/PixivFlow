@@ -73,6 +73,46 @@ Downloaded items are tracked in a SQLite database and skipped automatically;
 files that exist without a database record are reconciled, so the two never
 conflict.
 
+### Persistent and cache delivery modes
+
+Each target can use `storageMode: "persistent"` (the default, keep files) or
+`storageMode: "cache"` (send files to a named delivery target and delete them
+only after success). The delivery layer is service-independent; this example
+merely translates an HTTP multipart submission API into configuration:
+
+```json
+{
+  "delivery": {
+    "targets": {
+      "sharing-api": {
+        "type": "httpMultipart",
+        "url": "https://example.test/submissions",
+        "headers": { "Authorization": "Bearer ${SHARING_TOKEN}" },
+        "fileField": "files",
+        "fields": { "title": "{{title}}" },
+        "success": { "statuses": [201], "jsonPath": "ok", "equals": true }
+      }
+    }
+  },
+  "targets": [
+    { "type": "illustration", "tag": "archive", "storageMode": "persistent" },
+    {
+      "type": "illustration",
+      "tag": "updates",
+      "storageMode": "cache",
+      "delivery": {
+        "target": "sharing-api",
+        "fields": { "tags": ["announcement", "update"], "anonymous": false }
+      }
+    }
+  ]
+}
+```
+
+Headers and URLs accept arbitrary `${ENV_NAME}` interpolation. Failed delivery
+keeps both files and the durable outbox manifest beside the SQLite database;
+the next run retries them before processing new targets.
+
 Interactive configuration wizard: `pixivflow setup`.
 
 ## Common commands

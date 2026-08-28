@@ -9,6 +9,7 @@ import { getTodayDate, getYesterdayDate } from '../../utils/pixiv-date-utils';
 import { NetworkError } from '../../utils/errors';
 import { calculatePopularityScore } from '../../utils/pixiv-utils';
 import { PixivIllust } from '../../pixiv/PixivClient';
+import { DeliveryOutbox } from '../../delivery/DeliveryOutbox';
 
 export class IllustrationTargetHandler {
   constructor(
@@ -16,7 +17,8 @@ export class IllustrationTargetHandler {
     private readonly database: IDatabase,
     private readonly rankingService: RankingService,
     private readonly illustrationDownloader: IllustrationDownloader,
-    private readonly pipeline: DownloadPipeline
+    private readonly pipeline: DownloadPipeline,
+    private readonly deliveryOutbox?: DeliveryOutbox
   ) {}
 
   async handle(target: TargetConfig): Promise<void> {
@@ -40,7 +42,7 @@ export class IllustrationTargetHandler {
         illusts,
         target,
         'illustration',
-        (illust, tag) => this.illustrationDownloader.downloadIllustration(illust, tag)
+        (illust, tag) => this.downloadAndDeliver(illust, tag, target)
       );
       this.handleDownloadResult(result, target, mode, displayTag, illusts.length);
     } catch (error) {
@@ -219,7 +221,7 @@ export class IllustrationTargetHandler {
 
       const detail = await this.client.getIllustration(illustId);
       // Use the detail directly as it's already a PixivIllust
-      await this.illustrationDownloader.downloadIllustration(detail, `illust-${illustId}`);
+      await this.downloadAndDeliver(detail, `illust-${illustId}`, target);
       logger.info(`Successfully downloaded illustration ${illustId}`);
     } catch (error) {
       this.logError(error, `Failed to download illustration ${illustId}`);
@@ -251,7 +253,7 @@ export class IllustrationTargetHandler {
         illusts,
         target,
         'illustration',
-        (illust, tag) => this.illustrationDownloader.downloadIllustration(illust, tag)
+        (illust, tag) => this.downloadAndDeliver(illust, tag, target)
       );
       this.handleDownloadResult(result, target, 'user', `user-${userId}`, illusts.length);
     } catch (error) {
@@ -310,6 +312,15 @@ export class IllustrationTargetHandler {
       stack: error instanceof Error ? error.stack : undefined,
     });
   }
+
+  private async downloadAndDeliver(
+    illust: PixivIllust,
+    tag: string,
+    target: TargetConfig
+  ): Promise<void> {
+    const artifact = await this.illustrationDownloader.downloadIllustration(illust, tag);
+    if (artifact && this.deliveryOutbox) {
+      await this.deliveryOutbox.deliver(artifact, target);
+    }
+  }
 }
-
-

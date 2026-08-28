@@ -102,7 +102,45 @@ export function validateConfig(config: Partial<StandaloneConfig>, location: stri
       if (target.rankingDate && !/^\d{4}-\d{2}-\d{2}$/.test(target.rankingDate) && target.rankingDate !== 'YESTERDAY') {
         errors.push(`targets[${index}].rankingDate: Invalid format, must be YYYY-MM-DD or "YESTERDAY"`);
       }
+      if (target.storageMode && !['persistent', 'cache'].includes(target.storageMode)) {
+        errors.push(`targets[${index}].storageMode: Must be "persistent" or "cache"`);
+      }
+      if (target.storageMode === 'cache') {
+        const deliveryTarget = target.delivery?.target?.trim();
+        if (!deliveryTarget) {
+          errors.push(`targets[${index}].delivery.target: Required when storageMode is "cache"`);
+        } else if (!config.delivery?.targets?.[deliveryTarget]) {
+          errors.push(`targets[${index}].delivery.target: Unknown delivery target "${deliveryTarget}"`);
+        }
+      }
     });
+  }
+
+  for (const [name, delivery] of Object.entries(config.delivery?.targets ?? {})) {
+    const prefix = `delivery.targets.${name}`;
+    if (delivery.type !== 'httpMultipart') {
+      errors.push(`${prefix}.type: Unsupported delivery type "${(delivery as { type?: string }).type}"`);
+      continue;
+    }
+    if (!delivery.url?.trim()) {
+      errors.push(`${prefix}.url: Required field is missing or empty`);
+    } else if (!/\$\{[A-Za-z_][A-Za-z0-9_]*\}/.test(delivery.url)) {
+      try {
+        const url = new URL(delivery.url);
+        if (!['http:', 'https:'].includes(url.protocol)) throw new Error('unsupported protocol');
+      } catch {
+        errors.push(`${prefix}.url: Must be a valid HTTP or HTTPS URL`);
+      }
+    }
+    if (delivery.method && !['POST', 'PUT'].includes(delivery.method)) {
+      errors.push(`${prefix}.method: Must be "POST" or "PUT"`);
+    }
+    if (delivery.maxAttempts !== undefined && (!Number.isInteger(delivery.maxAttempts) || delivery.maxAttempts < 1)) {
+      errors.push(`${prefix}.maxAttempts: Must be an integer greater than 0`);
+    }
+    if (delivery.retryDelayMs !== undefined && delivery.retryDelayMs < 0) {
+      errors.push(`${prefix}.retryDelayMs: Must be greater than or equal to 0`);
+    }
   }
 
   // Validate network config
@@ -216,4 +254,3 @@ export function validateConfigFile(configPath: string): { valid: boolean; errors
     };
   }
 }
-

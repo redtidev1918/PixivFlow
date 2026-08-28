@@ -131,9 +131,64 @@ export class ConfigValidator {
           });
         }
 
+        if (target.storageMode && target.storageMode !== 'persistent' && target.storageMode !== 'cache') {
+          errors.push({
+            code: 'CONFIG_VALIDATION_TARGET_STORAGE_MODE_INVALID',
+            field: `${targetPrefix}.storageMode`,
+            message: `Target ${index + 1}: Storage mode must be 'persistent' or 'cache'`,
+          });
+        }
+        if (target.storageMode === 'cache') {
+          const deliveryTarget = target.delivery?.target?.trim();
+          if (!deliveryTarget) {
+            errors.push({
+              code: 'CONFIG_VALIDATION_DELIVERY_TARGET_REQUIRED',
+              field: `${targetPrefix}.delivery.target`,
+              message: `Target ${index + 1}: Cache mode requires a delivery target`,
+            });
+          } else if (!config.delivery?.targets?.[deliveryTarget]) {
+            errors.push({
+              code: 'CONFIG_VALIDATION_DELIVERY_TARGET_UNKNOWN',
+              field: `${targetPrefix}.delivery.target`,
+              message: `Target ${index + 1}: Unknown delivery target '${deliveryTarget}'`,
+            });
+          }
+        }
+
         // Validate date ranges
         this.validateTargetDates(target, index, errors, warnings);
       });
+    }
+
+    for (const [name, delivery] of Object.entries(config.delivery?.targets ?? {})) {
+      const prefix = `delivery.targets.${name}`;
+      if (delivery.type !== 'httpMultipart') {
+        errors.push({
+          code: 'CONFIG_VALIDATION_DELIVERY_TYPE_UNSUPPORTED',
+          field: `${prefix}.type`,
+          message: `Delivery target '${name}': Unsupported type`,
+        });
+        continue;
+      }
+      if (!/\$\{[A-Za-z_][A-Za-z0-9_]*\}/.test(delivery.url)) {
+        try {
+          const url = new URL(delivery.url);
+          if (!['http:', 'https:'].includes(url.protocol)) throw new Error('unsupported protocol');
+        } catch {
+          errors.push({
+            code: 'CONFIG_VALIDATION_DELIVERY_URL_INVALID',
+            field: `${prefix}.url`,
+            message: `Delivery target '${name}': URL must be valid HTTP or HTTPS`,
+          });
+        }
+      }
+      if (delivery.maxAttempts !== undefined && (!Number.isInteger(delivery.maxAttempts) || delivery.maxAttempts < 1)) {
+        errors.push({
+          code: 'CONFIG_VALIDATION_DELIVERY_ATTEMPTS_INVALID',
+          field: `${prefix}.maxAttempts`,
+          message: `Delivery target '${name}': maxAttempts must be an integer greater than 0`,
+        });
+      }
     }
 
     // Validate storage config
@@ -331,5 +386,3 @@ export function validateConfigWithUnifiedStorage(
     databasePath,
   });
 }
-
-

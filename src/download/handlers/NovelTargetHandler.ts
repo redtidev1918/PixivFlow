@@ -9,6 +9,7 @@ import { NetworkError } from '../../utils/errors';
 import { getTodayDate, getYesterdayDate } from '../../utils/pixiv-date-utils';
 import { calculatePopularityScore } from '../../utils/pixiv-utils';
 import { PixivNovel } from '../../pixiv/PixivClient';
+import { DeliveryOutbox } from '../../delivery/DeliveryOutbox';
 
 export class NovelTargetHandler {
   constructor(
@@ -16,7 +17,8 @@ export class NovelTargetHandler {
     private readonly database: IDatabase,
     private readonly rankingService: RankingService,
     private readonly pipeline: DownloadPipeline,
-    private readonly novelDownloader: NovelDownloader
+    private readonly novelDownloader: NovelDownloader,
+    private readonly deliveryOutbox?: DeliveryOutbox
   ) {}
 
   async handle(target: TargetConfig): Promise<void> {
@@ -45,7 +47,7 @@ export class NovelTargetHandler {
         novels,
         target,
         'novel',
-        (novel, tag) => this.novelDownloader.download(novel, tag, target)
+        (novel, tag) => this.downloadAndDeliver(novel, tag, target)
       );
       this.handleDownloadResult(result, target, mode, displayTag, novels.length);
     } catch (error) {
@@ -225,7 +227,7 @@ export class NovelTargetHandler {
         create_date: detail.create_date,
       };
 
-      await this.novelDownloader.download(novel, `novel-${novelId}`, target);
+      await this.downloadAndDeliver(novel, `novel-${novelId}`, target);
       logger.info(`Successfully downloaded novel ${novelId}`);
     } catch (error) {
       this.logError(error, `Failed to download novel ${novelId}`);
@@ -256,7 +258,7 @@ export class NovelTargetHandler {
         }
 
         try {
-          await this.novelDownloader.download(novel, `series-${seriesId}`, target);
+          await this.downloadAndDeliver(novel, `series-${seriesId}`, target);
           downloaded++;
           logger.info(
             `Successfully downloaded novel ${novel.id} from series (${downloaded}/${Math.min(targetLimit, novels.length)})`
@@ -305,7 +307,7 @@ export class NovelTargetHandler {
         novels,
         target,
         'novel',
-        (novel, tag) => this.novelDownloader.download(novel, tag, target)
+        (novel, tag) => this.downloadAndDeliver(novel, tag, target)
       );
       this.handleDownloadResult(result, target, 'user', `user-${userId}`, novels.length);
     } catch (error) {
@@ -359,6 +361,15 @@ export class NovelTargetHandler {
       stack: error instanceof Error ? error.stack : undefined,
     });
   }
+
+  private async downloadAndDeliver(
+    novel: PixivNovel,
+    tag: string,
+    target: TargetConfig
+  ): Promise<void> {
+    const artifact = await this.novelDownloader.download(novel, tag, target);
+    if (artifact && this.deliveryOutbox) {
+      await this.deliveryOutbox.deliver(artifact, target);
+    }
+  }
 }
-
-

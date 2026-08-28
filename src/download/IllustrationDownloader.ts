@@ -63,6 +63,12 @@ export class IllustrationDownloader {
         setTimeout(() => reject(new Error(`Timeout: Failed to get illustration detail for ${illust.id} within 60 seconds`)), 60000)
       )
     ]);
+    // Ugoira (animation) works have no original image urls; they are
+    // delivered as a zip of frames plus a frame-delay sidecar.
+    if (detail.illust_type === 'ugoira' || (illust as any).type === 'ugoira') {
+      return this.downloadUgoira(detail, tag, tags);
+    }
+
     const pages = this.getIllustrationPages(detail);
 
     // Use parallel download for multiple pages to improve performance
@@ -164,6 +170,99 @@ export class IllustrationDownloader {
     if (successCount === 0) {
       throw new Error(`Failed to download any pages for illustration ${detail.id}`);
     }
+  }
+
+  /**
+   * Download an ugoira (animation) work: fetch metadata, download the frame
+   * zip (original size when available), and save the frame-delay sidecar so
+   * the animation can be reassembled by external tools.
+   */
+  private async downloadUgoira(
+    detail: PixivIllust,
+    tag: string,
+    tags: Array<{ name: string; translated_name?: string }>
+  ): Promise<void> {
+    if (this.database.hasDownloaded(String(detail.id), 'illustration')) {
+      logger.debug(`Ugoira ${detail.id} already downloaded, skipping`);
+      return;
+    }
+
+    const meta = await (this.client as IPixivClient).ugoiraMetadata(detail.id);
+    const medium = meta.zip_urls?.medium ?? '';
+    const originalUrl =
+      meta.zip_urls?.original ?? medium.replace('_ugoira600x600', '_ugoira1920x1080');
+    // Try the original-size zip first; fall back to the smaller medium zip.
+    const zipCandidates = [originalUrl, medium].filter(Boolean);
+    if (zipCandidates.length === 0) {
+      throw new Error(`Ugoira zip url missing for illustration ${detail.id}`);
+    }
+
+    const baseName = this.fileService.sanitizeFileName(
+      `${detail.id}_${detail.title}_ugoira`
+    );
+    const zipFileName = `${baseName}.zip`;
+
+    const metadata: FileMetadata = {
+      author: detail.user?.name,
+      tag: tag,
+      date: detail.create_date ? new Date(detail.create_date) : new Date(),
+    };
+
+    let buffer: ArrayBuffer | undefined;
+    let lastZipError: unknown;
+    for (const zipUrl of zipCandidates) {
+      try {
+        buffer = await Promise.race([
+          this.client.downloadImage(zipUrl),
+          new Promise<ArrayBuffer>((_, reject) =>
+            setTimeout(() => reject(new Error(`Timeout: ugoira zip download for ${detail.id}`)), 300000)
+          ),
+        ]);
+        break;
+      } catch (e) {
+        lastZipError = e;
+        logger.warn(`Ugoira zip candidate failed (${zipUrl.slice(0, 80)})`, {
+          error: e instanceof Error ? e.message : String(e),
+        });
+      }
+    }
+    if (!buffer) {
+      throw new Error(
+        `Ugoira zip download failed for ${detail.id}: ${lastZipError instanceof Error ? lastZipError.message : String(lastZipError)}`
+      );
+    }
+    const zipPath = await this.fileService.saveImage(buffer, zipFileName, metadata);
+
+    const framesPath = zipPath.replace(/\.zip$/, '_frames.json');
+    await fs.writeFile(
+      framesPath,
+      JSON.stringify(
+        {
+          illust_id: detail.id,
+          title: detail.title,
+          frames: meta.frames ?? [],
+          zip_file: zipFileName,
+          original_url: `https://www.pixiv.net/artworks/${detail.id}`,
+        },
+        null,
+        2
+      ),
+      'utf-8'
+    );
+
+    this.database.insertDownload({
+      pixivId: String(detail.id),
+      type: 'illustration',
+      tag,
+      title: detail.title,
+      filePath: zipPath,
+      author: detail.user?.name,
+      userId: detail.user?.id,
+    });
+
+    logger.info(`Saved ugoira ${detail.id} (zip + ${meta.frames?.length ?? 0} frames)`, {
+      filePath: zipPath,
+    });
   }
 
   /**

@@ -106,7 +106,7 @@ export class PixivApiCore {
 
   // Minimal request method signature; implementation will be added during wiring.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async request<T = any>(path: string, init?: RequestInit): Promise<T> {
+  async request<T = any>(path: string, init?: RequestInit & { skipAuth?: boolean; responseType?: 'json' | 'text' }): Promise<T> {
     const url = this.resolveUrl(path);
     let lastError: unknown;
     // maxRetries is the number of retries, so total attempts = maxRetries + 1 (initial attempt)
@@ -123,7 +123,9 @@ export class PixivApiCore {
             ...(init?.headers as Record<string, string> | undefined),
           };
           // Authorization header
-          if (this.getAccessToken) {
+          // skipAuth: web endpoints (www.pixiv.net/ajax/*) reject the App
+          // Bearer token, so callers may opt out for those requests.
+          if (this.getAccessToken && !(init as any)?.skipAuth) {
             const token = await Promise.resolve(this.getAccessToken());
             if (token) {
               headers.Authorization = `Bearer ${token}`;
@@ -166,7 +168,7 @@ export class PixivApiCore {
             res = await fetch(url, fetchOptions) as unknown as Response;
           }
 
-          return await this.processResponse<T>(res, url, attempt);
+          return await this.processResponse<T>(res, url, attempt, (init as any)?.responseType);
         } finally {
           clearTimeout(timeout);
         }
@@ -222,16 +224,18 @@ export class PixivApiCore {
     throw new NetworkError(`Request to ${url} failed: ${message}`, url, lastError instanceof Error ? lastError : undefined);
   }
 
-  async downloadBinary(pathOrUrl: string, init?: RequestInit): Promise<ArrayBuffer> {
+  async downloadBinary(pathOrUrl: string, init?: RequestInit & { timeoutMs?: number }): Promise<ArrayBuffer> {
     const url = this.resolveUrl(pathOrUrl);
     let lastError: unknown;
+    // Large binaries (e.g. ugoira zips) may need longer than the API default
+    const attemptTimeoutMs = (init as any)?.timeoutMs ?? this.defaultTimeoutMs;
     // maxRetries is the number of retries, so total attempts = maxRetries + 1 (initial attempt)
     const maxAttempts = Math.max(1, this.maxRetries + 1);
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       try {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), this.defaultTimeoutMs);
+        const timeout = setTimeout(() => controller.abort(), attemptTimeoutMs);
         try {
           const headers: Record<string, string> = {
             ...(this.userAgent ? { 'User-Agent': this.userAgent } : {}),
@@ -361,7 +365,7 @@ export class PixivApiCore {
     return Math.ceil(1000 / this.rateLimitPerSecond);
   }
 
-  async processResponse<T>(response: Response, url: string, attempt: number): Promise<T> {
+  async processResponse<T>(response: Response, url: string, attempt: number, responseType?: 'json' | 'text'): Promise<T> {
     // 401: likely token issue
     if (response.status === 401) {
       const body = await this.tryReadText(response);
@@ -399,6 +403,10 @@ export class PixivApiCore {
         `Pixiv API error: ${response.status} ${response.statusText}${body ? ` - ${body}` : ''}`,
         url
       );
+    }
+
+    if (responseType === 'text') {
+      return (await response.text()) as unknown as T;
     }
 
     return (await response.json()) as T;

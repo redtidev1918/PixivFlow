@@ -1,6 +1,7 @@
 import { PixivApiCore } from './PixivApiCore';
 import type { PixivNovel, PixivUser, PixivNovelTextResponse } from '../types';
 import { NetworkError } from '../../utils/errors';
+import { logger } from '../../logger';
 
 /**
  * Service for novel related Pixiv API calls.
@@ -62,28 +63,77 @@ export class NovelService {
   async getNovelText(novelId: number, opts?: { userAgent?: string }): Promise<PixivNovelTextResponse> {
     // Primary: v1 API
     const url = `/v1/novel/text?novel_id=${encodeURIComponent(String(novelId))}`;
+    let primaryError: unknown;
     try {
       return await this.api.request<PixivNovelTextResponse>(url, { method: 'GET' });
     } catch (e) {
-      // Fallback: ajax endpoint
-      try {
-        const ajaxUrl = `https://www.pixiv.net/ajax/novel/${novelId}`;
-        const headers: Record<string, string> = {
-          Referer: 'https://www.pixiv.net/',
-          ...(opts?.userAgent ? { 'User-Agent': opts.userAgent } : {}),
-        };
-        // We intentionally call request<T> to reuse auth/proxy/timeout
-        const resp = await this.api.request<any>(ajaxUrl, {
-          method: 'GET',
-          headers,
-        });
-        if (resp?.body?.content) {
-          return { novel_text: resp.body.content };
+      primaryError = e;
+    }
+
+    // Fallback 2: webview v2 (app endpoint; serves novels whose /v1/novel/text
+    // returns 404, e.g. works with embedded images or newly-posted ones).
+    try {
+      const webviewUrl = `/webview/v2/novel?id=${encodeURIComponent(String(novelId))}&viewer_version=20221031_ai`;
+      const html = await this.api.request<string>(webviewUrl, {
+        method: 'GET',
+        responseType: 'text',
+      });
+      const marker = 'novel: ';
+      const start = html.indexOf(marker);
+      if (start !== -1) {
+        const from = start + marker.length;
+        const end = html.indexOf(',\n', from);
+        if (end !== -1) {
+          const parsed = JSON.parse(html.slice(from, end));
+          if (parsed?.text) {
+            return { novel_text: parsed.text };
+          }
         }
-        throw new NetworkError('Unexpected ajax novel response structure', ajaxUrl);
-      } catch (e2) {
-        throw e2;
       }
+      logger.warn('webview novel parse found no embedded novel JSON, trying web ajax', {
+        novelId,
+      });
+    } catch (webviewError) {
+      logger.warn('webview novel fetch failed, trying web ajax', {
+        novelId,
+        error: webviewError instanceof Error ? webviewError.message : String(webviewError),
+      });
+    }
+
+    // Fallback 3: web ajax endpoint. This one must NOT carry the App Bearer
+    // token (www.pixiv.net/ajax rejects it with a different payload), so we
+    // send browser-like headers with skipAuth instead.
+    const BROWSER_UA =
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36';
+    const ajaxUrl = `https://www.pixiv.net/ajax/novel/${novelId}`;
+    try {
+      const resp = await this.api.request<any>(ajaxUrl, {
+        method: 'GET',
+        headers: {
+          Referer: 'https://www.pixiv.net/',
+          'User-Agent': opts?.userAgent ?? BROWSER_UA,
+        },
+        skipAuth: true,
+      });
+      if (resp?.error) {
+        throw new NetworkError(
+          `ajax endpoint returned error: ${resp.message || 'unknown'}`,
+          ajaxUrl
+        );
+      }
+      if (resp?.body?.content) {
+        return { novel_text: resp.body.content };
+      }
+      throw new NetworkError('Unexpected ajax novel response structure', ajaxUrl);
+    } catch (fallbackError) {
+      const primaryMsg =
+        primaryError instanceof Error ? primaryError.message : String(primaryError);
+      const fallbackMsg =
+        fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
+      throw new NetworkError(
+        `novel text failed for ${novelId}: app-api (${primaryMsg}) and web ajax (${fallbackMsg})`,
+        ajaxUrl
+      );
     }
   }
 

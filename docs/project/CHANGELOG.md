@@ -5,6 +5,17 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [2.3.0] - 2026-08-27
+
+### 新增
+- ✨ 动图（ugoira）支持：自动下载 帧 zip （原始尺寸优先，失败降级 medium）并写入 帧延迟侧车 JSON
+- ✨ 小说正文获取新增 webview 回退（/webview/v2/novel，参考 gallery-dl）：修复部分作品 /v1/novel/text 404 的问题
+- ✨ 图片/搜索结果类型字段兼容（illust_type / type）
+
+### 修复
+- 🐛 健康检查与 token 刷新遵循 network.proxy（随 2.2.1 发布）后续完善：ajax 回退不再携带 App Bearer 凭据，避免 web 端拒绝
+
+---
 ## [2.2.1] - 2026-08-27
 
 ### 修复

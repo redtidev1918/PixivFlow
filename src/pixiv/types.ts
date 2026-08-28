@@ -11,6 +11,9 @@ export interface PixivIllust {
   id: number;
   title: string;
   page_count: number;
+  /** Work type. App API detail uses illust_type; search results use type. */
+  illust_type?: 'illust' | 'manga' | 'ugoira';
+  type?: 'illust' | 'manga' | 'ugoira';
   user: PixivUser;
   image_urls: {
     square_medium: string;

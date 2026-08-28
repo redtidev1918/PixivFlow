@@ -115,17 +115,15 @@ Bugs and feature requests go to
 secrets before sharing). Security issues are handled privately — see
 [SECURITY.md](SECURITY.md).
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
-PixivFlow stands on the shoulders of the Pixiv App API community and open source:
+- [gallery-dl](https://github.com/mikf/gallery-dl) — reference for ugoira and novel text handling
+- [pixiv-app-api](https://github.com/akameco/pixiv-app-api) · [pixiv-api](https://github.com/azuline/pixiv-api) — App API endpoint semantics
+- [get-pixivpy-token](https://github.com/eggplants/get-pixivpy-token) — OAuth login flow reference
+- [pixiv-token-getter](https://github.com/redtidev1918/pixiv-token-getter) — login library
+- [pixivflow-webui](https://github.com/redtidev1918/pixivflow-webui) — WebUI frontend
 
-- [mikf/gallery-dl](https://github.com/mikf/gallery-dl) — reference for ugoira handling and the novel webview text fallback
-- [azuline/pixiv-api](https://github.com/azuline/pixiv-api) · [akameco/pixiv-app-api](https://github.com/akameco/pixiv-app-api) — App API endpoint semantics
-- [eggplants/get-pixivpy-token](https://github.com/eggplants/get-pixivpy-token) — Python pioneer of the OAuth (PKCE) login flow
-- [pixiv-token-getter](https://github.com/redtidev1918/pixiv-token-getter) — built-in login library (self-maintained)
-- [pixivflow-webui](https://github.com/redtidev1918/pixivflow-webui) — official WebUI frontend
-
-Full credits and usage policy: [docs/ACKNOWLEDGMENTS.md](docs/ACKNOWLEDGMENTS.md).
+Not affiliated with Pixiv Inc. Full statement: [docs/ACKNOWLEDGMENTS.md](docs/ACKNOWLEDGMENTS.md).
 
 ## License
 

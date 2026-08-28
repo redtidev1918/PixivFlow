@@ -283,6 +283,19 @@ export class PixivClient implements IPixivClient {
     return this.novelService.getNovelText(novelId, { userAgent: this.config.pixiv.userAgent });
   }
 
+  public async ugoiraMetadata(illustId: number): Promise<{
+    zip_urls: { medium?: string; original?: string };
+    frames: Array<{ file: string; delay: number }>;
+    silence_before?: number;
+    silence_after?: number;
+  }> {
+    const res = await this.apiCore.request<any>(
+      `/v1/ugoira/metadata?illust_id=${encodeURIComponent(String(illustId))}`,
+      { method: 'GET' }
+    );
+    return res.ugoira_metadata;
+  }
+
   /**
    * Get all novels in a series
    */

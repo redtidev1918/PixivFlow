@@ -79,6 +79,16 @@ export interface IPixivClient {
   /**
    * Get illustration detail with tags
    */
+  /**
+   * Get ugoira (animation) metadata: zip urls + frame delays
+   */
+  ugoiraMetadata(illustId: number): Promise<{
+    zip_urls: { medium?: string; original?: string };
+    frames: Array<{ file: string; delay: number }>;
+    silence_before?: number;
+    silence_after?: number;
+  }>;
+
   getIllustDetailWithTags(illustId: number): Promise<{
     illust: PixivIllust;
     tags: Array<{ name: string; translated_name?: string }>;

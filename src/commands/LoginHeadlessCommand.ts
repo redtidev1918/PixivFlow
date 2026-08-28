@@ -3,6 +3,7 @@
  */
 
 import * as path from 'path';
+import { readStdinLine } from '../utils/stdin';
 import { BaseCommand } from './Command';
 import { CommandCategory } from './metadata';
 import { CommandContext, CommandArgs, CommandResult } from './types';
@@ -45,12 +46,13 @@ export class LoginHeadlessCommand extends BaseCommand {
     const errors: string[] = [];
     const username = (args.options.username || args.options.u) as string | undefined;
     const password = (args.options.password || args.options.p) as string | undefined;
+    const passwordStdin = args.options['password-stdin'] === true;
 
     if (!username) {
       errors.push('Username (-u or --username) is required');
     }
-    if (!password) {
-      errors.push('Password (-p or --password) is required');
+    if (!password && !passwordStdin) {
+      errors.push('Password (-p, --password or --password-stdin) is required');
     }
 
     return {
@@ -62,14 +64,18 @@ export class LoginHeadlessCommand extends BaseCommand {
   async execute(context: CommandContext, args: CommandArgs): Promise<CommandResult> {
     const validation = this.validate(args);
     if (!validation.valid) {
-      console.error('[!]: Headless login requires username (-u) and password (-p)');
+      console.error('[!]: Headless login requires username (-u) and password (-p, --password or --password-stdin)');
       console.error('Usage: pixivflow login-headless -u <username> -p <password>');
       return this.failure(validation.errors.join(', '));
     }
 
     const json = !!(args.options.json || args.options.j);
     const username = (args.options.username || args.options.u) as string;
-    const password = (args.options.password || args.options.p) as string;
+    let password = (args.options.password || args.options.p) as string;
+    if (args.options['password-stdin'] === true) {
+      // Read the password from stdin so it never lands in shell history
+      password = await readStdinLine();
+    }
     const configPath = (args.options.config as string) || context.configPath;
 
     try {
@@ -115,7 +121,10 @@ export class LoginHeadlessCommand extends BaseCommand {
   
 Options:
   -u, --username <id>    Pixiv ID (email, username, or account name) [required]
-  -p, --password <pwd>   Your Pixiv password [required]
+  -p, --password <pwd>   Your Pixiv password [required unless --password-stdin]
+  --password-stdin       Read the password from stdin (e.g. pass -p is stored
+                         in shell history; stdin avoids that):
+                         echo "password" | pixivflow login-headless -u me --password-stdin
   -j, --json             Output response as JSON
   --config <path>        Path to config file
 

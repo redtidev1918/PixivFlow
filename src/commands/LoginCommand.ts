@@ -95,6 +95,10 @@ export class LoginCommand extends BaseCommand {
       }
 
       outputLoginResult(loginInfo, json);
+      if (!json) {
+        console.log('[i]: \u5728\u65e0\u6d4f\u89c8\u5668\u7684\u670d\u52a1\u5668\u4e0a\uff1f\u590d\u5236\u4e0a\u9762\u7684 refresh_token\uff0c\u5728\u670d\u52a1\u5668\u4e0a\u8fd0\u884c:');
+        console.log('[i]:   pixivflow refresh <refresh_token>');
+      }
       return this.success('Login successful', loginInfo);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);

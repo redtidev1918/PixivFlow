@@ -41,6 +41,9 @@ pixivflow login-headless -u user@example.com -p 密码
 
 ```bash
 pixivflow refresh <refresh_token>
+
+# 不让 token 进 shell history / 进程列表的安全写法:
+cat token.txt | pixivflow refresh -
 ```
 
 把一个已有的 refresh token 写入配置并刷新访问令牌,适合:
@@ -49,6 +52,17 @@ pixivflow refresh <refresh_token>
 - Docker 部署时在宿主机准备好凭据(见 [DOCKER · 凭据](DOCKER.md))。
 
 该命令有别名 `login-token` 和 `set-token`,行为一致。
+
+### 无头账密登录(兜底)
+
+```bash
+pixivflow login-headless -u user@example.com -p 密码
+
+# 密码不进 shell history 的写法:
+echo "密码" | pixivflow login-headless -u user@example.com --password-stdin
+```
+
+Puppeteer 无头浏览器自动完成授权(服务器需可安装 Chromium)。密码会经过服务器进程,能避免就避免——优先用 Token 搬运。
 
 ## 凭据存在哪里
 

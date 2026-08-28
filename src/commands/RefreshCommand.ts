@@ -8,6 +8,7 @@ import { CommandContext, CommandArgs, CommandResult } from './types';
 import { TerminalLogin, LoginInfo } from '../terminal-login';
 import { updateConfigWithToken } from '../utils/login-helper';
 import { generateDefaultConfig } from '../config/defaults';
+import { readStdinAll } from '../utils/stdin';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { logger } from '../logger';
@@ -48,7 +49,13 @@ export class RefreshCommand extends BaseCommand {
    * This allows the command to work even if the config file has a placeholder token.
    */
   static async preExecute(args: CommandArgs, configPath: string): Promise<void> {
-    const refreshToken = args.positional[0] || (args.options.token as string);
+    let refreshToken = (args.positional[0] || (args.options.token as string)) as string | undefined;
+    // '-' reads the token from stdin (e.g. cat token.txt | pixivflow refresh -)
+    // so it never lands in shell history or the process list.
+    if (refreshToken === '-') {
+      refreshToken = (await readStdinAll()).trim();
+      args.options.token = refreshToken;
+    }
     if (!refreshToken) {
       // No token provided, nothing to do. The validation in `execute` will catch this.
       return;
@@ -132,13 +139,17 @@ export class RefreshCommand extends BaseCommand {
 Login using an existing refresh token, or refresh access token.\nThis is recommended for servers without GUI browsers.\nThe token will be written into your config automatically.
 
 Arguments:
-  <refresh_token>        Refresh token to use for refreshing access token [required]
+  <refresh_token>        Refresh token to use for refreshing access token
+  -                      Read the token from stdin instead (keeps it out of
+                         shell history), e.g. cat token.txt | pixivflow refresh -
 
 Options:
+  --token <token>        Provide the refresh token via option
   -j, --json             Output response as JSON
 
 Examples:
   pixivflow refresh <refresh_token>
+  cat token.txt | pixivflow refresh -
   pixivflow login-token <refresh_token>
   pixivflow set-token <refresh_token>
   pixivflow refresh <refresh_token> --json`;

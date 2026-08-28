@@ -103,6 +103,7 @@ Full tutorial site: <https://redtidev1918.github.io/PixivFlow/>
 | [ARCHITECTURE](docs/ARCHITECTURE.md) | Architecture notes |
 | [RELEASING](docs/RELEASING.md) | npm release workflow |
 | [CHANGELOG](docs/project/CHANGELOG.md) | Version history |
+| [ACKNOWLEDGMENTS](docs/ACKNOWLEDGMENTS.md) | Credits and references |
 
 Chinese version: [README.md](README.md).
 

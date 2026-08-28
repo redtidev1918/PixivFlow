@@ -25,7 +25,7 @@ pixivflow login -u 用户名 -p 密码 # 也可以直接带账号参数
 ```
 
 底层优先使用 [pixiv-token-getter](https://www.npmjs.com/package/pixiv-token-getter)
-(Node.js 实现,零额外依赖);失败时回退到 Puppeteer 自动化;Python gppt
+(Node.js 实现,零额外依赖);失败时回退到 Puppeteer 自动化;[Python gppt](https://github.com/eggplants/get-pixivpy-token)
 仅作为最后备选,正常情况下**不需要安装 Python**。
 
 ### 无头登录

@@ -99,6 +99,7 @@ pixivflow scheduler             # 按 cron 配置长期挂机自动收集
 | [ARCHITECTURE](docs/ARCHITECTURE.md) | 架构与技术实现 |
 | [RELEASING](docs/RELEASING.md) | npm 发版流程 |
 | [CHANGELOG](docs/project/CHANGELOG.md) | 版本更新日志 |
+| [ACKNOWLEDGMENTS](docs/ACKNOWLEDGMENTS.md) | 参考与致谢:灵感来源、核心依赖与规范声明 |
 
 English version: [README_EN.md](README_EN.md).
 

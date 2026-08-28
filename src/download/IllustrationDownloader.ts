@@ -8,6 +8,7 @@ import { processInParallel } from '../utils/concurrency';
 import { promises as fs } from 'node:fs';
 import { join } from 'node:path';
 import { getErrorMessage } from '../utils/errors';
+import { DownloadedArtifact } from '../delivery/types';
 
 /**
  * Service for downloading illustrations
@@ -24,7 +25,7 @@ export class IllustrationDownloader {
   /**
    * Download an illustration
    */
-  async downloadIllustration(illust: PixivIllust, tag: string): Promise<void> {
+  async downloadIllustration(illust: PixivIllust, tag: string): Promise<DownloadedArtifact | null> {
     // Check if files already exist in file system but not in database
     const existingFiles = await this.findExistingIllustrationFiles(illust.id);
     if (existingFiles.length > 0 && !this.database.hasDownloaded(String(illust.id), 'illustration')) {
@@ -53,7 +54,12 @@ export class IllustrationDownloader {
       }
       
       logger.info(`Updated database with ${existingFiles.length} existing file(s) for illustration ${detail.id}`);
-      return; // Skip download
+      return {
+        pixivId: String(detail.id),
+        type: 'illustration',
+        title: detail.title,
+        files: existingFiles,
+      };
     }
     
     // Add timeout protection for getIllustDetailWithTags to prevent hanging
@@ -126,20 +132,23 @@ export class IllustrationDownloader {
           bookmark_count: detail.bookmark_count,
           view_count: detail.view_count,
         };
+        let metadataPath: string | undefined;
         try {
-          await this.fileService.saveMetadata(filePath, pixivMetadata);
+          metadataPath = await this.fileService.saveMetadata(filePath, pixivMetadata);
         } catch (error) {
           // Log warning but don't fail the download if metadata save fails
           logger.warn(`Failed to save metadata for illustration ${detail.id} page ${index + 1}: ${error instanceof Error ? error.message : String(error)}`);
         }
 
-        return { filePath, index: index + 1 };
+        return { filePath, index: index + 1, metadataPath };
       },
       concurrency
     );
 
     // Insert download records and log results
     let successCount = 0;
+    const files: string[] = [];
+    const cleanupFiles: string[] = [];
     for (const result of downloadResults) {
       if (result.success) {
         this.database.insertDownload({
@@ -159,6 +168,10 @@ export class IllustrationDownloader {
           filePath: result.result.filePath 
         });
         successCount++;
+        files.push(result.result.filePath);
+        if (result.result.metadataPath) {
+          cleanupFiles.push(result.result.metadataPath);
+        }
       } else {
         logger.warn(`Failed to download page ${result.error.message}`, { 
           illustId: detail.id,
@@ -170,6 +183,14 @@ export class IllustrationDownloader {
     if (successCount === 0) {
       throw new Error(`Failed to download any pages for illustration ${detail.id}`);
     }
+
+    return {
+      pixivId: String(detail.id),
+      type: 'illustration',
+      title: detail.title,
+      files,
+      cleanupFiles,
+    };
   }
 
   /**
@@ -181,10 +202,10 @@ export class IllustrationDownloader {
     detail: PixivIllust,
     tag: string,
     tags: Array<{ name: string; translated_name?: string }>
-  ): Promise<void> {
+  ): Promise<DownloadedArtifact | null> {
     if (this.database.hasDownloaded(String(detail.id), 'illustration')) {
       logger.debug(`Ugoira ${detail.id} already downloaded, skipping`);
-      return;
+      return null;
     }
 
     const meta = await (this.client as IPixivClient).ugoiraMetadata(detail.id);
@@ -263,6 +284,12 @@ export class IllustrationDownloader {
     logger.info(`Saved ugoira ${detail.id} (zip + ${meta.frames?.length ?? 0} frames)`, {
       filePath: zipPath,
     });
+    return {
+      pixivId: String(detail.id),
+      type: 'illustration',
+      title: detail.title,
+      files: [zipPath, framesPath],
+    };
   }
 
   /**
@@ -353,4 +380,3 @@ export class IllustrationDownloader {
     return path.slice(index);
   }
 }
-

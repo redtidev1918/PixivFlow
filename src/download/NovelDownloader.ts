@@ -6,6 +6,7 @@ import { FileMetadata, PixivMetadata } from './FileService';
 import { IFileService } from '../interfaces/IFileService';
 import { PixivNovel } from '../pixiv/PixivClient';
 import { detectLanguage } from '../utils/language-detection';
+import { DownloadedArtifact } from '../delivery/types';
 
 export class NovelDownloader {
   constructor(
@@ -14,7 +15,7 @@ export class NovelDownloader {
     private readonly fileService: IFileService
   ) {}
 
-  async download(novel: PixivNovel, tag: string, target: TargetConfig): Promise<void> {
+  async download(novel: PixivNovel, tag: string, target: TargetConfig): Promise<DownloadedArtifact | undefined> {
     const { novel: detail, tags } = await this.client.getNovelDetailWithTags(novel.id);
     const text = await this.client.getNovelText(novel.id);
 
@@ -122,8 +123,9 @@ export class NovelDownloader {
         : {}),
     };
 
+    let metadataPath: string | undefined;
     try {
-      await this.fileService.saveMetadata(filePath, pixivMetadata);
+      metadataPath = await this.fileService.saveMetadata(filePath, pixivMetadata);
     } catch (error) {
       logger.warn(
         `Failed to save metadata for novel ${detail.id}: ${error instanceof Error ? error.message : String(error)}`
@@ -148,7 +150,12 @@ export class NovelDownloader {
       filePath,
       ...(detectedLang ? { language: detectedLang.name, isChinese: detectedLang.isChinese } : {}),
     });
+    return {
+      pixivId: String(detail.id),
+      type: 'novel',
+      title: detail.title,
+      files: [filePath],
+      cleanupFiles: metadataPath ? [metadataPath] : [],
+    };
   }
 }
-
-

@@ -9,11 +9,17 @@
 export type {
   TargetType,
   TargetConfig,
+  DeliveryFieldValue,
+  TargetDeliveryConfig,
   PixivCredentialConfig,
   NetworkConfig,
   OrganizationMode,
   StorageConfig,
   SchedulerConfig,
+  HttpMultipartSuccessConfig,
+  HttpMultipartDeliveryConfig,
+  DeliveryTargetConfig,
+  DeliveryConfig,
   StandaloneConfig,
 } from './config/types';
 

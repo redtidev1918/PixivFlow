@@ -13,6 +13,9 @@ import { DownloadExecutor } from './exec/DownloadExecutor';
 import { DefaultErrorRecovery, ErrorRecoveryStrategy } from './recovery/ErrorRecovery';
 import { DownloadPipeline } from './pipeline/DownloadPipeline';
 import { OperationCancelledError } from '../utils/errors';
+import { DeliveryDispatcher } from '../delivery/DeliveryDispatcher';
+import { DeliveryOutbox } from '../delivery/DeliveryOutbox';
+import { dirname, join } from 'node:path';
 import { IllustrationTargetHandler } from './handlers/IllustrationTargetHandler';
 import { NovelTargetHandler } from './handlers/NovelTargetHandler';
 
@@ -54,6 +57,7 @@ export class DownloadManager implements IDownloadManager {
   // Cooperative cancellation state (see cancel())
   private cancelled = false;
   private cancelReason = '';
+  private readonly deliveryOutbox: DeliveryOutbox;
 
   /**
    * Request cooperative cancellation of the current run. In-flight item
@@ -115,12 +119,24 @@ export class DownloadManager implements IDownloadManager {
       isCancelled: () => this.cancelled,
     });
 
+    const databasePath = config.storage?.databasePath ?? './data/pixiv-downloader.db';
+    const deliveryDispatcher = new DeliveryDispatcher(
+      config.delivery,
+      this.buildProxyUrl(config.network)
+    );
+    this.deliveryOutbox = new DeliveryOutbox(
+      join(dirname(databasePath), 'delivery-outbox'),
+      deliveryDispatcher,
+      config.delivery?.deleteAfterDelivery !== false
+    );
+
     this.illustrationHandler = new IllustrationTargetHandler(
       client,
       database,
       this.rankingService,
       this.illustrationDownloader,
-      this.pipeline
+      this.pipeline,
+      this.deliveryOutbox
     );
 
     this.novelHandler = new NovelTargetHandler(
@@ -128,7 +144,8 @@ export class DownloadManager implements IDownloadManager {
       database,
       this.rankingService,
       this.pipeline,
-      this.novelDownloader
+      this.novelDownloader,
+      this.deliveryOutbox
     );
   }
 
@@ -141,6 +158,11 @@ export class DownloadManager implements IDownloadManager {
   }
 
   public async runAllTargets() {
+    const pending = await this.deliveryOutbox.retryPending();
+    if (pending.succeeded > 0 || pending.failed > 0) {
+      logger.info('Processed pending deliveries', { ...pending });
+    }
+
     const totalTargets = this.config.targets.length;
 
     if (totalTargets === 0) {
@@ -205,5 +227,20 @@ export class DownloadManager implements IDownloadManager {
   private updateProgress(current: number, total: number, message?: string): void {
     this.progressReporter.update(current, total, message);
   }
-}
 
+  private buildProxyUrl(network: StandaloneConfig['network']): string | undefined {
+    const proxy = network?.proxy;
+    if (!proxy?.enabled) {
+      return undefined;
+    }
+    const protocol = proxy.protocol ?? 'http';
+    if (protocol !== 'http' && protocol !== 'https') {
+      logger.warn(`HTTP multipart delivery does not support ${protocol} proxy through undici; delivering directly`);
+      return undefined;
+    }
+    const url = new URL(`${protocol}://${proxy.host}:${proxy.port}`);
+    if (proxy.username) url.username = proxy.username;
+    if (proxy.password) url.password = proxy.password;
+    return url.toString();
+  }
+}

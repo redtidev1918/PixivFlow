@@ -109,6 +109,45 @@ pixivflow setup
 | `languageFilter` | `chinese` / `non-chinese` | 语言过滤;短于 50 字符的作品无法可靠判断,默认放行 |
 | `detectLanguage` | boolean(默认 true) | 记录检测结果并写入元数据 |
 
+### target 存储与交付模式
+
+| 字段 | 取值 | 说明 |
+| --- | --- | --- |
+| `storageMode` | `persistent` / `cache` | 默认 `persistent`;`cache` 交付成功后删除本地文件 |
+| `delivery.target` | string | 顶层 `delivery.targets` 中的目标名称，cache 模式必填 |
+| `delivery.fields` | object | 当前 target 的表单字段覆盖 |
+
+`cache` 模式使用通用命名交付目标。当前内置 provider 是流式
+`httpMultipart`，下面的地址和字段仅为示例：
+
+```json
+{
+  "delivery": {
+    "targets": {
+      "my-api": {
+        "type": "httpMultipart",
+        "url": "https://example.test/submissions",
+        "method": "POST",
+        "headers": { "Authorization": "Bearer ${MY_API_TOKEN}" },
+        "fileField": "files",
+        "fields": { "title": "{{title}}", "source_id": "{{pixivId}}" },
+        "arrayFormat": "comma",
+        "success": { "statuses": [201], "jsonPath": "ok", "equals": true },
+        "maxAttempts": 3,
+        "retryDelayMs": 2000
+      }
+    }
+  }
+}
+```
+
+字段值支持 `{{title}}`、`{{pixivId}}`、`{{type}}`、`{{tag}}` 模板；headers
+和 URL 支持 `${ENV_NAME}`。`arrayFormat` 可设 `comma`、`repeat` 或 `json`。
+
+交付前会把任务写入数据库同目录的 `delivery-outbox/`。失败不会删除下载文件；
+下次 `download` 或 scheduler 执行时先重试。成功后才删除作品文件、元数据
+sidecar 和 outbox 清单。`delivery.deleteAfterDelivery: false` 可用于调试时保留文件。
+
 ## storage 存储与目录组织
 
 | 字段 | 默认值 | 说明 |

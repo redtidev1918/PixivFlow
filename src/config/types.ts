@@ -4,6 +4,15 @@
 
 export type TargetType = 'illustration' | 'novel';
 
+export type DeliveryFieldValue = string | number | boolean | string[];
+
+export interface TargetDeliveryConfig {
+  /** 顶层 delivery.targets 中定义的交付目标名称 */
+  target: string;
+  /** 覆盖该交付目标的表单字段，支持 {{title}} 等模板变量 */
+  fields?: Record<string, DeliveryFieldValue>;
+}
+
 export interface TargetConfig {
   type: TargetType;
   tag?: string;
@@ -117,6 +126,13 @@ export interface TargetConfig {
    * Default: true
    */
   detectLanguage?: boolean;
+  /**
+   * 存储模式:'persistent'(默认,本地留存)或 'cache'(下载成功后上传到
+   * target.delivery 指定的交付通道,成功即删除本地文件)。
+   */
+  storageMode?: 'persistent' | 'cache';
+  /** cache 模式下该 target 使用的交付目标与字段覆盖 */
+  delivery?: TargetDeliveryConfig;
 }
 
 export interface PixivCredentialConfig {
@@ -242,6 +258,43 @@ export interface SchedulerConfig {
   failureRetryDelay?: number;
 }
 
+export interface HttpMultipartSuccessConfig {
+  /** 可接受的 HTTP 状态码；缺省接受全部 2xx */
+  statuses?: number[];
+  /** 可选 JSON 路径，例如 "ok" 或 "data.accepted" */
+  jsonPath?: string;
+  /** jsonPath 对应的期望值 */
+  equals?: string | number | boolean | null;
+}
+
+export interface HttpMultipartDeliveryConfig {
+  type: 'httpMultipart';
+  url: string;
+  method?: 'POST' | 'PUT';
+  /** 支持 ${ENV_NAME} 环境变量插值 */
+  headers?: Record<string, string>;
+  /** multipart 文件字段名，默认 files */
+  fileField?: string;
+  /** 普通表单字段，支持 {{title}}/{{pixivId}}/{{type}}/{{tag}} */
+  fields?: Record<string, DeliveryFieldValue>;
+  /** 数组字段编码方式，默认 comma */
+  arrayFormat?: 'comma' | 'repeat' | 'json';
+  success?: HttpMultipartSuccessConfig;
+  /** 单次交付的最大尝试次数（含首次），默认 3 */
+  maxAttempts?: number;
+  /** 重试基础间隔（毫秒），默认 2000 */
+  retryDelayMs?: number;
+}
+
+export type DeliveryTargetConfig = HttpMultipartDeliveryConfig;
+
+export interface DeliveryConfig {
+  /** 可供各 target 引用的命名交付目标 */
+  targets: Record<string, DeliveryTargetConfig>;
+  /** 交付成功后删除缓存文件；默认 true，失败一律保留 */
+  deleteAfterDelivery?: boolean;
+}
+
 export interface StandaloneConfig {
   /**
    * Pixiv API credentials
@@ -263,6 +316,10 @@ export interface StandaloneConfig {
    * Download targets (tags to download)
    */
   targets: TargetConfig[];
+  /**
+   * 缓存模式的通用交付配置(storageMode='cache' 时使用)
+   */
+  delivery?: DeliveryConfig;
   /**
    * Log level: 'debug' | 'info' | 'warn' | 'error'
    * Default: 'info'
@@ -317,8 +374,6 @@ export interface StandaloneConfig {
     timeout?: number;
   };
 }
-
-
 
 
 

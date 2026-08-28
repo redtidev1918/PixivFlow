@@ -62,6 +62,18 @@ export class DownloadError extends PixivFlowError {
   }
 }
 
+/**
+ * The work was downloaded, but delivery failed and was persisted in the
+ * delivery outbox. Retrying the download itself would only create duplicates;
+ * the outbox is retried independently on the next run.
+ */
+export class PendingDeliveryError extends PixivFlowError {
+  constructor(message: string, cause?: Error) {
+    super(message, 'PENDING_DELIVERY', undefined, cause);
+    this.name = 'PendingDeliveryError';
+  }
+}
+
 export class DatabaseError extends PixivFlowError {
   constructor(message: string, cause?: Error) {
     super(message, 'DATABASE_ERROR', 500, cause);
@@ -122,6 +134,9 @@ export function is404Error(error: unknown): boolean {
  * Check if an error should be skipped (non-fatal)
  */
 export function isSkipableError(error: unknown): boolean {
+  if (error instanceof PendingDeliveryError) {
+    return true;
+  }
   if (is404Error(error)) {
     return true;
   }

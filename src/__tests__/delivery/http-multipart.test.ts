@@ -1,0 +1,195 @@
+import { promises as fs } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { DeliveryDispatcher } from '../../delivery/DeliveryDispatcher';
+import { DeliveryOutbox } from '../../delivery/DeliveryOutbox';
+import { HttpMultipartDelivery } from '../../delivery/HttpMultipartDelivery';
+
+describe('HttpMultipartDelivery', () => {
+  let directory: string;
+  const originalFetch = global.fetch;
+  const originalToken = process.env.TEST_DELIVERY_TOKEN;
+
+  beforeEach(async () => {
+    directory = await fs.mkdtemp(join(tmpdir(), 'pixivflow-http-delivery-'));
+    process.env.TEST_DELIVERY_TOKEN = 'secret';
+  });
+
+  afterEach(async () => {
+    global.fetch = originalFetch;
+    if (originalToken === undefined) delete process.env.TEST_DELIVERY_TOKEN;
+    else process.env.TEST_DELIVERY_TOKEN = originalToken;
+    await fs.rm(directory, { recursive: true, force: true });
+    jest.restoreAllMocks();
+  });
+
+  it('streams files with configurable headers, fields, templates and success rules', async () => {
+    const filePath = join(directory, 'cover.jpg');
+    await fs.writeFile(filePath, 'image');
+    const fetchMock = jest.fn().mockResolvedValue(
+      new Response(JSON.stringify({ ok: true, data: { id: 1 } }), {
+        status: 201,
+        headers: { 'content-type': 'application/json' },
+      })
+    );
+    global.fetch = fetchMock as typeof fetch;
+
+    const provider = new HttpMultipartDelivery({
+      type: 'httpMultipart',
+      url: 'https://example.test/submissions',
+      headers: { Authorization: 'Bearer ${TEST_DELIVERY_TOKEN}' },
+      fileField: 'assets',
+      fields: { title: '{{title}}', tags: ['default'] },
+      success: { statuses: [201], jsonPath: 'ok', equals: true },
+      maxAttempts: 1,
+      retryDelayMs: 0,
+    });
+    const result = await provider.deliver({
+      files: [filePath],
+      fields: { tags: ['announcement', 'update'], anonymous: false },
+      context: { title: 'Work title', pixivId: '123', type: 'illustration', tag: 'source' },
+    });
+
+    expect(result).toEqual({ status: 201, body: { ok: true, data: { id: 1 } } });
+    const [url, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://example.test/submissions');
+    expect(options.headers).toEqual(expect.objectContaining({ Authorization: 'Bearer secret' }));
+    const chunks: Buffer[] = [];
+    for await (const chunk of options.body as unknown as AsyncIterable<Buffer>) {
+      chunks.push(Buffer.from(chunk));
+    }
+    const multipart = Buffer.concat(chunks).toString('utf8');
+    expect(multipart).toContain('name="assets"; filename="cover.jpg"');
+    expect(multipart).toContain('name="title"\r\n\r\nWork title');
+    expect(multipart).toContain('name="tags"\r\n\r\nannouncement,update');
+    expect(multipart).toContain('name="anonymous"\r\n\r\nfalse');
+  });
+
+  it('retries failed delivery attempts', async () => {
+    const filePath = join(directory, 'work.txt');
+    await fs.writeFile(filePath, 'text');
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(new Response('temporary', { status: 503 }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    global.fetch = fetchMock as typeof fetch;
+    const provider = new HttpMultipartDelivery({
+      type: 'httpMultipart',
+      url: 'https://example.test/deliver',
+      maxAttempts: 2,
+      retryDelayMs: 0,
+    });
+
+    await expect(
+      provider.deliver({
+        files: [filePath],
+        context: { title: 'Work', pixivId: '1', type: 'novel' },
+      })
+    ).resolves.toMatchObject({ status: 204 });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('DeliveryOutbox', () => {
+  let directory: string;
+  let outboxDirectory: string;
+  let filePath: string;
+  let metadataPath: string;
+
+  beforeEach(async () => {
+    directory = await fs.mkdtemp(join(tmpdir(), 'pixivflow-delivery-outbox-'));
+    outboxDirectory = join(directory, 'outbox');
+    filePath = join(directory, 'work.jpg');
+    metadataPath = join(directory, 'work.json');
+    await fs.writeFile(filePath, 'image');
+    await fs.writeFile(metadataPath, '{}');
+  });
+
+  afterEach(async () => {
+    await fs.rm(directory, { recursive: true, force: true });
+  });
+
+  it('deletes cache files only after successful delivery', async () => {
+    const deliver = jest.fn().mockResolvedValue({ status: 201 });
+    const dispatcher = {
+      hasTarget: jest.fn().mockReturnValue(true),
+      deliver,
+    } as unknown as DeliveryDispatcher;
+    const outbox = new DeliveryOutbox(outboxDirectory, dispatcher);
+
+    await outbox.deliver(
+      {
+        pixivId: '123',
+        type: 'illustration',
+        title: 'Work',
+        files: [filePath],
+        cleanupFiles: [metadataPath],
+      },
+      {
+        type: 'illustration',
+        tag: 'source',
+        storageMode: 'cache',
+        delivery: { target: 'share', fields: { category: ['one', 'two'] } },
+      }
+    );
+
+    await expect(fs.access(filePath)).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(fs.access(metadataPath)).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(await fs.readdir(outboxDirectory)).toEqual([]);
+    expect(deliver).toHaveBeenCalledWith(
+      'share',
+      expect.objectContaining({
+        files: [filePath],
+        fields: { category: ['one', 'two'] },
+        context: expect.objectContaining({ title: 'Work', tag: 'source' }),
+      })
+    );
+  });
+
+  it('retains failed files and retries the durable manifest later', async () => {
+    const deliver = jest
+      .fn()
+      .mockRejectedValueOnce(new Error('service unavailable'))
+      .mockResolvedValueOnce({ status: 200 });
+    const dispatcher = {
+      hasTarget: jest.fn().mockReturnValue(true),
+      deliver,
+    } as unknown as DeliveryDispatcher;
+    const outbox = new DeliveryOutbox(outboxDirectory, dispatcher);
+
+    await expect(
+      outbox.deliver(
+        {
+          pixivId: '456',
+          type: 'illustration',
+          title: 'Retry me',
+          files: [filePath],
+          cleanupFiles: [metadataPath],
+        },
+        { type: 'illustration', storageMode: 'cache', delivery: { target: 'share' } }
+      )
+    ).rejects.toMatchObject({ code: 'PENDING_DELIVERY' });
+    await expect(fs.access(filePath)).resolves.toBeUndefined();
+    expect((await fs.readdir(outboxDirectory)).filter((name) => name.endsWith('.json'))).toHaveLength(1);
+
+    await expect(outbox.retryPending()).resolves.toEqual({ succeeded: 1, failed: 0 });
+    await expect(fs.access(filePath)).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(fs.access(metadataPath)).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(await fs.readdir(outboxDirectory)).toEqual([]);
+  });
+
+  it('does nothing for persistent targets', async () => {
+    const dispatcher = {
+      hasTarget: jest.fn(),
+      deliver: jest.fn(),
+    } as unknown as DeliveryDispatcher;
+    const outbox = new DeliveryOutbox(outboxDirectory, dispatcher);
+
+    await outbox.deliver(
+      { pixivId: '789', type: 'illustration', title: 'Keep me', files: [filePath] },
+      { type: 'illustration', storageMode: 'persistent' }
+    );
+    expect(dispatcher.deliver).not.toHaveBeenCalled();
+    await expect(fs.access(filePath)).resolves.toBeUndefined();
+  });
+});

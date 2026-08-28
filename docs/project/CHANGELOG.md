@@ -5,6 +5,19 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [2.6.0] - 2026-08-28
+
+### 新增
+- ✨ 下载 target 新增 `storageMode: "persistent" | "cache"`：默认永久留存；缓存模式在交付成功后清理作品文件与元数据 sidecar
+- ✨ 通用命名交付目标：首个 provider 为流式 `httpMultipart`，URL、method、headers、文件字段、普通表单字段及成功判定均可配置，不绑定具体投稿服务
+- ✨ target 可选择 delivery target 并覆盖表单字段，支持作品变量模板和任意环境变量插值
+- ✨ 持久化 delivery outbox：交付失败保留文件及任务清单，下次运行自动重试，防止数据库判重后漏投
+
+### 改进
+- 🔧 multipart 文件采用流式传输，避免大文件或多文件投稿时整体载入内存
+- ✅ 新增交付成功、立即重试、跨运行恢复、成功清理及持久化模式回归测试
+
+---
 ## [2.5.0] - 2026-08-27
 
 ### 新增

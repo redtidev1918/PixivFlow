@@ -46,7 +46,7 @@ export class HealthCommand extends BaseCommand {
     this.checkAuthentication(context, info, warnings, issues);
 
     // 5. Check network (optional, non-blocking)
-    await this.checkNetwork(info, warnings);
+    await this.checkNetwork(context, info, warnings);
 
     // Print summary
     this.printSummary(issues, warnings, info);
@@ -238,39 +238,66 @@ export class HealthCommand extends BaseCommand {
   }
 
   private async checkNetwork(
+    context: CommandContext,
     info: string[],
     warnings: string[]
   ): Promise<void> {
     console.log('📋 Network Connection:');
     
     try {
-      const https = require('https');
-      const { URL } = require('url');
-      
-      const testUrl = 'https://www.pixiv.net';
       const timeout = 5000; // 5 seconds
-      
-      await new Promise<void>((resolve, reject) => {
-        const req = https.get(testUrl, { timeout }, (res: any) => {
-          if (res.statusCode === 200 || res.statusCode === 403) {
-            // 403 is expected for pixiv.net (they block direct access)
-            resolve();
-          } else {
-            reject(new Error(`Unexpected status: ${res.statusCode}`));
-          }
+      const testUrl = 'https://www.pixiv.net';
+
+      // Honor network.proxy from the config: the download pipeline routes
+      // requests through PixivApiCore with undici ProxyAgent/socks, so the
+      // connectivity probe must use the same path — a raw https.get here
+      // always reports timeout for proxied setups.
+      const proxy = context.config?.network?.proxy;
+      const useProxy = !!(proxy?.enabled && proxy.host && proxy.port);
+
+      if (useProxy) {
+        const undici = require('undici');
+        const protocol = (proxy!.protocol || 'http').toLowerCase();
+        const auth =
+          proxy!.username && proxy!.password
+            ? `${encodeURIComponent(proxy!.username)}:${encodeURIComponent(proxy!.password)}@`
+            : '';
+        const dispatcher = new undici.ProxyAgent(
+          `${protocol}://${auth}${proxy!.host}:${proxy!.port}`
+        );
+        const res = await undici.request(testUrl, {
+          dispatcher,
+          headersTimeout: timeout,
+          bodyTimeout: timeout,
+          maxRedirections: 2,
         });
-        
-        req.on('error', reject);
-        req.on('timeout', () => {
-          req.destroy();
-          reject(new Error('Connection timeout'));
+        if (res.statusCode >= 500) {
+          throw new Error(`Unexpected status: ${res.statusCode}`);
+        }
+      } else {
+        const https = require('https');
+        await new Promise<void>((resolve, reject) => {
+          const req = https.get(testUrl, { timeout }, (res: any) => {
+            if (res.statusCode === 200 || res.statusCode === 403) {
+              // 403 is expected for pixiv.net (they block direct access)
+              resolve();
+            } else {
+              reject(new Error(`Unexpected status: ${res.statusCode}`));
+            }
+          });
+
+          req.on('error', reject);
+          req.on('timeout', () => {
+            req.destroy();
+            reject(new Error('Connection timeout'));
+          });
+
+          setTimeout(() => {
+            req.destroy();
+            reject(new Error('Timeout'));
+          }, timeout);
         });
-        
-        setTimeout(() => {
-          req.destroy();
-          reject(new Error('Timeout'));
-        }, timeout);
-      });
+      }
       
       info.push('✓ Can access Pixiv (proxy may be required)');
       console.log(`  ✓ Can access Pixiv (proxy may be required)`);

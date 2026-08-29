@@ -5,6 +5,13 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [2.10.3] - 2026-08-29
+
+### 新增
+- 🔞 **`topicDiscovery.includeR18`**：允许主题下载包含 R-18 作品（不限 NSFW）。Pixiv 插画搜索默认带 `filter=for_ios` 会过滤 R-18，开启后移除该过滤；采样（discovery）、采集（collection）与背景频率估计全部贯通。小说搜索本来就包含 R-18，不受影响。目标级配置示例：`{ "mode": "topic", "topic": "丸呑み", "topicDiscovery": { "includeR18": true } }`。
+
+---
+
 ## [2.10.2] - 2026-08-29
 
 ### 修正

@@ -61,6 +61,7 @@ export class TopicPipeline {
     const maxPerTag = this.bound(collect.maxPerTag, COLLECT_DEFAULTS.maxPerTag, 5, 100);
     const maxCandidates = this.bound(collect.maxCandidates, COLLECT_DEFAULTS.maxCandidates, 20, 500);
     const minMetadataScore = collect.minMetadataScore ?? COLLECT_DEFAULTS.minMetadataScore;
+    const includeR18 = discovery.includeR18 === true;
 
     const byId = new Map<number, { work: T; candidate: TopicCandidate }>();
     let rawCount = 0;
@@ -69,7 +70,7 @@ export class TopicPipeline {
     for (let i = 0; i < tagNames.length; i++) {
       if (byId.size >= maxCandidates) break;
       const tag = tagNames[i];
-      const works = await this.searchDay<T>(contentType, tag, day, maxPerTag);
+      const works = await this.searchDay<T>(contentType, tag, day, maxPerTag, includeR18);
       rawCount += works.length;
       for (const work of works) {
         if (byId.has(work.id)) continue;
@@ -121,10 +122,11 @@ export class TopicPipeline {
     contentType: TopicContentType,
     tag: string,
     day: string,
-    limit: number
+    limit: number,
+    includeR18: boolean
   ): Promise<T[]> {
     try {
-      const opts = { startDate: day, endDate: day };
+      const opts = { startDate: day, endDate: day, includeR18 };
       const works = contentType === 'illustration'
         ? await this.client.searchIllustrationsForTags(tag, limit, opts)
         : await this.client.searchNovelsForTags(tag, limit, opts);

@@ -284,4 +284,31 @@ describe('TopicPipeline', () => {
     const { works } = await pipeline.selectWorks(target, 'illustration', DAY, 10, {}, {});
     expect(works.some((w) => w.id === 42)).toBe(true);
   });
+
+  it('includeR18 propagates to discovery sampling and collection searches', async () => {
+    const seen: Array<{ seed: string; includeR18?: boolean }> = [];
+    const r18Client: TopicClient = {
+      getTagAutocomplete: async () => [{ name: 'ボテ腹' }, { name: '妊娠' }],
+      searchIllustrationsForTags: async (seed: string, limit: number, opts) => {
+        seen.push({ seed, includeR18: opts?.includeR18 });
+        if (seed === 'ボテ腹') return [dayWork(1, ['ボテ腹', 'R-18'], 300, 'R18ボテ腹')];
+        if (seed === '妊娠') return [dayWork(2, ['妊娠', 'R-18'], 50, '')];
+        return [];
+      },
+      searchNovelsForTags: async () => [],
+    };
+    const dir = await fs.mkdtemp(join(os.tmpdir(), 'topic-r18-'));
+    const { TopicResolver } = await import('../../topic/TopicResolver');
+    const { TopicCache } = await import('../../topic/TopicCache');
+    const resolver = new TopicResolver(r18Client, new TopicCache(dir), 0);
+    const pipeline = new TopicPipeline(r18Client, resolver, 0);
+    const target = { type: 'illustration', mode: 'topic', topic: 'ボテ腹' } as never;
+    await pipeline.selectWorks(target, 'illustration', DAY, 1, { refresh: true, includeR18: true }, {});
+    // Every search the pipeline issued (discovery seed sample + collection per tag)
+    // must carry includeR18: true so R-18 works are not filtered out server-side.
+    expect(seen.length).toBeGreaterThan(0);
+    for (const s of seen) {
+      expect(s.includeR18).toBe(true);
+    }
+  });
 });

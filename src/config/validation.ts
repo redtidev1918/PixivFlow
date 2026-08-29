@@ -114,6 +114,9 @@ export function validateConfig(config: Partial<StandaloneConfig>, location: stri
         if (typeof td.minScore === 'number' && (td.minScore < 0 || td.minScore > 1)) {
           errors.push(`targets[${index}].topicDiscovery.minScore: Must be between 0 and 1 (got ${td.minScore})`);
         }
+        if (td.includeR18 !== undefined && typeof td.includeR18 !== 'boolean') {
+          errors.push(`targets[${index}].topicDiscovery.includeR18: Must be a boolean (got ${typeof td.includeR18})`);
+        }
       }
       const cc = target.candidateCollection;
       if (cc) {

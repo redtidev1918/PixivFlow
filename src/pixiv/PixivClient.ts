@@ -139,7 +139,7 @@ export class PixivClient implements IPixivClient {
   public async searchIllustrationsForTags(
     seed: string,
     limit: number,
-    options: { startDate?: string; endDate?: string } = {}
+    options: { startDate?: string; endDate?: string; includeR18?: boolean } = {}
   ): Promise<PixivIllust[]> {
     return this.searchIllustrations({
       type: 'illustration',
@@ -149,13 +149,14 @@ export class PixivClient implements IPixivClient {
       limit,
       startDate: options.startDate,
       endDate: options.endDate,
+      r18: options.includeR18,
     });
   }
 
   public async searchNovelsForTags(
     seed: string,
     limit: number,
-    options: { startDate?: string; endDate?: string } = {}
+    options: { startDate?: string; endDate?: string; includeR18?: boolean } = {}
   ): Promise<PixivNovel[]> {
     return this.searchNovels({
       type: 'novel',
@@ -165,6 +166,7 @@ export class PixivClient implements IPixivClient {
       limit,
       startDate: options.startDate,
       endDate: options.endDate,
+      r18: options.includeR18,
     });
   }
 

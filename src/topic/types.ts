@@ -40,6 +40,8 @@ export interface TopicSpace {
 }
 
 export interface TopicDiscoveryOptions {
+  /** Include R-18 works in topic sampling and collection (default false). */
+  includeR18?: boolean;
   maxTags?: number;
   sampleWorks?: number;
   cacheDays?: number;
@@ -74,12 +76,12 @@ export interface TopicClient {
   searchIllustrationsForTags(
     seed: string,
     limit: number,
-    options?: { startDate?: string; endDate?: string }
+    options?: { startDate?: string; endDate?: string; includeR18?: boolean }
   ): Promise<Array<WorkLike>>;
   searchNovelsForTags(
     seed: string,
     limit: number,
-    options?: { startDate?: string; endDate?: string }
+    options?: { startDate?: string; endDate?: string; includeR18?: boolean }
   ): Promise<Array<WorkLike>>;
 }
 

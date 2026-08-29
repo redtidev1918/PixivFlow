@@ -69,7 +69,7 @@ export class TopicResolver {
 
     logger.info(`[TopicResolver] refreshing topic=${seed} type=${contentType}`);
     try {
-      const space = await this.discover(seed, contentType, { maxTags, sampleWorks, cacheDays, minScore });
+      const space = await this.discover(seed, contentType, { maxTags, sampleWorks, cacheDays, minScore, includeR18: options.includeR18 === true });
       await this.cache.save(space);
       logger.info(`[TopicResolver] topic=${seed} type=${contentType} resolvedTags=${space.tags.length} sampled=${space.sampledWorks}`);
       for (const tag of space.tags.slice(0, maxTags)) {
@@ -94,9 +94,9 @@ export class TopicResolver {
   private async discover(
     seed: string,
     contentType: TopicContentType,
-    cfg: { maxTags: number; sampleWorks: number; cacheDays: number; minScore: number }
+    cfg: { maxTags: number; sampleWorks: number; cacheDays: number; minScore: number; includeR18: boolean }
   ): Promise<TopicSpace> {
-    const [suggested, topicWorks, backgroundWorks] = await this.gatherSamples(seed, contentType, cfg.sampleWorks);
+    const [suggested, topicWorks, backgroundWorks] = await this.gatherSamples(seed, contentType, cfg.sampleWorks, cfg.includeR18);
 
     const suggestedNames = new Set(suggested.map((t) => this.scorer.key(t.name)).filter(Boolean));
     const related = this.scorer.score({
@@ -143,21 +143,22 @@ export class TopicResolver {
   private async gatherSamples(
     seed: string,
     contentType: TopicContentType,
-    sampleWorks: number
+    sampleWorks: number,
+    includeR18: boolean
   ): Promise<[Array<{ name: string; translated_name?: string }>, WorkLike[], WorkLike[]]> {
     const suggested = await this.client.getTagAutocomplete(seed).catch(() => [] as Array<{ name: string; translated_name?: string }>);
     if (this.requestDelayMs > 0) await delay(this.requestDelayMs);
 
     const topicWorks = contentType === 'illustration'
-      ? await this.client.searchIllustrationsForTags(seed, sampleWorks)
-      : await this.client.searchNovelsForTags(seed, sampleWorks);
+      ? await this.client.searchIllustrationsForTags(seed, sampleWorks, { includeR18 })
+      : await this.client.searchNovelsForTags(seed, sampleWorks, { includeR18 });
 
     // A small, cheap background sample (a common platform tag) estimates how
     // generic a co-occurring tag is. Bounded to keep requests/memory low.
     if (this.requestDelayMs > 0) await delay(this.requestDelayMs);
     const backgroundWorks = contentType === 'illustration'
-      ? await this.client.searchIllustrationsForTags('イラスト', 40).catch(() => [] as WorkLike[])
-      : await this.client.searchNovelsForTags('小説', 40).catch(() => [] as WorkLike[]);
+      ? await this.client.searchIllustrationsForTags('イラスト', 40, { includeR18 }).catch(() => [] as WorkLike[])
+      : await this.client.searchNovelsForTags('小説', 40, { includeR18 }).catch(() => [] as WorkLike[]);
 
     return [suggested, topicWorks, backgroundWorks];
   }

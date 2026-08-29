@@ -11,6 +11,7 @@ import { calculatePopularityScore } from '../../utils/pixiv-utils';
 import { PixivIllust } from '../../pixiv/PixivClient';
 import { DeliveryOutbox } from '../../delivery/DeliveryOutbox';
 import type { TopicPipelineFactory } from '../../topic/createTopicPipeline';
+import { getTargetLabel } from '../../utils/target-label';
 
 export class IllustrationTargetHandler {
   constructor(
@@ -35,7 +36,7 @@ export class IllustrationTargetHandler {
     }
 
     const mode = target.mode || 'search';
-    const displayTag = target.filterTag || target.tag || 'unknown';
+    const displayTag = getTargetLabel(target);
     logger.info(`Processing illustration ${mode === 'ranking' ? 'ranking' : 'tag'} ${displayTag}`);
 
     try {
@@ -170,7 +171,7 @@ export class IllustrationTargetHandler {
   ): void {
     const { downloaded, skipped, alreadyDownloaded, filteredOut } = result;
     const targetLimit = target.limit || 10;
-    const tagForLog = target.filterTag || target.tag || 'unknown';
+    const tagForLog = getTargetLabel(target);
 
     if (downloaded === 0 && targetLimit > 0) {
       this.handleZeroDownloads(alreadyDownloaded, skipped, filteredOut, totalFound, targetLimit, tagForLog, mode);

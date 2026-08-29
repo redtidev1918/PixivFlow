@@ -188,6 +188,7 @@ export class IllustrationDownloader {
       pixivId: String(detail.id),
       type: 'illustration',
       title: detail.title,
+      tags: tags.map((item) => item.name).filter(Boolean),
       files,
       cleanupFiles,
     };
@@ -288,6 +289,7 @@ export class IllustrationDownloader {
       pixivId: String(detail.id),
       type: 'illustration',
       title: detail.title,
+      tags: tags.map((item) => item.name).filter(Boolean),
       files: [zipPath, framesPath],
     };
   }

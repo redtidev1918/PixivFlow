@@ -184,7 +184,11 @@ pixivflow setup
 }
 ```
 
-字段值支持 `{{title}}`、`{{pixivId}}`、`{{type}}`、`{{tag}}` 模板；headers
+字段值支持 `{{title}}`、`{{pixivId}}`、`{{type}}`、`{{tag}}`、`{{topic}}`、
+`{{workTags}}` 模板。`{{tag}}` 是统一的目标标签：普通搜索使用 `tag`、标签排行
+使用 `filterTag`、语义主题模式使用 `topic`；`{{workTags}}` 是作品自身的 Pixiv
+标签，以逗号连接。需要同时投稿来源、计划主题和作品标签时可配置
+`"tags": ["Pixiv", "{{tag}}", "{{workTags}}"]`。headers
 和 URL 支持 `${ENV_NAME}`。`arrayFormat` 可设 `comma`、`repeat` 或 `json`。
 
 交付前会把任务写入数据库同目录的 `delivery-outbox/`。失败不会删除下载文件；

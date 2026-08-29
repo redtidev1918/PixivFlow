@@ -39,7 +39,12 @@ describe('HttpMultipartDelivery', () => {
       url: 'https://example.test/submissions',
       headers: { Authorization: 'Bearer ${TEST_DELIVERY_TOKEN}' },
       fileField: 'assets',
-      fields: { title: '{{title}}', tags: ['default'] },
+      fields: {
+        title: '{{title}}',
+        topic: '{{topic}}',
+        work_tags: '{{workTags}}',
+        tags: ['default'],
+      },
       success: { statuses: [201], jsonPath: 'ok', equals: true },
       maxAttempts: 1,
       retryDelayMs: 0,
@@ -47,7 +52,14 @@ describe('HttpMultipartDelivery', () => {
     const result = await provider.deliver({
       files: [filePath],
       fields: { tags: ['announcement', 'update'], anonymous: false },
-      context: { title: 'Work title', pixivId: '123', type: 'illustration', tag: 'source' },
+      context: {
+        title: 'Work title',
+        pixivId: '123',
+        type: 'illustration',
+        tag: 'source',
+        topic: 'ボテ腹',
+        workTags: ['ボテ腹', '腹部膨満'],
+      },
     });
 
     expect(result).toEqual({ status: 201, body: { ok: true, data: { id: 1 } } });
@@ -61,6 +73,8 @@ describe('HttpMultipartDelivery', () => {
     const multipart = Buffer.concat(chunks).toString('utf8');
     expect(multipart).toContain('name="assets"; filename="cover.jpg"');
     expect(multipart).toContain('name="title"\r\n\r\nWork title');
+    expect(multipart).toContain('name="topic"\r\n\r\nボテ腹');
+    expect(multipart).toContain('name="work_tags"\r\n\r\nボテ腹,腹部膨満');
     expect(multipart).toContain('name="tags"\r\n\r\nannouncement,update');
     expect(multipart).toContain('name="anonymous"\r\n\r\nfalse');
   });
@@ -147,6 +161,44 @@ describe('DeliveryOutbox', () => {
         files: [filePath],
         fields: { category: ['one', 'two'] },
         context: expect.objectContaining({ title: 'Work', tag: 'source' }),
+      })
+    );
+  });
+
+  it('uses the semantic topic as the delivery tag and retains concrete work tags', async () => {
+    const deliver = jest.fn().mockResolvedValue({ status: 201 });
+    const dispatcher = {
+      hasTarget: jest.fn().mockReturnValue(true),
+      deliver,
+    } as unknown as DeliveryDispatcher;
+    const outbox = new DeliveryOutbox(outboxDirectory, dispatcher, false);
+
+    await outbox.deliver(
+      {
+        pixivId: 'topic-123',
+        type: 'illustration',
+        title: 'Topic work',
+        tags: ['ボテ腹', '腹部膨満'],
+        files: [filePath],
+      },
+      {
+        id: 'bot1-topic-illust',
+        type: 'illustration',
+        mode: 'topic',
+        topic: 'ボテ腹',
+        storageMode: 'cache',
+        delivery: { target: 'share' },
+      }
+    );
+
+    expect(deliver).toHaveBeenCalledWith(
+      'share',
+      expect.objectContaining({
+        context: expect.objectContaining({
+          tag: 'ボテ腹',
+          topic: 'ボテ腹',
+          workTags: ['ボテ腹', '腹部膨満'],
+        }),
       })
     );
   });

@@ -5,6 +5,18 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [2.10.4] - 2026-08-30
+
+### 修复
+- 🏷️ **Topic 投稿标签不再丢失**：`mode: "topic"` 目标现在把主题名作为统一 `{{tag}}` 传给 delivery，修复 TelePost 投稿最终只剩 `#pixiv` 的问题。
+- 🧭 Topic 目标的下载日志与内部标签不再显示 `unknown`，统一按 `filterTag → tag → topic` 解析。
+
+### 新增
+- 🧩 HTTP multipart delivery 新增 `{{topic}}` 与 `{{workTags}}` 模板变量；插画和小说下载结果会携带作品自身的 Pixiv 标签。
+- 📦 双 Bot 模板默认投稿 `Pixiv + 计划主题 + 作品标签`，与 TelePost 2.10.4 的有序去重配合使用。
+
+---
+
 ## [2.10.3] - 2026-08-29
 
 ### 新增

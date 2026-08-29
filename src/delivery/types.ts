@@ -7,6 +7,8 @@ export interface DownloadedArtifact {
   pixivId: string;
   type: DeliveryItemType;
   title: string;
+  /** Pixiv tags attached to the concrete work (not the configured search topic). */
+  tags?: string[];
   /** Files sent to the configured delivery target. */
   files: string[];
   /** Local sidecars deleted with cache files after successful delivery. */
@@ -18,6 +20,8 @@ export interface DeliveryContext {
   pixivId: string;
   type: DeliveryItemType;
   tag?: string;
+  topic?: string;
+  workTags?: string[];
 }
 
 export interface DeliveryRequest {

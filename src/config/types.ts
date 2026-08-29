@@ -363,7 +363,7 @@ export interface HttpMultipartDeliveryConfig {
   headers?: Record<string, string>;
   /** multipart 文件字段名，默认 files */
   fileField?: string;
-  /** 普通表单字段，支持 {{title}}/{{pixivId}}/{{type}}/{{tag}} */
+  /** 普通表单字段，支持 title/pixivId/type/tag/topic/workTags 模板变量 */
   fields?: Record<string, DeliveryFieldValue>;
   /** 数组字段编码方式，默认 comma */
   arrayFormat?: 'comma' | 'repeat' | 'json';
@@ -470,7 +470,6 @@ export interface StandaloneConfig {
     timeout?: number;
   };
 }
-
 
 
 

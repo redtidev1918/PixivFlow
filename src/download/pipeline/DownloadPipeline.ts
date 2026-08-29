@@ -1,5 +1,6 @@
 import { StandaloneConfig, TargetConfig } from '../../config';
 import { logger } from '../../logger';
+import { getTargetLabel } from '../../utils/target-label';
 import { getErrorMessage, is404Error } from '../../utils/errors';
 import { PixivIllust, PixivNovel } from '../../pixiv/PixivClient';
 import { DownloadPlanner } from '../plan/DownloadPlanner';
@@ -53,7 +54,7 @@ export class DownloadPipeline {
     itemType: ItemType,
     downloadFn: (item: T, tag: string) => Promise<void>
   ): Promise<DownloadPipelineResult> {
-    const tagForLog = target.filterTag || target.tag || 'unknown';
+    const tagForLog = getTargetLabel(target);
     const plan = this.planner.planDownloads(items, target, itemType);
     const targetLimit = plan.limit;
     const filteredOutCount = plan.filteredOut;
@@ -280,5 +281,4 @@ export class DownloadPipeline {
     }
   }
 }
-
 

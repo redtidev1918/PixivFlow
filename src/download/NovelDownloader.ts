@@ -154,6 +154,7 @@ export class NovelDownloader {
       pixivId: String(detail.id),
       type: 'novel',
       title: detail.title,
+      tags: tags.map((item) => item.name).filter(Boolean),
       files: [filePath],
       cleanupFiles: metadataPath ? [metadataPath] : [],
     };

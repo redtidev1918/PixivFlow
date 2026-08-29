@@ -133,12 +133,14 @@ export class HttpMultipartDelivery implements DeliveryProvider {
       pixivId: request.context.pixivId,
       type: request.context.type,
       tag: request.context.tag ?? '',
+      topic: request.context.topic ?? '',
+      workTags: request.context.workTags?.join(',') ?? '',
     };
     return Object.fromEntries(
       Object.entries(fields).map(([name, value]) => {
         const values = Array.isArray(value) ? value : [value];
         const rendered = values.map((item) =>
-          String(item).replace(/\{\{(title|pixivId|type|tag)\}\}/g, (_, key: string) => variables[key])
+          String(item).replace(/\{\{(title|pixivId|type|tag|topic|workTags)\}\}/g, (_, key: string) => variables[key])
         );
         switch (this.config.arrayFormat ?? 'comma') {
           case 'repeat':

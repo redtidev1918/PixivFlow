@@ -6,6 +6,7 @@ import { logger } from '../logger';
 import { ConfigError, PendingDeliveryError } from '../utils/errors';
 import { DeliveryDispatcher } from './DeliveryDispatcher';
 import { DeliveryRequest, DeliveryResult, DownloadedArtifact } from './types';
+import { getTargetLabel } from '../utils/target-label';
 
 interface PendingDelivery {
   version: 1;
@@ -78,7 +79,12 @@ export class DeliveryOutbox {
           title: artifact.title,
           pixivId: artifact.pixivId,
           type: artifact.type,
-          tag: target.filterTag ?? target.tag,
+          // `tag` is the configured target label used by existing templates.
+          // Topic targets have neither tag nor filterTag, so include topic in
+          // the fallback instead of silently rendering {{tag}} as empty.
+          tag: getTargetLabel(target, ''),
+          topic: target.topic?.trim() || undefined,
+          workTags: artifact.tags,
         },
       },
     };

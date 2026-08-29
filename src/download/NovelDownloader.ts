@@ -157,6 +157,7 @@ export class NovelDownloader {
       tags: tags.map((item) => item.name).filter(Boolean),
       files: [filePath],
       cleanupFiles: metadataPath ? [metadataPath] : [],
+      spoiler: (detail.x_restrict ?? 0) > 0,
     };
   }
 }

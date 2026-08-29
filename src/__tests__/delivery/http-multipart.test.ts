@@ -79,6 +79,67 @@ describe('HttpMultipartDelivery', () => {
     expect(multipart).toContain('name="anonymous"\r\n\r\nfalse');
   });
 
+  it('renders link / topicTag / spoiler template variables', async () => {
+    const filePath = join(directory, 'cover.jpg');
+    await fs.writeFile(filePath, 'image');
+    const fetchMock = jest.fn().mockImplementation(() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ ok: true }), {
+          status: 201,
+          headers: { 'content-type': 'application/json' },
+        })
+      )
+    );
+    global.fetch = fetchMock as typeof fetch;
+
+    const provider = new HttpMultipartDelivery({
+      type: 'httpMultipart',
+      url: 'https://example.test/submissions',
+      fileField: 'files',
+      fields: {
+        link: '{{link}}',
+        topicTag: '{{topicTag}}',
+        spoiler: '{{spoiler}}',
+      },
+      success: { statuses: [201], jsonPath: 'ok', equals: true },
+      maxAttempts: 1,
+      retryDelayMs: 0,
+    });
+
+    // illustration + R-18 -> artworks link + spoiler true
+    await provider.deliver({
+      files: [filePath],
+      context: {
+        title: 'T', pixivId: '456', type: 'illustration',
+        topic: 'ボテ腹', workTags: ['ボテ腹'], spoiler: true,
+      },
+    });
+    let [url, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+    let chunks: Buffer[] = [];
+    for await (const chunk of options.body as unknown as AsyncIterable<Buffer>) chunks.push(Buffer.from(chunk));
+    let multipart = Buffer.concat(chunks).toString('utf8');
+    expect(multipart).toContain('name="link"\r\n\r\nhttps://www.pixiv.net/artworks/456');
+    expect(multipart).toContain('name="topicTag"\r\n\r\nボテ腹');
+    expect(multipart).toContain('name="spoiler"\r\n\r\ntrue');
+
+    // novel + non-R18 -> novel permalink + spoiler false; tag fallback for topicTag
+    fetchMock.mockClear();
+    await provider.deliver({
+      files: [filePath],
+      context: {
+        title: 'N', pixivId: '789', type: 'novel',
+        tag: 'fallback', spoiler: false,
+      },
+    });
+    [url, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+    chunks = [];
+    for await (const chunk of options.body as unknown as AsyncIterable<Buffer>) chunks.push(Buffer.from(chunk));
+    multipart = Buffer.concat(chunks).toString('utf8');
+    expect(multipart).toContain('name="link"\r\n\r\nhttps://www.pixiv.net/novel/show.php?id=789');
+    expect(multipart).toContain('name="topicTag"\r\n\r\nfallback');
+    expect(multipart).toContain('name="spoiler"\r\n\r\nfalse');
+  });
+
   it('retries failed delivery attempts', async () => {
     const filePath = join(directory, 'work.txt');
     await fs.writeFile(filePath, 'text');

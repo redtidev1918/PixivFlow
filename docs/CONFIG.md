@@ -109,7 +109,7 @@ pixivflow setup
 `topicDiscovery`：`maxTags`(默认 12)、`sampleWorks`(默认 100)、`cacheDays`(默认 7)、`minScore`(默认 0.22)、`refresh`(默认 false)。
 `candidateCollection`：`maxPerTag`(默认 40)、`maxCandidates`(默认 250)、`minMetadataScore`(默认 0.35)。
 
-工作流：Topic →（Pixiv 标签联想 + 近期作品 Tag 共现，PMI 式特异性打分自动压低 R-18/オリジナル 等通用 Tag）→ 相关 Tag 空间 → 分别搜索当天作品 → PID 去重 → 仅用 Tag/标题/描述做轻量相关性过滤 → 相关性优先、本地热度排序 → Top N。插画与小说使用各自独立的 Tag 空间，结果缓存到数据卷 `topic-cache/`（默认 7 天），刷新失败自动降级到旧缓存或仅用主题词本身，不中断调度。**全程不使用任何 LLM/VLM/Embedding/本地模型。**
+工作流：Topic →（Pixiv 标签联想 + 近期作品 Tag 共现，PMI 式特异性打分自动压低 R-18/オリジナル 等通用 Tag）→ 相关 Tag 空间 → 分别搜索当天作品 → PID 去重 → 仅用 Tag/标题/描述做轻量相关性过滤（**只作接受门槛**，过 `minMetadataScore` 即视为属于主题）→ 通过的候选之间**完全按本地热度 `calculatePopularityScore()` 排名** → Top N。插画与小说使用各自独立的 Tag 空间，结果缓存到数据卷 `topic-cache/`（默认 7 天），刷新失败自动降级到旧缓存或仅用主题词本身，不中断调度。**全程不使用任何 LLM/VLM/Embedding/本地模型。**
 
 能力边界：如果某作品没有任何与主题相关的 Tag/标题/描述（视觉上相关但元数据无关），在不使用视觉模型的前提下无法识别，这是设计取舍而非 Bug。
 

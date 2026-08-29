@@ -104,6 +104,7 @@ export class TopicResolver {
       topicWorks,
       backgroundWorks,
       suggestedNames,
+      suggestedTags: suggested,
     });
 
     // Seed tag always leads the space with score 1.0; keep related tags above

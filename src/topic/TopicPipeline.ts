@@ -191,34 +191,29 @@ export class TopicPipeline {
     return score;
   }
 
-  /**
-   * Rank primarily by topic relevance tier, then by local popularity within a
-   * tier. Relevance wins because the goal is "belongs to the topic", with
-   * popularity deciding which on-topic work to download.
-   */
-  private relevanceTier(c: TopicCandidate): number {
-    if (c.metadataScore >= 1.0) return 3; // carries the seed tag / strong evidence
-    if (c.metadataScore >= 0.7) return 2;
-    return 1;
-  }
 
-  private rankCompare(a: TopicCandidate, b: TopicCandidate): number {
-    const tier = this.relevanceTier(b) - this.relevanceTier(a);
-    if (tier !== 0) return tier;
+  /**
+   * Ranking is PURELY by local popularity (calculatePopularityScore). Metadata
+   * relevance is only a gate: once a work clears minMetadataScore it is accepted
+   * as on-topic, and the choice between accepted works is decided by popularity
+   * alone. A work with a higher metadata score does NOT outrank a more popular
+   * accepted work.
+   */
+  private popCompare(a: TopicCandidate, b: TopicCandidate): number {
     return b.popularity - a.popularity;
   }
 
   private topByPopularity<T>(items: Array<{ work: T; candidate: TopicCandidate }>, limit: number) {
-    if (items.length <= limit) return items.sort((a, b) => this.rankCompare(a.candidate, b.candidate));
+    if (items.length <= limit) return items.sort((a, b) => this.popCompare(a.candidate, b.candidate));
     // O(n) top-`limit` selection (limit is tiny, e.g. 1); avoids a full sort.
     const top: Array<{ work: T; candidate: TopicCandidate }> = [];
     for (const item of items) {
       if (top.length < limit) {
         top.push(item);
-        top.sort((a, b) => this.rankCompare(a.candidate, b.candidate));
-      } else if (this.rankCompare(item.candidate, top[top.length - 1].candidate) < 0) {
+        top.sort((a, b) => this.popCompare(a.candidate, b.candidate));
+      } else if (this.popCompare(item.candidate, top[top.length - 1].candidate) < 0) {
         top[top.length - 1] = item;
-        top.sort((a, b) => this.rankCompare(a.candidate, b.candidate));
+        top.sort((a, b) => this.popCompare(a.candidate, b.candidate));
       }
     }
     return top;

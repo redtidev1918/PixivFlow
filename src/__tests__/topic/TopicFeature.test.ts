@@ -180,14 +180,14 @@ describe('TopicPipeline', () => {
   it('deduplicates works across tags and selects Top N by popularity (limit=1 O(n))', async () => {
     const { pipeline } = await build();
     const target = { type: 'illustration', mode: 'topic', topic: 'ボテ腹' } as never;
-    // Discovery first (fresh) then collection — use a high minScore then rely on
-    // accepted set; id=3 (妊娠+R-18 generic, 9999 bm) must NOT win over a
-    // topic-relevant work because metadata filter requires topic relevance.
-    const { works, selection } = await pipeline.selectWorks(target, 'illustration', DAY, 1, { cacheDays: 7 }, { minMetadataScore: 0.5 });
+    // Pool: id=1 (seed+妊娠, 500) appears under BOTH ボテ腹 and 妊娠 -> raw counts it
+    // twice but dedup collapses to one. id=3 (妊娠+R-18, 9999) carries the related
+    // tag 妊娠, clears the gate, and is the most popular accepted work -> it wins
+    // Top-1 purely by popularity (relevance is only the gate).
+    const { works, selection } = await pipeline.selectWorks(target, 'illustration', DAY, 1, { cacheDays: 7 }, { minMetadataScore: 0.35 });
     expect(selection.dedupedCount).toBe(selection.rawCount - 1); // id=1 duplicated across tags
     expect(works).toHaveLength(1);
-    // id=1 carries the seed tag and is on-topic; id=3 lacks seed/strong related tags.
-    expect(works[0].id).toBe(1);
+    expect(works[0].id).toBe(3); // highest popularity among accepted works
   });
 
   it('caps the candidate pool at maxCandidates', async () => {
@@ -214,11 +214,74 @@ describe('TopicPipeline', () => {
     // Generic-only work id=90 (R-18/オリジナル/女の子) is never even in the
     // collected pool; and every selected work must reference the seed or a
     // resolved related tag — never just platform-generic tags.
-    const genericOnly = (tags: string[]) => tags.every((t) => ['R-18', 'オリジナル', '女の子', 'イラスト'].includes(t));
+    const genericOnly = (tags: string[]) => tags.every((x) => ['R-18', 'オリジナル', '女の子', 'イラスト'].includes(x));
     for (const c of selection.selected) {
       expect(genericOnly(c.tags)).toBe(false);
     }
-    // Top-1 relevance-first: the seed-tag work beats the higher-bookmark tangential one.
-    expect(selection.selected[0].id).toBe(1);
+  });
+
+  it('RANKING IS POPULARITY-ONLY: among works above the gate, highest popularity wins even without the seed tag', async () => {
+    // A: carries the seed tag (#ボテ腹) but low popularity.
+    // B: has NO seed tag but carries several resolved related tags (#妊娠 #妊婦
+    //    #膨腹), clears the metadata gate, and is far more popular.
+    // B must win Top-1 because relevance is only a gate; popularity ranks.
+    const rankClient: TopicClient = {
+      getTagAutocomplete: async () => [{ name: 'ボテ腹' }, { name: '妊娠' }, { name: '妊婦' }, { name: '膨腹' }],
+      searchIllustrationsForTags: async (seed: string) => {
+        if (seed === 'ボテ腹') return [
+          dayWork(1, ['ボテ腹'], 100, ''),            // A: seed tag, pop 100
+          dayWork(2, ['ボテ腹', '妊娠'], 80, ''),
+        ];
+        if (seed === '妊娠') return [dayWork(7, ['妊娠', '妊婦', '膨腹'], 5000, '')];  // B: no seed, pop 5000
+        if (seed === '妊婦') return [dayWork(7, ['妊娠', '妊婦', '膨腹'], 5000, '')];
+        if (seed === '膨腹') return [dayWork(7, ['妊娠', '妊婦', '膨腹'], 5000, '')];
+        if (seed === 'イラスト') return [];
+        return [];
+      },
+      searchNovelsForTags: async () => [],
+    };
+    const dir = await fs.mkdtemp(join(os.tmpdir(), 'topic-rank-'));
+    const { TopicResolver } = await import('../../topic/TopicResolver');
+    const { TopicCache } = await import('../../topic/TopicCache');
+    const resolver = new TopicResolver(rankClient, new TopicCache(dir), 0);
+    const pipeline = new TopicPipeline(rankClient, resolver, 0);
+    const target = { type: 'illustration', mode: 'topic', topic: 'ボテ腹' } as never;
+    // First resolve to build the tag space (so 妊婦/膨腹 become related tags).
+    await resolver.resolve('ボテ腹', 'illustration', { refresh: true });
+    const { works, selection } = await pipeline.selectWorks(target, 'illustration', DAY, 1, {}, { minMetadataScore: 0.35 });
+    // B (id 7) must be accepted AND be Top-1 despite lacking the seed tag.
+    expect(works).toHaveLength(1);
+    expect(works[0].id).toBe(7);
+    expect(selection.selected[0].metadataScore).toBeGreaterThanOrEqual(0.35);
+  });
+
+  it('AUTOCOMPLETE-ONLY tag enters the search space (recall), below co-occurring tags', async () => {
+    // Autocomplete suggests 臨月 which never appears in the seed sample.
+    const acClient: TopicClient = {
+      getTagAutocomplete: async () => [{ name: 'ボテ腹' }, { name: '臨月' }],
+      searchIllustrationsForTags: async (seed: string) => {
+        if (seed === 'ボテ腹') return [dayWork(1, ['ボテ腹', '妊娠'], 100, '')];
+        if (seed === 'イラスト') return [];
+        // 臨月 is searched because it entered the space via autocomplete-only.
+        if (seed === '臨月') return [dayWork(42, ['臨月', 'ボテ腹'], 1234, '')];
+        return [];
+      },
+      searchNovelsForTags: async () => [],
+    };
+    const dir = await fs.mkdtemp(join(os.tmpdir(), 'topic-ac-'));
+    const { TopicResolver } = await import('../../topic/TopicResolver');
+    const { TopicCache } = await import('../../topic/TopicCache');
+    const resolver = new TopicResolver(acClient, new TopicCache(dir), 0);
+    const { space } = await resolver.resolve('ボテ腹', 'illustration', { refresh: true });
+    const names = space.tags.map((x) => x.name);
+    expect(names).toContain('臨月');                       // autocomplete-only recalled
+    expect(space.tags[0].name).toBe('ボテ腹');             // seed always first
+    // Co-occurring 妊娠 (occurrences > 0) ranks above autocomplete-only 臨月 (occ 0).
+    expect(names.indexOf('妊娠')).toBeLessThan(names.indexOf('臨月'));
+    // And it is actually used as a search key by the collector.
+    const pipeline = new TopicPipeline(acClient, resolver, 0);
+    const target = { type: 'illustration', mode: 'topic', topic: 'ボテ腹' } as never;
+    const { works } = await pipeline.selectWorks(target, 'illustration', DAY, 10, {}, {});
+    expect(works.some((w) => w.id === 42)).toBe(true);
   });
 });

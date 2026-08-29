@@ -39,7 +39,19 @@ export interface ScorerInput {
   topicWorks: WorkLike[];
   backgroundWorks: WorkLike[];
   suggestedNames: Set<string>;
+  /** Full autocomplete suggestions (used to recall tags absent from the sample). */
+  suggestedTags?: Array<{ name: string; translated_name?: string }>;
 }
+
+/**
+ * Confidence for a tag that Pixiv autocomplete explicitly relates to the topic
+ * but which did NOT co-occur in the bounded seed sample. It is a legitimate but
+ * lower-confidence recall channel: it can enter the search space, yet always
+ * ranks below co-occurring tags (it carries occurrences = 0) and is capped by
+ * maxTags. Fixed modest score keeps it above minScore without outranking real
+ * co-occurrence evidence.
+ */
+const AUTOCOMPLETE_ONLY_SCORE = 0.27;
 
 export class TopicTagScorer {
   /** Normalize for matching/keys: trim, NFKC, lower-case. */
@@ -117,6 +129,29 @@ export class TopicTagScorer {
         coverage: Number(coverage.toFixed(4)),
         specificity: Number(specificity.toFixed(4)),
         suggested: stat.suggested,
+        seed: false,
+      });
+    }
+
+    // Autocomplete-only recall: tags Pixiv explicitly relates to the seed that
+    // never appeared in the bounded sample. They earn a modest, fixed confidence
+    // (no co-occurrence evidence) and occurrences = 0, so the global sort below
+    // always places them after any tag that actually co-occurs.
+    const seenKeys = new Set(resolved.map((r) => this.key(r.name)));
+    for (const sug of input.suggestedTags ?? []) {
+      const name = sug.name?.trim();
+      const k = this.key(name ?? '');
+      if (!k || k === seedKey || seenKeys.has(k)) continue;
+      if (GENERIC_TAG_PENALTY.has(k)) continue; // never recall platform-generic tags
+      seenKeys.add(k);
+      resolved.push({
+        name: name as string,
+        translatedName: sug.translated_name?.trim() || undefined,
+        score: AUTOCOMPLETE_ONLY_SCORE,
+        occurrences: 0,
+        coverage: 0,
+        specificity: 1.0, // Pixiv-endorsed related; treated as specific but unobserved
+        suggested: true,
         seed: false,
       });
     }

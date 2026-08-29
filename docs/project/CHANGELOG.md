@@ -5,6 +5,13 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [2.10.1] - 2026-08-29
+
+### 修复
+- 🐛 Topic 缓存目录改为从实际 SQLite 文件的绝对位置推导（`Database.getDatabasePath()` 规范化为绝对路径）。此前当 `storage.databasePath` 为相对路径且进程 CWD 与数据库目录不一致时（如容器 CLI），`topic-cache/` 可能写到工作目录而非数据卷，导致缓存无法随卷持久化；现在 CLI 与调度器在任意工作目录下都把缓存放在数据库同级目录。
+
+---
+
 ## [2.10.0] - 2026-08-29
 
 ### 新增

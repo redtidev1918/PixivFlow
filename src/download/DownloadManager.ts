@@ -138,7 +138,9 @@ export class DownloadManager implements IDownloadManager {
     // One lazily-created topic pipeline (shared resolver/cache) for this run.
     const topicFactory = createTopicPipelineFactory(
       client,
-      config.storage?.databasePath,
+      typeof (database as unknown as { getDatabasePath?: () => string }).getDatabasePath === 'function'
+        ? (database as unknown as { getDatabasePath(): string })
+        : config.storage?.databasePath,
       config.download?.requestDelay ?? 500
     );
 

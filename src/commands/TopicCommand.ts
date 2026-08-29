@@ -8,6 +8,7 @@ import { createTopicPipeline, createTopicPipelineFactory } from '../topic/create
 import { TopicResolver } from '../topic/TopicResolver';
 import { TopicCache } from '../topic/TopicCache';
 import type { TopicContentType } from '../topic/types';
+import { dirname } from 'node:path';
 import { getYesterdayDate, getTodayDate } from '../utils/pixiv-date-utils';
 
 export class TopicCommand extends BaseCommand {
@@ -58,7 +59,7 @@ export class TopicCommand extends BaseCommand {
     const types: TopicContentType[] = type === 'all' ? ['illustration', 'novel'] : [type];
 
     return this.withClient(context, async ({ client, database }) => {
-      const cache = TopicCache.forDatabase(database.getDatabasePath());
+      const cache = new TopicCache(dirname(database.getDatabasePath()) + '/topic-cache');
       for (const contentType of types) {
         const resolver = new TopicResolver(client as never, cache, context.config.download?.requestDelay ?? 500);
         const { space, fromCache, degraded } = await resolver.resolve(topic, contentType, { refresh });
@@ -86,7 +87,7 @@ export class TopicCommand extends BaseCommand {
     const refresh = Boolean(args.options.refresh);
 
     return this.withClient(context, async ({ client, database }) => {
-      const factory = createTopicPipelineFactory(client, database.getDatabasePath(), context.config.download?.requestDelay ?? 500);
+      const factory = createTopicPipelineFactory(client, database, context.config.download?.requestDelay ?? 500);
       for (const contentType of types) {
         const target = { type: contentType, mode: 'topic' as const, topic, limit, topicDiscovery: { refresh } } as never;
         const pipeline = factory();

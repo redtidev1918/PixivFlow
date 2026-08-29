@@ -115,7 +115,12 @@ describe('DeliveryOutbox', () => {
       hasTarget: jest.fn().mockReturnValue(true),
       deliver,
     } as unknown as DeliveryDispatcher;
-    const outbox = new DeliveryOutbox(outboxDirectory, dispatcher);
+    const outbox = new DeliveryOutbox(
+      outboxDirectory,
+      dispatcher,
+      true,
+      { retryBaseDelayMs: 0, retryMaxDelayMs: 0 }
+    );
 
     await outbox.deliver(
       {
@@ -155,7 +160,12 @@ describe('DeliveryOutbox', () => {
       hasTarget: jest.fn().mockReturnValue(true),
       deliver,
     } as unknown as DeliveryDispatcher;
-    const outbox = new DeliveryOutbox(outboxDirectory, dispatcher);
+    const outbox = new DeliveryOutbox(
+      outboxDirectory,
+      dispatcher,
+      true,
+      { retryBaseDelayMs: 0, retryMaxDelayMs: 0 }
+    );
 
     await expect(
       outbox.deliver(
@@ -172,10 +182,64 @@ describe('DeliveryOutbox', () => {
     await expect(fs.access(filePath)).resolves.toBeUndefined();
     expect((await fs.readdir(outboxDirectory)).filter((name) => name.endsWith('.json'))).toHaveLength(1);
 
-    await expect(outbox.retryPending()).resolves.toEqual({ succeeded: 1, failed: 0 });
+    await expect(outbox.retryPending()).resolves.toEqual({
+      succeeded: 1,
+      failed: 0,
+      deferred: 0,
+    });
     await expect(fs.access(filePath)).rejects.toMatchObject({ code: 'ENOENT' });
     await expect(fs.access(metadataPath)).rejects.toMatchObject({ code: 'ENOENT' });
     expect(await fs.readdir(outboxDirectory)).toEqual([]);
+  });
+
+  it('backs off durable retries to avoid repeated bandwidth usage', async () => {
+    let now = Date.parse('2026-08-29T00:00:00.000Z');
+    const deliver = jest
+      .fn()
+      .mockRejectedValueOnce(new Error('service unavailable'))
+      .mockResolvedValueOnce({ status: 200 });
+    const dispatcher = {
+      hasTarget: jest.fn().mockReturnValue(true),
+      deliver,
+    } as unknown as DeliveryDispatcher;
+    const outbox = new DeliveryOutbox(
+      outboxDirectory,
+      dispatcher,
+      true,
+      {
+        retryBaseDelayMs: 60_000,
+        retryMaxDelayMs: 3_600_000,
+        now: () => now,
+      }
+    );
+
+    await expect(
+      outbox.deliver(
+        {
+          pixivId: 'backoff',
+          type: 'illustration',
+          title: 'Retry later',
+          files: [filePath],
+          cleanupFiles: [metadataPath],
+        },
+        { type: 'illustration', storageMode: 'cache', delivery: { target: 'share' } }
+      )
+    ).rejects.toMatchObject({ code: 'PENDING_DELIVERY' });
+
+    await expect(outbox.retryPending()).resolves.toEqual({
+      succeeded: 0,
+      failed: 0,
+      deferred: 1,
+    });
+    expect(deliver).toHaveBeenCalledTimes(1);
+
+    now += 60_000;
+    await expect(outbox.retryPending()).resolves.toEqual({
+      succeeded: 1,
+      failed: 0,
+      deferred: 0,
+    });
+    expect(deliver).toHaveBeenCalledTimes(2);
   });
 
   it('does nothing for persistent targets', async () => {

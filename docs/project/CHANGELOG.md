@@ -5,6 +5,16 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [2.8.0] - 2026-08-29
+
+### 改进
+- 🔁 delivery outbox 新增持久化指数退避，默认 5 分钟起步、最长 6 小时，避免远端不可用时每个计划都重复上传
+- 💾 outbox 状态更新改为临时文件 + 原子替换，进程中断时不再容易留下半写 JSON
+- ✅ 新增延迟重试、到期恢复和配置范围校验测试
+- 🛡️ npm 发版固定使用受支持的 Node 22，并在 publish 前执行版本、构建与完整测试门禁
+
+---
+
 ## [2.7.0] - 2026-08-29
 
 ### 新增

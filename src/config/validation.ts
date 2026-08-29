@@ -151,6 +151,25 @@ export function validateConfig(config: Partial<StandaloneConfig>, location: stri
       errors.push(`${prefix}.retryDelayMs: Must be greater than or equal to 0`);
     }
   }
+  if (
+    config.delivery?.outboxRetryBaseMs !== undefined &&
+    (!Number.isInteger(config.delivery.outboxRetryBaseMs) || config.delivery.outboxRetryBaseMs < 0)
+  ) {
+    errors.push('delivery.outboxRetryBaseMs: Must be an integer greater than or equal to 0');
+  }
+  if (
+    config.delivery?.outboxRetryMaxMs !== undefined &&
+    (!Number.isInteger(config.delivery.outboxRetryMaxMs) || config.delivery.outboxRetryMaxMs < 0)
+  ) {
+    errors.push('delivery.outboxRetryMaxMs: Must be an integer greater than or equal to 0');
+  }
+  if (
+    config.delivery?.outboxRetryBaseMs !== undefined &&
+    config.delivery?.outboxRetryMaxMs !== undefined &&
+    config.delivery.outboxRetryMaxMs < config.delivery.outboxRetryBaseMs
+  ) {
+    errors.push('delivery.outboxRetryMaxMs: Must be greater than or equal to outboxRetryBaseMs');
+  }
 
   // Validate network config
   if (config.network) {

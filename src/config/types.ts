@@ -328,6 +328,10 @@ export interface DeliveryConfig {
   targets: Record<string, DeliveryTargetConfig>;
   /** 交付成功后删除缓存文件；默认 true，失败一律保留 */
   deleteAfterDelivery?: boolean;
+  /** 持久 outbox 跨运行重试的基础退避；默认 5 分钟 */
+  outboxRetryBaseMs?: number;
+  /** 持久 outbox 跨运行重试的最大退避；默认 6 小时 */
+  outboxRetryMaxMs?: number;
 }
 
 export interface StandaloneConfig {
@@ -413,7 +417,6 @@ export interface StandaloneConfig {
     timeout?: number;
   };
 }
-
 
 
 

@@ -5,6 +5,20 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [2.9.0] - 2026-08-29
+
+### 新增
+- ✨ `pixivflow tags discover <种子词>`：相关 Tag 发现。结合 Pixiv 官方标签联想接口（`/v2/search/autocomplete`）与作品标签共现统计——分别抽样最近插画/小说，按覆盖率与联想排名加权打分，帮你找到主题相关但文字不近似的标签（例如下载「西瓜肚」时发现日文等价标签 `ボテ腹`、`膨腹`）
+- ✨ `pixivflow tags apply <清单> --target <id> --select <tag1,tag2>`：人工确认后把所选 Tag 原子写入配置，自动设为 `tagRelation: or`，运行中的 scheduler 经配置热重载生效，无需重启
+- ✨ 发现结果按种子词与参数哈希缓存（默认 7 天），存于数据库同级 `tag-discovery/` 目录，避免重复请求
+
+### 安全与边界
+- 🛡️ `discover` 只生成候选清单，绝不改动下载计划；`apply` 仅接受清单内的标签白名单，写入前整份校验配置并自动备份（`.tag-apply.bak`），再以临时文件 + 原子替换发布，失败不触碰原配置
+- 🛡️ 抽样量有界（默认每类 60，上限 200）、候选数与缓存周期均可配置，适配低内存 / 限带宽部署
+- 🔒 移除误被 Git 跟踪的配置备份模板，并在 `.gitignore` 补充 `config/backups/` 与 `*.tag-apply.bak` 规则，防止真实配置入库
+
+---
+
 ## [2.8.0] - 2026-08-29
 
 ### 改进

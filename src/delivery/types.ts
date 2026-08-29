@@ -13,6 +13,8 @@ export interface DownloadedArtifact {
   files: string[];
   /** Local sidecars deleted with cache files after successful delivery. */
   cleanupFiles?: string[];
+  /** R-18 work (x_restrict > 0): delivery templates may open Telegram spoiler. */
+  spoiler?: boolean;
 }
 
 export interface DeliveryContext {
@@ -22,6 +24,7 @@ export interface DeliveryContext {
   tag?: string;
   topic?: string;
   workTags?: string[];
+  spoiler?: boolean;
 }
 
 export interface DeliveryRequest {

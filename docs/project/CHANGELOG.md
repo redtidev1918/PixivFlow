@@ -5,6 +5,13 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [2.10.5] - 2026-08-30
+
+### 新增
+- 🏷️ **投稿模板变量扩展**：新增 `{{link}}`（按类型生成 Pixiv 永久链接：插画 `artworks/{id}`、小说 `novel/show.php?id={id}`）、`{{topicTag}}`（topic 模式取主题词、否则取配置 tag，避免标签空项）、`{{spoiler}}`（R-18 作品 `x_restrict>0` 自动为 `true`，普通作品 `false`）。投稿不再需要硬编码 `spoiler: true` 或手动拼链接。
+
+---
+
 ## [2.10.4] - 2026-08-30
 
 ### 修复

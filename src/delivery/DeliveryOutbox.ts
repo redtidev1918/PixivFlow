@@ -85,6 +85,7 @@ export class DeliveryOutbox {
           tag: getTargetLabel(target, ''),
           topic: target.topic?.trim() || undefined,
           workTags: artifact.tags,
+          spoiler: artifact.spoiler,
         },
       },
     };

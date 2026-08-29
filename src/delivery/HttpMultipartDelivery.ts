@@ -135,12 +135,25 @@ export class HttpMultipartDelivery implements DeliveryProvider {
       tag: request.context.tag ?? '',
       topic: request.context.topic ?? '',
       workTags: request.context.workTags?.join(',') ?? '',
+      // Canonical Pixiv permalink; generated here so templates stay type-agnostic.
+      link:
+        request.context.type === 'novel'
+          ? `https://www.pixiv.net/novel/show.php?id=${request.context.pixivId}`
+          : `https://www.pixiv.net/artworks/${request.context.pixivId}`,
+      // Non-empty topic-or-tag label for tags fields (topic targets have no tag).
+      topicTag: request.context.topic || request.context.tag || '',
+      // R-18 works are auto-spoilerized; templates can use {{spoiler}} instead
+      // of hard-coding true.
+      spoiler: request.context.spoiler === true ? 'true' : 'false',
     };
     return Object.fromEntries(
       Object.entries(fields).map(([name, value]) => {
         const values = Array.isArray(value) ? value : [value];
         const rendered = values.map((item) =>
-          String(item).replace(/\{\{(title|pixivId|type|tag|topic|workTags)\}\}/g, (_, key: string) => variables[key])
+          String(item).replace(
+            /\{\{(title|pixivId|type|tag|topic|workTags|link|topicTag|spoiler)\}\}/g,
+            (_, key: string) => variables[key]
+          )
         );
         switch (this.config.arrayFormat ?? 'comma') {
           case 'repeat':

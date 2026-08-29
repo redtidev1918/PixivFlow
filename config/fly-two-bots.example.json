@@ -72,6 +72,8 @@
     "timeout": 90000
   },
   "delivery": {
+    "outboxRetryBaseMs": 300000,
+    "outboxRetryMaxMs": 21600000,
     "targets": {
       "telepost-bot1": {
         "type": "httpMultipart",

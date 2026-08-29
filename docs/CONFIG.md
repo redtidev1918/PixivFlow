@@ -128,6 +128,8 @@ pixivflow setup
 ```json
 {
   "delivery": {
+    "outboxRetryBaseMs": 300000,
+    "outboxRetryMaxMs": 21600000,
     "targets": {
       "my-api": {
         "type": "httpMultipart",
@@ -150,8 +152,10 @@ pixivflow setup
 和 URL 支持 `${ENV_NAME}`。`arrayFormat` 可设 `comma`、`repeat` 或 `json`。
 
 交付前会把任务写入数据库同目录的 `delivery-outbox/`。失败不会删除下载文件；
-下次 `download` 或 scheduler 执行时先重试。成功后才删除作品文件、元数据
-sidecar 和 outbox 清单。`delivery.deleteAfterDelivery: false` 可用于调试时保留文件。
+下次 `download` 或 scheduler 执行时先检查待投递项。`outboxRetryBaseMs` 默认
+`300000`（5 分钟），`outboxRetryMaxMs` 默认 `21600000`（6 小时），失败后指数退避，
+避免远端故障时反复消耗带宽。成功后才删除作品文件、元数据 sidecar 和 outbox
+清单。`delivery.deleteAfterDelivery: false` 可用于调试时保留文件。
 
 ## storage 存储与目录组织
 

@@ -43,9 +43,12 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version: 22
           registry-url: https://registry.npmjs.org
           package-manager-cache: false
+
+      - name: Use npm with Trusted Publishing support
+        run: npm install --global npm@11
 
       # 方式 B：自动升级版本号并打 tag
       - name: Bump version (manual dispatch only)
@@ -70,12 +73,19 @@ jobs:
             echo "tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Verify tag matches package version
+        run: |
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+          test "${{ steps.rel.outputs.tag }}" = "v$PACKAGE_VERSION"
+
       - run: npm ci
 
       - run: npm run build --if-present
 
+      - run: npm test -- --runInBand --silent
+
       - name: Publish to npm
-        run: npm publish --access public
+        run: npm publish --provenance --access public
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

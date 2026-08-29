@@ -127,7 +127,11 @@ export class DownloadManager implements IDownloadManager {
     this.deliveryOutbox = new DeliveryOutbox(
       join(dirname(databasePath), 'delivery-outbox'),
       deliveryDispatcher,
-      config.delivery?.deleteAfterDelivery !== false
+      config.delivery?.deleteAfterDelivery !== false,
+      {
+        retryBaseDelayMs: config.delivery?.outboxRetryBaseMs,
+        retryMaxDelayMs: config.delivery?.outboxRetryMaxMs,
+      }
     );
 
     this.illustrationHandler = new IllustrationTargetHandler(
@@ -161,6 +165,8 @@ export class DownloadManager implements IDownloadManager {
     const pending = await this.deliveryOutbox.retryPending();
     if (pending.succeeded > 0 || pending.failed > 0) {
       logger.info('Processed pending deliveries', { ...pending });
+    } else if (pending.deferred > 0) {
+      logger.debug('Pending deliveries remain in backoff', { ...pending });
     }
 
     const totalTargets = this.config.targets.length;

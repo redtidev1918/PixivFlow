@@ -202,6 +202,29 @@ export class ConfigValidator {
         });
       }
     }
+    const retryBase = config.delivery?.outboxRetryBaseMs;
+    const retryMax = config.delivery?.outboxRetryMaxMs;
+    if (retryBase !== undefined && (!Number.isInteger(retryBase) || retryBase < 0)) {
+      errors.push({
+        code: 'CONFIG_VALIDATION_OUTBOX_RETRY_BASE_INVALID',
+        field: 'delivery.outboxRetryBaseMs',
+        message: 'Delivery outbox retry base must be an integer greater than or equal to 0',
+      });
+    }
+    if (retryMax !== undefined && (!Number.isInteger(retryMax) || retryMax < 0)) {
+      errors.push({
+        code: 'CONFIG_VALIDATION_OUTBOX_RETRY_MAX_INVALID',
+        field: 'delivery.outboxRetryMaxMs',
+        message: 'Delivery outbox retry maximum must be an integer greater than or equal to 0',
+      });
+    }
+    if (retryBase !== undefined && retryMax !== undefined && retryMax < retryBase) {
+      errors.push({
+        code: 'CONFIG_VALIDATION_OUTBOX_RETRY_RANGE_INVALID',
+        field: 'delivery.outboxRetryMaxMs',
+        message: 'Delivery outbox retry maximum must be greater than or equal to the base',
+      });
+    }
 
     // Validate storage config
     if (!config.storage) {

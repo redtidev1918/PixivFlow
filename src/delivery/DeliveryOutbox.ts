@@ -19,11 +19,19 @@ interface PendingDelivery {
   request: Omit<DeliveryRequest, 'files'>;
   result?: DeliveryResult;
   lastError?: string;
+  nextAttemptAt?: string;
 }
 
 export interface PendingRetryResult {
   succeeded: number;
   failed: number;
+  deferred: number;
+}
+
+export interface DeliveryOutboxOptions {
+  retryBaseDelayMs?: number;
+  retryMaxDelayMs?: number;
+  now?: () => number;
 }
 
 /** Durable, provider-independent delivery outbox for cache-mode downloads. */
@@ -31,7 +39,8 @@ export class DeliveryOutbox {
   constructor(
     private readonly directory: string,
     private readonly dispatcher: DeliveryDispatcher,
-    private readonly deleteAfterDelivery = true
+    private readonly deleteAfterDelivery = true,
+    private readonly options: DeliveryOutboxOptions = {}
   ) {}
 
   async deliver(artifact: DownloadedArtifact, target: TargetConfig): Promise<void> {
@@ -95,16 +104,23 @@ export class DeliveryOutbox {
     try {
       names = (await fs.readdir(this.directory)).filter((name) => name.endsWith('.json')).sort();
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { succeeded: 0, failed: 0 };
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        return { succeeded: 0, failed: 0, deferred: 0 };
+      }
       throw error;
     }
 
     let succeeded = 0;
     let failed = 0;
+    let deferred = 0;
     for (const name of names) {
       const manifestPath = join(this.directory, name);
       try {
         const entry = await this.readManifest(manifestPath);
+        if (this.shouldDefer(entry)) {
+          deferred++;
+          continue;
+        }
         await this.processManifest(manifestPath, entry);
         succeeded++;
       } catch (error) {
@@ -115,7 +131,7 @@ export class DeliveryOutbox {
         });
       }
     }
-    return { succeeded, failed };
+    return { succeeded, failed, deferred };
   }
 
   private async processManifest(manifestPath: string, entry: PendingDelivery): Promise<void> {
@@ -131,11 +147,15 @@ export class DeliveryOutbox {
         entry.attempts++;
         entry.updatedAt = new Date().toISOString();
         delete entry.lastError;
+        delete entry.nextAttemptAt;
         await this.writeManifest(manifestPath, entry);
       } catch (error) {
         entry.attempts++;
         entry.updatedAt = new Date().toISOString();
         entry.lastError = error instanceof Error ? error.message : String(error);
+        entry.nextAttemptAt = new Date(
+          this.now() + this.retryDelayMs(entry.attempts)
+        ).toISOString();
         await this.writeManifest(manifestPath, entry);
         throw error;
       }
@@ -187,13 +207,34 @@ export class DeliveryOutbox {
     return parsed;
   }
 
+  private now(): number {
+    return this.options.now?.() ?? Date.now();
+  }
+
+  private shouldDefer(entry: PendingDelivery): boolean {
+    if (entry.status !== 'pending' || !entry.nextAttemptAt) return false;
+    const timestamp = Date.parse(entry.nextAttemptAt);
+    return Number.isFinite(timestamp) && timestamp > this.now();
+  }
+
+  private retryDelayMs(attempts: number): number {
+    const base = Math.max(0, this.options.retryBaseDelayMs ?? 5 * 60_000);
+    const maximum = Math.max(base, this.options.retryMaxDelayMs ?? 6 * 60 * 60_000);
+    return Math.min(maximum, base * 2 ** Math.min(Math.max(0, attempts - 1), 20));
+  }
+
   private async writeNewManifest(manifestPath: string, entry: PendingDelivery): Promise<void> {
-    const temporaryPath = `${manifestPath}.${process.pid}.${randomUUID()}.tmp`;
-    await fs.writeFile(temporaryPath, JSON.stringify(entry, null, 2), 'utf8');
-    await fs.rename(temporaryPath, manifestPath);
+    await this.writeManifest(manifestPath, entry);
   }
 
   private async writeManifest(manifestPath: string, entry: PendingDelivery): Promise<void> {
-    await fs.writeFile(manifestPath, JSON.stringify(entry, null, 2), 'utf8');
+    const temporaryPath = `${manifestPath}.${process.pid}.${randomUUID()}.tmp`;
+    try {
+      await fs.writeFile(temporaryPath, JSON.stringify(entry, null, 2), 'utf8');
+      await fs.rename(temporaryPath, manifestPath);
+    } catch (error) {
+      await fs.unlink(temporaryPath).catch(() => undefined);
+      throw error;
+    }
   }
 }

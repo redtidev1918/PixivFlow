@@ -108,6 +108,8 @@ pixivflow scheduler             # 按 cron 配置长期挂机自动收集
 ```json
 {
   "delivery": {
+    "outboxRetryBaseMs": 300000,
+    "outboxRetryMaxMs": 21600000,
     "targets": {
       "tg-example": {
         "type": "httpMultipart",
@@ -140,7 +142,8 @@ pixivflow scheduler             # 按 cron 配置长期挂机自动收集
 
 headers 和 URL 支持任意 `${ENV_NAME}` 环境变量插值。交付失败时文件和
 outbox 清单保留在 SQLite 数据库同级的 `delivery-outbox/`；下一次运行会先
-自动重试，成功后再清理。
+检查待投递项。失败项默认从 5 分钟开始指数退避、最长 6 小时，避免服务不可用时
+每个计划都重复上传并浪费带宽；成功后再清理。
 对上面的 TG 示例，可把 `/gen_token` 得到的 `tp_...` 放入
 `TG_SUBMIT_TOKEN` 环境变量；这只是示例服务自己的认证流程。
 

@@ -18,6 +18,8 @@ export interface TopicDiscoveryConfig {
   minScore?: number;
   /** Ignore a fresh cache and re-discover now (default false). */
   refresh?: boolean;
+  /** Include R-18 works in topic sampling and collection (default false). */
+  includeR18?: boolean;
 }
 
 /** Candidate collection tuning for mode='topic'. */
@@ -70,6 +72,12 @@ export interface TargetConfig {
    */
   sort?: 'date_desc' | 'date_asc' | 'popular_desc';
   restrict?: 'public' | 'private';
+  /**
+   * Include R-18 works in searches for this target (default false). Pixiv's
+   * app API filters R-18 out of illustration search via `filter=for_ios`;
+   * setting this removes the filter. Novel search already returns R-18.
+   */
+  r18?: boolean;
   /**
    * Download mode: 'search' (default), 'ranking' or 'topic'
    * - 'search': Search by tag

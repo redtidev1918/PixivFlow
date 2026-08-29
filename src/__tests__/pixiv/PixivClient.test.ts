@@ -166,6 +166,32 @@ describe('PixivClient', () => {
       expect(fetchMock).toHaveBeenCalled();
     });
 
+    it('filters R-18 by default (filter=for_ios) and omits it when r18: true', async () => {
+      const mockResponse = { illusts: [], next_url: null };
+      const respond = () =>
+        fetchMock.mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => mockResponse,
+          text: async () => JSON.stringify(mockResponse),
+          headers: new Headers(),
+        } as Response);
+
+      // default: filter=for_ios present
+      fetchMock.mockClear();
+      respond();
+      await client.searchIllustrations({ type: 'illustration', tag: 'test_tag', limit: 5 } as TargetConfig);
+      const defaultUrl = String(fetchMock.mock.calls[0][0]);
+      expect(defaultUrl).toContain('filter=for_ios');
+
+      // r18: filter omitted
+      fetchMock.mockClear();
+      respond();
+      await client.searchIllustrations({ type: 'illustration', tag: 'test_tag', limit: 5, r18: true } as TargetConfig);
+      const r18Url = String(fetchMock.mock.calls[0][0]);
+      expect(r18Url).not.toContain('filter=for_ios');
+    });
+
     it('should handle API errors', async () => {
       const target: TargetConfig = {
         type: 'illustration',

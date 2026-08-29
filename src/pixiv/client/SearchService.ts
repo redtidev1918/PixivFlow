@@ -136,12 +136,14 @@ export class SearchService {
     }
     const { startDate, endDate } = dateRange;
 
-    const params = new URLSearchParams({
+    // filter=for_ios excludes R-18 works; omit it when the target opts in.
+    const paramsObj: Record<string, string> = {
       word: tag,
       search_target: target.searchTarget ?? 'partial_match_for_tags',
-      filter: 'for_ios',
       include_translated_tag_results: 'true',
-    });
+    };
+    if (!target.r18) paramsObj.filter = 'for_ios';
+    const params = new URLSearchParams(paramsObj);
     if (target.sort) params.set('sort', target.sort);
 
     const sortMode = target.sort || 'date_desc';

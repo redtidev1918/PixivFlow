@@ -24,6 +24,7 @@ import { SetupCommand } from './SetupCommand';
 import { DirsCommand } from './DirsCommand';
 import { VersionCommand } from './VersionCommand';
 import { TagsCommand } from './TagsCommand';
+import { TopicCommand } from './TopicCommand';
 
 /**
  * Create and register all commands
@@ -50,6 +51,7 @@ export function registerAllCommands(registry: CommandRegistry): void {
   registry.register(new DirsCommand());
   registry.register(new VersionCommand());
   registry.register(new TagsCommand());
+  registry.register(new TopicCommand());
 }
 
 /**
@@ -77,4 +79,5 @@ export {
   DirsCommand,
   VersionCommand,
   TagsCommand,
+  TopicCommand,
 };

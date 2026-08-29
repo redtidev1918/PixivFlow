@@ -10,6 +10,7 @@ import { getTodayDate, getYesterdayDate } from '../../utils/pixiv-date-utils';
 import { calculatePopularityScore } from '../../utils/pixiv-utils';
 import { PixivNovel } from '../../pixiv/PixivClient';
 import { DeliveryOutbox } from '../../delivery/DeliveryOutbox';
+import type { TopicPipelineFactory } from '../../topic/createTopicPipeline';
 
 export class NovelTargetHandler {
   constructor(
@@ -18,7 +19,8 @@ export class NovelTargetHandler {
     private readonly rankingService: RankingService,
     private readonly pipeline: DownloadPipeline,
     private readonly novelDownloader: NovelDownloader,
-    private readonly deliveryOutbox?: DeliveryOutbox
+    private readonly deliveryOutbox?: DeliveryOutbox,
+    private readonly topicPipelineFactory?: TopicPipelineFactory
   ) {}
 
   async handle(target: TargetConfig): Promise<void> {
@@ -56,11 +58,40 @@ export class NovelTargetHandler {
   }
 
   private async fetchNovels(target: TargetConfig, mode: string): Promise<PixivNovel[]> {
+    if (mode === 'topic') {
+      return this.fetchTopicNovels(target);
+    }
     if (mode === 'ranking') {
       return this.fetchRankingNovels(target);
     } else {
       return this.fetchSearchNovels(target);
     }
+  }
+
+  private async fetchTopicNovels(target: TargetConfig): Promise<PixivNovel[]> {
+    const topic = (target.topic ?? '').trim();
+    const day = target.date === 'TODAY'
+      ? getTodayDate()
+      : target.date && target.date !== 'YESTERDAY'
+        ? target.date
+        : getYesterdayDate();
+    const limit = target.limit || 1;
+    logger.info(`Fetching ${day} novels for topic "${topic}", resolving dynamic tag space`);
+
+    if (!this.topicPipelineFactory) {
+      throw new Error('mode=topic requires the topic pipeline, which was not configured');
+    }
+    const pipeline = this.topicPipelineFactory();
+    const { works, selection } = await pipeline.selectWorks<PixivNovel>(
+      target,
+      'novel',
+      day,
+      limit,
+      target.topicDiscovery ?? {},
+      target.candidateCollection ?? {}
+    );
+    logger.info(`Topic "${topic}" novel: tags=${selection.resolvedTagCount} raw=${selection.rawCount} deduped=${selection.dedupedCount} accepted=${selection.acceptedCount} selected=${works.length}`);
+    return works;
   }
 
   private async fetchRankingNovels(target: TargetConfig): Promise<PixivNovel[]> {

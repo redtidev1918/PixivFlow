@@ -6,6 +6,30 @@ export type TargetType = 'illustration' | 'novel';
 
 export type DeliveryFieldValue = string | number | boolean | string[];
 
+/** Discovery tuning for mode='topic'. Every value has a safe default. */
+export interface TopicDiscoveryConfig {
+  /** Max related tags used to build the search space (default 12). */
+  maxTags?: number;
+  /** Recent works sampled per type to compute co-occurrence (default 100). */
+  sampleWorks?: number;
+  /** Cache lifetime in days for the resolved tag space (default 7). */
+  cacheDays?: number;
+  /** Minimum relatedness score for a tag to enter the space (default 0.18). */
+  minScore?: number;
+  /** Ignore a fresh cache and re-discover now (default false). */
+  refresh?: boolean;
+}
+
+/** Candidate collection tuning for mode='topic'. */
+export interface CandidateCollectionConfig {
+  /** Max works fetched per related tag for the target day (default 40). */
+  maxPerTag?: number;
+  /** Hard cap on the merged, deduplicated candidate pool (default 250). */
+  maxCandidates?: number;
+  /** Minimum metadata-topic score to survive filtering (default 0.35). */
+  minMetadataScore?: number;
+}
+
 export interface TargetDeliveryConfig {
   /** 顶层 delivery.targets 中定义的交付目标名称 */
   target: string;
@@ -47,13 +71,34 @@ export interface TargetConfig {
   sort?: 'date_desc' | 'date_asc' | 'popular_desc';
   restrict?: 'public' | 'private';
   /**
-   * Download mode: 'search' (default) or 'ranking'
+   * Download mode: 'search' (default), 'ranking' or 'topic'
    * - 'search': Search by tag
    * - 'ranking': Use the Pixiv ranking API when filterTag is absent. With
    *   filterTag, search works published on rankingDate and rank them locally
    *   by popularity.
+   * - 'topic': Semantic-topic download. Instead of requiring the user to know
+   *   every related Pixiv tag, PixivFlow derives a dynamic search space from
+   *   the topic itself (Pixiv autocomplete + tag co-occurrence on recent
+   *   works), searches the target day across those tags, filters by lightweight
+   *   metadata scoring and ranks by local popularity, then downloads Top N.
+   *   No LLM/VLM/embeddings — only Pixiv tag/metadata signals.
    */
-  mode?: 'search' | 'ranking';
+  mode?: 'search' | 'ranking' | 'topic';
+  /**
+   * Semantic topic for mode='topic'. Distinct from `tag`: a tag is an exact
+   *   Pixiv tag to match, while a topic is expanded at runtime into related
+   *   tags. Only the seed topic needs to be supplied.
+   */
+  topic?: string;
+  /**
+   * One-day publication window for mode='topic' (YYYY-MM-DD, 'YESTERDAY' or
+   *   'TODAY'). Resolved at run time. Falls back to rankingDate/startDate, then
+   *   YESTERDAY for the daily scheduler use case.
+   */
+  date?: string;
+  /** Tunable discovery/collection knobs for mode='topic' (all optional). */
+  topicDiscovery?: TopicDiscoveryConfig;
+  candidateCollection?: CandidateCollectionConfig;
   /**
    * Ranking mode (only used when mode='ranking')
    * - 'day': Daily ranking

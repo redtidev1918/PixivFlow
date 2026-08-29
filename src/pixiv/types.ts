@@ -45,6 +45,9 @@ export interface PixivIllust {
   total_view?: number;
   bookmark_count?: number;
   view_count?: number;
+  /** Caption/description (search & detail responses include it). */
+  caption?: string;
+  x_restrict?: number;
   /** Search responses usually include enough tag metadata for discovery. */
   tags?: PixivTag[];
 }
@@ -61,6 +64,10 @@ export interface PixivNovel {
   total_view?: number;
   bookmark_count?: number;
   view_count?: number;
+  /** Caption/description (search & detail responses include it). */
+  caption?: string;
+  text_length?: number;
+  x_restrict?: number;
   /** Search responses usually include enough tag metadata for discovery. */
   tags?: PixivTag[];
 }

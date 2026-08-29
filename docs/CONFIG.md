@@ -94,6 +94,42 @@ pixivflow setup
 `filterTag` 时，为了得到“指定 tag 在昨天发布的最热作品”，会用 `rankingDate`
 作为单日发布窗口抓取候选，再按热度排序；此时 `rankingMode` 不参与查询。
 
+### 主题模式字段(`mode: "topic"`)
+
+语义主题下载。与 `tag`（精确匹配某个 Pixiv Tag）不同，`topic` 只表达“我要这个主题的作品”，PixivFlow 会自动推导出相关检索空间，你不需要事先研究和维护相关 Tag 表。
+
+| 字段 | 取值 | 说明 |
+| --- | --- | --- |
+| `topic` | string | **必填**。主题词（如 `ボテ腹`），运行时自动扩展为相关 Tag |
+| `date` | `YESTERDAY` / `TODAY` / `YYYY-MM-DD` | 单日发布窗口，运行时动态解析；缺省为 `YESTERDAY` |
+| `limit` | number | 该主题每天下载 Top N（插画/小说分别配置） |
+| `topicDiscovery` | object | 可选高级覆盖，见下，均有默认值 |
+| `candidateCollection` | object | 可选高级覆盖，见下 |
+
+`topicDiscovery`：`maxTags`(默认 12)、`sampleWorks`(默认 100)、`cacheDays`(默认 7)、`minScore`(默认 0.22)、`refresh`(默认 false)。
+`candidateCollection`：`maxPerTag`(默认 40)、`maxCandidates`(默认 250)、`minMetadataScore`(默认 0.35)。
+
+工作流：Topic →（Pixiv 标签联想 + 近期作品 Tag 共现，PMI 式特异性打分自动压低 R-18/オリジナル 等通用 Tag）→ 相关 Tag 空间 → 分别搜索当天作品 → PID 去重 → 仅用 Tag/标题/描述做轻量相关性过滤 → 相关性优先、本地热度排序 → Top N。插画与小说使用各自独立的 Tag 空间，结果缓存到数据卷 `topic-cache/`（默认 7 天），刷新失败自动降级到旧缓存或仅用主题词本身，不中断调度。**全程不使用任何 LLM/VLM/Embedding/本地模型。**
+
+能力边界：如果某作品没有任何与主题相关的 Tag/标题/描述（视觉上相关但元数据无关），在不使用视觉模型的前提下无法识别，这是设计取舍而非 Bug。
+
+每日北京时间 20:00 下载昨天“ボテ腹”主题最热插画 1 部、小说 1 部：
+
+```json
+{
+  "targets": [
+    { "id": "bote-illust", "type": "illustration", "mode": "topic", "topic": "ボテ腹", "date": "YESTERDAY", "limit": 1 },
+    { "id": "bote-novel",  "type": "novel",       "mode": "topic", "topic": "ボテ腹", "date": "YESTERDAY", "limit": 1 }
+  ],
+  "schedules": [
+    { "id": "bote-daily", "enabled": true, "cron": "0 20 * * *", "timezone": "Asia/Shanghai",
+      "targetIds": ["bote-illust", "bote-novel"] }
+  ]
+}
+```
+
+可用 `pixivflow topic resolve "ボテ腹"` 查看推导出的 Tag 空间，用 `pixivflow topic test "ボテ腹" --date YESTERDAY` dry-run 预览（不下载）。
+
 ### 定向 ID 字段
 
 指定后跳过搜索,精确下载:

@@ -5,6 +5,16 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [2.10.2] - 2026-08-29
+
+### 修正
+- 🎯 **排名语义修正**：`metadata` 相关性只作为接受门槛（gate），不再参与排序。通过 `minMetadataScore` 的候选之间完全按 `calculatePopularityScore()`（收藏 + 浏览/1000）热度排名；`limit=1` 仍用 O(n) 取最大值。此前“带 seed tag 的作品永远优先于更高热度的相关作品”的旧逻辑已移除（`relevanceTier`/`rankCompare` 删除）。
+- 🔍 **autocomplete 独立召回**：Pixiv autocomplete 明确关联、但未出现在本次样本共现中的 Tag 现在也会以低置信度（固定 0.27 分、`occurrences=0`）进入检索空间，排在一切有共现证据的 Tag 之后，且仍受 `maxTags` 限制。三类可信度：autocomplete+共现（高）> 仅共现（正常）> 仅 autocomplete（低）。通用平台 Tag（R-18/オリジナル/女の子 等）仍被排除。
+- 🐛 依赖 `better-sqlite3` 升级 `^11.10.0 → ^12.2.0`：修复 Node 22/24 下进程退出时 GC 触发 `RemoveEnvironmentCleanupHook` 断言崩溃（影响本地 CLI 与 CI 稳定性；Fly 运行时为 Node 20 不受影响）。
+- 🧠 内存实测（Node `--max-old-space-size=128`，与 Fly 一致）：topic 发现/采集/下载全程峰值 `heapUsed ≈ 33MB`（远低于 128MB 堆上限）、峰值 RSS ≈ 145MB；未触发任何 OOM。
+
+---
+
 ## [2.10.1] - 2026-08-29
 
 ### 修复

@@ -9,7 +9,7 @@ import { parsePixivDate } from '../utils/pixiv-utils';
 import { sortPixivItems } from '../utils/pixiv-sort';
 import { PixivAuth } from './AuthClient';
 import { IPixivClient } from '../interfaces/IPixivClient';
-import type { PixivUser, PixivIllust, PixivNovel, PixivIllustPage, PixivNovelTextResponse } from './types';
+import type { PixivUser, PixivIllust, PixivNovel, PixivIllustPage, PixivNovelTextResponse, PixivTag } from './types';
 import { PixivApiCore } from './client/PixivApiCore';
 import { IllustService } from './client/IllustService';
 import { NovelService } from './client/NovelService';
@@ -130,6 +130,30 @@ export class PixivClient implements IPixivClient {
   public async searchIllustrations(target: TargetConfig): Promise<PixivIllust[]> {
     const requestDelay = this.config.download?.requestDelay ?? 3000;
     return this.searchService.searchIllustrations(target, requestDelay);
+  }
+
+  public async getTagAutocomplete(seed: string): Promise<PixivTag[]> {
+    return this.searchService.getTagAutocomplete(seed);
+  }
+
+  public async searchIllustrationsForTags(seed: string, limit: number): Promise<PixivIllust[]> {
+    return this.searchIllustrations({
+      type: 'illustration',
+      tag: seed,
+      searchTarget: 'partial_match_for_tags',
+      sort: 'date_desc',
+      limit,
+    });
+  }
+
+  public async searchNovelsForTags(seed: string, limit: number): Promise<PixivNovel[]> {
+    return this.searchNovels({
+      type: 'novel',
+      tag: seed,
+      searchTarget: 'partial_match_for_tags',
+      sort: 'date_desc',
+      limit,
+    });
   }
 
   /**
@@ -327,4 +351,3 @@ export class PixivClient implements IPixivClient {
     return this.apiCore.request<T>(url, { ...init, headers });
   }
 }
-

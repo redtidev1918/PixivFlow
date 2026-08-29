@@ -280,4 +280,11 @@ Icon
 .AppleDesktop
 Network Trash Folder
 Temporary Items
-.apdiskdocs/ADD_GITHUB_PAGES_LINK.md
+.apdisk
+
+# Runtime config backups (never commit real configs)
+config/backups/
+config/*.tag-apply.bak
+**/*.tag-apply.bak
+
+docs/ADD_GITHUB_PAGES_LINK.md

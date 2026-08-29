@@ -7,6 +7,11 @@ export interface PixivUser {
   name: string;
 }
 
+export interface PixivTag {
+  name: string;
+  translated_name?: string;
+}
+
 export interface PixivIllust {
   id: number;
   title: string;
@@ -40,6 +45,8 @@ export interface PixivIllust {
   total_view?: number;
   bookmark_count?: number;
   view_count?: number;
+  /** Search responses usually include enough tag metadata for discovery. */
+  tags?: PixivTag[];
 }
 
 export type PixivIllustPage = NonNullable<PixivIllust['meta_pages']>[number];
@@ -54,12 +61,13 @@ export interface PixivNovel {
   total_view?: number;
   bookmark_count?: number;
   view_count?: number;
+  /** Search responses usually include enough tag metadata for discovery. */
+  tags?: PixivTag[];
 }
 
 export interface PixivNovelTextResponse {
   novel_text: string;
 }
-
 
 
 

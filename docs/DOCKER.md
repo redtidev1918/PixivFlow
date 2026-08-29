@@ -54,6 +54,22 @@ cp /path/to/new-config.json config/standalone.config.json.new
 mv config/standalone.config.json.new config/standalone.config.json
 ```
 
+## 内存实测（256 MB cgroup）
+
+`mode: "topic"` 语义主题下载已按 256 MB 内存限制真实验证（Fly 256 MB 机器、
+Linux cgroup、生产联合镜像、真实 Pixiv API、`NODE_OPTIONS=--max-old-space-size=128`）：
+
+| 场景 | 结果 | 峰值 RSS（全进程） |
+| --- | --- | --- |
+| topic 发现（cache miss + refresh） | 成功 | 106 MB |
+| topic 采集 + Metadata 过滤 + 热度排名 | 成功 | 106 MB |
+| illustration + novel 双 target 同一计划下载 | 成功 | 106 MB |
+
+- 全部场景 `exit 0`、`oom_killed=false`、无重启；距 256 MB 上限余量约 150 MB。
+- 堆使用峰值 ≈ 33 MB（heapUsed），远低于 128 MB 堆上限。
+- 关键保障：相关 Tag ≤ 12、采样 ≤ 100、候选池 ≤ 250、串行低并发请求、
+  候选对象字段裁剪、`limit=1` 用 O(n) 选取、API 响应随迭代释放。
+
 ## 前置要求
 
 - Docker Engine 与 Compose V2 插件；验证命令 `docker compose version`。

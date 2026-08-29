@@ -61,7 +61,8 @@ pixivflow scheduler             # 按 cron 配置长期挂机自动收集
 
 `schedules[]` 可以为不同 target 组设置各自的 Cron。所有计划由一个 Node
 进程托管，共享 Pixiv 客户端、SQLite 与文件服务；执行阶段使用有界串行队列，
-适合 512 MiB 小内存机器。配置文件默认被监听，SSH/同步工具替换文件后会先完整
+适合 512 MiB 小内存机器（实测：`topic` 发现/采集/下载全程在 256 MB cgroup 限制下
+稳定运行，峰值 RSS ≈ 106 MB、heapUsed ≈ 33 MB，无 OOM，见 [DOCKER.md](docs/DOCKER.md)）。配置文件默认被监听，SSH/同步工具替换文件后会先完整
 校验，再一次性替换全部调度项；无效 JSON、错误 Cron 或未知 target id 不会破坏
 当前运行中的计划。正在执行的任务继续使用旧快照，下一次任务使用新快照。
 

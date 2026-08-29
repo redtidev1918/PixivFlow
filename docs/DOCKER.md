@@ -8,6 +8,11 @@
 > Compose V2 syntax. Read top to bottom for first-time setup, or jump to a section for
 > maintenance tasks.
 
+> **联合部署套件**：如果还需要 TelePost（Telegram 频道投稿机器人），推荐使用
+> [pixivflow-telepost-deploy](https://github.com/redtidev1918/pixivflow-telepost-deploy)
+> —— 一套 Compose 同时启动 PixivFlow + TelePost，支持 Polling/Webhook 双模式，
+> 可选 Mihomo 代理（国内服务器），以及 Fly.io 低成本托管。
+
 本文档面向通过 Docker 在服务器或 NAS 上长期运行 PixivFlow 的用户，覆盖部署、登录、升级与排障全流程。
 所有命令基于 Compose V2（`docker compose`）。非容器环境的原生安装见[快速开始](./QUICKSTART.md)。
 

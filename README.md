@@ -21,6 +21,9 @@ pixivflow --help
 ```
 
 服务器部署推荐 Docker Compose，见 [DOCKER.md](docs/DOCKER.md)；
+PixivFlow + TelePost 联合部署套件（含可选代理）：
+[redtidev1918/pixivflow-telepost-deploy](https://github.com/redtidev1918/pixivflow-telepost-deploy)
+—— 一套配置，支持国内/海外、有/无公网 IP、VPS/Fly.io 任意场景。
 从源码构建：
 
 ```bash

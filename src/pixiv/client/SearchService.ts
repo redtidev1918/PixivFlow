@@ -1,6 +1,6 @@
 import { setTimeout as delay } from 'node:timers/promises';
 import { PixivApiCore } from './PixivApiCore';
-import type { PixivIllust, PixivNovel } from '../types';
+import type { PixivIllust, PixivNovel, PixivTag } from '../types';
 import { logger } from '../../logger';
 import { sortPixivItems } from '../../utils/pixiv-sort';
 import type { TargetConfig } from '../../config';
@@ -12,6 +12,20 @@ import { SearchFilters } from './search/SearchFilters';
  */
 export class SearchService {
   constructor(private readonly api: PixivApiCore) {}
+
+  async getTagAutocomplete(seed: string): Promise<PixivTag[]> {
+    const params = new URLSearchParams({
+      word: seed,
+      merge_plain_keyword_results: 'true',
+    });
+    const response = await this.api.request<{
+      tags?: PixivTag[];
+      search_auto_complete_keywords?: string[];
+    }>(`/v2/search/autocomplete?${params.toString()}`, { method: 'GET' });
+
+    if (Array.isArray(response.tags)) return response.tags;
+    return (response.search_auto_complete_keywords ?? []).map((name) => ({ name }));
+  }
 
   async searchIllustrations(target: TargetConfig, requestDelayMs: number): Promise<PixivIllust[]> {
     if (!target.tag) {
@@ -265,5 +279,4 @@ export class SearchService {
     return sortedResults as T[];
   }
 }
-
 

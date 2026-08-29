@@ -141,6 +141,10 @@ Interactive configuration wizard: `pixivflow setup`.
 | `pixivflow config` | Manage config (view / edit / backup / restore) |
 | `pixivflow status` | Download stats and recent records |
 | `pixivflow health` | Health check: config, directories, connectivity |
+| `pixivflow tags discover <seed>` | Discover related tags (Pixiv autocomplete + tag co-occurrence); lists candidates only |
+| `pixivflow tags apply <manifest> --target <id> --select <tag1,tag2>` | Atomically write chosen tags into config after manual confirmation, then hot-reload |
+
+`tags discover` calls the Pixiv autocomplete endpoint and samples recent illustrations/novels to count co-occurring tags, caching results for 7 days; it **never** changes active plans. After reviewing candidates, run `tags apply` to explicitly select tags: it validates the whole config, writes a backup and atomically replaces the file so a running scheduler hot-reloads it.
 
 More commands in [CLI_MIGRATION_SUMMARY.md](docs/CLI_MIGRATION_SUMMARY.md).
 

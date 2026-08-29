@@ -5,6 +5,21 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [2.10.0] - 2026-08-29
+
+### 新增
+- ✨ **语义主题下载 `mode: "topic"`**：从“按明确 Tag 下载”扩展为“只给一个 Topic，自动推导检索空间”。例如 `topic: "ボテ腹"` 会通过 Pixiv autocomplete + 近期作品标签共现自动发现 `妊娠/妊婦/膨腹/臨月` 等相关 Tag，搜索目标日期作品 → 去重 → 轻量 Metadata 相关性过滤 → 本地热度排序 → 下载 Top N；不需要用户事先研究和维护相关 Tag 表
+- ✨ `pixivflow topic resolve <topic>`：查看自动推导出的相关 Tag 空间（带相关度/共现/特异性，`--refresh` 强制刷新、`--type` 区分插画/小说）
+- ✨ `pixivflow topic test <topic> --date YESTERDAY`：dry-run 预览某天的候选数与 Top N，不下载
+- ✨ Topic 空间按 `topic + 插画/小说` 分别缓存到数据卷的 `topic-cache/`（默认 7 天，原子写），容器重建不丢；刷新失败自动降级到旧缓存、再降级到仅用种子 Tag，调度器不中断
+
+### 设计与边界
+- 🧠 **零 AI**：不依赖任何 LLM/VLM/Embedding/本地模型/向量库，只用 Pixiv 自身的 Tag/共现/标题/描述做可解释统计（PMI 式特异性打分自动压低 R-18/オリジナル 等通用 Tag）
+- 🪶 **低资源**：相关 Tag ≤ 12、采样 ≤ 100、候选池 ≤ 250、串行低并发请求、候选对象字段裁剪、`limit=1` 走 O(n) 选取，适配 256 MB Docker VPS
+- 🧭 相关性优先于热度排序，避免高热度但仅“沾边”的作品挤掉真正的主题作品；插画/小说 Tag 空间独立；相关 Tag 永不递归扩散（depth=1，围绕原始 Topic）
+
+---
+
 ## [2.9.0] - 2026-08-29
 
 ### 新增

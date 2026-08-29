@@ -1,6 +1,6 @@
 import DatabaseDriver from 'better-sqlite3';
 import { mkdirSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { dirname, isAbsolute, resolve } from 'node:path';
 import { DatabaseError } from '../utils/errors';
 import { IDatabase } from '../interfaces/IDatabase';
 import { DatabaseMigration } from './DatabaseMigration';
@@ -88,7 +88,10 @@ export class Database implements IDatabase {
 
   /** Absolute path of the SQLite file (used to locate sibling cache dirs). */
   public getDatabasePath(): string {
-    return this.databasePath;
+    // The constructor accepts a possibly-relative path (resolved against CWD
+    // by better-sqlite3). Normalize to absolute so sibling dirs (topic-cache,
+    // delivery-outbox) always land beside the real database regardless of CWD.
+    return isAbsolute(this.databasePath) ? this.databasePath : resolve(process.cwd(), this.databasePath);
   }
 
   // Token management - delegated to TokenRepository

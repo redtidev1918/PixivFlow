@@ -86,6 +86,11 @@ export class Database implements IDatabase {
     this.migration.migrate();
   }
 
+  /** Absolute path of the SQLite file (used to locate sibling cache dirs). */
+  public getDatabasePath(): string {
+    return this.databasePath;
+  }
+
   // Token management - delegated to TokenRepository
   public getToken(key: string): AccessTokenStore | null {
     return this.tokenRepo.getToken(key);

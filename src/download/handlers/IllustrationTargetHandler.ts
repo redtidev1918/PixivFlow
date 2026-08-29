@@ -10,6 +10,7 @@ import { NetworkError } from '../../utils/errors';
 import { calculatePopularityScore } from '../../utils/pixiv-utils';
 import { PixivIllust } from '../../pixiv/PixivClient';
 import { DeliveryOutbox } from '../../delivery/DeliveryOutbox';
+import type { TopicPipelineFactory } from '../../topic/createTopicPipeline';
 
 export class IllustrationTargetHandler {
   constructor(
@@ -18,7 +19,8 @@ export class IllustrationTargetHandler {
     private readonly rankingService: RankingService,
     private readonly illustrationDownloader: IllustrationDownloader,
     private readonly pipeline: DownloadPipeline,
-    private readonly deliveryOutbox?: DeliveryOutbox
+    private readonly deliveryOutbox?: DeliveryOutbox,
+    private readonly topicPipelineFactory?: TopicPipelineFactory
   ) {}
 
   async handle(target: TargetConfig): Promise<void> {
@@ -51,11 +53,44 @@ export class IllustrationTargetHandler {
   }
 
   private async fetchIllustrations(target: TargetConfig, mode: string): Promise<PixivIllust[]> {
+    if (mode === 'topic') {
+      return this.fetchTopicIllustrations(target);
+    }
     if (mode === 'ranking') {
       return this.fetchRankingIllustrations(target);
     } else {
       return this.fetchSearchIllustrations(target);
     }
+  }
+
+  private async fetchTopicIllustrations(target: TargetConfig): Promise<PixivIllust[]> {
+    const topic = (target.topic ?? '').trim();
+    const day = target.date === 'TODAY'
+      ? getTodayDate()
+      : target.date && target.date !== 'YESTERDAY'
+        ? target.date
+        : getYesterdayDate();
+    const limit = target.limit || 1;
+    logger.info(`Fetching ${day} illustrations for topic "${topic}", resolving dynamic tag space`);
+
+    if (!this.topicPipelineFactory) {
+      throw new Error('mode=topic requires the topic pipeline, which was not configured');
+    }
+    const pipeline = this.topicPipelineFactory();
+    const { works, selection } = await pipeline.selectWorks<PixivIllust>(
+      target,
+      'illustration',
+      day,
+      limit,
+      target.topicDiscovery ?? {},
+      target.candidateCollection ?? {}
+    );
+    logger.info(`Topic "${topic}" illustration: tags=${selection.resolvedTagCount} raw=${selection.rawCount} deduped=${selection.dedupedCount} accepted=${selection.acceptedCount} selected=${works.length}`);
+    return works;
+  }
+
+  private requestDelayMs(): number {
+    return 500;
   }
 
   private async fetchRankingIllustrations(target: TargetConfig): Promise<PixivIllust[]> {

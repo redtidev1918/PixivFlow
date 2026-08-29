@@ -136,23 +136,35 @@ export class PixivClient implements IPixivClient {
     return this.searchService.getTagAutocomplete(seed);
   }
 
-  public async searchIllustrationsForTags(seed: string, limit: number): Promise<PixivIllust[]> {
+  public async searchIllustrationsForTags(
+    seed: string,
+    limit: number,
+    options: { startDate?: string; endDate?: string } = {}
+  ): Promise<PixivIllust[]> {
     return this.searchIllustrations({
       type: 'illustration',
       tag: seed,
       searchTarget: 'partial_match_for_tags',
       sort: 'date_desc',
       limit,
+      startDate: options.startDate,
+      endDate: options.endDate,
     });
   }
 
-  public async searchNovelsForTags(seed: string, limit: number): Promise<PixivNovel[]> {
+  public async searchNovelsForTags(
+    seed: string,
+    limit: number,
+    options: { startDate?: string; endDate?: string } = {}
+  ): Promise<PixivNovel[]> {
     return this.searchNovels({
       type: 'novel',
       tag: seed,
       searchTarget: 'partial_match_for_tags',
       sort: 'date_desc',
       limit,
+      startDate: options.startDate,
+      endDate: options.endDate,
     });
   }
 

@@ -162,6 +162,8 @@ outbox 清单保留在 SQLite 数据库同级的 `delivery-outbox/`；下一次�
 | `pixivflow health` | 健康检查：配置、目录可写性、连通性 |
 | `pixivflow tags discover <词>` | 发现相关 Tag（Pixiv 联想 + 作品标签共现），只列候选不改配置 |
 | `pixivflow tags apply <清单> --target <id> --select <tag1,tag2>` | 人工确认后把所选 Tag 原子写入配置并触发热重载 |
+| `pixivflow topic resolve <主题>` | 查看自动推导出的相关 Tag 空间（`--type illustration\|novel`、`--refresh`） |
+| `pixivflow topic test <主题> --date YESTERDAY` | dry-run 预览某天的候选与 Top N，不下载 |
 
 `tags discover` 会调用 Pixiv 标签联想接口，并抽样最近插画 / 小说统计共同出现的标签，结果缓存 7 天；它**不会**改动任何下载计划。确认候选后用 `tags apply` 显式选择，应用前会整份校验配置、自动备份并原子替换，运行中的 scheduler 经配置热重载生效。
 

@@ -18,6 +18,7 @@ import { DeliveryOutbox } from '../delivery/DeliveryOutbox';
 import { dirname, join } from 'node:path';
 import { IllustrationTargetHandler } from './handlers/IllustrationTargetHandler';
 import { NovelTargetHandler } from './handlers/NovelTargetHandler';
+import { createTopicPipelineFactory } from '../topic/createTopicPipeline';
 
 /**
  * Download Manager with Concurrency Control
@@ -134,13 +135,21 @@ export class DownloadManager implements IDownloadManager {
       }
     );
 
+    // One lazily-created topic pipeline (shared resolver/cache) for this run.
+    const topicFactory = createTopicPipelineFactory(
+      client,
+      config.storage?.databasePath,
+      config.download?.requestDelay ?? 500
+    );
+
     this.illustrationHandler = new IllustrationTargetHandler(
       client,
       database,
       this.rankingService,
       this.illustrationDownloader,
       this.pipeline,
-      this.deliveryOutbox
+      this.deliveryOutbox,
+      topicFactory
     );
 
     this.novelHandler = new NovelTargetHandler(
@@ -149,7 +158,8 @@ export class DownloadManager implements IDownloadManager {
       this.rankingService,
       this.pipeline,
       this.novelDownloader,
-      this.deliveryOutbox
+      this.deliveryOutbox,
+      topicFactory
     );
   }
 

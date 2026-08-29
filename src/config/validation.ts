@@ -88,9 +88,46 @@ export function validateConfig(config: Partial<StandaloneConfig>, location: stri
         }
         targetIds.add(target.id);
       }
-      // Tag is required for search mode, optional for ranking, series, single novel, single illustration, or user mode
-      if (target.mode !== 'ranking' && !target.seriesId && !target.novelId && !target.illustId && !target.userId && (!target.tag || target.tag.trim() === '')) {
-        errors.push(`targets[${index}].tag: Required field is missing or empty (required for search mode, optional for ranking/series/single novel/single illustration/user mode)`);
+      // mode must be a known value
+      if (target.mode && !['search', 'ranking', 'topic'].includes(target.mode)) {
+        errors.push(`targets[${index}].mode: Invalid value "${target.mode}", must be search, ranking or topic`);
+      }
+      // mode='topic' requires a topic seed instead of an exact tag
+      if (target.mode === 'topic' && (!target.topic || target.topic.trim() === '')) {
+        errors.push(`targets[${index}].topic: Required field is missing or empty (mode='topic' derives tags from the topic)`);
+      }
+      // Tag is required for search mode, optional for ranking/topic/series/single/user modes
+      if (target.mode !== 'ranking' && target.mode !== 'topic' && !target.seriesId && !target.novelId && !target.illustId && !target.userId && (!target.tag || target.tag.trim() === '')) {
+        errors.push(`targets[${index}].tag: Required field is missing or empty (required for search mode, optional for ranking/topic/series/single/user mode)`);
+      }
+      const td = target.topicDiscovery;
+      if (td) {
+        const bound = (field: 'maxTags' | 'sampleWorks' | 'cacheDays', min: number, max: number) => {
+          const value = td[field];
+          if (value !== undefined && (typeof value !== 'number' || !Number.isInteger(value) || value < min || value > max)) {
+            errors.push(`targets[${index}].topicDiscovery.${field}: Must be an integer between ${min} and ${max} (got ${value})`);
+          }
+        };
+        bound('maxTags', 1, 40);
+        bound('sampleWorks', 10, 200);
+        bound('cacheDays', 1, 90);
+        if (typeof td.minScore === 'number' && (td.minScore < 0 || td.minScore > 1)) {
+          errors.push(`targets[${index}].topicDiscovery.minScore: Must be between 0 and 1 (got ${td.minScore})`);
+        }
+      }
+      const cc = target.candidateCollection;
+      if (cc) {
+        const bound = (field: 'maxPerTag' | 'maxCandidates', min: number, max: number) => {
+          const value = cc[field];
+          if (value !== undefined && (typeof value !== 'number' || !Number.isInteger(value) || value < min || value > max)) {
+            errors.push(`targets[${index}].candidateCollection.${field}: Must be an integer between ${min} and ${max} (got ${value})`);
+          }
+        };
+        bound('maxPerTag', 5, 100);
+        bound('maxCandidates', 20, 500);
+        if (typeof cc.minMetadataScore === 'number' && (cc.minMetadataScore < 0 || cc.minMetadataScore > 3)) {
+          errors.push(`targets[${index}].candidateCollection.minMetadataScore: Must be between 0 and 3 (got ${cc.minMetadataScore})`);
+        }
       }
       if (target.type && !['illustration', 'novel'].includes(target.type)) {
         errors.push(`targets[${index}].type: Must be "illustration" or "novel"`);

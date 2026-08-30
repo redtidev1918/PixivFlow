@@ -5,6 +5,16 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [2.10.9] - 2026-08-30
+
+### 修复
+- 💾 **低内存机器下载多页作品时强制回收页缓冲**：每页图片保存后立即调用
+  `global.gc()`（配合 `NODE_OPTIONS=--expose-gc`）。`fetch().arrayBuffer()`
+  返回的 ArrayBuffer 属于 V8 外部内存，不受 `--max-old-space-size` 限制，
+  默认 GC 节奏下会在下载 20+ 页作品时持续累积，使 node RSS 涨到 512 MiB
+  机器无法承受的水平（健康检查开始超时/被标记 critical）。
+  显式 GC 后单页缓冲即刻释放，下载进程 RSS 保持平稳。
+
 ## [2.10.8] - 2026-08-30
 
 ### 修复

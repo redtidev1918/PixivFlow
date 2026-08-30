@@ -113,6 +113,19 @@ export class IllustrationDownloader {
         ]);
         const filePath = await this.fileService.saveImage(buffer, fileName, metadata);
 
+        // Release the page buffer promptly: ArrayBuffers are external memory,
+        // NOT capped by --max-old-space-size. Without explicit GC they linger
+        // and accumulate while downloading multi-page works, ballooning node
+        // RSS past what a 512 MB machine can hold (health checks start
+        // failing). Requires --expose-gc in NODE_OPTIONS; harmless without it.
+        if (typeof globalThis !== 'undefined' && (globalThis as { gc?: () => void }).gc) {
+          try {
+            (globalThis as { gc: () => void }).gc();
+          } catch {
+            // no-op
+          }
+        }
+
         // Save metadata JSON file
         const pixivMetadata: PixivMetadata = {
           pixiv_id: detail.id,

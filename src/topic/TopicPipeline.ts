@@ -2,6 +2,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 
 import { logger } from '../logger';
 import { calculatePopularityScore } from '../utils/pixiv-utils';
+import { isAIIllustration } from '../utils/ai-detection';
 import type { TargetConfig } from '../config';
 import type { TopicResolver } from './TopicResolver';
 import type {
@@ -75,7 +76,7 @@ export class TopicPipeline {
       const works = await this.searchDay<T>(contentType, tag, day, maxPerTag, includeR18);
       rawCount += works.length;
       for (const work of works) {
-        if (contentType === 'illustration' && target.excludeAI === true && work.illust_ai_type === 2) {
+        if (contentType === 'illustration' && target.excludeAI === true && isAIIllustration(work)) {
           aiExcludedCount += 1;
           continue;
         }

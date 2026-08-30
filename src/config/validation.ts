@@ -145,6 +145,9 @@ export function validateConfig(config: Partial<StandaloneConfig>, location: stri
       if (target.excludeAI !== undefined && typeof target.excludeAI !== 'boolean') {
         errors.push(`targets[${index}].excludeAI: Must be a boolean`);
       }
+      if (target.aiMetadataCheck !== undefined && typeof target.aiMetadataCheck !== 'boolean') {
+        errors.push(`targets[${index}].aiMetadataCheck: Must be a boolean`);
+      }
       if (target.strictLanguageFilter !== undefined && typeof target.strictLanguageFilter !== 'boolean') {
         errors.push(`targets[${index}].strictLanguageFilter: Must be a boolean`);
       }

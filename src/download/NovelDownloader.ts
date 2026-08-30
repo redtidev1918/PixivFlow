@@ -17,7 +17,21 @@ export class NovelDownloader {
 
   async download(novel: PixivNovel, tag: string, target: TargetConfig): Promise<DownloadedArtifact | undefined> {
     const { novel: detail, tags } = await this.client.getNovelDetailWithTags(novel.id);
-    const text = await this.client.getNovelText(novel.id);
+    // getNovelText resolves to the API envelope { novel_text }; unwrap it here,
+    // otherwise the object gets stringified to "[object Object]" and the
+    // delivered .txt contains only the header block (title/tags) and no body.
+    const textResponse = await this.client.getNovelText(novel.id);
+    const text = typeof textResponse === 'string'
+      ? textResponse
+      : (textResponse?.novel_text ?? '');
+
+    if (!text || !text.trim()) {
+      logger.warn(`Novel ${novel.id} text came back empty (all fallbacks); skipping so no body-less file is delivered`, {
+        novelId: novel.id,
+        title: detail.title,
+      });
+      return undefined;
+    }
 
     const enableDetection = target.detectLanguage !== false;
     let detectedLang: ReturnType<typeof detectLanguage> = null;

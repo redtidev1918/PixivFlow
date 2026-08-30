@@ -5,6 +5,12 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [2.10.6] - 2026-08-30
+
+### 修复
+- 📖 **小说正文不再为空**：正确解包 Pixiv `getNovelText` 返回的 `{ novel_text }`，避免把响应对象拼成 `[object Object]`，导致下载与投稿的 `.txt` 只有标题/标签头而没有正文。
+- 🛡️ 当所有正文回退均为空时跳过该小说，不写数据库、不生成空文件，也不会把无正文文档送入审核群。
+
 ## [2.10.5] - 2026-08-30
 
 ### 新增

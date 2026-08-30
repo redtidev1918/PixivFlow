@@ -148,6 +148,11 @@ outbox 清单保留在 SQLite 数据库同级的 `delivery-outbox/`；下一次�
 对上面的 TG 示例，可把 `/gen_token` 得到的 `tp_...` 放入
 `TG_SUBMIT_TOKEN` 环境变量；这只是示例服务自己的认证流程。
 
+同样的目标也可以指向 [telepress](https://github.com/redtidev1918/telepress)
+的 `/publish/gallery`，把插画自动发布成 Telegra.ph 相册（自动分页、`#标签`
+与来源链接页脚、R-18 提示），见 [CONFIG.md](docs/CONFIG.md) 的「Telegraph
+（telegra.ph）相册上传」一节。
+
 交互式配置向导：`pixivflow setup`。
 
 ## 常用命令

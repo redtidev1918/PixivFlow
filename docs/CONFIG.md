@@ -197,6 +197,52 @@ pixivflow setup
 `"tags": ["Pixiv", "{{tag}}", "{{workTags}}"]`。headers
 和 URL 支持 `${ENV_NAME}`。`arrayFormat` 可设 `comma`、`repeat` 或 `json`。
 
+#### Telegraph（telegra.ph）相册上传
+
+把下载的插画自动发布到 [Telegra.ph](https://telegra.ph) 相册页时，可搭配
+[telepress](https://github.com/redtidev1918/telepress) 的 REST 服务：
+telepress 负责把收到的图片打包、上传并生成带「上一页/下一页」导航的相册页，
+PixivFlow 侧无需任何代码改动，只增加一个 `httpMultipart` 目标即可。
+
+先启动 telepress 服务（任选一台机器，与 PixivFlow 同机时用内网地址）：
+
+```bash
+pip install "telepress[api]"
+telepress-server --host 0.0.0.0 --port 8000
+```
+
+然后在 `delivery.targets` 中增加目标：
+
+```json
+{
+  "delivery": {
+    "targets": {
+      "telegraph": {
+        "type": "httpMultipart",
+        "url": "http://127.0.0.1:8000/publish/gallery",
+        "fileField": "files",
+        "fields": {
+          "title": "{{title}}",
+          "tags": "{{workTags}}",
+          "link": "{{link}}",
+          "spoiler": "{{spoiler}}"
+        },
+        "success": { "statuses": [200], "jsonPath": "ok", "equals": true },
+        "maxAttempts": 3,
+        "retryDelayMs": 2000
+      }
+    }
+  }
+}
+```
+
+`title` 作为相册页标题；`tags` 会把作品 Pixiv 标签渲染成 `#标签` 页脚；
+`link` 生成指向原作品的来源链接；R-18 作品（`{{spoiler}}` 为 `true`）会在
+首页附加成人内容提示。telepress 对单张图片自动压缩到 5 MiB 以内、按 100 张
+一页自动分页，返回 `{"ok": true, "url": "...", "files": N}`，因此
+`success` 判定 `ok == true`。注意 telepress 相册要求图片文件，小说正文请走
+TelePost 等其他渠道。
+
 交付前会把任务写入数据库同目录的 `delivery-outbox/`。失败不会删除下载文件；
 下次 `download` 或 scheduler 执行时先检查待投递项。`outboxRetryBaseMs` 默认
 `300000`（5 分钟），`outboxRetryMaxMs` 默认 `21600000`（6 小时），失败后指数退避，

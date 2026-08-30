@@ -319,6 +319,12 @@ export interface StorageConfig {
    * `delivery.deleteAfterDelivery` is false. Default: 14 (0 disables).
    */
   cacheRetentionDays?: number;
+  /**
+   * Maximum aggregate size of downloaded cache files in MiB. `maintain`
+   * removes the oldest complete works until the cache is below this limit.
+   * Default: 0 (disabled).
+   */
+  cacheMaxSizeMB?: number;
 }
 
 export interface SchedulerConfig {
@@ -509,7 +515,6 @@ export interface StandaloneConfig {
     timeout?: number;
   };
 }
-
 
 
 

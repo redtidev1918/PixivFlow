@@ -5,6 +5,17 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [2.10.13] - 2026-08-30
+
+### 新增
+- 📦 **缓存容量硬上限**：新增 `storage.cacheMaxSizeMB`（`0` 关闭）。`pixivflow
+  maintain` 会在按天清理后，将最旧的完整作品成组淘汰到容量线以下，避免 1 GiB
+  小卷在保留期到达前被异常多页作品填满，也不会主动清理投递 outbox。
+
+### 修复
+- 🧩 缓存清理改为按作品分组，多页插画的图片与元数据会一起淘汰，不再逐个文件
+  删除后过早移除下载记录。
+
 ## [2.10.12] - 2026-08-30
 
 ### 新增

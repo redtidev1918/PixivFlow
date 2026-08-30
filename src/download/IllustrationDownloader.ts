@@ -8,6 +8,7 @@ import { processInParallel } from '../utils/concurrency';
 import { promises as fs } from 'node:fs';
 import { join } from 'node:path';
 import { getErrorMessage } from '../utils/errors';
+import { detectAiFileMetadata } from '../utils/ai-detection';
 import { DownloadedArtifact } from '../delivery/types';
 
 /**
@@ -25,7 +26,11 @@ export class IllustrationDownloader {
   /**
    * Download an illustration
    */
-  async downloadIllustration(illust: PixivIllust, tag: string): Promise<DownloadedArtifact | null> {
+  async downloadIllustration(
+    illust: PixivIllust,
+    tag: string,
+    aiMetadataCheck?: boolean
+  ): Promise<DownloadedArtifact | null> {
     // Check if files already exist in file system but not in database
     const existingFiles = await this.findExistingIllustrationFiles(illust.id);
     if (existingFiles.length > 0 && !this.database.hasDownloaded(String(illust.id), 'illustration')) {
@@ -196,6 +201,36 @@ export class IllustrationDownloader {
 
     if (successCount === 0) {
       throw new Error(`Failed to download any pages for illustration ${detail.id}`);
+    }
+
+    // Optional content-side AI check: scan the first page's file metadata for
+    // AI-generator markers (Stable Diffusion parameters / NovelAI EXIF ...).
+    // Cheap bounded read, no pixel analysis. Works detected this way are still
+    // recorded as downloaded (so future runs don't re-fetch them) but are NOT
+    // delivered.
+    if (aiMetadataCheck === true && files.length > 0) {
+      try {
+        const firstPath = files[0];
+        const handle = await fs.open(firstPath, 'r');
+        try {
+          const head = Buffer.allocUnsafe(2 * 1024 * 1024);
+          const { bytesRead } = await handle.read(head, 0, head.length, 0);
+          if (detectAiFileMetadata(bytesRead > 0 ? head.subarray(0, bytesRead) : head)) {
+            logger.info(
+              `Skipping illustration ${detail.id}: AI generator metadata detected in "${firstPath}" (aiMetadataCheck)`,
+              { illustrationId: detail.id, title: detail.title }
+            );
+            return null;
+          }
+        } finally {
+          await handle.close();
+        }
+      } catch (error) {
+        logger.warn(
+          `aiMetadataCheck failed for illustration ${detail.id}; delivering anyway: ${error instanceof Error ? error.message : String(error)}`,
+          { illustrationId: detail.id }
+        );
+      }
     }
 
     return {

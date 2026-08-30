@@ -150,6 +150,13 @@ export class ConfigValidator {
             message: `Target ${index + 1}: excludeAI must be a boolean`,
           });
         }
+        if (target.aiMetadataCheck !== undefined && typeof target.aiMetadataCheck !== 'boolean') {
+          errors.push({
+            code: 'CONFIG_VALIDATION_TARGET_AI_METADATA_CHECK_INVALID',
+            field: `${targetPrefix}.aiMetadataCheck`,
+            message: `Target ${index + 1}: aiMetadataCheck must be a boolean`,
+          });
+        }
         if (target.strictLanguageFilter !== undefined && typeof target.strictLanguageFilter !== 'boolean') {
           errors.push({
             code: 'CONFIG_VALIDATION_TARGET_STRICT_LANGUAGE_INVALID',

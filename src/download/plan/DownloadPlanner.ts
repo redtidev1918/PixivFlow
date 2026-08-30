@@ -1,6 +1,7 @@
 import type { TargetConfig } from '../../config';
 import type { PixivIllust, PixivNovel } from '../../pixiv/types';
 import { parseDateRange, isDateInRange } from '../../utils/date-utils';
+import { isAIIllustration } from '../../utils/ai-detection';
 import { logger } from '../../logger';
 import type { IDatabase } from '../../interfaces/IDatabase';
 
@@ -135,7 +136,10 @@ export class DownloadPlanner {
 
     if (itemType === 'illustration' && target.excludeAI === true) {
       const beforeCount = filtered.length;
-      filtered = filtered.filter((item) => (item as PixivIllust).illust_ai_type !== 2);
+      // Official Pixiv flag (`illust_ai_type === 2`) or explicit AI tags
+      // (生成AI / AI生成 / Generative AI ...) — tag matching also catches
+      // works whose AI classification field is missing or not yet set.
+      filtered = filtered.filter((item) => !isAIIllustration(item));
       if (filtered.length < beforeCount) {
         logger.info(`Excluded ${beforeCount - filtered.length} Pixiv AI-generated illustration(s)`);
       }

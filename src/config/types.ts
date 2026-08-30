@@ -79,11 +79,21 @@ export interface TargetConfig {
    */
   r18?: boolean;
   /**
-   * Exclude works that Pixiv marks as AI-generated (`illust_ai_type === 2`).
-   * Only applies to illustration targets. Unknown/missing metadata is kept so
-   * older API responses are not discarded accidentally. Default: false.
+   * Exclude works that Pixiv marks as AI-generated (`illust_ai_type === 2`)
+   * or that carry explicit AI-generation tags (生成AI / AI生成 / Generative AI).
+   * Tag matching also catches works whose classification field is missing or
+   * not yet set by Pixiv. Only applies to illustration targets. Default: false.
    */
   excludeAI?: boolean;
+  /**
+   * Optional content-side AI check (illustration targets only): after pages
+   * are downloaded, scan the first page's file bytes for AI-generator
+   * metadata markers (Stable Diffusion `parameters=` PNG tEXt, NovelAI EXIF,
+   * ...) and skip delivery when found. Cost: one bounded 2 MiB read per work;
+   * no pixel analysis, no model inference. Detected works are still recorded
+   * as downloaded so they are not re-fetched on later runs. Default: false.
+   */
+  aiMetadataCheck?: boolean;
   /**
    * Download mode: 'search' (default), 'ranking' or 'topic'
    * - 'search': Search by tag

@@ -5,6 +5,20 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [2.10.10] - 2026-08-30
+
+### 新增
+- 🤖 **AI 标签过滤**：`excludeAI: true` 时除 Pixiv 官方 `illust_ai_type === 2` 外，
+  还匹配作品标签中的 AI 标记（生成AI / AI生成 / Generative AI / AI-generated 等，
+  含翻译名），官方字段缺失或尚未标注的 AI 作品也能被拦住。纯文本匹配，零额外开销。
+- 🔍 **可选文件元数据检查 `aiMetadataCheck`**（target 级，默认关闭）：下载完成后
+  读取首页文件头部 2 MiB，扫描 AI 生成工具写入的元数据标记（Stable Diffusion 的
+  `parameters=` PNG tEXt、NovelAI 的 EXIF 等），命中则跳过投递（仍记为已下载，
+  避免以后重复拉取）。单次有界读，无像素分析、无模型推理，512 MiB 机器零压力。
+
+### 修复
+- 无（行为保持兼容：`excludeAI` 语义增强但默认关闭项不变）。
+
 ## [2.10.9] - 2026-08-30
 
 ### 修复

@@ -233,52 +233,60 @@ describe('Pixiv client services', () => {
       expect(requestMock).toHaveBeenCalledTimes(1);
     });
 
-    it('fetches novel text successfully', async () => {
-      requestMock.mockResolvedValueOnce({
-        novel_text: 'Novel content here',
-      });
+    it('fetches novel text from the gallery-dl webview endpoint first', async () => {
+      requestMock.mockResolvedValueOnce(
+        '<html>novel: {"id": 30, "text": "Novel content here"},\n</html>' as unknown as PixivNovelTextResponse
+      );
 
       const service = new NovelService(api as PixivApiCore);
       const result = await service.getNovelText(30);
 
       expect(result).toEqual({ novel_text: 'Novel content here' });
-      expect(requestMock).toHaveBeenCalledWith('/v1/novel/text?novel_id=30', { method: 'GET' });
+      expect(requestMock).toHaveBeenCalledWith(
+        '/webview/v2/novel?id=30&viewer_version=20221031_ai',
+        { method: 'GET', responseType: 'text' }
+      );
+      expect(requestMock).toHaveBeenCalledTimes(1);
     });
 
-    it('fetches novel text with user agent', async () => {
-      requestMock.mockResolvedValueOnce({
-        novel_text: 'Novel content',
-      });
+    it('falls back to the legacy App API when webview parsing fails', async () => {
+      requestMock
+        .mockResolvedValueOnce('<html>no marker</html>' as unknown as PixivNovelTextResponse)
+        .mockResolvedValueOnce({ novel_text: 'Legacy API content' });
 
       const service = new NovelService(api as PixivApiCore);
-      const result = await service.getNovelText(31, { userAgent: 'CustomUA' });
+      const result = await service.getNovelText(31);
 
-      expect(result).toEqual({ novel_text: 'Novel content' });
-      expect(requestMock).toHaveBeenCalledWith('/v1/novel/text?novel_id=31', { method: 'GET' });
+      expect(result).toEqual({ novel_text: 'Legacy API content' });
+      expect(requestMock).toHaveBeenNthCalledWith(
+        2,
+        '/v1/novel/text?novel_id=31',
+        { method: 'GET' }
+      );
     });
 
-    it('falls back to webview endpoint when novel text API fails', async () => {
+    it('rejects empty webview and App API bodies before using web ajax', async () => {
       requestMock
-        .mockRejectedValueOnce(new Error('500 Internal Error'))
         .mockResolvedValueOnce(
-          '<html>novel: {"id": 30, "text": "webview content"},\n</html>' as unknown as PixivNovelTextResponse
-        );
+          '<html>novel: {"id": 30, "text": "   "},\n</html>' as unknown as PixivNovelTextResponse
+        )
+        .mockResolvedValueOnce({ novel_text: '' })
+        .mockResolvedValueOnce({ body: { content: 'ajax content' } });
 
       const service = new NovelService(api as PixivApiCore);
       const result = await service.getNovelText(30, { userAgent: 'UA' });
 
-      expect(result).toEqual({ novel_text: 'webview content' });
-      expect(requestMock).toHaveBeenNthCalledWith(
-        2,
-        '/webview/v2/novel?id=30&viewer_version=20221031_ai',
-        { method: 'GET', responseType: 'text' }
-      );
+      expect(result).toEqual({ novel_text: 'ajax content' });
+      const thirdCall = requestMock.mock.calls[2];
+      expect(thirdCall[0]).toBe('https://www.pixiv.net/ajax/novel/30');
+      expect((thirdCall[1] as any).skipAuth).toBe(true);
+      expect((thirdCall[1] as any).headers['User-Agent']).toBe('UA');
     });
 
-    it('falls back to web ajax (skipAuth) when webview has no marker', async () => {
+    it('falls back to web ajax (skipAuth) when both app endpoints fail', async () => {
       requestMock
-        .mockRejectedValueOnce(new Error('500 Internal Error'))
-        .mockResolvedValueOnce('<html>no marker here</html>' as unknown as PixivNovelTextResponse)
+        .mockRejectedValueOnce(new Error('webview failed'))
+        .mockRejectedValueOnce(new Error('legacy API failed'))
         .mockResolvedValueOnce({ body: { content: 'ajax content' } });
 
       const service = new NovelService(api as PixivApiCore);
@@ -290,22 +298,22 @@ describe('Pixiv client services', () => {
       expect((thirdCall[1] as any).skipAuth).toBe(true);
     });
 
-    it('throws error when ajax endpoint returns unexpected structure', async () => {
+    it('reports every exhausted source when no endpoint returns body text', async () => {
       requestMock
-        .mockRejectedValueOnce(new Error('500 Internal Error'))
         .mockResolvedValueOnce('<html>no marker</html>' as unknown as PixivNovelTextResponse)
+        .mockResolvedValueOnce({ novel_text: '   ' })
         .mockResolvedValueOnce({ body: { unexpected: 'structure' } });
 
       const service = new NovelService(api as PixivApiCore);
       await expect(service.getNovelText(32)).rejects.toThrow(
-        /app-api \(500 Internal Error\) and web ajax \(Unexpected ajax novel response structure\)/
+        /webview returned no non-empty novel text; app-api returned no non-empty novel_text; web ajax returned no non-empty content/
       );
     });
 
     it('throws error when ajax endpoint fails', async () => {
       requestMock
-        .mockRejectedValueOnce(new Error('500 Internal Error'))
-        .mockResolvedValueOnce('<html>no marker</html>' as unknown as PixivNovelTextResponse)
+        .mockRejectedValueOnce(new Error('Webview endpoint failed'))
+        .mockRejectedValueOnce(new Error('Legacy endpoint failed'))
         .mockRejectedValueOnce(new Error('Ajax endpoint failed'));
 
       const service = new NovelService(api as PixivApiCore);
@@ -603,5 +611,4 @@ describe('Pixiv client services', () => {
     });
   });
 });
-
 

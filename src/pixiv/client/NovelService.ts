@@ -1,7 +1,6 @@
 import { PixivApiCore } from './PixivApiCore';
 import type { PixivNovel, PixivUser, PixivNovelTextResponse } from '../types';
 import { NetworkError } from '../../utils/errors';
-import { logger } from '../../logger';
 
 /**
  * Service for novel related Pixiv API calls.
@@ -61,17 +60,12 @@ export class NovelService {
   }
 
   async getNovelText(novelId: number, opts?: { userAgent?: string }): Promise<PixivNovelTextResponse> {
-    // Primary: v1 API
-    const url = `/v1/novel/text?novel_id=${encodeURIComponent(String(novelId))}`;
-    let primaryError: unknown;
-    try {
-      return await this.api.request<PixivNovelTextResponse>(url, { method: 'GET' });
-    } catch (e) {
-      primaryError = e;
-    }
+    const failures: string[] = [];
 
-    // Fallback 2: webview v2 (app endpoint; serves novels whose /v1/novel/text
-    // returns 404, e.g. works with embedded images or newly-posted ones).
+    // Primary: the same webview endpoint used by gallery-dl. The legacy
+    // /v1/novel/text endpoint can return a successful response with an empty
+    // body for some works, so HTTP success alone must not be treated as a
+    // successful novel download.
     try {
       const webviewUrl = `/webview/v2/novel?id=${encodeURIComponent(String(novelId))}&viewer_version=20221031_ai`;
       const html = await this.api.request<string>(webviewUrl, {
@@ -85,22 +79,28 @@ export class NovelService {
         const end = html.indexOf(',\n', from);
         if (end !== -1) {
           const parsed = JSON.parse(html.slice(from, end));
-          if (parsed?.text) {
-            return { novel_text: parsed.text };
-          }
+          const text = this.nonEmptyText(parsed?.text);
+          if (text) return { novel_text: text };
         }
       }
-      logger.warn('webview novel parse found no embedded novel JSON, trying web ajax', {
-        novelId,
-      });
-    } catch (webviewError) {
-      logger.warn('webview novel fetch failed, trying web ajax', {
-        novelId,
-        error: webviewError instanceof Error ? webviewError.message : String(webviewError),
-      });
+      failures.push('webview returned no non-empty novel text');
+    } catch (error) {
+      failures.push(`webview (${this.errorMessage(error)})`);
     }
 
-    // Fallback 3: web ajax endpoint. This one must NOT carry the App Bearer
+    // Fallback 1: legacy App API. Keep it for compatibility, but only accept a
+    // genuinely non-empty novel_text value.
+    const url = `/v1/novel/text?novel_id=${encodeURIComponent(String(novelId))}`;
+    try {
+      const response = await this.api.request<PixivNovelTextResponse>(url, { method: 'GET' });
+      const text = this.nonEmptyText(response?.novel_text);
+      if (text) return { novel_text: text };
+      failures.push('app-api returned no non-empty novel_text');
+    } catch (error) {
+      failures.push(`app-api (${this.errorMessage(error)})`);
+    }
+
+    // Fallback 2: web ajax endpoint. This one must NOT carry the App Bearer
     // token (www.pixiv.net/ajax rejects it with a different payload), so we
     // send browser-like headers with skipAuth instead.
     const BROWSER_UA =
@@ -121,20 +121,25 @@ export class NovelService {
           ajaxUrl
         );
       }
-      if (resp?.body?.content) {
-        return { novel_text: resp.body.content };
-      }
-      throw new NetworkError('Unexpected ajax novel response structure', ajaxUrl);
+      const text = this.nonEmptyText(resp?.body?.content);
+      if (text) return { novel_text: text };
+      failures.push('web ajax returned no non-empty content');
     } catch (fallbackError) {
-      const primaryMsg =
-        primaryError instanceof Error ? primaryError.message : String(primaryError);
-      const fallbackMsg =
-        fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
-      throw new NetworkError(
-        `novel text failed for ${novelId}: app-api (${primaryMsg}) and web ajax (${fallbackMsg})`,
-        ajaxUrl
-      );
+      failures.push(`web ajax (${this.errorMessage(fallbackError)})`);
     }
+
+    throw new NetworkError(
+      `novel text failed for ${novelId}: ${failures.join('; ')}`,
+      ajaxUrl
+    );
+  }
+
+  private nonEmptyText(value: unknown): string | null {
+    return typeof value === 'string' && value.trim() ? value : null;
+  }
+
+  private errorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
   }
 
   async getUserNovels(
@@ -238,5 +243,3 @@ export class NovelService {
     return results;
   }
 }
-
-

@@ -79,7 +79,7 @@ describe('HttpMultipartDelivery', () => {
     expect(multipart).toContain('name="anonymous"\r\n\r\nfalse');
   });
 
-  it('renders link / topicTag / spoiler template variables', async () => {
+  it('renders link / topicTag / spoiler / x_restrict template variables', async () => {
     const filePath = join(directory, 'cover.jpg');
     await fs.writeFile(filePath, 'image');
     const fetchMock = jest.fn().mockImplementation(() =>
@@ -100,18 +100,21 @@ describe('HttpMultipartDelivery', () => {
         link: '{{link}}',
         topicTag: '{{topicTag}}',
         spoiler: '{{spoiler}}',
+        x_restrict: '{{xRestrict}}',
+        rating: '{{xRestrictLabel}}',
+        rating_tag: '{{xRestrictTag}}',
       },
       success: { statuses: [201], jsonPath: 'ok', equals: true },
       maxAttempts: 1,
       retryDelayMs: 0,
     });
 
-    // illustration + R-18 -> artworks link + spoiler true
+    // Exact R-18G level remains available even when channel policy disables masking.
     await provider.deliver({
       files: [filePath],
       context: {
         title: 'T', pixivId: '456', type: 'illustration',
-        topic: 'ボテ腹', workTags: ['ボテ腹'], spoiler: true,
+        topic: 'ボテ腹', workTags: ['ボテ腹'], spoiler: false, xRestrict: 2,
       },
     });
     let [url, options] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -120,7 +123,10 @@ describe('HttpMultipartDelivery', () => {
     let multipart = Buffer.concat(chunks).toString('utf8');
     expect(multipart).toContain('name="link"\r\n\r\nhttps://www.pixiv.net/artworks/456');
     expect(multipart).toContain('name="topicTag"\r\n\r\nボテ腹');
-    expect(multipart).toContain('name="spoiler"\r\n\r\ntrue');
+    expect(multipart).toContain('name="spoiler"\r\n\r\nfalse');
+    expect(multipart).toContain('name="x_restrict"\r\n\r\n2');
+    expect(multipart).toContain('name="rating"\r\n\r\nR-18G');
+    expect(multipart).toContain('name="rating_tag"\r\n\r\nR18G');
 
     // novel + non-R18 -> novel permalink + spoiler false; tag fallback for topicTag
     fetchMock.mockClear();
@@ -284,6 +290,7 @@ describe('DeliveryOutbox', () => {
         type: 'illustration',
         title: 'Topic work',
         tags: ['ボテ腹', '腹部膨満'],
+        xRestrict: 1,
         files: [filePath],
       },
       {
@@ -303,6 +310,7 @@ describe('DeliveryOutbox', () => {
           tag: 'ボテ腹',
           topic: 'ボテ腹',
           workTags: ['ボテ腹', '腹部膨満'],
+          xRestrict: 1,
         }),
       })
     );

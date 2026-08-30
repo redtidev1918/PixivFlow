@@ -5,6 +5,14 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [2.10.15] - 2026-08-31
+
+### 新增
+- 🔞 **精确暴露 Pixiv `x_restrict` 等级**：下载产物和可持久投递 outbox
+  现在保留原始整数，HTTP multipart 新增 `{{xRestrict}}`、
+  `{{xRestrictLabel}}` 和 `{{xRestrictTag}}` 模板变量，可区分全年龄、R-18
+  与 R-18G，也不会把内容等级强制绑定为下游遮罩策略。
+
 ## [2.10.14] - 2026-08-30
 
 ### 新增

@@ -191,7 +191,11 @@ pixivflow setup
 ```
 
 字段值支持 `{{title}}`、`{{pixivId}}`、`{{type}}`、`{{tag}}`、`{{topic}}`、
-`{{workTags}}` 模板。`{{tag}}` 是统一的目标标签：普通搜索使用 `tag`、标签排行
+`{{workTags}}`、`{{xRestrict}}`、`{{xRestrictLabel}}`、`{{xRestrictTag}}`
+模板。`{{xRestrict}}` 保留 Pixiv 原始整数（0=全年龄、1=R-18、2=R-18G）；
+`{{xRestrictLabel}}` 输出 `all-ages` / `R-18` / `R-18G`，`{{xRestrictTag}}`
+输出适合 Telegram 标签的 `AllAges` / `R18` / `R18G`。这三者与
+`{{spoiler}}` 独立，下游可以按频道策略决定是否加遮罩。`{{tag}}` 是统一的目标标签：普通搜索使用 `tag`、标签排行
 使用 `filterTag`、语义主题模式使用 `topic`；`{{workTags}}` 是作品自身的 Pixiv
 标签，以逗号连接。需要同时投稿来源、计划主题和作品标签时可配置
 `"tags": ["Pixiv", "{{tag}}", "{{workTags}}"]`。headers

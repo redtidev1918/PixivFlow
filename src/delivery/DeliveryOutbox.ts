@@ -7,6 +7,15 @@ import { ConfigError, PendingDeliveryError } from '../utils/errors';
 import { DeliveryDispatcher } from './DeliveryDispatcher';
 import { DeliveryRequest, DeliveryResult, DownloadedArtifact } from './types';
 import { getTargetLabel } from '../utils/target-label';
+import { getTodayDate, getYesterdayDate } from '../utils/pixiv-date-utils';
+
+/** Resolve the ranking/list day (JST, YYYY-MM-DD) for a target. */
+export function resolveRankingDate(target: TargetConfig): string {
+  const raw = target.date || target.rankingDate || 'YESTERDAY';
+  if (raw === 'TODAY') return getTodayDate();
+  if (raw === 'YESTERDAY') return getYesterdayDate();
+  return raw;
+}
 
 interface PendingDelivery {
   version: 1;
@@ -86,6 +95,9 @@ export class DeliveryOutbox {
           topic: target.topic?.trim() || undefined,
           workTags: artifact.tags,
           spoiler: artifact.spoiler,
+          rankingDate: resolveRankingDate(target),
+          publishedAt: artifact.publishedAt,
+          language: artifact.language,
         },
       },
     };

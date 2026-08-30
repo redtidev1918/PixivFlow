@@ -140,6 +140,50 @@ describe('HttpMultipartDelivery', () => {
     expect(multipart).toContain('name="spoiler"\r\n\r\nfalse');
   });
 
+  it('renders rankingDate / publishedDate / language template variables', async () => {
+    const filePath = join(directory, 'novel.txt');
+    await fs.writeFile(filePath, 'body');
+    const fetchMock = jest.fn().mockImplementation(() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ ok: true }), {
+          status: 201,
+          headers: { 'content-type': 'application/json' },
+        })
+      )
+    );
+    global.fetch = fetchMock as typeof fetch;
+
+    const provider = new HttpMultipartDelivery({
+      type: 'httpMultipart',
+      url: 'https://example.test/submissions',
+      fileField: 'files',
+      fields: {
+        note: '📅 {{rankingDate}} 🕒 {{publishedDate}} 🌐 {{language}}',
+      },
+      success: { statuses: [201], jsonPath: 'ok', equals: true },
+      maxAttempts: 1,
+      retryDelayMs: 0,
+    });
+
+    await provider.deliver({
+      files: [filePath],
+      context: {
+        title: 'N', pixivId: '789', type: 'novel',
+        rankingDate: '2026-08-29',
+        publishedAt: '2026-08-28T21:15:00+09:00',
+        language: 'Chinese (Mandarin) (cmn)',
+      },
+    });
+
+    const [url, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const chunks: Buffer[] = [];
+    for await (const chunk of options.body as unknown as AsyncIterable<Buffer>) chunks.push(Buffer.from(chunk));
+    const multipart = Buffer.concat(chunks).toString('utf8');
+    expect(multipart).toContain(
+      'name="note"\r\n\r\n📅 2026-08-29 🕒 2026-08-28 🌐 Chinese (Mandarin) (cmn)'
+    );
+  });
+
   it('retries failed delivery attempts', async () => {
     const filePath = join(directory, 'work.txt');
     await fs.writeFile(filePath, 'text');

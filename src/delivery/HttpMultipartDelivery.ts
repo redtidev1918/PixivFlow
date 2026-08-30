@@ -6,6 +6,13 @@ import { DeliveryFieldValue, HttpMultipartDeliveryConfig } from '../config';
 import { logger } from '../logger';
 import { DeliveryProvider, DeliveryRequest, DeliveryResult } from './types';
 
+/** Render an ISO timestamp to YYYY-MM-DD (create_date is JST). */
+function formatPublishedDate(iso?: string): string {
+  if (!iso) return '';
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  return match ? `${match[1]}-${match[2]}-${match[3]}` : iso.slice(0, 10);
+}
+
 /** Generic streaming HTTP multipart delivery provider. */
 export class HttpMultipartDelivery implements DeliveryProvider {
   private readonly dispatcher?: unknown;
@@ -145,13 +152,20 @@ export class HttpMultipartDelivery implements DeliveryProvider {
       // R-18 works are auto-spoilerized; templates can use {{spoiler}} instead
       // of hard-coding true.
       spoiler: request.context.spoiler === true ? 'true' : 'false',
+      // Ranking day (JST YYYY-MM-DD) — which day's hot works this is.
+      rankingDate: request.context.rankingDate ?? '',
+      // Pixiv publish date, YYYY-MM-DD (create_date is JST ISO).
+      publishedDate: formatPublishedDate(request.context.publishedAt),
+      // Detected language for novels ("Chinese (Mandarin) (cmn)"); empty for
+      // illustrations or when detection was inconclusive.
+      language: request.context.language ?? '',
     };
     return Object.fromEntries(
       Object.entries(fields).map(([name, value]) => {
         const values = Array.isArray(value) ? value : [value];
         const rendered = values.map((item) =>
           String(item).replace(
-            /\{\{(title|pixivId|type|tag|topic|workTags|link|topicTag|spoiler)\}\}/g,
+            /\{\{(title|pixivId|type|tag|topic|workTags|link|topicTag|spoiler|rankingDate|publishedDate|language)\}\}/g,
             (_, key: string) => variables[key]
           )
         );

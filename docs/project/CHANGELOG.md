@@ -5,6 +5,14 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [2.10.11] - 2026-08-30
+
+### 新增
+- 📅 **投稿模板新变量**：`{{rankingDate}}`（JST 榜单日，YYYY-MM-DD，自动解析
+  TODAY/YESTERDAY/字面日期）、`{{publishedDate}}`（作品 Pixiv 发布日期，取自
+  create_date）、`{{language}}`（小说检测语言，如 `Chinese (Mandarin) (cmn)`；
+  插画为空）。渠道观众一眼就能看出这份投稿是「哪一天的热门作品、什么时候发布的」。
+
 ## [2.10.10] - 2026-08-30
 
 ### 新增

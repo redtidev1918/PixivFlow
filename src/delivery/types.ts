@@ -15,6 +15,10 @@ export interface DownloadedArtifact {
   cleanupFiles?: string[];
   /** R-18 work (x_restrict > 0): delivery templates may open Telegram spoiler. */
   spoiler?: boolean;
+  /** Pixiv publish timestamp (create_date, ISO) — rendered as {{publishedDate}}. */
+  publishedAt?: string;
+  /** Detected language label for novels (e.g. "Chinese (Mandarin) (cmn)"). */
+  language?: string;
 }
 
 export interface DeliveryContext {
@@ -25,6 +29,12 @@ export interface DeliveryContext {
   topic?: string;
   workTags?: string[];
   spoiler?: boolean;
+  /** Ranking/list day in YYYY-MM-DD (JST) — which day's hot works this is. */
+  rankingDate?: string;
+  /** Pixiv publish date, ISO — when the work was released. */
+  publishedAt?: string;
+  /** Detected language label for novels. */
+  language?: string;
 }
 
 export interface DeliveryRequest {

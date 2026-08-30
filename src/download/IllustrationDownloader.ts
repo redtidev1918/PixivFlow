@@ -241,6 +241,7 @@ export class IllustrationDownloader {
       files,
       cleanupFiles,
       spoiler: (detail.x_restrict ?? 0) > 0,
+      publishedAt: detail.create_date,
     };
   }
 

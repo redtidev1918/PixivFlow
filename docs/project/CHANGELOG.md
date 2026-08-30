@@ -5,6 +5,15 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [2.10.14] - 2026-08-30
+
+### 新增
+- 📤 **Telegraph（telegra.ph）相册上传**：新增「Telegraph（telegra.ph）相册
+  上传」配置指南——配合 [telepress](https://github.com/redtidev1918/telepress)
+  的 `/publish/gallery` REST 端点，用现有 `httpMultipart` 交付目标即可把插画
+  自动发布成 Telegra.ph 相册（自动分页、`#标签` 与来源链接页脚、R-18 提示），
+  无需改动任何 PixivFlow 代码。
+
 ## [2.10.13] - 2026-08-30
 
 ### 新增

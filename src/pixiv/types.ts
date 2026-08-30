@@ -48,6 +48,8 @@ export interface PixivIllust {
   /** Caption/description (search & detail responses include it). */
   caption?: string;
   x_restrict?: number;
+  /** Pixiv AI classification: 2 means AI-generated; 0/1 are not excluded. */
+  illust_ai_type?: number;
   /** Search responses usually include enough tag metadata for discovery. */
   tags?: PixivTag[];
 }
@@ -75,7 +77,6 @@ export interface PixivNovel {
 export interface PixivNovelTextResponse {
   novel_text: string;
 }
-
 
 
 

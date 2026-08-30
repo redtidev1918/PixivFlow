@@ -79,6 +79,12 @@ export interface TargetConfig {
    */
   r18?: boolean;
   /**
+   * Exclude works that Pixiv marks as AI-generated (`illust_ai_type === 2`).
+   * Only applies to illustration targets. Unknown/missing metadata is kept so
+   * older API responses are not discarded accidentally. Default: false.
+   */
+  excludeAI?: boolean;
+  /**
    * Download mode: 'search' (default), 'ranking' or 'topic'
    * - 'search': Search by tag
    * - 'ranking': Use the Pixiv ranking API when filterTag is absent. With
@@ -180,6 +186,16 @@ export interface TargetConfig {
    * Novels that are too short for reliable detection will be downloaded by default.
    */
   languageFilter?: 'chinese' | 'non-chinese';
+  /**
+   * When a novel language filter is active, try this many popularity-ranked
+   * candidates to backfill the requested limit (default 20, max 100).
+   */
+  languageCandidateLimit?: number;
+  /**
+   * Reject novels whose text is too short for reliable language detection.
+   * Default false preserves the legacy permissive behavior.
+   */
+  strictLanguageFilter?: boolean;
   /**
    * Enable language detection and logging for novels (only used when type='novel')
    * If true, detected language will be logged and saved in metadata
@@ -470,7 +486,6 @@ export interface StandaloneConfig {
     timeout?: number;
   };
 }
-
 
 
 

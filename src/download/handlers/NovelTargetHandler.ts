@@ -77,6 +77,9 @@ export class NovelTargetHandler {
         ? target.date
         : getYesterdayDate();
     const limit = target.limit || 1;
+    const selectionLimit = target.languageFilter
+      ? Math.max(limit, Math.min(target.languageCandidateLimit ?? 20, 100))
+      : limit;
     logger.info(`Fetching ${day} novels for topic "${topic}", resolving dynamic tag space`);
 
     if (!this.topicPipelineFactory) {
@@ -87,11 +90,11 @@ export class NovelTargetHandler {
       target,
       'novel',
       day,
-      limit,
+      selectionLimit,
       target.topicDiscovery ?? {},
       target.candidateCollection ?? {}
     );
-    logger.info(`Topic "${topic}" novel: tags=${selection.resolvedTagCount} raw=${selection.rawCount} deduped=${selection.dedupedCount} accepted=${selection.acceptedCount} selected=${works.length}`);
+    logger.info(`Topic "${topic}" novel: tags=${selection.resolvedTagCount} raw=${selection.rawCount} deduped=${selection.dedupedCount} accepted=${selection.acceptedCount} candidates=${works.length} target=${limit}`);
     return works;
   }
 

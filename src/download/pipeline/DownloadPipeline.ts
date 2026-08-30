@@ -68,11 +68,14 @@ export class DownloadPipeline {
       downloaded: 0,
       skippedCount: 0,
     };
+    const concurrency = itemType === 'novel' && target.languageFilter
+      ? 1
+      : (this.config.download?.concurrency || 3);
 
     if (plan.mode === 'random') {
-      await this.executeRandomMode(plan, targetLimit, planAvailableCount, itemType, tagForLog, downloadFn, retryAttempts, state);
+      await this.executeRandomMode(plan, targetLimit, planAvailableCount, itemType, tagForLog, downloadFn, retryAttempts, concurrency, state);
     } else {
-      await this.executeSequentialMode(plan, targetLimit, itemType, tagForLog, downloadFn, retryAttempts, state);
+      await this.executeSequentialMode(plan, targetLimit, itemType, tagForLog, downloadFn, retryAttempts, concurrency, state);
     }
 
     this.updateProgress(
@@ -97,6 +100,7 @@ export class DownloadPipeline {
     tagForLog: string,
     downloadFn: (item: T, tag: string) => Promise<void>,
     retryAttempts: number,
+    concurrency: number,
     state: { downloaded: number; skippedCount: number }
   ): Promise<void> {
     const candidates = plan.queue;
@@ -109,7 +113,6 @@ export class DownloadPipeline {
       return;
     }
 
-    const concurrency = this.config.download?.concurrency || 3;
     const selectionLimit = plan.random?.maxAttempts ?? candidates.length;
     let attemptCounter = 0;
     let completedForProgress = 0;
@@ -176,10 +179,10 @@ export class DownloadPipeline {
     tagForLog: string,
     downloadFn: (item: T, tag: string) => Promise<void>,
     retryAttempts: number,
+    concurrency: number,
     state: { downloaded: number; skippedCount: number }
   ): Promise<void> {
     const toProcess = plan.queue;
-    const concurrency = this.config.download?.concurrency || 3;
     const totalPlanned = toProcess.length;
     let completedForProgress = 0;
 
@@ -281,4 +284,3 @@ export class DownloadPipeline {
     }
   }
 }
-

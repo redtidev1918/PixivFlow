@@ -22,6 +22,7 @@ const work = (id: number, tags: string[], opts: Partial<WorkLike> = {}): WorkLik
   create_date: opts.create_date ?? '2026-08-28T10:00:00+09:00',
   total_bookmarks: opts.total_bookmarks ?? 0,
   total_view: opts.total_view ?? 0,
+  ...(opts.illust_ai_type !== undefined ? { illust_ai_type: opts.illust_ai_type } : {}),
   tags: tags.map(tag),
 });
 
@@ -205,6 +206,28 @@ describe('TopicPipeline', () => {
     const target = { type: 'illustration', mode: 'topic', topic: 'seed' } as never;
     const { selection } = await pipeline.selectWorks(target, 'illustration', DAY, 3, {}, { maxPerTag: 60, maxCandidates: 25 });
     expect(selection.dedupedCount).toBeLessThanOrEqual(25);
+  });
+
+  it('excludes Pixiv-marked AI works before popularity Top-N selection', async () => {
+    const aiClient: TopicClient = {
+      getTagAutocomplete: async () => [{ name: 'seed' }],
+      searchIllustrationsForTags: async (seed: string) => seed === 'seed'
+        ? [
+            work(1, ['seed'], { create_date: DAY + 'T10:00:00+09:00', total_bookmarks: 9999, illust_ai_type: 2 }),
+            work(2, ['seed'], { create_date: DAY + 'T11:00:00+09:00', total_bookmarks: 100, illust_ai_type: 1 }),
+          ]
+        : [],
+      searchNovelsForTags: async () => [],
+    };
+    const dir = await fs.mkdtemp(join(os.tmpdir(), 'topic-ai-'));
+    const resolver = new TopicResolver(aiClient, new TopicCache(dir), 0);
+    const pipeline = new TopicPipeline(aiClient, resolver, 0);
+    const target = { type: 'illustration', mode: 'topic', topic: 'seed', excludeAI: true } as never;
+
+    const { works, selection } = await pipeline.selectWorks(target, 'illustration', DAY, 1, {}, {});
+
+    expect(works.map((item) => item.id)).toEqual([2]);
+    expect(selection.aiExcludedCount).toBeGreaterThanOrEqual(1);
   });
 
   it('filter rejects works that carry only generic platform tags', async () => {

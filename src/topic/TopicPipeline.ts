@@ -30,6 +30,7 @@ export interface TopicSelection {
   rawCount: number;
   dedupedCount: number;
   acceptedCount: number;
+  aiExcludedCount: number;
 }
 
 /**
@@ -65,6 +66,7 @@ export class TopicPipeline {
 
     const byId = new Map<number, { work: T; candidate: TopicCandidate }>();
     let rawCount = 0;
+    let aiExcludedCount = 0;
     const tagNames = space.tags.map((t) => t.name);
 
     for (let i = 0; i < tagNames.length; i++) {
@@ -73,6 +75,10 @@ export class TopicPipeline {
       const works = await this.searchDay<T>(contentType, tag, day, maxPerTag, includeR18);
       rawCount += works.length;
       for (const work of works) {
+        if (contentType === 'illustration' && target.excludeAI === true && work.illust_ai_type === 2) {
+          aiExcludedCount += 1;
+          continue;
+        }
         if (byId.has(work.id)) continue;
         byId.set(work.id, { work, candidate: this.toCandidate(work, contentType) });
         if (byId.size >= maxCandidates) break;
@@ -82,7 +88,7 @@ export class TopicPipeline {
     }
 
     const dedupedCount = byId.size;
-    logger.info('[TopicCollector] type=' + contentType + ' raw=' + rawCount + ' deduplicated=' + dedupedCount);
+    logger.info('[TopicCollector] type=' + contentType + ' raw=' + rawCount + ' deduplicated=' + dedupedCount + ' aiExcluded=' + aiExcludedCount);
 
     const seedKey = this.key(topic);
     const accepted: Array<{ work: T; candidate: TopicCandidate }> = [];
@@ -114,6 +120,7 @@ export class TopicPipeline {
         rawCount,
         dedupedCount,
         acceptedCount: accepted.length,
+        aiExcludedCount,
       },
     };
   }
@@ -150,6 +157,7 @@ export class TopicPipeline {
       views: Number(work.total_view ?? work.view_count ?? 0) || 0,
       popularity,
       metadataScore: 0,
+      ...(work.illust_ai_type !== undefined ? { aiType: work.illust_ai_type } : {}),
     };
   }
 

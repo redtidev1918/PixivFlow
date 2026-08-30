@@ -71,7 +71,10 @@ pixivflow download --targets '[{"type":"novel","tag":"アークナイツ","limit
 - **日期窗口**:`startDate` / `endDate`,支持 `YESTERDAY`、`TODAY`
   占位符——每天定时执行时自动滚动到「昨天」;
 - **小说语言过滤**:`languageFilter: "chinese"` 只收中文小说,
-  `non-chinese` 反之;不足 50 字符、无法可靠判断的作品默认放行。
+  `non-chinese` 反之；`languageCandidateLimit` 控制按热度回填检查的候选数
+  （默认 20），`strictLanguageFilter: true` 会拒绝正文过短等无法判断的作品；
+- **排除 AI 插画**：`excludeAI: true` 会在热度 Top N 选择前排除 Pixiv
+  明确标记为 AI 生成（`illust_ai_type=2`）的作品。
 
 ## 排行榜模式
 

@@ -73,6 +73,12 @@ export class NovelDownloader {
         );
       }
     } else if (target.languageFilter && !detectedLang) {
+      if (target.strictLanguageFilter === true) {
+        logger.info(`Skipping novel ${detail.id}: strict language filter could not classify the text`);
+        throw new Error(
+          `Novel ${detail.id} skipped: language filter inconclusive (required: ${target.languageFilter})`
+        );
+      }
       logger.debug(`Language filter is set but detection failed for novel ${detail.id}, downloading anyway`);
     }
 

@@ -344,8 +344,9 @@ describe('PixivClient', () => {
       fetchMock.mockResolvedValueOnce({
         ok: true,
         status: 200,
-        json: async () => mockResponse,
-        text: async () => JSON.stringify(mockResponse),
+        json: async () => ({}),
+        text: async () =>
+          `<html>novel: ${JSON.stringify({ id: novelId, text: mockResponse.novel_text })},\n</html>`,
         headers: new Headers(),
       } as Response);
 
@@ -353,7 +354,8 @@ describe('PixivClient', () => {
 
       expect(response).toEqual(mockResponse);
       expect(response.novel_text).toBe('This is a test novel text.');
-      expect(fetchMock).toHaveBeenCalled();
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(String(fetchMock.mock.calls[0][0])).toContain('/webview/v2/novel');
     });
 
     it('should handle 404 errors for novels', async () => {
@@ -939,4 +941,3 @@ describe('PixivClient', () => {
     });
   });
 });
-

@@ -5,6 +5,13 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [2.10.8] - 2026-08-30
+
+### 修复
+- 📚 **小说正文改用 gallery-dl 验证过的 webview 主路径**：优先请求 `/webview/v2/novel` 并解析嵌入的 `novel.text`，旧 `/v1/novel/text` 与 Web AJAX 保留为两级回退。
+- 🛡️ 三条正文来源均要求返回非空字符串；HTTP 200 但正文为空或结构异常不再被误判为成功，也不会生成只有标题/元数据头的 `.txt` 投稿。
+- 🧪 新增空 webview、空 App API、AJAX 回退及全部来源耗尽的回归测试。
+
 ## [2.10.7] - 2026-08-30
 
 ### 新增

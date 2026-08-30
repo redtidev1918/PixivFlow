@@ -362,7 +362,12 @@ export class IllustrationTargetHandler {
     target: TargetConfig
   ): Promise<void> {
     const artifact = await this.illustrationDownloader.downloadIllustration(
-      illust, tag, target.aiMetadataCheck === true
+      illust,
+      tag,
+      {
+        aiMetadataCheck: target.aiMetadataCheck === true,
+        maxPageCount: target.maxPageCount,
+      }
     );
     if (artifact && this.deliveryOutbox) {
       await this.deliveryOutbox.deliver(artifact, target);

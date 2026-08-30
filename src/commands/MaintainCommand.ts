@@ -43,6 +43,7 @@ export class MaintainCommand extends BaseCommand {
       await this.cleanupLogs();
       await this.cleanupBackups();
       await this.cleanupTemp();
+      await this.cleanupCache(context);
       await this.optimizeDatabase(context);
       await this.fixPermissions();
       await this.checkDiskSpace();
@@ -254,6 +255,77 @@ export class MaintainCommand extends BaseCommand {
       console.log(`  ✓ Cleaned ${cleaned} temporary file(s)/directory(ies)`);
     }
 
+    console.log('');
+  }
+
+  /**
+   * Prune downloaded cache files older than the retention window and drop
+   * their DB records, so `deleteAfterDelivery=false` (cache retention) cannot
+   * grow the volume without bound. Retention days: config
+   * `storage.cacheRetentionDays` or env CACHE_RETENTION_DAYS (default 14).
+   */
+  private async cleanupCache(context: CommandContext): Promise<void> {
+    console.log('📋 Cleaning old download cache...');
+
+    const retentionDays = context.config.storage?.cacheRetentionDays
+      ?? Number(process.env.CACHE_RETENTION_DAYS || 14);
+    if (!(retentionDays > 0)) {
+      console.log('  ℹ Cache retention disabled');
+      console.log('');
+      return;
+    }
+
+    const storage = context.config.storage ?? {};
+    const dirs = [
+      storage.illustrationDirectory,
+      storage.novelDirectory,
+      storage.downloadDirectory,
+    ].filter((d): d is string => Boolean(d));
+
+    const cutoff = Date.now() - retentionDays * 86400_000;
+    let prunedFiles = 0;
+    let prunedRecords = 0;
+    const db = new Database(
+      storage.databasePath || './data/pixiv-downloader.db'
+    );
+
+    const walk = (dir: string): void => {
+      if (!existsSync(dir)) return;
+      const entries = readdirSync(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        const full = join(dir, entry.name);
+        if (entry.isDirectory()) {
+          walk(full);
+        } else if (entry.isFile()) {
+          try {
+            if (statSync(full).mtimeMs >= cutoff) continue;
+            const idMatch = /^(\d+)/.exec(entry.name);
+            if (idMatch) {
+              const pixivId = idMatch[1];
+              const type: 'illustration' | 'novel' = full.includes('novel')
+                ? 'novel'
+                : 'illustration';
+              prunedRecords += db.deleteDownloadByPixivId(pixivId, type);
+            }
+            unlinkSync(full);
+            prunedFiles++;
+          } catch {
+            // ignore per-file errors; keep pruning the rest
+          }
+        }
+      }
+    };
+
+    for (const dir of dirs) walk(dir);
+
+    if (prunedFiles === 0) {
+      console.log(`  ℹ No cache files older than ${retentionDays} days`);
+    } else {
+      console.log(
+        `  ✓ Pruned ${prunedFiles} cache file(s) (${retentionDays}+ days old), ` +
+        `${prunedRecords} DB record(s)`
+      );
+    }
     console.log('');
   }
 

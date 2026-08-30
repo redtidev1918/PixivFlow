@@ -5,6 +5,15 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [2.10.12] - 2026-08-30
+
+### 新增
+- 🗜️ **缓存保留清理**：`pixivflow maintain` 现在会清理超过
+  `storage.cacheRetentionDays`（默认 14 天，0 关闭）的下载缓存文件并同步删除
+  对应下载记录——配合 `deleteAfterDelivery=false`，缓存有界增长、不再占满卷。
+- 🛡️ **`maxPageCount` 页数上限**（target 级，默认不限）：超过该页数的插画直接跳过，
+  杜绝 20+ 页原图在 512 MiB 机器上触发下载+相册上传的内存尖峰。
+
 ## [2.10.11] - 2026-08-30
 
 ### 新增

@@ -95,6 +95,13 @@ export interface TargetConfig {
    */
   aiMetadataCheck?: boolean;
   /**
+   * Illustration safety cap: skip works with more than this many pages.
+   * A 20+ page original set is the single biggest memory/CPU spike on small
+   * (512 MiB) machines; capping it keeps daily runs predictable. Default:
+   * unlimited (0/undefined = no cap).
+   */
+  maxPageCount?: number;
+  /**
    * Download mode: 'search' (default), 'ranking' or 'topic'
    * - 'search': Search by tag
    * - 'ranking': Use the Pixiv ranking API when filterTag is absent. With
@@ -306,6 +313,12 @@ export interface StorageConfig {
    * Default: 'flat'
    */
   novelOrganization?: OrganizationMode;
+  /**
+   * How many days downloaded cache files are kept before `pixivflow maintain`
+   * prunes them (files + download records). Keeps storage bounded when
+   * `delivery.deleteAfterDelivery` is false. Default: 14 (0 disables).
+   */
+  cacheRetentionDays?: number;
 }
 
 export interface SchedulerConfig {

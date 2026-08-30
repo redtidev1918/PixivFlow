@@ -141,6 +141,10 @@ export class Database implements IDatabase {
     return this.downloadRepo.updateFilePath(pixivId, type, oldPath, newPath);
   }
 
+  public deleteDownloadByPixivId(pixivId: string, type: 'illustration' | 'novel'): number {
+    return this.downloadRepo.deleteDownloadByPixivId(pixivId, type);
+  }
+
   public getDownloadStats(tag?: string, type?: 'illustration' | 'novel'): {
     total: number;
     byTag: Record<string, number>;

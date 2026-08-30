@@ -50,6 +50,17 @@ export class DownloadWriteRepository extends BaseRepository {
     const result = stmt.run(newPath, pixivId, type, oldPath);
     return result.changes;
   }
+
+  /**
+   * Delete all download records for a pixiv work (used by cache retention
+   * pruning so pruned files are not treated as "already downloaded" later).
+   */
+  public deleteDownloadByPixivId(pixivId: string, type: 'illustration' | 'novel'): number {
+    const stmt = this.db.prepare(
+      'DELETE FROM downloads WHERE pixiv_id = ? AND type = ?'
+    );
+    return stmt.run(pixivId, type).changes;
+  }
 }
 
 

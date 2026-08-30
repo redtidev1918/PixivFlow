@@ -29,7 +29,7 @@ export class IllustrationDownloader {
   async downloadIllustration(
     illust: PixivIllust,
     tag: string,
-    aiMetadataCheck?: boolean
+    options: { aiMetadataCheck?: boolean; maxPageCount?: number } = {}
   ): Promise<DownloadedArtifact | null> {
     // Check if files already exist in file system but not in database
     const existingFiles = await this.findExistingIllustrationFiles(illust.id);
@@ -82,6 +82,16 @@ export class IllustrationDownloader {
     }
 
     const pages = this.getIllustrationPages(detail);
+
+    // Safety cap for small machines: skip huge page counts entirely so the
+    // download + album upload memory spike never happens.
+    if (options.maxPageCount && pages.length > options.maxPageCount) {
+      logger.info(
+        `Skipping illustration ${detail.id}: ${pages.length} pages exceeds maxPageCount ${options.maxPageCount}`,
+        { illustrationId: detail.id, pages: pages.length, maxPageCount: options.maxPageCount }
+      );
+      return null;
+    }
 
     // Use parallel download for multiple pages to improve performance
     const concurrency = Math.min(this.downloadConcurrency, pages.length);
@@ -208,7 +218,7 @@ export class IllustrationDownloader {
     // Cheap bounded read, no pixel analysis. Works detected this way are still
     // recorded as downloaded (so future runs don't re-fetch them) but are NOT
     // delivered.
-    if (aiMetadataCheck === true && files.length > 0) {
+    if (options.aiMetadataCheck === true && files.length > 0) {
       try {
         const firstPath = files[0];
         const handle = await fs.open(firstPath, 'r');

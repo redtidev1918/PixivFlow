@@ -148,6 +148,11 @@ export function validateConfig(config: Partial<StandaloneConfig>, location: stri
       if (target.aiMetadataCheck !== undefined && typeof target.aiMetadataCheck !== 'boolean') {
         errors.push(`targets[${index}].aiMetadataCheck: Must be a boolean`);
       }
+      if (target.maxPageCount !== undefined && (
+        !Number.isInteger(target.maxPageCount) || target.maxPageCount < 1
+      )) {
+        errors.push(`targets[${index}].maxPageCount: Must be a positive integer`);
+      }
       if (target.strictLanguageFilter !== undefined && typeof target.strictLanguageFilter !== 'boolean') {
         errors.push(`targets[${index}].strictLanguageFilter: Must be a boolean`);
       }

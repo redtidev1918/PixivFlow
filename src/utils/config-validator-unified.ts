@@ -157,6 +157,15 @@ export class ConfigValidator {
             message: `Target ${index + 1}: aiMetadataCheck must be a boolean`,
           });
         }
+        if (target.maxPageCount !== undefined && (
+          !Number.isInteger(target.maxPageCount) || target.maxPageCount < 1
+        )) {
+          errors.push({
+            code: 'CONFIG_VALIDATION_TARGET_MAX_PAGE_COUNT_INVALID',
+            field: `${targetPrefix}.maxPageCount`,
+            message: `Target ${index + 1}: maxPageCount must be a positive integer`,
+          });
+        }
         if (target.strictLanguageFilter !== undefined && typeof target.strictLanguageFilter !== 'boolean') {
           errors.push({
             code: 'CONFIG_VALIDATION_TARGET_STRICT_LANGUAGE_INVALID',

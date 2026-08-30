@@ -91,6 +91,10 @@ export class DownloadRepository extends BaseRepository {
     return this.writeRepo.updateFilePath(pixivId, type, oldPath, newPath);
   }
 
+  public deleteDownloadByPixivId(pixivId: string, type: 'illustration' | 'novel'): number {
+    return this.writeRepo.deleteDownloadByPixivId(pixivId, type);
+  }
+
   // Stats methods
   public getDownloadStats(tag?: string, type?: 'illustration' | 'novel') {
     return this.statsRepo.getDownloadStats(tag, type);

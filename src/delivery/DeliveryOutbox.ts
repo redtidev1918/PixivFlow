@@ -95,6 +95,7 @@ export class DeliveryOutbox {
           topic: target.topic?.trim() || undefined,
           workTags: artifact.tags,
           spoiler: artifact.spoiler,
+          xRestrict: artifact.xRestrict,
           rankingDate: resolveRankingDate(target),
           publishedAt: artifact.publishedAt,
           language: artifact.language,

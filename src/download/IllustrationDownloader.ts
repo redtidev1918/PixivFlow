@@ -65,6 +65,7 @@ export class IllustrationDownloader {
         title: detail.title,
         files: existingFiles,
         spoiler: (detail.x_restrict ?? 0) > 0,
+        xRestrict: detail.x_restrict,
       };
     }
     
@@ -251,6 +252,7 @@ export class IllustrationDownloader {
       files,
       cleanupFiles,
       spoiler: (detail.x_restrict ?? 0) > 0,
+      xRestrict: detail.x_restrict,
       publishedAt: detail.create_date,
     };
   }
@@ -353,6 +355,7 @@ export class IllustrationDownloader {
       tags: tags.map((item) => item.name).filter(Boolean),
       files: [zipPath, framesPath],
       spoiler: (detail.x_restrict ?? 0) > 0,
+      xRestrict: detail.x_restrict,
     };
   }
 

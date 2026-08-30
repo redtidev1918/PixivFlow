@@ -135,6 +135,21 @@ export class HttpMultipartDelivery implements DeliveryProvider {
     fields: Record<string, DeliveryFieldValue>,
     request: DeliveryRequest
   ): Record<string, string[]> {
+    const xRestrict = request.context.xRestrict;
+    const xRestrictLabel = (() => {
+      if (xRestrict === undefined) return 'unknown';
+      if (xRestrict === 0) return 'all-ages';
+      if (xRestrict === 1) return 'R-18';
+      if (xRestrict === 2) return 'R-18G';
+      return `unknown(${xRestrict})`;
+    })();
+    const xRestrictTag = (() => {
+      if (xRestrict === undefined) return '';
+      if (xRestrict === 0) return 'AllAges';
+      if (xRestrict === 1) return 'R18';
+      if (xRestrict === 2) return 'R18G';
+      return `XRestrict${xRestrict}`;
+    })();
     const variables: Record<string, string> = {
       title: request.context.title,
       pixivId: request.context.pixivId,
@@ -152,6 +167,10 @@ export class HttpMultipartDelivery implements DeliveryProvider {
       // R-18 works are auto-spoilerized; templates can use {{spoiler}} instead
       // of hard-coding true.
       spoiler: request.context.spoiler === true ? 'true' : 'false',
+      // Keep Pixiv's exact rating independent from the channel's mask policy.
+      xRestrict: xRestrict === undefined ? '' : String(xRestrict),
+      xRestrictLabel,
+      xRestrictTag,
       // Ranking day (JST YYYY-MM-DD) — which day's hot works this is.
       rankingDate: request.context.rankingDate ?? '',
       // Pixiv publish date, YYYY-MM-DD (create_date is JST ISO).
@@ -165,7 +184,7 @@ export class HttpMultipartDelivery implements DeliveryProvider {
         const values = Array.isArray(value) ? value : [value];
         const rendered = values.map((item) =>
           String(item).replace(
-            /\{\{(title|pixivId|type|tag|topic|workTags|link|topicTag|spoiler|rankingDate|publishedDate|language)\}\}/g,
+            /\{\{(title|pixivId|type|tag|topic|workTags|link|topicTag|spoiler|xRestrict|xRestrictLabel|xRestrictTag|rankingDate|publishedDate|language)\}\}/g,
             (_, key: string) => variables[key]
           )
         );

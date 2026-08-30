@@ -15,6 +15,8 @@ export interface DownloadedArtifact {
   cleanupFiles?: string[];
   /** R-18 work (x_restrict > 0): delivery templates may open Telegram spoiler. */
   spoiler?: boolean;
+  /** Raw Pixiv content restriction level: 0 = all-ages, 1 = R-18, 2 = R-18G. */
+  xRestrict?: number;
   /** Pixiv publish timestamp (create_date, ISO) — rendered as {{publishedDate}}. */
   publishedAt?: string;
   /** Detected language label for novels (e.g. "Chinese (Mandarin) (cmn)"). */
@@ -29,6 +31,8 @@ export interface DeliveryContext {
   topic?: string;
   workTags?: string[];
   spoiler?: boolean;
+  /** Raw Pixiv x_restrict value; kept separate from the channel spoiler policy. */
+  xRestrict?: number;
   /** Ranking/list day in YYYY-MM-DD (JST) — which day's hot works this is. */
   rankingDate?: string;
   /** Pixiv publish date, ISO — when the work was released. */

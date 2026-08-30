@@ -178,6 +178,7 @@ export class NovelDownloader {
       files: [filePath],
       cleanupFiles: metadataPath ? [metadataPath] : [],
       spoiler: (detail.x_restrict ?? 0) > 0,
+      xRestrict: detail.x_restrict,
       publishedAt: detail.create_date,
       language: detectedLang ? `${detectedLang.name} (${detectedLang.code})` : undefined,
     };

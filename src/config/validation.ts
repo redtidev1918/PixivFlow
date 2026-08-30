@@ -142,6 +142,19 @@ export function validateConfig(config: Partial<StandaloneConfig>, location: stri
           warnings.push(`targets[${index}].limit: Should be between 1 and 1000 (got ${target.limit})`);
         }
       }
+      if (target.excludeAI !== undefined && typeof target.excludeAI !== 'boolean') {
+        errors.push(`targets[${index}].excludeAI: Must be a boolean`);
+      }
+      if (target.strictLanguageFilter !== undefined && typeof target.strictLanguageFilter !== 'boolean') {
+        errors.push(`targets[${index}].strictLanguageFilter: Must be a boolean`);
+      }
+      if (target.languageCandidateLimit !== undefined && (
+        !Number.isInteger(target.languageCandidateLimit) ||
+        target.languageCandidateLimit < 1 ||
+        target.languageCandidateLimit > 100
+      )) {
+        errors.push(`targets[${index}].languageCandidateLimit: Must be an integer between 1 and 100`);
+      }
       if (target.searchTarget && !['partial_match_for_tags', 'exact_match_for_tags', 'title_and_caption'].includes(target.searchTarget)) {
         errors.push(`targets[${index}].searchTarget: Invalid value, must be one of: partial_match_for_tags, exact_match_for_tags, title_and_caption`);
       }

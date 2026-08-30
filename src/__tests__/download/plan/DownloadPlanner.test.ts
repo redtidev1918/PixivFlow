@@ -159,6 +159,35 @@ describe('DownloadPlanner', () => {
     expect(plan.originalCount).toBe(60);
     expect(new Set(plan.queue.map((item) => item.id)).size).toBe(plan.queue.length);
   });
-});
 
+  it('excludes only illustrations explicitly marked as Pixiv AI-generated', () => {
+    const { database } = createDatabaseMock();
+    const planner = new DownloadPlanner(database);
+    const items = [
+      createIllustration(1, { illust_ai_type: 2 }),
+      createIllustration(2, { illust_ai_type: 1 }),
+      createIllustration(3),
+    ];
+
+    const plan = planner.planDownloads(items, createTarget({ excludeAI: true }), 'illustration');
+
+    expect(plan.queue.map((item) => item.id)).toEqual([2, 3]);
+    expect(plan.filteredOut).toBe(1);
+  });
+
+  it('keeps a bounded ordered retry pool for full-text novel language filtering', () => {
+    const { database } = createDatabaseMock();
+    const planner = new DownloadPlanner(database);
+    const items = [1, 2, 3, 4].map((id) => createIllustration(id));
+
+    const plan = planner.planDownloads(
+      items,
+      createTarget({ type: 'novel', limit: 1, languageFilter: 'chinese', languageCandidateLimit: 3 }),
+      'novel'
+    );
+
+    expect(plan.limit).toBe(1);
+    expect(plan.queue.map((item) => item.id)).toEqual([1, 2, 3]);
+  });
+});
 

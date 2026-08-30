@@ -5,6 +5,16 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [2.10.7] - 2026-08-30
+
+### 新增
+- 🚫 **可验证的非 AI 插画筛选**：插画目标新增 `excludeAI: true`，依据 Pixiv 返回的 `illust_ai_type=2` 元数据，在 Topic 热度排序前排除 AI 作品；其他下载模式也在规划阶段统一过滤。缺失/未知标记默认保留，避免误杀。
+- 🇨🇳 **中文小说热度回填**：`languageFilter: "chinese"` 不再只检测总体 Top 1；新增 `languageCandidateLimit`（默认 20），按热度串行检查完整正文，跳过非中文后继续下一部，直到补足 `limit`。
+- 🔒 新增 `strictLanguageFilter: true`，正文过短或检测失败时拒绝投稿，适合“只允许中文小说”的严格计划。
+
+### 修复
+- 🧵 语言回填强制单并发，保持热度顺序并避免多个候选同时越过 `limit` 造成超额投稿。
+
 ## [2.10.6] - 2026-08-30
 
 ### 修复

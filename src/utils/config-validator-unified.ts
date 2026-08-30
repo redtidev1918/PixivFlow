@@ -143,6 +143,32 @@ export class ConfigValidator {
           });
         }
 
+        if (target.excludeAI !== undefined && typeof target.excludeAI !== 'boolean') {
+          errors.push({
+            code: 'CONFIG_VALIDATION_TARGET_EXCLUDE_AI_INVALID',
+            field: `${targetPrefix}.excludeAI`,
+            message: `Target ${index + 1}: excludeAI must be a boolean`,
+          });
+        }
+        if (target.strictLanguageFilter !== undefined && typeof target.strictLanguageFilter !== 'boolean') {
+          errors.push({
+            code: 'CONFIG_VALIDATION_TARGET_STRICT_LANGUAGE_INVALID',
+            field: `${targetPrefix}.strictLanguageFilter`,
+            message: `Target ${index + 1}: strictLanguageFilter must be a boolean`,
+          });
+        }
+        if (target.languageCandidateLimit !== undefined && (
+          !Number.isInteger(target.languageCandidateLimit) ||
+          target.languageCandidateLimit < 1 ||
+          target.languageCandidateLimit > 100
+        )) {
+          errors.push({
+            code: 'CONFIG_VALIDATION_TARGET_LANGUAGE_CANDIDATES_INVALID',
+            field: `${targetPrefix}.languageCandidateLimit`,
+            message: `Target ${index + 1}: languageCandidateLimit must be an integer between 1 and 100`,
+          });
+        }
+
         if (target.storageMode && target.storageMode !== 'persistent' && target.storageMode !== 'cache') {
           errors.push({
             code: 'CONFIG_VALIDATION_TARGET_STORAGE_MODE_INVALID',

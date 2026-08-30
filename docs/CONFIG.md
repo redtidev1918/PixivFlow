@@ -103,6 +103,7 @@ pixivflow setup
 | `topic` | string | **必填**。主题词（如 `ボテ腹`），运行时自动扩展为相关 Tag |
 | `date` | `YESTERDAY` / `TODAY` / `YYYY-MM-DD` | 单日发布窗口，运行时动态解析；缺省为 `YESTERDAY` |
 | `limit` | number | 该主题每天下载 Top N（插画/小说分别配置） |
+| `excludeAI` | boolean（默认 false） | 插画目标排除 Pixiv 明确标记为 AI 生成的作品；缺失/未知标记不误杀 |
 | `topicDiscovery` | object | 可选高级覆盖，见下，均有默认值 |
 | `candidateCollection` | object | 可选高级覆盖，见下 |
 
@@ -113,16 +114,17 @@ pixivflow setup
 
 能力边界：如果某作品没有任何与主题相关的 Tag/标题/描述（视觉上相关但元数据无关），在不使用视觉模型的前提下无法识别，这是设计取舍而非 Bug。
 
-每日北京时间 20:00 下载昨天“ボテ腹”主题最热插画 1 部、小说 1 部：
+每日北京时间 10:00 下载昨天“ボテ腹”主题最热非 AI 插画 1 部、中文小说 1 部：
 
 ```json
 {
   "targets": [
-    { "id": "bote-illust", "type": "illustration", "mode": "topic", "topic": "ボテ腹", "date": "YESTERDAY", "limit": 1 },
-    { "id": "bote-novel",  "type": "novel",       "mode": "topic", "topic": "ボテ腹", "date": "YESTERDAY", "limit": 1 }
+    { "id": "bote-illust", "type": "illustration", "mode": "topic", "topic": "ボテ腹", "date": "YESTERDAY", "limit": 1, "excludeAI": true },
+    { "id": "bote-novel",  "type": "novel",       "mode": "topic", "topic": "ボテ腹", "date": "YESTERDAY", "limit": 1,
+      "languageFilter": "chinese", "languageCandidateLimit": 20, "strictLanguageFilter": true }
   ],
   "schedules": [
-    { "id": "bote-daily", "enabled": true, "cron": "0 20 * * *", "timezone": "Asia/Shanghai",
+    { "id": "bote-daily", "enabled": true, "cron": "0 10 * * *", "timezone": "Asia/Shanghai",
       "targetIds": ["bote-illust", "bote-novel"] }
   ]
 }
@@ -147,8 +149,12 @@ pixivflow setup
 
 | 字段 | 取值 | 说明 |
 | --- | --- | --- |
-| `languageFilter` | `chinese` / `non-chinese` | 语言过滤;短于 50 字符的作品无法可靠判断,默认放行 |
+| `languageFilter` | `chinese` / `non-chinese` | 根据完整正文过滤小说语言 |
+| `languageCandidateLimit` | 1–100（默认 20） | 按热度依次检测的候选上限；例如 Top 1 不是中文时继续检查下一部，直到补足 `limit` |
+| `strictLanguageFilter` | boolean（默认 false） | true 时拒绝正文过短等无法可靠判断语言的小说；要保证“只收中文”时应开启 |
 | `detectLanguage` | boolean(默认 true) | 记录检测结果并写入元数据 |
+
+`mode: "topic"` 会先按热度取 `languageCandidateLimit` 个小说候选，再串行检测完整正文并在达到 `limit` 后停止；这样既保证热度顺序，也避免并发检查造成超额投稿。对“最热 1 部中文小说”的低带宽部署，推荐 `limit: 1`、`languageCandidateLimit: 20`、`strictLanguageFilter: true`。
 
 ### target 存储与交付模式
 

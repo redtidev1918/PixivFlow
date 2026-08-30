@@ -65,7 +65,13 @@ export class DownloadPlanner {
       };
     }
 
-    const queue = available.slice(0, Math.min(available.length, limit));
+    // Language is detected from the full novel body during download. Keep a
+    // bounded popularity-ordered retry pool so a non-matching Top-1 candidate
+    // can be skipped and replaced by the next matching novel.
+    const languageBackfillLimit = itemType === 'novel' && target.languageFilter
+      ? Math.max(limit, Math.min(target.languageCandidateLimit ?? 20, 100))
+      : limit;
+    const queue = available.slice(0, Math.min(available.length, languageBackfillLimit));
 
     return {
       queue,
@@ -127,6 +133,14 @@ export class DownloadPlanner {
       }
     }
 
+    if (itemType === 'illustration' && target.excludeAI === true) {
+      const beforeCount = filtered.length;
+      filtered = filtered.filter((item) => (item as PixivIllust).illust_ai_type !== 2);
+      if (filtered.length < beforeCount) {
+        logger.info(`Excluded ${beforeCount - filtered.length} Pixiv AI-generated illustration(s)`);
+      }
+    }
+
     if (filtered.length < originalCount) {
       logger.info(
         `Total filtering: ${originalCount} -> ${filtered.length} ${itemType}(s) after applying all filters`
@@ -172,4 +186,3 @@ export class DownloadPlanner {
     return arr;
   }
 }
-

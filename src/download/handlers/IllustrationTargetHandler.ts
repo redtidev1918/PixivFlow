@@ -86,7 +86,7 @@ export class IllustrationTargetHandler {
       target.topicDiscovery ?? {},
       target.candidateCollection ?? {}
     );
-    logger.info(`Topic "${topic}" illustration: tags=${selection.resolvedTagCount} raw=${selection.rawCount} deduped=${selection.dedupedCount} accepted=${selection.acceptedCount} selected=${works.length}`);
+    logger.info(`Topic "${topic}" illustration: tags=${selection.resolvedTagCount} raw=${selection.rawCount} deduped=${selection.dedupedCount} aiExcluded=${selection.aiExcludedCount} accepted=${selection.acceptedCount} selected=${works.length}`);
     return works;
   }
 

@@ -78,4 +78,21 @@ describe('NovelDownloader', () => {
     expect(fileService.saveText).not.toHaveBeenCalled();
     expect(database.insertDownload).not.toHaveBeenCalled();
   });
+
+  it('strict language filtering skips text that is too short to classify', async () => {
+    const { downloader, fileService, database } = createDownloader('短文');
+
+    await expect(downloader.download(
+      novel,
+      'ボテ腹',
+      {
+        type: 'novel',
+        languageFilter: 'chinese',
+        strictLanguageFilter: true,
+      } as TargetConfig
+    )).rejects.toThrow('language filter inconclusive');
+
+    expect(fileService.saveText).not.toHaveBeenCalled();
+    expect(database.insertDownload).not.toHaveBeenCalled();
+  });
 });

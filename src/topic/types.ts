@@ -68,6 +68,8 @@ export interface TopicCandidate {
   popularity: number;
   /** Metadata topic-relevance score computed by the filter stage. */
   metadataScore: number;
+  /** Pixiv AI classification copied from illustration search metadata. */
+  aiType?: number;
 }
 
 /** Minimal surface the resolver/collector need from the Pixiv client. */
@@ -95,4 +97,5 @@ export interface WorkLike {
   bookmark_count?: number;
   total_view?: number;
   view_count?: number;
+  illust_ai_type?: number;
 }

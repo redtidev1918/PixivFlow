@@ -212,6 +212,13 @@ pixivflow setup
 | `illustrationDirectory` | `{根}/illustrations` | 插画目录,相对或绝对路径 |
 | `novelDirectory` | `{根}/novels` | 小说目录 |
 | `illustrationOrganization` / `novelOrganization` | `flat` | 目录组织方式,见下表 |
+| `cacheRetentionDays` | `14` | `maintain` 清理多少天前的下载缓存；`0` 关闭按时间清理 |
+| `cacheMaxSizeMB` | `0` | 下载缓存容量硬上限（MiB）；超限时按完整作品从旧到新清理，`0` 关闭 |
+
+`cacheRetentionDays` 与 `cacheMaxSizeMB` 可同时使用：维护任务先清理过期作品，再在
+仍超出容量时淘汰最旧的完整作品。容量清理不会触碰 `delivery-outbox`，因此远端暂时
+不可用时的待投递文件仍会保留。1 GiB Fly 卷建议设置 `cacheMaxSizeMB: 384`，为数据库、
+审核数据与失败重试预留空间。
 
 目录组织的 12 种模式:
 

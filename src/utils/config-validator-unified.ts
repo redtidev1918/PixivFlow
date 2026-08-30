@@ -283,6 +283,24 @@ export class ConfigValidator {
           message: 'Download directory is required',
         });
       }
+      if (config.storage.cacheRetentionDays !== undefined && (
+        !Number.isFinite(config.storage.cacheRetentionDays) || config.storage.cacheRetentionDays < 0
+      )) {
+        errors.push({
+          code: 'CONFIG_VALIDATION_CACHE_RETENTION_INVALID',
+          field: 'storage.cacheRetentionDays',
+          message: 'Cache retention days must be a non-negative number',
+        });
+      }
+      if (config.storage.cacheMaxSizeMB !== undefined && (
+        !Number.isFinite(config.storage.cacheMaxSizeMB) || config.storage.cacheMaxSizeMB < 0
+      )) {
+        errors.push({
+          code: 'CONFIG_VALIDATION_CACHE_MAX_SIZE_INVALID',
+          field: 'storage.cacheMaxSizeMB',
+          message: 'Cache maximum size must be a non-negative number',
+        });
+      }
     }
 
     // Validate download config

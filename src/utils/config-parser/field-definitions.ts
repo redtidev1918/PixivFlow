@@ -170,6 +170,20 @@ function initializeStorageFields(definitions: Map<string, FieldDefinition>): voi
     type: 'string',
   });
 
+  definitions.set('storage.cacheRetentionDays', {
+    required: false,
+    description: 'Days to retain downloaded cache before maintenance pruning (0 disables)',
+    defaultValue: 14,
+    type: 'number',
+  });
+
+  definitions.set('storage.cacheMaxSizeMB', {
+    required: false,
+    description: 'Maximum downloaded cache size in MiB; oldest complete works are pruned first (0 disables)',
+    defaultValue: 0,
+    type: 'number',
+  });
+
   definitions.set('storage.illustrationOrganization', {
     required: false,
     description: 'Directory organization mode for illustrations',
@@ -444,7 +458,6 @@ export function getFieldDefinition(
 
   return undefined;
 }
-
 
 
 

@@ -259,71 +259,162 @@ export class MaintainCommand extends BaseCommand {
   }
 
   /**
-   * Prune downloaded cache files older than the retention window and drop
-   * their DB records, so `deleteAfterDelivery=false` (cache retention) cannot
-   * grow the volume without bound. Retention days: config
-   * `storage.cacheRetentionDays` or env CACHE_RETENTION_DAYS (default 14).
+   * Prune downloaded cache by age and/or aggregate size, then drop matching
+   * DB records. Files are grouped by complete Pixiv work so a multi-page
+   * illustration is never left partially cached.
    */
   private async cleanupCache(context: CommandContext): Promise<void> {
     console.log('📋 Cleaning old download cache...');
 
-    const retentionDays = context.config.storage?.cacheRetentionDays
+    const storage = context.config.storage ?? {};
+    const retentionDays = storage.cacheRetentionDays
       ?? Number(process.env.CACHE_RETENTION_DAYS || 14);
-    if (!(retentionDays > 0)) {
-      console.log('  ℹ Cache retention disabled');
+    const configuredMaxSizeMB = storage.cacheMaxSizeMB
+      ?? Number(process.env.CACHE_MAX_SIZE_MB || 0);
+    const maxBytes = Number.isFinite(configuredMaxSizeMB) && configuredMaxSizeMB > 0
+      ? Math.floor(configuredMaxSizeMB * 1024 * 1024)
+      : 0;
+    if (!(retentionDays > 0) && maxBytes === 0) {
+      console.log('  ℹ Cache pruning disabled');
       console.log('');
       return;
     }
 
-    const storage = context.config.storage ?? {};
     const dirs = [
-      storage.illustrationDirectory,
-      storage.novelDirectory,
-      storage.downloadDirectory,
-    ].filter((d): d is string => Boolean(d));
+      { path: storage.illustrationDirectory, type: 'illustration' as const },
+      { path: storage.novelDirectory, type: 'novel' as const },
+      { path: storage.downloadDirectory, type: undefined },
+    ].filter((entry): entry is { path: string; type: 'illustration' | 'novel' | undefined } => Boolean(entry.path));
 
     const cutoff = Date.now() - retentionDays * 86400_000;
     let prunedFiles = 0;
     let prunedRecords = 0;
-    const db = new Database(
-      storage.databasePath || './data/pixiv-downloader.db'
-    );
+    let reclaimedBytes = 0;
+    const seenFiles = new Set<string>();
+    type CacheFile = {
+      path: string;
+      size: number;
+      mtimeMs: number;
+      pixivId?: string;
+      type?: 'illustration' | 'novel';
+    };
+    type CacheGroup = {
+      key: string;
+      files: CacheFile[];
+      bytes: number;
+      newestMtimeMs: number;
+      pixivId?: string;
+      type?: 'illustration' | 'novel';
+    };
+    const groups = new Map<string, CacheGroup>();
 
-    const walk = (dir: string): void => {
+    const addFile = (file: CacheFile): void => {
+      const key = file.pixivId && file.type
+        ? `${file.type}:${file.pixivId}`
+        : `file:${file.path}`;
+      const group = groups.get(key) ?? {
+        key,
+        files: [],
+        bytes: 0,
+        newestMtimeMs: 0,
+        pixivId: file.pixivId,
+        type: file.type,
+      };
+      group.files.push(file);
+      group.bytes += file.size;
+      group.newestMtimeMs = Math.max(group.newestMtimeMs, file.mtimeMs);
+      groups.set(key, group);
+    };
+
+    const walk = (dir: string, typeHint?: 'illustration' | 'novel'): void => {
       if (!existsSync(dir)) return;
       const entries = readdirSync(dir, { withFileTypes: true });
       for (const entry of entries) {
         const full = join(dir, entry.name);
         if (entry.isDirectory()) {
-          walk(full);
+          walk(full, typeHint);
         } else if (entry.isFile()) {
           try {
-            if (statSync(full).mtimeMs >= cutoff) continue;
+            const normalized = resolve(full);
+            if (seenFiles.has(normalized)) continue;
+            seenFiles.add(normalized);
+            const stats = statSync(normalized);
             const idMatch = /^(\d+)/.exec(entry.name);
-            if (idMatch) {
-              const pixivId = idMatch[1];
-              const type: 'illustration' | 'novel' = full.includes('novel')
-                ? 'novel'
-                : 'illustration';
-              prunedRecords += db.deleteDownloadByPixivId(pixivId, type);
-            }
-            unlinkSync(full);
-            prunedFiles++;
+            addFile({
+              path: normalized,
+              size: stats.size,
+              mtimeMs: stats.mtimeMs,
+              pixivId: idMatch?.[1],
+              type: idMatch ? (typeHint ?? (normalized.includes('novel') ? 'novel' : 'illustration')) : undefined,
+            });
           } catch {
-            // ignore per-file errors; keep pruning the rest
+            // Ignore files that disappear while the maintenance scan runs.
           }
         }
       }
     };
 
-    for (const dir of dirs) walk(dir);
+    for (const dir of dirs) walk(dir.path, dir.type);
+
+    let totalBytes = [...groups.values()].reduce((sum, group) => sum + group.bytes, 0);
+    if (groups.size === 0) {
+      console.log('  ℹ Download cache is empty');
+      console.log('');
+      return;
+    }
+
+    const db = new Database(storage.databasePath || './data/pixiv-downloader.db');
+    db.migrate();
+    const removeGroup = (group: CacheGroup): boolean => {
+      let allRemoved = true;
+      let removedBytes = 0;
+      let removedFiles = 0;
+      for (const file of group.files) {
+        try {
+          unlinkSync(file.path);
+          removedBytes += file.size;
+          removedFiles++;
+        } catch {
+          allRemoved = false;
+        }
+      }
+      if (!allRemoved) return false;
+      if (group.pixivId && group.type) {
+        prunedRecords += db.deleteDownloadByPixivId(group.pixivId, group.type);
+      }
+      groups.delete(group.key);
+      totalBytes -= removedBytes;
+      reclaimedBytes += removedBytes;
+      prunedFiles += removedFiles;
+      return true;
+    };
+
+    try {
+      if (retentionDays > 0) {
+        for (const group of [...groups.values()]) {
+          if (group.newestMtimeMs < cutoff) removeGroup(group);
+        }
+      }
+
+      if (maxBytes > 0 && totalBytes > maxBytes) {
+        const oldestFirst = [...groups.values()]
+          .sort((a, b) => a.newestMtimeMs - b.newestMtimeMs);
+        for (const group of oldestFirst) {
+          if (totalBytes <= maxBytes) break;
+          removeGroup(group);
+        }
+      }
+    } finally {
+      db.close();
+    }
 
     if (prunedFiles === 0) {
-      console.log(`  ℹ No cache files older than ${retentionDays} days`);
+      const sizeMB = (totalBytes / (1024 * 1024)).toFixed(1);
+      console.log(`  ℹ Cache within policy (${sizeMB} MiB)`);
     } else {
       console.log(
-        `  ✓ Pruned ${prunedFiles} cache file(s) (${retentionDays}+ days old), ` +
-        `${prunedRecords} DB record(s)`
+        `  ✓ Pruned ${prunedFiles} cache file(s), ${prunedRecords} DB record(s), ` +
+        `reclaimed ${(reclaimedBytes / (1024 * 1024)).toFixed(1)} MiB`
       );
     }
     console.log('');
@@ -476,4 +567,3 @@ Examples:
   pixivflow maintain                 # Run maintenance tasks`;
   }
 }
-

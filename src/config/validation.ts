@@ -253,6 +253,19 @@ export function validateConfig(config: Partial<StandaloneConfig>, location: stri
     }
   }
 
+  if (config.storage) {
+    if (config.storage.cacheRetentionDays !== undefined && (
+      !Number.isFinite(config.storage.cacheRetentionDays) || config.storage.cacheRetentionDays < 0
+    )) {
+      errors.push('storage.cacheRetentionDays: Must be a non-negative number');
+    }
+    if (config.storage.cacheMaxSizeMB !== undefined && (
+      !Number.isFinite(config.storage.cacheMaxSizeMB) || config.storage.cacheMaxSizeMB < 0
+    )) {
+      errors.push('storage.cacheMaxSizeMB: Must be a non-negative number');
+    }
+  }
+
   // Validate scheduler config
   if (config.scheduler) {
     if (config.scheduler.enabled && !config.scheduler.cron) {

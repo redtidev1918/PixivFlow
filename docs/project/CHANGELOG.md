@@ -5,6 +5,15 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [2.10.18] - 2026-08-31
+
+### 新增
+- ⭐ **投递模板支持热度数据**：新增 `{{bookmarkCount}}`（收藏数）与
+  `{{viewCount}}`（浏览数）两个模板变量，取自 Pixiv 作品的 `total_bookmarks` /
+  `total_view`；大数字以紧凑形式渲染（如 `1.2k`、`34.6w`），接口未返回时为空串。
+  可写进投稿简介，作为"热门依据"。
+- 🧪 新增热度变量渲染测试。
+
 ## [2.10.17] - 2026-08-31
 
 ### 新增

@@ -99,6 +99,8 @@ export class DeliveryOutbox {
           rankingDate: resolveRankingDate(target),
           publishedAt: artifact.publishedAt,
           language: artifact.language,
+          bookmarkCount: artifact.bookmarkCount,
+          viewCount: artifact.viewCount,
         },
       },
     };

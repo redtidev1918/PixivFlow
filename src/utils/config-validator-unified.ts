@@ -184,6 +184,34 @@ export class ConfigValidator {
             message: `Target ${index + 1}: languageCandidateLimit must be an integer between 1 and 100`,
           });
         }
+        if (target.noMatchPolicy?.lookbackDays !== undefined && (
+          !Number.isInteger(target.noMatchPolicy.lookbackDays) ||
+          target.noMatchPolicy.lookbackDays < 0 ||
+          target.noMatchPolicy.lookbackDays > 7
+        )) {
+          errors.push({
+            code: 'CONFIG_VALIDATION_TARGET_NO_MATCH_LOOKBACK_INVALID',
+            field: `${targetPrefix}.noMatchPolicy.lookbackDays`,
+            message: `Target ${index + 1}: noMatchPolicy.lookbackDays must be an integer between 0 and 7`,
+          });
+        }
+        if (target.noMatchPolicy?.notify !== undefined && typeof target.noMatchPolicy.notify !== 'boolean') {
+          errors.push({
+            code: 'CONFIG_VALIDATION_TARGET_NO_MATCH_NOTIFY_INVALID',
+            field: `${targetPrefix}.noMatchPolicy.notify`,
+            message: `Target ${index + 1}: noMatchPolicy.notify must be a boolean`,
+          });
+        }
+        if (target.noMatchPolicy?.notify === true) {
+          const deliveryTarget = target.delivery?.target?.trim();
+          if (!deliveryTarget || !config.delivery?.targets?.[deliveryTarget]?.notificationUrl?.trim()) {
+            errors.push({
+              code: 'CONFIG_VALIDATION_TARGET_NO_MATCH_NOTIFICATION_MISSING',
+              field: `${targetPrefix}.noMatchPolicy.notify`,
+              message: `Target ${index + 1}: no-match notification requires delivery notificationUrl`,
+            });
+          }
+        }
 
         if (target.storageMode && target.storageMode !== 'persistent' && target.storageMode !== 'cache') {
           errors.push({
@@ -233,6 +261,18 @@ export class ConfigValidator {
             code: 'CONFIG_VALIDATION_DELIVERY_URL_INVALID',
             field: `${prefix}.url`,
             message: `Delivery target '${name}': URL must be valid HTTP or HTTPS`,
+          });
+        }
+      }
+      if (delivery.notificationUrl && !/\$\{[A-Za-z_][A-Za-z0-9_]*\}/.test(delivery.notificationUrl)) {
+        try {
+          const url = new URL(delivery.notificationUrl);
+          if (!['http:', 'https:'].includes(url.protocol)) throw new Error('unsupported protocol');
+        } catch {
+          errors.push({
+            code: 'CONFIG_VALIDATION_DELIVERY_NOTIFICATION_URL_INVALID',
+            field: `${prefix}.notificationUrl`,
+            message: `Delivery target '${name}': notificationUrl must be valid HTTP or HTTPS`,
           });
         }
       }

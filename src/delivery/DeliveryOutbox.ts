@@ -119,6 +119,14 @@ export class DeliveryOutbox {
     }
   }
 
+  async notifyNoMatch(target: TargetConfig, text: string, idempotencyKey: string): Promise<void> {
+    const deliveryTarget = target.delivery?.target?.trim();
+    if (!deliveryTarget) {
+      throw new ConfigError('No-match notification requires target.delivery.target');
+    }
+    await this.dispatcher.notify(deliveryTarget, { text, idempotencyKey });
+  }
+
   async retryPending(): Promise<PendingRetryResult> {
     let names: string[];
     try {

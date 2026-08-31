@@ -152,9 +152,11 @@ pixivflow setup
 | `languageFilter` | `chinese` / `non-chinese` | 根据完整正文过滤小说语言 |
 | `languageCandidateLimit` | 1–100（默认 20） | 按热度依次检测的候选上限；例如 Top 1 不是中文时继续检查下一部，直到补足 `limit` |
 | `strictLanguageFilter` | boolean（默认 false） | true 时拒绝正文过短等无法可靠判断语言的小说；要保证“只收中文”时应开启 |
+| `noMatchPolicy.lookbackDays` | 0–7（默认 0） | 当天没有目标语言小说时，按日期逐日向前回看；主题和语言条件不会被静默放宽 |
+| `noMatchPolicy.notify` | boolean（默认 false） | 最终仍无结果时，通过交付目标的 `notificationUrl` 通知审核群 |
 | `detectLanguage` | boolean(默认 true) | 记录检测结果并写入元数据 |
 
-`mode: "topic"` 会先按热度取 `languageCandidateLimit` 个小说候选，再串行检测完整正文并在达到 `limit` 后停止；这样既保证热度顺序，也避免并发检查造成超额投稿。对“最热 1 部中文小说”的低带宽部署，推荐 `limit: 1`、`languageCandidateLimit: 20`、`strictLanguageFilter: true`。
+`mode: "topic"` 会先按热度取 `languageCandidateLimit` 个小说候选，再串行检测完整正文并在达到 `limit` 后停止；这样既保证热度顺序，也避免并发检查造成超额投稿。对“最热 1 部中文小说”的低带宽部署，推荐 `limit: 1`、`languageCandidateLimit: 20`、`strictLanguageFilter: true`。需要“尽量补足且不静默”时，可再设置 `noMatchPolicy: { "lookbackDays": 3, "notify": true }`；它最多检查昨天及之前 3 天，不会退化为日文或无关主题。
 
 ### target 存储与交付模式
 

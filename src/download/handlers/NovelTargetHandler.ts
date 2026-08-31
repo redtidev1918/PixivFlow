@@ -3,7 +3,7 @@ import { logger } from '../../logger';
 import { IPixivClient } from '../../interfaces/IPixivClient';
 import { IDatabase } from '../../interfaces/IDatabase';
 import { RankingService } from '../RankingService';
-import { DownloadPipeline } from '../pipeline/DownloadPipeline';
+import { DownloadPipeline, DownloadPipelineResult } from '../pipeline/DownloadPipeline';
 import { NovelDownloader } from '../NovelDownloader';
 import { NetworkError } from '../../utils/errors';
 import { getTodayDate, getYesterdayDate } from '../../utils/pixiv-date-utils';
@@ -45,6 +45,10 @@ export class NovelTargetHandler {
     logger.info(`Processing novel ${mode === 'ranking' ? 'ranking' : 'tag'} ${displayTag}`);
 
     try {
+      if (mode === 'topic' && target.languageFilter && (target.noMatchPolicy?.lookbackDays ?? 0) > 0) {
+        await this.handleTopicWithLookback(target, displayTag);
+        return;
+      }
       const novels = await this.fetchNovels(target, mode);
       const result = await this.pipeline.run(
         novels,
@@ -52,7 +56,7 @@ export class NovelTargetHandler {
         'novel',
         (novel, tag) => this.downloadAndDeliver(novel, tag, target)
       );
-      this.handleDownloadResult(result, target, mode, displayTag, novels.length);
+      await this.handleDownloadResult(result, target, mode, displayTag, novels.length);
     } catch (error) {
       this.handleError(error, displayTag, mode);
     }
@@ -71,11 +75,7 @@ export class NovelTargetHandler {
 
   private async fetchTopicNovels(target: TargetConfig): Promise<PixivNovel[]> {
     const topic = (target.topic ?? '').trim();
-    const day = target.date === 'TODAY'
-      ? getTodayDate()
-      : target.date && target.date !== 'YESTERDAY'
-        ? target.date
-        : getYesterdayDate();
+    const day = this.resolveTopicDay(target);
     const limit = target.limit || 1;
     const selectionLimit = target.languageFilter
       ? Math.max(limit, Math.min(target.languageCandidateLimit ?? 20, 100))
@@ -96,6 +96,72 @@ export class NovelTargetHandler {
     );
     logger.info(`Topic "${topic}" novel: tags=${selection.resolvedTagCount} raw=${selection.rawCount} deduped=${selection.dedupedCount} accepted=${selection.acceptedCount} candidates=${works.length} target=${limit}`);
     return works;
+  }
+
+  private async handleTopicWithLookback(target: TargetConfig, displayTag: string): Promise<void> {
+    const requested = target.limit || 1;
+    const additionalDays = Math.max(0, Math.min(target.noMatchPolicy?.lookbackDays ?? 0, 7));
+    const baseDay = this.resolveTopicDay(target);
+    const checkedDays: string[] = [];
+    const aggregate: DownloadPipelineResult = {
+      downloaded: 0,
+      skipped: 0,
+      alreadyDownloaded: 0,
+      filteredOut: 0,
+    };
+    let totalFound = 0;
+
+    for (let offset = 0; offset <= additionalDays && aggregate.downloaded < requested; offset++) {
+      const day = this.shiftDay(baseDay, -offset);
+      const attemptTarget: TargetConfig = {
+        ...target,
+        date: day,
+        limit: requested - aggregate.downloaded,
+      };
+      checkedDays.push(day);
+      if (offset > 0) {
+        logger.warn(`No matching ${target.languageFilter} novel found yet; checking fallback day ${day}`, {
+          topic: target.topic,
+          requestedDay: baseDay,
+          fallbackOffset: offset,
+        });
+      }
+      const novels = await this.fetchTopicNovels(attemptTarget);
+      totalFound += novels.length;
+      const result = await this.pipeline.run(
+        novels,
+        attemptTarget,
+        'novel',
+        (novel, tag) => this.downloadAndDeliver(novel, tag, attemptTarget)
+      );
+      aggregate.downloaded += result.downloaded;
+      aggregate.skipped += result.skipped;
+      aggregate.alreadyDownloaded += result.alreadyDownloaded;
+      aggregate.filteredOut += result.filteredOut;
+    }
+
+    await this.handleDownloadResult(
+      aggregate,
+      target,
+      'topic',
+      displayTag,
+      totalFound,
+      checkedDays
+    );
+  }
+
+  private resolveTopicDay(target: TargetConfig): string {
+    return target.date === 'TODAY'
+      ? getTodayDate()
+      : target.date && target.date !== 'YESTERDAY'
+        ? target.date
+        : getYesterdayDate();
+  }
+
+  private shiftDay(day: string, offset: number): string {
+    const date = new Date(`${day}T00:00:00.000Z`);
+    date.setUTCDate(date.getUTCDate() + offset);
+    return date.toISOString().slice(0, 10);
   }
 
   private async fetchRankingNovels(target: TargetConfig): Promise<PixivNovel[]> {
@@ -160,19 +226,31 @@ export class NovelTargetHandler {
     return novels;
   }
 
-  private handleDownloadResult(
+  private async handleDownloadResult(
     result: { downloaded: number; skipped: number; alreadyDownloaded: number; filteredOut: number },
     target: TargetConfig,
     mode: string,
     displayTag: string,
-    totalFound: number
-  ): void {
+    totalFound: number,
+    checkedDays: string[] = []
+  ): Promise<void> {
     const { downloaded, skipped, alreadyDownloaded, filteredOut } = result;
     const targetLimit = target.limit || 10;
     const tagForLog = getTargetLabel(target);
 
     if (downloaded === 0 && targetLimit > 0) {
-      this.handleZeroDownloads(alreadyDownloaded, skipped, filteredOut, targetLimit, tagForLog, mode);
+      await this.handleZeroDownloads(
+        alreadyDownloaded,
+        skipped,
+        filteredOut,
+        targetLimit,
+        tagForLog,
+        mode,
+        target,
+        totalFound,
+        checkedDays
+      );
+      return;
     }
 
     if (downloaded > 0 && downloaded < targetLimit * 0.5 && skipped > 0) {
@@ -192,15 +270,29 @@ export class NovelTargetHandler {
     logger.info(`Novel ${mode === 'ranking' ? 'ranking' : 'tag'} ${tagForLog} completed`, { downloaded });
   }
 
-  private handleZeroDownloads(
+  private async handleZeroDownloads(
     alreadyDownloaded: number,
     skipped: number,
     filteredOut: number,
     targetLimit: number,
     tagForLog: string,
-    mode: string
-  ): void {
-    if (alreadyDownloaded > 0 && skipped === 0) {
+    mode: string,
+    target: TargetConfig,
+    totalFound: number,
+    checkedDays: string[]
+  ): Promise<void> {
+    const expectedLanguageNoMatch = mode === 'topic' && Boolean(target.languageFilter);
+    if (expectedLanguageNoMatch) {
+      const days = checkedDays.length > 0 ? checkedDays : [this.resolveTopicDay(target)];
+      const message = `No matching ${target.languageFilter} novels found after checking ${totalFound} candidate(s) across ${days.length} day(s): ${days.join(', ')}`;
+      this.database.logExecution(tagForLog, 'novel', 'success', message);
+      logger.warn(`Novel topic ${tagForLog} produced no matching result`, {
+        languageFilter: target.languageFilter,
+        candidates: totalFound,
+        checkedDays: days,
+      });
+      await this.notifyNoMatch(target, tagForLog, totalFound, days);
+    } else if (alreadyDownloaded > 0 && skipped === 0) {
       logger.info(`All ${alreadyDownloaded} novel(s) for tag ${tagForLog} were already downloaded`);
       this.database.logExecution(
         tagForLog,
@@ -221,6 +313,37 @@ export class NovelTargetHandler {
       this.database.logExecution(tagForLog, 'novel', 'failed', errorMessage);
       logger.error(`Novel ${mode === 'ranking' ? 'ranking' : 'tag'} ${tagForLog} failed: ${errorMessage}`);
       throw new Error(errorMessage);
+    }
+  }
+
+  private async notifyNoMatch(
+    target: TargetConfig,
+    label: string,
+    candidateCount: number,
+    checkedDays: string[]
+  ): Promise<void> {
+    if (target.noMatchPolicy?.notify !== true) return;
+    if (!this.deliveryOutbox) {
+      logger.warn('No-match notification requested but delivery outbox is unavailable');
+      return;
+    }
+    const language = target.languageFilter === 'chinese' ? '中文正文' : '非中文正文';
+    const text = [
+      '⚠️ PixivFlow 本次没有可投稿内容',
+      `目标：${target.id || label}（${label} · 小说）`,
+      `要求：${language}，主题与语言条件未放宽`,
+      `检查日期：${checkedDays.join('、')}`,
+      `候选数量：${candidateCount}`,
+      '处理结果：未创建空投稿；下次定时任务会继续正常执行。',
+    ].join('\n');
+    const key = `pixivflow:no-match:${target.id || label}:novel:${checkedDays[0]}:${checkedDays.at(-1)}`;
+    try {
+      await this.deliveryOutbox.notifyNoMatch(target, text, key);
+    } catch (error) {
+      logger.warn('Failed to send no-match notification', {
+        target: target.id || label,
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 

@@ -79,6 +79,34 @@ describe('HttpMultipartDelivery', () => {
     expect(multipart).toContain('name="anonymous"\r\n\r\nfalse');
   });
 
+  it('sends authenticated JSON no-match notifications', async () => {
+    const fetchMock = jest.fn().mockResolvedValue(
+      new Response(JSON.stringify({ ok: true, data: { status: 'notified' } }), { status: 201 })
+    );
+    global.fetch = fetchMock as typeof fetch;
+    const provider = new HttpMultipartDelivery({
+      type: 'httpMultipart',
+      url: 'https://example.test/submissions',
+      notificationUrl: 'https://example.test/notifications',
+      headers: { Authorization: 'Bearer ${TEST_DELIVERY_TOKEN}' },
+      success: { statuses: [201], jsonPath: 'ok', equals: true },
+      maxAttempts: 1,
+    });
+
+    await provider.notify({ text: 'no matching work', idempotencyKey: 'empty:2023-06-14' });
+
+    const [url, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://example.test/notifications');
+    expect(options.headers).toEqual(expect.objectContaining({
+      Authorization: 'Bearer secret',
+      'Content-Type': 'application/json',
+    }));
+    expect(JSON.parse(String(options.body))).toEqual({
+      text: 'no matching work',
+      idempotency_key: 'empty:2023-06-14',
+    });
+  });
+
   it('renders link / topicTag / spoiler / x_restrict template variables', async () => {
     const filePath = join(directory, 'cover.jpg');
     await fs.writeFile(filePath, 'image');

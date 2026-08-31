@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { Readable } from 'node:stream';
 import { DeliveryFieldValue, HttpMultipartDeliveryConfig } from '../config';
 import { logger } from '../logger';
-import { DeliveryProvider, DeliveryRequest, DeliveryResult } from './types';
+import { DeliveryNotificationRequest, DeliveryProvider, DeliveryRequest, DeliveryResult } from './types';
 
 /** Render an ISO timestamp to YYYY-MM-DD (create_date is JST). */
 function formatPublishedDate(iso?: string): string {
@@ -53,6 +53,57 @@ export class HttpMultipartDelivery implements DeliveryProvider {
     }
     throw new Error(
       `HTTP multipart delivery failed after ${maxAttempts} attempts: ${
+        lastError instanceof Error ? lastError.message : String(lastError)
+      }`
+    );
+  }
+
+  async notify(request: DeliveryNotificationRequest): Promise<DeliveryResult> {
+    const url = this.config.notificationUrl?.trim();
+    if (!url) throw new Error('HTTP delivery notificationUrl is not configured');
+    const maxAttempts = Math.max(1, this.config.maxAttempts ?? 3);
+    const retryDelayMs = Math.max(0, this.config.retryDelayMs ?? 2000);
+    let lastError: unknown;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const headers = {
+          ...this.resolveHeaders(this.config.headers ?? {}),
+          'Content-Type': 'application/json',
+        };
+        const options: Record<string, unknown> = {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            text: request.text,
+            idempotency_key: request.idempotencyKey,
+          }),
+        };
+        if (this.dispatcher) options.dispatcher = this.dispatcher;
+        const response = await fetch(
+          this.interpolateEnvironment(url),
+          options as Parameters<typeof fetch>[1]
+        );
+        const text = await response.text();
+        let body: unknown = text;
+        if (text) {
+          try { body = JSON.parse(text); } catch { /* plain text is valid */ }
+        }
+        this.assertSuccess(response, body);
+        logger.info('HTTP delivery notification succeeded', { url, status: response.status });
+        return { status: response.status, body };
+      } catch (error) {
+        lastError = error;
+        logger.warn(`HTTP delivery notification attempt ${attempt}/${maxAttempts} failed`, {
+          url,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        if (attempt < maxAttempts) {
+          await new Promise((resolve) => setTimeout(resolve, retryDelayMs * attempt));
+        }
+      }
+    }
+    throw new Error(
+      `HTTP delivery notification failed after ${maxAttempts} attempts: ${
         lastError instanceof Error ? lastError.message : String(lastError)
       }`
     );

@@ -32,6 +32,18 @@ export interface CandidateCollectionConfig {
   minMetadataScore?: number;
 }
 
+/** Behaviour when a target cannot produce the requested number of works. */
+export interface NoMatchPolicyConfig {
+  /**
+   * For topic novels with a language filter, inspect this many additional
+   * preceding publication days, one day at a time (default 0, max 7).
+   * Topic and language constraints are never relaxed implicitly.
+   */
+  lookbackDays?: number;
+  /** Send a best-effort notice through the target's delivery endpoint. */
+  notify?: boolean;
+}
+
 export interface TargetDeliveryConfig {
   /** 顶层 delivery.targets 中定义的交付目标名称 */
   target: string;
@@ -130,6 +142,8 @@ export interface TargetConfig {
   /** Tunable discovery/collection knobs for mode='topic' (all optional). */
   topicDiscovery?: TopicDiscoveryConfig;
   candidateCollection?: CandidateCollectionConfig;
+  /** Bounded fallback and notification policy for an empty result. */
+  noMatchPolicy?: NoMatchPolicyConfig;
   /**
    * Ranking mode (only used when mode='ranking')
    * - 'day': Daily ranking
@@ -403,6 +417,8 @@ export interface HttpMultipartSuccessConfig {
 export interface HttpMultipartDeliveryConfig {
   type: 'httpMultipart';
   url: string;
+  /** Optional JSON endpoint used for no-match operational notifications. */
+  notificationUrl?: string;
   method?: 'POST' | 'PUT';
   /** 支持 ${ENV_NAME} 环境变量插值 */
   headers?: Record<string, string>;
@@ -515,7 +531,6 @@ export interface StandaloneConfig {
     timeout?: number;
   };
 }
-
 
 
 

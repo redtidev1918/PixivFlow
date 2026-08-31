@@ -218,6 +218,45 @@ describe('HttpMultipartDelivery', () => {
     );
   });
 
+  it('renders bookmark/view popularity counts (compact, empty when absent)', async () => {
+    const filePath = join(directory, 'pop.txt');
+    await fs.writeFile(filePath, 'body');
+    const fetchMock = jest.fn().mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), {
+        status: 201,
+        headers: { 'content-type': 'application/json' },
+      })
+    );
+    global.fetch = fetchMock as typeof fetch;
+
+    const provider = new HttpMultipartDelivery({
+      type: 'httpMultipart',
+      url: 'https://example.test/submissions',
+      fileField: 'files',
+      fields: {
+        note: '⭐ {{bookmarkCount}} 👁 {{viewCount}}',
+      },
+      success: { statuses: [201], jsonPath: 'ok', equals: true },
+      maxAttempts: 1,
+      retryDelayMs: 0,
+    });
+
+    await provider.deliver({
+      files: [filePath],
+      context: {
+        title: 'P', pixivId: '1', type: 'illustration',
+        bookmarkCount: 12340, viewCount: 345678,
+      },
+    });
+
+    const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const chunks: Buffer[] = [];
+    for await (const chunk of options.body as unknown as AsyncIterable<Buffer>) chunks.push(Buffer.from(chunk));
+    const multipart = Buffer.concat(chunks).toString('utf8');
+    // 12340 -> 1.2w, 345678 -> 34.6w
+    expect(multipart).toContain('name="note"\r\n\r\n⭐ 1.2w 👁 34.6w');
+  });
+
   it('retries failed delivery attempts', async () => {
     const filePath = join(directory, 'work.txt');
     await fs.writeFile(filePath, 'text');

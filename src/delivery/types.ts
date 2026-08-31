@@ -21,6 +21,10 @@ export interface DownloadedArtifact {
   publishedAt?: string;
   /** Detected language label for novels (e.g. "Chinese (Mandarin) (cmn)"). */
   language?: string;
+  /** Pixiv bookmark count (popularity signal). */
+  bookmarkCount?: number;
+  /** Pixiv view count (popularity signal). */
+  viewCount?: number;
 }
 
 export interface DeliveryContext {
@@ -39,6 +43,10 @@ export interface DeliveryContext {
   publishedAt?: string;
   /** Detected language label for novels. */
   language?: string;
+  /** Pixiv bookmark count — rendered as {{bookmarkCount}}. */
+  bookmarkCount?: number;
+  /** Pixiv view count — rendered as {{viewCount}}. */
+  viewCount?: number;
 }
 
 export interface DeliveryRequest {

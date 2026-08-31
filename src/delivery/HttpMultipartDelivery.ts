@@ -13,6 +13,19 @@ function formatPublishedDate(iso?: string): string {
   return match ? `${match[1]}-${match[2]}-${match[3]}` : iso.slice(0, 10);
 }
 
+/**
+ * Render a popularity count for a caption. Large numbers use a compact k/w
+ * form (1234 -> "1.2k", 34567 -> "3.5w"); absent/undefined renders empty so
+ * templates can leave the line out rather than showing "0".
+ */
+function formatCount(value?: number): string {
+  if (value === undefined || value === null || Number.isNaN(Number(value))) return '';
+  const n = Number(value);
+  if (n >= 10000) return `${(n / 10000).toFixed(1).replace(/\.0$/, '')}w`;
+  if (n >= 1000) return `${(n / 1000).toFixed(1).replace(/\.0$/, '')}k`;
+  return String(n);
+}
+
 /** Generic streaming HTTP multipart delivery provider. */
 export class HttpMultipartDelivery implements DeliveryProvider {
   private readonly dispatcher?: unknown;
@@ -229,13 +242,17 @@ export class HttpMultipartDelivery implements DeliveryProvider {
       // Detected language for novels ("Chinese (Mandarin) (cmn)"); empty for
       // illustrations or when detection was inconclusive.
       language: request.context.language ?? '',
+      // Popularity signals. Compact localized form (e.g. 12.3k) when large,
+      // empty string when the API response carried no count.
+      bookmarkCount: formatCount(request.context.bookmarkCount),
+      viewCount: formatCount(request.context.viewCount),
     };
     return Object.fromEntries(
       Object.entries(fields).map(([name, value]) => {
         const values = Array.isArray(value) ? value : [value];
         const rendered = values.map((item) =>
           String(item).replace(
-            /\{\{(title|pixivId|type|tag|topic|workTags|link|topicTag|spoiler|xRestrict|xRestrictLabel|xRestrictTag|rankingDate|publishedDate|language)\}\}/g,
+            /\{\{(title|pixivId|type|tag|topic|workTags|link|topicTag|spoiler|xRestrict|xRestrictLabel|xRestrictTag|rankingDate|publishedDate|language|bookmarkCount|viewCount)\}\}/g,
             (_, key: string) => variables[key]
           )
         );

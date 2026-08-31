@@ -254,6 +254,8 @@ export class IllustrationDownloader {
       spoiler: (detail.x_restrict ?? 0) > 0,
       xRestrict: detail.x_restrict,
       publishedAt: detail.create_date,
+      bookmarkCount: detail.total_bookmarks ?? detail.bookmark_count,
+      viewCount: detail.total_view ?? detail.view_count,
     };
   }
 
@@ -356,6 +358,9 @@ export class IllustrationDownloader {
       files: [zipPath, framesPath],
       spoiler: (detail.x_restrict ?? 0) > 0,
       xRestrict: detail.x_restrict,
+      publishedAt: detail.create_date,
+      bookmarkCount: detail.total_bookmarks ?? detail.bookmark_count,
+      viewCount: detail.total_view ?? detail.view_count,
     };
   }
 

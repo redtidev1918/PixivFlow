@@ -110,7 +110,7 @@ pixivflow setup
 `topicDiscovery`：`maxTags`(默认 12)、`sampleWorks`(默认 100)、`cacheDays`(默认 7)、`minScore`(默认 0.22)、`refresh`(默认 false)、`includeR18`(默认 false，设为 `true` 时采样与采集均包含 R-18 作品——Pixiv 插画搜索默认会被 `filter=for_ios` 过滤掉 R-18；小说搜索本来就包含)。
 `candidateCollection`：`maxPerTag`(默认 40)、`maxCandidates`(默认 250)、`minMetadataScore`(默认 0.35)。
 
-工作流：Topic →（Pixiv 标签联想 + 近期作品 Tag 共现，PMI 式特异性打分自动压低 R-18/オリジナル 等通用 Tag）→ 相关 Tag 空间 → 分别搜索当天作品 → PID 去重 → 仅用 Tag/标题/描述做轻量相关性过滤（**只作接受门槛**，过 `minMetadataScore` 即视为属于主题）→ 通过的候选之间**完全按本地热度 `calculatePopularityScore()` 排名** → Top N。插画与小说使用各自独立的 Tag 空间，结果缓存到数据卷 `topic-cache/`（默认 7 天），刷新失败自动降级到旧缓存或仅用主题词本身，不中断调度。**全程不使用任何 LLM/VLM/Embedding/本地模型。**
+工作流：Topic →（Pixiv 标签联想 + 近期作品 Tag 共现，PMI 式特异性打分自动压低 R-18/オリジナル 等通用 Tag）→ 相关 Tag 空间 → 分别搜索当天作品 → PID 去重 → 仅用 Tag/标题/描述做轻量相关性过滤（**只作接受门槛**，过 `minMetadataScore` 即视为属于主题）→ 通过的候选之间**完全按本地热度 `calculatePopularityScore()` 排名** → 从有界热度候选池剔除下载历史 → 依次递补至 Top N。插画与小说使用各自独立的 Tag 空间，结果缓存到数据卷 `topic-cache/`（默认 7 天），刷新失败自动降级到旧缓存或仅用主题词本身，不中断调度。同一发布日期重复执行时，已经投稿的第一名不会让任务空跑；`limit=1` 默认保留 20 个插画候选，常规递补池上限 100（用户显式配置更大的 `limit` 时仍会尊重该数量），再由下载计划批量去重。**全程不使用任何 LLM/VLM/Embedding/本地模型。**
 
 能力边界：如果某作品没有任何与主题相关的 Tag/标题/描述（视觉上相关但元数据无关），在不使用视觉模型的前提下无法识别，这是设计取舍而非 Bug。
 

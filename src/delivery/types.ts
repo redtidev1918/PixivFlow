@@ -52,6 +52,12 @@ export interface DeliveryResult {
   body?: unknown;
 }
 
+export interface DeliveryNotificationRequest {
+  text: string;
+  idempotencyKey: string;
+}
+
 export interface DeliveryProvider {
   deliver(request: DeliveryRequest): Promise<DeliveryResult>;
+  notify?(request: DeliveryNotificationRequest): Promise<DeliveryResult>;
 }

@@ -5,6 +5,18 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [2.10.17] - 2026-08-31
+
+### 新增
+- 🔎 **中文小说有界回退**：`noMatchPolicy.lookbackDays` 可在目标日没有目标语言
+  小说时逐日向前检查，最多 7 天；主题与语言条件不会被静默放宽，命中后立即停止。
+- 🔔 **空结果通知**：`noMatchPolicy.notify` 配合交付目标 `notificationUrl`，可在
+  候选耗尽后向下游运维端点发送幂等通知，而不是只留一条本地日志。
+
+### 修复
+- 🧾 空结果只写一条 execution log，不再由结果处理与外层异常处理重复记录。
+- 🧪 新增逐日回退、命中停止、候选耗尽通知与认证 JSON 通知投递测试。
+
 ## [2.10.16] - 2026-08-31
 
 ### 修复

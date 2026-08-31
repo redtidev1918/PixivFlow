@@ -163,6 +163,22 @@ export function validateConfig(config: Partial<StandaloneConfig>, location: stri
       )) {
         errors.push(`targets[${index}].languageCandidateLimit: Must be an integer between 1 and 100`);
       }
+      if (target.noMatchPolicy?.lookbackDays !== undefined && (
+        !Number.isInteger(target.noMatchPolicy.lookbackDays) ||
+        target.noMatchPolicy.lookbackDays < 0 ||
+        target.noMatchPolicy.lookbackDays > 7
+      )) {
+        errors.push(`targets[${index}].noMatchPolicy.lookbackDays: Must be an integer between 0 and 7`);
+      }
+      if (target.noMatchPolicy?.notify !== undefined && typeof target.noMatchPolicy.notify !== 'boolean') {
+        errors.push(`targets[${index}].noMatchPolicy.notify: Must be a boolean`);
+      }
+      if (target.noMatchPolicy?.notify === true) {
+        const deliveryTarget = target.delivery?.target?.trim();
+        if (!deliveryTarget || !config.delivery?.targets?.[deliveryTarget]?.notificationUrl?.trim()) {
+          errors.push(`targets[${index}].noMatchPolicy.notify: Delivery target must configure notificationUrl`);
+        }
+      }
       if (target.searchTarget && !['partial_match_for_tags', 'exact_match_for_tags', 'title_and_caption'].includes(target.searchTarget)) {
         errors.push(`targets[${index}].searchTarget: Invalid value, must be one of: partial_match_for_tags, exact_match_for_tags, title_and_caption`);
       }
@@ -200,6 +216,14 @@ export function validateConfig(config: Partial<StandaloneConfig>, location: stri
         if (!['http:', 'https:'].includes(url.protocol)) throw new Error('unsupported protocol');
       } catch {
         errors.push(`${prefix}.url: Must be a valid HTTP or HTTPS URL`);
+      }
+    }
+    if (delivery.notificationUrl && !/\$\{[A-Za-z_][A-Za-z0-9_]*\}/.test(delivery.notificationUrl)) {
+      try {
+        const url = new URL(delivery.notificationUrl);
+        if (!['http:', 'https:'].includes(url.protocol)) throw new Error('unsupported protocol');
+      } catch {
+        errors.push(`${prefix}.notificationUrl: Must be a valid HTTP or HTTPS URL`);
       }
     }
     if (delivery.method && !['POST', 'PUT'].includes(delivery.method)) {

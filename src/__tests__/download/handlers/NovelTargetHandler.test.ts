@@ -771,6 +771,71 @@ describe('NovelTargetHandler', () => {
     });
   });
 
+  describe('topic no-match policy', () => {
+    function buildTopicHandler(results: Array<{
+      downloaded: number; skipped: number; alreadyDownloaded: number; filteredOut: number;
+    }>) {
+      const selectWorks = jest.fn().mockResolvedValue({
+        works: [createMockNovel(1)],
+        selection: {
+          resolvedTagCount: 1, rawCount: 1, dedupedCount: 1,
+          acceptedCount: 1, candidates: [], selected: [], aiExcludedCount: 0,
+        },
+      });
+      mockPipeline.run.mockReset();
+      results.forEach((result) => mockPipeline.run.mockResolvedValueOnce(result));
+      const outbox = { notifyNoMatch: jest.fn().mockResolvedValue(undefined) } as any;
+      const topicHandler = new NovelTargetHandler(
+        mockClient,
+        mockDatabase,
+        mockRankingService,
+        mockPipeline,
+        mockNovelDownloader,
+        outbox,
+        (() => ({ selectWorks })) as any
+      );
+      return { topicHandler, selectWorks, outbox };
+    }
+
+    it('checks preceding days serially and stops after a matching novel is downloaded', async () => {
+      const { topicHandler, selectWorks, outbox } = buildTopicHandler([
+        { downloaded: 0, skipped: 1, alreadyDownloaded: 0, filteredOut: 0 },
+        { downloaded: 1, skipped: 0, alreadyDownloaded: 0, filteredOut: 0 },
+      ]);
+      await topicHandler.handle({
+        id: 'daily-cn', type: 'novel', mode: 'topic', topic: 'ボテ腹',
+        date: 'YESTERDAY', limit: 1, languageFilter: 'chinese',
+        noMatchPolicy: { lookbackDays: 3, notify: true },
+      });
+
+      expect(selectWorks).toHaveBeenCalledTimes(2);
+      expect(selectWorks.mock.calls[0][0].date).toBe('2023-06-14');
+      expect(selectWorks.mock.calls[1][0].date).toBe('2023-06-13');
+      expect(outbox.notifyNoMatch).not.toHaveBeenCalled();
+      expect(mockDatabase.logExecution).toHaveBeenCalledTimes(1);
+    });
+
+    it('sends one notification and writes one execution row after exhausting the lookback', async () => {
+      const { topicHandler, outbox } = buildTopicHandler([
+        { downloaded: 0, skipped: 1, alreadyDownloaded: 0, filteredOut: 0 },
+        { downloaded: 0, skipped: 1, alreadyDownloaded: 0, filteredOut: 0 },
+      ]);
+      await topicHandler.handle({
+        id: 'daily-cn', type: 'novel', mode: 'topic', topic: 'ボテ腹',
+        date: 'YESTERDAY', limit: 1, languageFilter: 'chinese',
+        noMatchPolicy: { lookbackDays: 1, notify: true },
+        storageMode: 'cache', delivery: { target: 'telepost' },
+      });
+
+      expect(outbox.notifyNoMatch).toHaveBeenCalledTimes(1);
+      expect(outbox.notifyNoMatch.mock.calls[0][1]).toContain('没有可投稿内容');
+      expect(mockDatabase.logExecution).toHaveBeenCalledTimes(1);
+      expect(mockDatabase.logExecution).toHaveBeenCalledWith(
+        'ボテ腹', 'novel', 'success', expect.stringContaining('across 2 day(s)')
+      );
+    });
+  });
+
   describe('sortByPopularityAndLog', () => {
     it('should sort novels by popularity and log top N', async () => {
       const target: TargetConfig = {

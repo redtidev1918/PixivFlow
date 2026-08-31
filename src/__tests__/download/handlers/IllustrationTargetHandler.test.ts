@@ -152,6 +152,61 @@ describe('IllustrationTargetHandler', () => {
       );
     });
 
+    it('requests a ranked topic backfill pool so already-downloaded Top-1 can be replaced', async () => {
+      const target: TargetConfig = {
+        type: 'illustration',
+        mode: 'topic',
+        topic: 'ボテ腹',
+        date: 'YESTERDAY',
+        limit: 1,
+      };
+      const works = [createMockIllust(1), createMockIllust(2)];
+      const selectWorks = jest.fn().mockResolvedValue({
+        works,
+        selection: {
+          candidates: [],
+          selected: [],
+          resolvedTagCount: 2,
+          rawCount: 2,
+          dedupedCount: 2,
+          acceptedCount: 2,
+          aiExcludedCount: 0,
+        },
+      });
+      const topicHandler = new IllustrationTargetHandler(
+        mockClient,
+        mockDatabase,
+        mockRankingService,
+        mockIllustrationDownloader,
+        mockPipeline,
+        undefined,
+        () => ({ selectWorks } as any)
+      );
+      mockPipeline.run.mockResolvedValue({
+        downloaded: 1,
+        skipped: 0,
+        alreadyDownloaded: 1,
+        filteredOut: 0,
+      });
+
+      await topicHandler.handle(target);
+
+      expect(selectWorks).toHaveBeenCalledWith(
+        target,
+        'illustration',
+        '2023-06-14',
+        20,
+        {},
+        {}
+      );
+      expect(mockPipeline.run).toHaveBeenCalledWith(
+        works,
+        target,
+        'illustration',
+        expect.any(Function)
+      );
+    });
+
     it('should handle errors and log them', async () => {
       const target: TargetConfig = {
         type: 'illustration',

@@ -72,6 +72,11 @@ export class IllustrationTargetHandler {
         ? target.date
         : getYesterdayDate();
     const limit = target.limit || 1;
+    // TopicPipeline ranks before DownloadPlanner removes works recorded in the
+    // download database. Keep a small, bounded ranked pool so a second run for
+    // the same day can backfill from the next-most-popular unseen work instead
+    // of selecting Top-1 again and producing zero downloads.
+    const selectionLimit = Math.max(limit, Math.min(Math.max(limit * 2, 20), 100));
     logger.info(`Fetching ${day} illustrations for topic "${topic}", resolving dynamic tag space`);
 
     if (!this.topicPipelineFactory) {
@@ -82,11 +87,11 @@ export class IllustrationTargetHandler {
       target,
       'illustration',
       day,
-      limit,
+      selectionLimit,
       target.topicDiscovery ?? {},
       target.candidateCollection ?? {}
     );
-    logger.info(`Topic "${topic}" illustration: tags=${selection.resolvedTagCount} raw=${selection.rawCount} deduped=${selection.dedupedCount} aiExcluded=${selection.aiExcludedCount} accepted=${selection.acceptedCount} selected=${works.length}`);
+    logger.info(`Topic "${topic}" illustration: tags=${selection.resolvedTagCount} raw=${selection.rawCount} deduped=${selection.dedupedCount} aiExcluded=${selection.aiExcludedCount} accepted=${selection.acceptedCount} candidates=${works.length} target=${limit}`);
     return works;
   }
 

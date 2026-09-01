@@ -1,4 +1,3 @@
-import { setTimeout as delay } from 'node:timers/promises';
 import { ProxyAgent } from 'undici';
 
 import { StandaloneConfig, TargetConfig } from '../config';

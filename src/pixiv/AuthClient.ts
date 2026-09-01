@@ -5,7 +5,6 @@ import { NetworkConfig, PixivCredentialConfig } from '../config';
 import { logger } from '../logger';
 import { AccessTokenStore, Database } from '../storage/Database';
 import { updateConfigWithToken } from '../utils/login-helper';
-import { saveTokenToStorage } from '../utils/token-manager';
 import { AuthenticationError } from '../utils/errors';
 
 interface RefreshTokenResponse {

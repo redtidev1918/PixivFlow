@@ -1,5 +1,4 @@
 import { PixivApiCore } from './PixivApiCore';
-import { NetworkError } from '../../utils/errors';
 
 /**
  * Media download service: provides binary download helpers with sane defaults.

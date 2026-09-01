@@ -194,8 +194,12 @@ pixivflow setup
 ```
 
 字段值支持 `{{title}}`、`{{pixivId}}`、`{{type}}`、`{{tag}}`、`{{topic}}`、
-`{{workTags}}`、`{{xRestrict}}`、`{{xRestrictLabel}}`、`{{xRestrictTag}}`
-模板。`{{xRestrict}}` 保留 Pixiv 原始整数（0=全年龄、1=R-18、2=R-18G）；
+`{{workTags}}`、`{{link}}`、`{{topicTag}}`、`{{spoiler}}`、`{{xRestrict}}`、
+`{{xRestrictLabel}}`、`{{xRestrictTag}}`、`{{rankingDate}}`、`{{publishedDate}}`、
+`{{language}}`、`{{bookmarkCount}}`、`{{viewCount}}`
+模板。`{{bookmarkCount}}`/`{{viewCount}}` 是作品收藏数/浏览数（Pixiv
+`total_bookmarks`/`total_view`），大数字紧凑渲染（`1.2k`、`34.6w`），接口
+未返回时为空串，可写进简介作为热门依据。`{{xRestrict}}` 保留 Pixiv 原始整数（0=全年龄、1=R-18、2=R-18G）；
 `{{xRestrictLabel}}` 输出 `all-ages` / `R-18` / `R-18G`，`{{xRestrictTag}}`
 输出适合 Telegram 标签的 `AllAges` / `R18` / `R18G`。这三者与
 `{{spoiler}}` 独立，下游可以按频道策略决定是否加遮罩。`{{tag}}` 是统一的目标标签：普通搜索使用 `tag`、标签排行

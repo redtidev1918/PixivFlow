@@ -2,7 +2,6 @@
  * Login command - Interactive login
  */
 
-import * as path from 'path';
 import { BaseCommand } from './Command';
 import { CommandCategory } from './metadata';
 import { CommandContext, CommandArgs, CommandResult } from './types';

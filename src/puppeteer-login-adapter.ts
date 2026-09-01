@@ -22,7 +22,6 @@
  * 5. Exchange authorization code for access_token and refresh_token
  */
 
-import { LoginInfo } from './terminal-login';
 import { ProxyConfig } from './puppeteer-login-adapter/proxy';
 import { loginWithPuppeteerInteractive } from './puppeteer-login-adapter/login-interactive';
 import { loginWithPuppeteerHeadless } from './puppeteer-login-adapter/login-headless';

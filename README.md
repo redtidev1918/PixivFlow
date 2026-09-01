@@ -7,13 +7,13 @@ Pixiv 批量下载与定时收集工具。支持插画和小说的批量下载�
 基于 TypeScript 和 Node.js，可在 Windows、macOS、Linux 及 Docker 中运行。
 
 [![Version](https://img.shields.io/npm/v/pixivflow?style=flat-square)](https://www.npmjs.com/package/pixivflow)
-[![Node](https://img.shields.io/badge/Node.js-18%2B_LTS-green.svg?style=flat-square&logo=node.js)](https://nodejs.org/)
+[![Node](https://img.shields.io/badge/Node.js-22.12%2B_LTS-green.svg?style=flat-square&logo=node.js)](https://nodejs.org/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](LICENSE)
 [![Documentation](https://img.shields.io/badge/Docs-redtidev1918.github.io-6366f1?style=flat-square)](https://redtidev1918.github.io/PixivFlow/)
 
 ## 安装
 
-需要 Node.js 18 或更高版本（LTS）。
+需要 Node.js 22.12 或更高版本；生产环境请使用仍受支持的 LTS。
 
 ```bash
 npm install -g pixivflow

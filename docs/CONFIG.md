@@ -158,6 +158,19 @@ pixivflow setup
 
 `mode: "topic"` 会先按热度取 `languageCandidateLimit` 个小说候选，再串行检测完整正文并在达到 `limit` 后停止；这样既保证热度顺序，也避免并发检查造成超额投稿。对“最热 1 部中文小说”的低带宽部署，推荐 `limit: 1`、`languageCandidateLimit: 20`、`strictLanguageFilter: true`。需要“尽量补足且不静默”时，可再设置 `noMatchPolicy: { "lookbackDays": 3, "notify": true }`；它最多检查昨天及之前 3 天，不会退化为日文或无关主题。
 
+#### 操作通知（投递结果通知审核群）
+
+交付目标配置了 `notificationUrl` 后，PixivFlow 可向审核群发送两类运维通知，都写入
+delivery outbox 持久化、幂等去重、指数退避重试：
+
+| 触发条件 | 消息 | 说明 |
+| --- | --- | --- |
+| 候选耗尽（无匹配） | `⚠️ PixivFlow 本次没有可投稿内容` | 受 `noMatchPolicy.notify: true` 控制；需目标自身开启该开关。 |
+| **下载硬失败** | `❌ PixivFlow 本次下载失败` | 目标投递过程中发生硬错误（超长标题写入 `ENAMETOOLONG`、网络/权限错误等，导致该目标整条失败）。无需额外开关——只要目标配置了 `delivery.target`（存在通知通道）即发送；无通知端点的目标由投递校验拦下并仅记警告。插画与小说目标均生效。 |
+
+硬失败消息含目标名称与错误摘要（错误超 200 字符自动截断），并提示可点「🔄 重抓/换一张」
+重试或等待下次定时任务。这样即便是静默的下载错误，审核员也能第一时间得知，而不必翻日志。
+
 ### target 存储与交付模式
 
 | 字段 | 取值 | 说明 |

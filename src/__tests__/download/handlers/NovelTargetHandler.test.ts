@@ -891,4 +891,62 @@ describe('NovelTargetHandler', () => {
       await expect(handler.handle(target)).rejects.toThrow();
     });
   });
+
+  describe('hard-failure notification', () => {
+    it('notifies the review group via the delivery outbox when a download hard-fails', async () => {
+      const mockOutbox = { notifyNoMatch: jest.fn().mockResolvedValue(undefined) } as any;
+      const h = new NovelTargetHandler(
+        mockClient,
+        mockDatabase,
+        mockRankingService,
+        mockPipeline,
+        mockNovelDownloader,
+        mockOutbox
+      );
+      const target: TargetConfig = {
+        type: 'novel',
+        tag: 'botefuku',
+        mode: 'search',
+        limit: 1,
+        noMatchPolicy: { notify: true },
+        delivery: { target: 'telepost-bot1' },
+      };
+      mockClient.searchNovels.mockResolvedValue([createMockNovel(1)]);
+      mockPipeline.run.mockRejectedValue(new Error('ENAMETOOLONG: name too long'));
+
+      await expect(h.handle(target)).rejects.toThrow('ENAMETOOLONG');
+
+      expect(mockOutbox.notifyNoMatch).toHaveBeenCalledTimes(1);
+      const [calledTarget, text, key] = mockOutbox.notifyNoMatch.mock.calls[0];
+      expect(calledTarget.id || calledTarget.tag).toBe('botefuku');
+      expect(text).toContain('下载失败');
+      expect(text).toContain('ENAMETOOLONG');
+      expect(key).toBe('pixivflow:hard-fail:botefuku:novel:2023-06-15');
+    });
+
+    it('does not notify when the target has no delivery destination', async () => {
+      const mockOutbox = { notifyNoMatch: jest.fn().mockResolvedValue(undefined) } as any;
+      const h = new NovelTargetHandler(
+        mockClient,
+        mockDatabase,
+        mockRankingService,
+        mockPipeline,
+        mockNovelDownloader,
+        mockOutbox
+      );
+      const target: TargetConfig = {
+        type: 'novel',
+        tag: 'botefuku',
+        mode: 'search',
+        limit: 1,
+        noMatchPolicy: { notify: true },
+        // no delivery.target -> no notification channel
+      };
+      mockClient.searchNovels.mockResolvedValue([createMockNovel(1)]);
+      mockPipeline.run.mockRejectedValue(new Error('ENAMETOOLONG: name too long'));
+
+      await expect(h.handle(target)).rejects.toThrow('ENAMETOOLONG');
+      expect(mockOutbox.notifyNoMatch).not.toHaveBeenCalled();
+    });
+  });
 });

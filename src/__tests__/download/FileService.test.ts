@@ -616,5 +616,30 @@ describe('FileService', () => {
       expect(mockFs.writeFile).toHaveBeenCalled();
     });
   });
+
+  describe('sanitizeFileName', () => {
+    it('keeps a short name unchanged (extension and pixiv id intact)', () => {
+      expect(fileService.sanitizeFileName('29004386_一些过往的经历.txt')).toBe('29004386_一些过往的经历.txt');
+    });
+
+    it('replaces illegal characters', () => {
+      expect(fileService.sanitizeFileName('a/b:c?d.txt')).toBe('a_b_c_d.txt');
+    });
+
+    it('truncates a long CJK title to fit the 255-byte filename limit', () => {
+      const title = '去'.repeat(120); // 360 bytes, well over the limit
+      const out = fileService.sanitizeFileName(`29012719_${title}.txt`);
+      expect(Buffer.byteLength(out, 'utf8')).toBeLessThanOrEqual(230);
+      // id prefix and extension preserved
+      expect(out.startsWith('29012719_')).toBe(true);
+      expect(out.endsWith('.txt')).toBe(true);
+    });
+
+    it('truncates without breaking a multibyte sequence (valid UTF-8)', () => {
+      const out = fileService.sanitizeFileName(`123_${'長'.repeat(100)}.txt`);
+      expect(Buffer.byteLength(out, 'utf8')).toBeLessThanOrEqual(230);
+      expect(Buffer.from(out, 'utf8').toString('utf8')).toBe(out); // no replacement char
+    });
+  });
 });
 

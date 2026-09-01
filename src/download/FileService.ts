@@ -77,11 +77,38 @@ export class FileService implements IFileService {
     return uniquePath;
   }
 
+  // Most filesystems cap a single filename component at 255 bytes. CJK titles
+  // are 3 bytes/char in UTF-8, so truncate by byte length (not char count) while
+  // keeping the extension; the pixiv id prefix lives before the title so it is
+  // never cut. Margin leaves room for findUniquePath's " (n)" suffix.
+  private static readonly MAX_FILENAME_BYTES = 230;
+
   public sanitizeFileName(name: string) {
-    return name
+    const cleaned = name
       .replace(/[\/:*?"<>|]/g, '_')
       .replace(/\s+/g, ' ')
       .trim();
+    return FileService.truncateToBytes(cleaned, FileService.MAX_FILENAME_BYTES);
+  }
+
+  /** Truncate a filename (preserving its extension) to at most maxBytes UTF-8. */
+  private static truncateToBytes(name: string, maxBytes: number): string {
+    if (Buffer.byteLength(name, 'utf8') <= maxBytes) return name;
+    const dot = name.lastIndexOf('.');
+    const ext = dot > 0 ? name.slice(dot) : '';
+    const extBytes = Buffer.byteLength(ext, 'utf8');
+    const baseBudget = maxBytes - extBytes;
+    let base = dot > 0 ? name.slice(0, dot) : name;
+    // Walk code points to avoid slicing a multibyte character.
+    let out = '';
+    let bytes = 0;
+    for (const ch of base) {
+      const b = Buffer.byteLength(ch, 'utf8');
+      if (bytes + b > baseBudget) break;
+      out += ch;
+      bytes += b;
+    }
+    return out + ext;
   }
 
   public sanitizeDirectoryName(name: string): string {

@@ -39,7 +39,7 @@ pkg install -y nodejs npm
 pkg install -y python3 make clang
 
 # 版本核验
-node -v               # 需要 v18.14+，18 / 20 / 22 均受支持
+node -v               # 需要 v22.12+；建议使用 Termux 当前提供的受支持版本
 npm -v                # 9 以上
 python3 --version
 make --version | head -1

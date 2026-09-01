@@ -5,6 +5,17 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [2.10.20] - 2026-09-01
+
+### 安全与维护
+- 🔐 生产运行时基线升级到 Node.js 22.12+，Docker 改用 Node.js 24 LTS，
+  CI 覆盖 Node.js 22 / 24，停止依赖已结束安全维护的 Node.js 18 / 20。
+- 📦 升级 `pixiv-token-getter` 2.2.1 与 `node-cron` 4.6，
+  `npm audit --omit=dev` 从 7 项降为 0 项。
+
+### 文档
+- 📚 README、快速开始、Docker、Termux 与静态站点统一标注当前运行时要求。
+
 ## [2.10.19] - 2026-09-01
 
 ### 改进

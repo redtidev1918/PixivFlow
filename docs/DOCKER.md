@@ -18,7 +18,7 @@
 
 ## 适用场景
 
-服务器持续挂机收集时，Docker 提供裸跑 Node.js 难以得到的保障：进程崩溃或宿主机重启后由 `restart: unless-stopped` 自动拉起、内置健康检查、以及隔离的运行时（Node 18、Chromium、gppt 打包在镜像内，宿主机无需安装依赖）。
+服务器持续挂机收集时，Docker 提供裸跑 Node.js 难以得到的保障：进程崩溃或宿主机重启后由 `restart: unless-stopped` 自动拉起、内置健康检查、以及隔离的运行时（Node 24 LTS、Chromium、gppt 打包在镜像内，宿主机无需安装依赖）。
 只想临时手动下载几个作品，不必上 Docker。
 
 ## 服务组成

@@ -58,7 +58,7 @@ export class NovelTargetHandler {
       );
       await this.handleDownloadResult(result, target, mode, displayTag, novels.length);
     } catch (error) {
-      this.handleError(error, displayTag, mode);
+      await this.handleError(error, displayTag, mode, target);
     }
   }
 
@@ -347,7 +347,7 @@ export class NovelTargetHandler {
     }
   }
 
-  private handleError(error: unknown, displayTag: string, mode: string): void {
+  private async handleError(error: unknown, displayTag: string, mode: string, target?: TargetConfig): Promise<void> {
     let errorMessage = error instanceof Error ? error.message : String(error);
 
     if (error instanceof NetworkError && error.cause) {
@@ -366,7 +366,31 @@ export class NovelTargetHandler {
       stack: error instanceof Error ? error.stack : undefined,
     });
 
+    await this.notifyDownloadFailure(target, displayTag, errorMessage);
+
     throw error;
+  }
+
+  /** Notify the review group when a target's download hard-fails (not just a no-match). */
+  private async notifyDownloadFailure(target: TargetConfig | undefined, label: string, errorMessage: string): Promise<void> {
+    if (!target?.delivery?.target?.trim()) return;
+    if (!this.deliveryOutbox) {
+      logger.warn('Download-failure notification requested but delivery outbox is unavailable');
+      return;
+    }
+    const truncated = errorMessage.length > 200 ? `${errorMessage.slice(0, 200)}…` : errorMessage;
+    const text = [
+      '❌ PixivFlow 本次下载失败',
+      `目标：${target.id || label}（${label} · 小说）`,
+      `错误：${truncated}`,
+      '处理结果：本次未投递；可点击「🔄 重抓/换一张」重试，或等待下次定时任务。',
+    ].join('\n');
+    const key = `pixivflow:hard-fail:${target.id || label}:novel:${getTodayDate()}`;
+    try {
+      await this.deliveryOutbox.notifyNoMatch(target, text, key);
+    } catch (notifyError) {
+      logger.warn('Failed to send download-failure notification', { label, errorMessage, notifyError });
+    }
   }
 
   private async handleSingleNovel(target: TargetConfig): Promise<void> {

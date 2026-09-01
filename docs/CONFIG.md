@@ -153,7 +153,7 @@ pixivflow setup
 | `languageCandidateLimit` | 1–100（默认 20） | 按热度依次检测的候选上限；例如 Top 1 不是中文时继续检查下一部，直到补足 `limit` |
 | `strictLanguageFilter` | boolean（默认 false） | true 时拒绝正文过短等无法可靠判断语言的小说；要保证“只收中文”时应开启 |
 | `noMatchPolicy.lookbackDays` | 0–7（默认 0） | 当天没有目标语言小说时，按日期逐日向前回看；主题和语言条件不会被静默放宽 |
-| `noMatchPolicy.notify` | boolean（默认 false） | 最终仍无结果时，通过交付目标的 `notificationUrl` 通知审核群 |
+| `noMatchPolicy.notify` | boolean（默认 false） | 最终仍无结果时，通过交付目标的 `notificationUrl` 通知审核群；通知会持久入 outbox 并指数退避重试 |
 | `detectLanguage` | boolean(默认 true) | 记录检测结果并写入元数据 |
 
 `mode: "topic"` 会先按热度取 `languageCandidateLimit` 个小说候选，再串行检测完整正文并在达到 `limit` 后停止；这样既保证热度顺序，也避免并发检查造成超额投稿。对“最热 1 部中文小说”的低带宽部署，推荐 `limit: 1`、`languageCandidateLimit: 20`、`strictLanguageFilter: true`。需要“尽量补足且不静默”时，可再设置 `noMatchPolicy: { "lookbackDays": 3, "notify": true }`；它最多检查昨天及之前 3 天，不会退化为日文或无关主题。
@@ -178,6 +178,7 @@ pixivflow setup
       "my-api": {
         "type": "httpMultipart",
         "url": "https://example.test/submissions",
+        "notificationUrl": "https://example.test/notifications",
         "method": "POST",
         "headers": { "Authorization": "Bearer ${MY_API_TOKEN}" },
         "fileField": "files",
@@ -249,7 +250,8 @@ telepress-server --host 0.0.0.0 --port 8000
 `success` 判定 `ok == true`。注意 telepress 相册要求图片文件，小说正文请走
 TelePost 等其他渠道。
 
-交付前会把任务写入数据库同目录的 `delivery-outbox/`。失败不会删除下载文件；
+交付前会把任务写入数据库同目录的 `delivery-outbox/`。作品投递失败不会删除下载文件；
+无候选通知也先写入该 outbox，不需要依赖当前进程的内存状态。
 下次 `download` 或 scheduler 执行时先检查待投递项。`outboxRetryBaseMs` 默认
 `300000`（5 分钟），`outboxRetryMaxMs` 默认 `21600000`（6 小时），失败后指数退避，
 避免远端故障时反复消耗带宽。成功后才删除作品文件、元数据 sidecar 和 outbox

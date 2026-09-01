@@ -17,7 +17,8 @@ or contact the maintainer directly, including:
 
 ## Scope notes
 
-PixivFlow is a local CLI/WebUI tool that talks only to Pixiv endpoints:
+PixivFlow is a local CLI/WebUI tool. It talks to Pixiv and to delivery targets
+that the deployer explicitly configures:
 
 - it stores credentials locally (config directory; never committed) and does
   not send telemetry or upload any user data;
@@ -26,3 +27,9 @@ PixivFlow is a local CLI/WebUI tool that talks only to Pixiv endpoints:
   config fields, and the WebUI server's request handling;
 - Docker deployments should keep the container's port binding private
   (`127.0.0.1` unless you deliberately expose it).
+- delivery credentials should be injected through `${ENV_NAME}` references;
+  do not commit Bearer tokens or private endpoint URLs to configuration files;
+- automated dependency scanning may report Puppeteer/node-cron advisories whose
+  upstream fixes require dropping Node 18 support. Runtime-facing compatible
+  transitive fixes are overridden promptly; the remaining login/scheduler
+  upgrade boundary is reviewed with each supported-Node release.

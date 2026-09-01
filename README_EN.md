@@ -102,6 +102,7 @@ merely translates an HTTP multipart submission API into configuration:
       "sharing-api": {
         "type": "httpMultipart",
         "url": "https://example.test/submissions",
+        "notificationUrl": "https://example.test/notifications",
         "headers": { "Authorization": "Bearer ${SHARING_TOKEN}" },
         "fileField": "files",
         "fields": { "title": "{{title}}" },
@@ -126,7 +127,9 @@ merely translates an HTTP multipart submission API into configuration:
 
 Headers and URLs accept arbitrary `${ENV_NAME}` interpolation. Failed delivery
 keeps both files and the durable outbox manifest beside the SQLite database;
-the next run retries them before processing new targets.
+the next run retries them before processing new targets. Final no-match
+notifications use the same durable outbox, so a restart or a temporary review
+endpoint outage does not silently lose the alert.
 
 Interactive configuration wizard: `pixivflow setup`.
 

@@ -5,6 +5,18 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [2.10.19] - 2026-09-01
+
+### 改进
+- 📨 **通知持久化**：最终无候选通知现在与作品投递共用 delivery
+  outbox，进程重启或下游短暂不可用时不再丢失，并沿用有界指数退避。
+- 🔐 升级 Axios、Express、Undici、Socket.IO 及其兼容的间接依赖，
+  生产依赖审计由 21 项降至 7 项；剩余项来自需要 Node 20/22
+  大版本的 node-cron/Puppeteer 上游链，保留 Node 18 LTS 兼容。
+
+### 测试
+- 🧪 新增跨进程重启恢复无候选通知的 outbox 回归测试。
+
 ## [2.10.18] - 2026-08-31
 
 ### 新增

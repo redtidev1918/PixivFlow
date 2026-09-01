@@ -5,6 +5,18 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [2.10.23] - 2026-09-01
+
+### 修复
+- 🐛 **超长标题小说下载失败（ENAMETOOLONG）**：`sanitizeFileName` 此前只替换
+  非法字符、不限制长度。当某天热榜选中标题为中文长句的小说（如
+  29012719，标题约 110 个 CJK 字符）时，文件名超过 Linux 单文件名 255 字节
+  上限，导致缓存写入 `ENAMETOOLONG`，整条目标硬失败（随后该目标不会触发"无
+  匹配"通知）。现按 **UTF-8 字节数**截断到 230 字节（保留扩展名与 pixiv id 前缀，
+  逐码点截断不切断多字节字符），并为 `findUniquePath` 的 ` (n)` 后缀留余量。
+- 🧪 新增 4 项 `sanitizeFileName` 测试（短名不变、非法字符替换、超长截断、多
+  字节完整性）。
+
 ## [2.10.22] - 2026-09-01
 
 ### 维护

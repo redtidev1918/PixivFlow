@@ -474,6 +474,52 @@ describe('DeliveryOutbox', () => {
     expect(deliver).toHaveBeenCalledTimes(2);
   });
 
+  it('retains failed no-match notifications and retries them after restart', async () => {
+    const notify = jest
+      .fn()
+      .mockRejectedValueOnce(new Error('review endpoint unavailable'))
+      .mockResolvedValueOnce({ status: 201 });
+    const dispatcher = {
+      hasTarget: jest.fn().mockReturnValue(true),
+      notify,
+    } as unknown as DeliveryDispatcher;
+    const target = {
+      type: 'novel',
+      topic: 'ボテ腹',
+      storageMode: 'cache',
+      delivery: { target: 'bot1' },
+    } as const;
+
+    const firstProcess = new DeliveryOutbox(
+      outboxDirectory,
+      dispatcher,
+      true,
+      { retryBaseDelayMs: 0, retryMaxDelayMs: 0 }
+    );
+    await expect(
+      firstProcess.notifyNoMatch(target, '没有可投稿内容', 'empty:bot1:2026-09-01')
+    ).rejects.toMatchObject({ code: 'PENDING_DELIVERY' });
+    expect((await fs.readdir(outboxDirectory)).filter((name) => name.endsWith('.json'))).toHaveLength(1);
+
+    // A new instance represents a process restart; the manifest is the source of truth.
+    const restartedProcess = new DeliveryOutbox(
+      outboxDirectory,
+      dispatcher,
+      true,
+      { retryBaseDelayMs: 0, retryMaxDelayMs: 0 }
+    );
+    await expect(restartedProcess.retryPending()).resolves.toEqual({
+      succeeded: 1,
+      failed: 0,
+      deferred: 0,
+    });
+    expect(notify).toHaveBeenNthCalledWith(2, 'bot1', {
+      text: '没有可投稿内容',
+      idempotencyKey: 'empty:bot1:2026-09-01',
+    });
+    expect(await fs.readdir(outboxDirectory)).toEqual([]);
+  });
+
   it('does nothing for persistent targets', async () => {
     const dispatcher = {
       hasTarget: jest.fn(),

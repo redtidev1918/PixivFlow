@@ -17,7 +17,7 @@ export function resolveRankingDate(target: TargetConfig): string {
   return raw;
 }
 
-interface PendingDelivery {
+interface PendingEntryBase {
   version: 1;
   id: string;
   createdAt: string;
@@ -25,12 +25,27 @@ interface PendingDelivery {
   attempts: number;
   status: 'pending' | 'delivered';
   deliveryTarget: string;
-  artifact: DownloadedArtifact;
-  request: Omit<DeliveryRequest, 'files'>;
   result?: DeliveryResult;
   lastError?: string;
   nextAttemptAt?: string;
 }
+
+interface PendingDelivery extends PendingEntryBase {
+  /** Absent on manifests written before notification entries were introduced. */
+  kind?: 'delivery';
+  artifact: DownloadedArtifact;
+  request: Omit<DeliveryRequest, 'files'>;
+}
+
+interface PendingNotification extends PendingEntryBase {
+  kind: 'notification';
+  notification: {
+    text: string;
+    idempotencyKey: string;
+  };
+}
+
+type PendingOutboxEntry = PendingDelivery | PendingNotification;
 
 export interface PendingRetryResult {
   succeeded: number;
@@ -126,7 +141,35 @@ export class DeliveryOutbox {
     if (!deliveryTarget) {
       throw new ConfigError('No-match notification requires target.delivery.target');
     }
-    await this.dispatcher.notify(deliveryTarget, { text, idempotencyKey });
+    if (!this.dispatcher.hasTarget(deliveryTarget)) {
+      throw new ConfigError(`Delivery target is not configured: ${deliveryTarget}`);
+    }
+
+    await fs.mkdir(this.directory, { recursive: true });
+    const now = new Date().toISOString();
+    const entry: PendingNotification = {
+      version: 1,
+      kind: 'notification',
+      id: randomUUID(),
+      createdAt: now,
+      updatedAt: now,
+      attempts: 0,
+      status: 'pending',
+      deliveryTarget,
+      notification: { text, idempotencyKey },
+    };
+    const manifestPath = join(this.directory, `notification-${entry.id}.json`);
+    await this.writeNewManifest(manifestPath, entry);
+
+    try {
+      await this.processManifest(manifestPath, entry);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new PendingDeliveryError(
+        `Notification failed; retained for retry in ${manifestPath}: ${message}`,
+        error instanceof Error ? error : undefined
+      );
+    }
   }
 
   async retryPending(): Promise<PendingRetryResult> {
@@ -164,14 +207,18 @@ export class DeliveryOutbox {
     return { succeeded, failed, deferred };
   }
 
-  private async processManifest(manifestPath: string, entry: PendingDelivery): Promise<void> {
+  private async processManifest(manifestPath: string, entry: PendingOutboxEntry): Promise<void> {
     if (entry.status === 'pending') {
-      await this.assertFilesExist(entry.artifact.files);
+      if (entry.kind !== 'notification') {
+        await this.assertFilesExist(entry.artifact.files);
+      }
       try {
-        const result = await this.dispatcher.deliver(entry.deliveryTarget, {
-          ...entry.request,
-          files: entry.artifact.files,
-        });
+        const result = entry.kind === 'notification'
+          ? await this.dispatcher.notify(entry.deliveryTarget, entry.notification)
+          : await this.dispatcher.deliver(entry.deliveryTarget, {
+            ...entry.request,
+            files: entry.artifact.files,
+          });
         entry.result = { status: result.status };
         entry.status = 'delivered';
         entry.attempts++;
@@ -191,18 +238,26 @@ export class DeliveryOutbox {
       }
     }
 
-    if (this.deleteAfterDelivery) {
+    if (entry.kind !== 'notification' && this.deleteAfterDelivery) {
       await this.deleteFiles([...entry.artifact.files, ...(entry.artifact.cleanupFiles ?? [])]);
     }
     await fs.unlink(manifestPath).catch((error: NodeJS.ErrnoException) => {
       if (error.code !== 'ENOENT') throw error;
     });
-    logger.info('Delivery outbox item completed', {
-      deliveryTarget: entry.deliveryTarget,
-      pixivId: entry.artifact.pixivId,
-      type: entry.artifact.type,
-      status: entry.result?.status,
-    });
+    logger.info('Delivery outbox item completed', entry.kind === 'notification'
+      ? {
+        deliveryTarget: entry.deliveryTarget,
+        kind: entry.kind,
+        idempotencyKey: entry.notification.idempotencyKey,
+        status: entry.result?.status,
+      }
+      : {
+        deliveryTarget: entry.deliveryTarget,
+        kind: 'delivery',
+        pixivId: entry.artifact.pixivId,
+        type: entry.artifact.type,
+        status: entry.result?.status,
+      });
   }
 
   private async assertFilesExist(files: string[]): Promise<void> {
@@ -223,15 +278,13 @@ export class DeliveryOutbox {
     }
   }
 
-  private async readManifest(manifestPath: string): Promise<PendingDelivery> {
-    const parsed = JSON.parse(await fs.readFile(manifestPath, 'utf8')) as PendingDelivery;
-    if (
-      parsed.version !== 1 ||
-      !parsed.deliveryTarget ||
-      !parsed.artifact ||
-      !Array.isArray(parsed.artifact.files) ||
-      !parsed.request?.context
-    ) {
+  private async readManifest(manifestPath: string): Promise<PendingOutboxEntry> {
+    const parsed = JSON.parse(await fs.readFile(manifestPath, 'utf8')) as PendingOutboxEntry;
+    const commonValid = parsed.version === 1 && Boolean(parsed.deliveryTarget);
+    const payloadValid = parsed.kind === 'notification'
+      ? Boolean(parsed.notification?.text && parsed.notification?.idempotencyKey)
+      : Boolean(parsed.artifact && Array.isArray(parsed.artifact.files) && parsed.request?.context);
+    if (!commonValid || !payloadValid) {
       throw new Error(`Invalid delivery outbox manifest: ${manifestPath}`);
     }
     return parsed;
@@ -241,7 +294,7 @@ export class DeliveryOutbox {
     return this.options.now?.() ?? Date.now();
   }
 
-  private shouldDefer(entry: PendingDelivery): boolean {
+  private shouldDefer(entry: PendingOutboxEntry): boolean {
     if (entry.status !== 'pending' || !entry.nextAttemptAt) return false;
     const timestamp = Date.parse(entry.nextAttemptAt);
     return Number.isFinite(timestamp) && timestamp > this.now();
@@ -253,11 +306,11 @@ export class DeliveryOutbox {
     return Math.min(maximum, base * 2 ** Math.min(Math.max(0, attempts - 1), 20));
   }
 
-  private async writeNewManifest(manifestPath: string, entry: PendingDelivery): Promise<void> {
+  private async writeNewManifest(manifestPath: string, entry: PendingOutboxEntry): Promise<void> {
     await this.writeManifest(manifestPath, entry);
   }
 
-  private async writeManifest(manifestPath: string, entry: PendingDelivery): Promise<void> {
+  private async writeManifest(manifestPath: string, entry: PendingOutboxEntry): Promise<void> {
     const temporaryPath = `${manifestPath}.${process.pid}.${randomUUID()}.tmp`;
     try {
       await fs.writeFile(temporaryPath, JSON.stringify(entry, null, 2), 'utf8');

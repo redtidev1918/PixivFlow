@@ -5,6 +5,15 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [2.10.21] - 2026-09-01
+
+### 修复
+- 📦 使用 npm 10 重建锁文件，使 Node.js 22 默认 npm 的 `npm ci`
+  与 Node.js 24 / npm 11 得到相同依赖树；修复 2.10.20 首次远端测试暴露的锁文件缺项。
+
+### 维护
+- 🧹 删除重复的 GitHub Pages 工作流；文档变更现在只构建、部署一次。
+
 ## [2.10.20] - 2026-09-01
 
 ### 安全与维护

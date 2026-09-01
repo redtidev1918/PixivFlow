@@ -5,6 +5,16 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [2.10.22] - 2026-09-01
+
+### 维护
+- 🧹 删除一批未使用的导入（`path`、`ConfigManager`、`createTopicPipeline`、
+  `saveTokenToStorage`、`NetworkError`、`delay`、`LoginInfo` 等），零行为变化，
+  `tsc` 与 538 项测试全绿。
+- 📝 文档：CONFIG.md 的投递模板变量列表补全 `{{bookmarkCount}}`/`{{viewCount}}`
+  （收藏/浏览热度）以及此前遗漏的 `{{link}}`/`{{topicTag}}`/`{{rankingDate}}`/
+  `{{publishedDate}}`/`{{language}}`。
+
 ## [2.10.21] - 2026-09-01
 
 ### 修复

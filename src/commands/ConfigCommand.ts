@@ -7,7 +7,6 @@ import { CommandCategory } from './metadata';
 import { CommandArgs, CommandContext, CommandResult } from './types';
 import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, statSync } from 'fs';
 import { join, resolve } from 'path';
-import { ConfigManager } from '../utils/config-manager';
 
 /**
  * Config command implementation

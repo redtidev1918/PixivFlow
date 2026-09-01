@@ -4,7 +4,7 @@ import type { CommandArgs, CommandContext, CommandResult } from './types';
 import { Database } from '../storage/Database';
 import { PixivAuth } from '../pixiv/AuthClient';
 import { PixivClient } from '../pixiv/PixivClient';
-import { createTopicPipeline, createTopicPipelineFactory } from '../topic/createTopicPipeline';
+import { createTopicPipelineFactory } from '../topic/createTopicPipeline';
 import { TopicResolver } from '../topic/TopicResolver';
 import { TopicCache } from '../topic/TopicCache';
 import type { TopicContentType } from '../topic/types';

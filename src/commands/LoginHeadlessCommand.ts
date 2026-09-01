@@ -2,7 +2,6 @@
  * Login headless command - Headless login with credentials
  */
 
-import * as path from 'path';
 import { readStdinLine } from '../utils/stdin';
 import { BaseCommand } from './Command';
 import { CommandCategory } from './metadata';

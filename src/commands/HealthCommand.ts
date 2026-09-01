@@ -7,7 +7,6 @@ import { CommandCategory } from './metadata';
 import { CommandArgs, CommandContext, CommandResult } from './types';
 import { Database } from '../storage/Database';
 import * as fs from 'fs/promises';
-import * as path from 'path';
 import { existsSync } from 'fs';
 
 /**

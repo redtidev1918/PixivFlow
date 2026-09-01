@@ -9,7 +9,7 @@ import { ConfigError } from '../utils/errors';
 import { ConfigPathMigrator } from '../utils/config-path-migrator';
 import { getBestAvailableToken, isPlaceholderToken, saveTokenToStorage } from '../utils/token-manager';
 import { getConfigManager } from '../utils/config-manager';
-import { getConfigDirectory, getDefaultConfigPath as getSmartDefaultConfigPath } from '../utils/project-root';
+import { getDefaultConfigPath as getSmartDefaultConfigPath } from '../utils/project-root';
 import { StandaloneConfig } from './types';
 import { generateDefaultConfig } from './defaults';
 import { applyDefaults } from './path-resolution';

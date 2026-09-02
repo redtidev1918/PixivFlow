@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { readFileSync, writeFileSync } from 'fs';
+import { writeFileSync } from 'fs';
 import { relative } from 'path';
 import { loadConfig, getConfigPath, StandaloneConfig, ConfigValidationError } from '../../../config';
 import { logger } from '../../../logger';

@@ -5,6 +5,31 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [2.10.26] - 2026-09-02
+
+### 新增 · 自我修复（self-healing）
+- 🔁 **漏跑补跑**：守护进程启动时检查每个计划——若其最近一次执行早于某个已错过的
+  cron 触发点（守护进程下线/崩溃/部署窗口），立即补跑一轮，不再静默丢档；
+  只补跑一次且记录执行（重启不会重复触发），全新计划不回填，热重载不触发。
+  由 `scheduler_executions` 表驱动，用 cron-parser 精确计算（新增依赖
+  `cron-parser@4.9.0`，自带类型）。
+- ⏱️ **卡死看门狗**：未显式配置 `timeout` 的计划自动获得 30 分钟上限
+  （`DEFAULT_SCHEDULE_TIMEOUT_MS`），卡死的下载运行会被中止并释放共享队列；
+  `run-once`（重抓）同样为每个计划套看门狗，超时中止并报错退出，
+  杜绝子进程无限挂起。
+- 🩺 **数据库启动完整性自检**：守护进程与 `run-once` 启动时对 pixivflow.db 执行
+  `PRAGMA quick_check`；结构损坏时自动把损坏文件（含 -wal/-shm）隔离为
+  `.corrupt-<时间戳>` 并重建空库，随后向各审核群发送恢复通知（每日幂等）。
+  迁移/schema 类错误不会被误判为损坏。
+
+### 清理（审计驱动）
+- 移除运行时路径死代码：`handleDownloadResult` 未用的 `displayTag` 参数、
+  `DownloadManager` 构造后从未读取的 `client`/`database` 属性、从未调用的
+  `requestDelayMs()`、`IllustrationDownloader` 未用的 `tags` 析构、
+  webui 中未使用的 import（`express`/`readFileSync`/`isPlaceholderToken`/
+  `watchFile`/`unwatchFile`）等；公共 API 参数与界面签名保留不动。
+- 新增测试：漏跑补跑 3 例、看门狗 3 例、数据库自检/隔离 2 例。
+
 ## [2.10.25] - 2026-09-02
 
 ### 新增

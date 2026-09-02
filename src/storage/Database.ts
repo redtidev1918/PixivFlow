@@ -1,5 +1,5 @@
 import DatabaseDriver from 'better-sqlite3';
-import { mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, renameSync } from 'node:fs';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import { DatabaseError } from '../utils/errors';
 import { IDatabase } from '../interfaces/IDatabase';
@@ -231,6 +231,17 @@ export class Database implements IDatabase {
       errorMessage,
       itemsDownloaded
     );
+  }
+
+  /** End time of the most recent execution for a schedule, or null if it never ran. */
+  public getLastSchedulerEnd(scheduleId: string): Date | null {
+    return this.schedulerRepo.getLastEnd(scheduleId);
+  }
+
+  /** SQLite `quick_check` result: `ok` when the database is structurally sound. */
+  public checkIntegrity(): string {
+    const row = this.db.prepare('PRAGMA quick_check').get() as { quick_check: string };
+    return row?.quick_check ?? 'unknown';
   }
 
   public getSchedulerStats(scheduleId?: string): {
@@ -525,3 +536,21 @@ export class Database implements IDatabase {
     this.db.close();
   }
 }
+
+/**
+ * Move a corrupt SQLite file (plus its -wal/-shm sidecars) aside so the
+ * process can start on a fresh database while keeping the corrupt file as
+ * evidence. Returns the isolation path.
+ */
+export function isolateCorruptDatabase(databasePath: string): string {
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const isolatedPath = `${databasePath}.corrupt-${stamp}`;
+  for (const suffix of ['', '-wal', '-shm']) {
+    const from = `${databasePath}${suffix}`;
+    if (existsSync(from)) {
+      renameSync(from, `${isolatedPath}${suffix}`);
+    }
+  }
+  return isolatedPath;
+}
+

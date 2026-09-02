@@ -11,7 +11,8 @@ import { BaseCommand } from './Command';
 import { CommandCategory } from './metadata';
 import { CommandContext, CommandArgs, CommandResult } from './types';
 import { resolveSchedules } from '../scheduler/schedules';
-import { createSchedulerRuntime } from './scheduler-runtime';
+import { DEFAULT_SCHEDULE_TIMEOUT_MS } from '../scheduler/Scheduler';
+import { createSchedulerRuntime, runWithTimeout } from './scheduler-runtime';
 
 export class SchedulerRunOnceCommand extends BaseCommand {
   readonly name = 'run-once';
@@ -37,8 +38,16 @@ export class SchedulerRunOnceCommand extends BaseCommand {
       });
       // Sequential: plans share one database and delivery outbox, and the
       // scheduler daemon's per-plan concurrency is not needed for a refetch.
+      // Each plan runs under a watchdog so a wedged download cannot hang the
+      // refetch subprocess past TelePost's timeout.
       for (const plan of plans) {
-        await runtime.runJob(runtime.config, plan);
+        const timeoutMs = plan.timeout ?? DEFAULT_SCHEDULE_TIMEOUT_MS;
+        await runWithTimeout(
+          runtime.runJob(runtime.config, plan),
+          timeoutMs,
+          () => runtime.cancelActive(`run timeout after ${timeoutMs}ms`),
+          `plan ${plan.id}`
+        );
       }
 
       return this.success('Scheduled plans completed', {

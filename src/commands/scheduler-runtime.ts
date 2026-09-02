@@ -7,12 +7,16 @@
  * same token maintenance, same target selection, same dedupe and delivery.
  */
 
-import { getConfigPath, loadConfig, ScheduleConfig, StandaloneConfig } from '../config';
-import { Database } from '../storage/Database';
+import { dirname, join } from 'node:path';
+
+import { getConfigPath, loadConfig, ScheduleConfig, StandaloneConfig, TargetConfig } from '../config';
+import { Database, isolateCorruptDatabase } from '../storage/Database';
 import { PixivAuth } from '../pixiv/AuthClient';
 import { PixivClient } from '../pixiv/PixivClient';
 import { FileService } from '../download/FileService';
 import { DownloadManager } from '../download/DownloadManager';
+import { DeliveryDispatcher } from '../delivery/DeliveryDispatcher';
+import { DeliveryOutbox } from '../delivery/DeliveryOutbox';
 import { createTokenMaintenanceService } from '../utils/token-maintenance';
 import { selectScheduleTargets } from '../scheduler/schedules';
 import { processConfigPlaceholders } from '../config/placeholders';
@@ -32,14 +36,101 @@ export interface SchedulerRuntime {
   close(): void;
 }
 
+/**
+ * Open the pixivflow database with a startup integrity check. A structurally
+ * corrupt file (quick_check failure) is isolated aside and replaced with a
+ * fresh database so the daemon keeps serving — download history resets, which
+ * the caller surfaces to the review group. Schema/migration errors are NOT
+ * treated as corruption and propagate normally.
+ */
+function openDatabaseWithRecovery(databasePath: string): { database: Database; recoveryNote?: string } {
+  const openFresh = (): Database => {
+    const db = new Database(databasePath);
+    db.migrate();
+    return db;
+  };
+
+  let database: Database;
+  try {
+    database = new Database(databasePath);
+  } catch (error) {
+    // Cannot even open the file (e.g. corrupt header). Isolate and recreate.
+    const message = error instanceof Error ? error.message : String(error);
+    logger.error('Database failed to open; isolating file and recreating', { databasePath, error: message });
+    const isolated = isolateCorruptDatabase(databasePath);
+    database = openFresh();
+    return {
+      database,
+      recoveryNote: `数据库无法打开（${message}），已隔离损坏文件 ${isolated} 并重建空库；下载去重记录已重置，将重新下载近期作品。`,
+    };
+  }
+
+  const check = database.checkIntegrity();
+  if (check === 'ok') {
+    database.migrate();
+    return { database };
+  }
+
+  // Structurally corrupt: isolate (preserving evidence) and recreate fresh.
+  const message = check.slice(0, 200);
+  logger.error('Database integrity check failed; isolating corrupt file and recreating', {
+    databasePath,
+    error: message,
+  });
+  database.close();
+  let isolated = `${databasePath}.corrupt`;
+  try {
+    isolated = isolateCorruptDatabase(databasePath);
+  } catch (isolateError) {
+    logger.error('Failed to isolate corrupt database file', { error: isolateError });
+  }
+  database = openFresh();
+  return {
+    database,
+    recoveryNote: `数据库完整性检查未通过（${message}），已隔离损坏文件 ${isolated} 并重建空库；下载去重记录已重置，将重新下载近期作品。`,
+  };
+}
+
+/** Best-effort: alert every delivery target that exposes a notificationUrl. */
+async function notifyRecovery(config: StandaloneConfig, databasePath: string, note: string): Promise<void> {
+  const delivery = config.delivery;
+  const targets = delivery?.targets ?? {};
+  const notifyable = Object.entries(targets).filter(([, t]) => t.notificationUrl?.trim());
+  if (notifyable.length === 0) return;
+
+  try {
+    const dispatcher = new DeliveryDispatcher(delivery, undefined);
+    const outbox = new DeliveryOutbox(
+      join(dirname(databasePath), 'delivery-outbox'),
+      dispatcher,
+      delivery?.deleteAfterDelivery !== false
+    );
+    const text = `⚠️ PixivFlow 数据库自检未通过，已自动隔离并重建\n${note}`;
+    const key = `pixivflow:db-recovery:${new Date().toISOString().slice(0, 10)}`;
+    for (const [name] of notifyable) {
+      try {
+        const syntheticTarget = { type: 'novel', delivery: { target: name } } as unknown as TargetConfig;
+        await outbox.notifyNoMatch(syntheticTarget, text, key);
+      } catch (error) {
+        logger.warn('Recovery notification failed for delivery target', { target: name, error });
+      }
+    }
+  } catch (error) {
+    logger.warn('Failed to build recovery notification', { error });
+  }
+}
+
 export async function createSchedulerRuntime(configPathArg?: string): Promise<SchedulerRuntime> {
   // Keep TODAY/YESTERDAY placeholders intact. They are resolved afresh for
   // every plan execution, not frozen at daemon startup.
   const configPath = getConfigPath(configPathArg);
   const config = loadConfig(configPath, false, false);
 
-  const database = new Database(config.storage!.databasePath!);
-  database.migrate();
+  const databasePath = config.storage!.databasePath!;
+  const { database, recoveryNote } = openDatabaseWithRecovery(databasePath);
+  if (recoveryNote) {
+    await notifyRecovery(config, databasePath, recoveryNote);
+  }
 
   const auth = new PixivAuth(config.pixiv, config.network!, database, configPath);
   const pixivClient = new PixivClient(auth, config);
@@ -119,4 +210,31 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
   };
 
   return { config, database, pixivClient, fileService, tokenMaintenance, runJob, cancelActive, close };
+}
+
+/**
+ * Watchdog for a single plan run (used by `run-once`; the daemon's cron runs
+ * are already guarded by the Scheduler timeout). On expiry the in-flight
+ * download is cancelled and the run rejects so the caller can report failure
+ * instead of hanging forever.
+ */
+export function runWithTimeout<T>(
+  task: Promise<T>,
+  timeoutMs: number,
+  onTimeout: () => void,
+  label: string
+): Promise<T> {
+  // If the watchdog wins the race, the original task settles later (after the
+  // cancellation drains); swallow that rejection so it is not unhandled.
+  task.catch(() => undefined);
+  let timer: NodeJS.Timeout | null = null;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      onTimeout();
+      reject(new Error(`${label}: run exceeded ${timeoutMs}ms watchdog; download cancelled`));
+    }, timeoutMs);
+  });
+  return Promise.race([task, timeout]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
 }

@@ -56,7 +56,7 @@ export class NovelTargetHandler {
         'novel',
         (novel, tag) => this.downloadAndDeliver(novel, tag, target)
       );
-      await this.handleDownloadResult(result, target, mode, displayTag, novels.length);
+      await this.handleDownloadResult(result, target, mode, novels.length);
     } catch (error) {
       await this.handleError(error, displayTag, mode, target);
     }
@@ -144,7 +144,6 @@ export class NovelTargetHandler {
       aggregate,
       target,
       'topic',
-      displayTag,
       totalFound,
       checkedDays
     );
@@ -230,7 +229,6 @@ export class NovelTargetHandler {
     result: { downloaded: number; skipped: number; alreadyDownloaded: number; filteredOut: number },
     target: TargetConfig,
     mode: string,
-    displayTag: string,
     totalFound: number,
     checkedDays: string[] = []
   ): Promise<void> {
@@ -496,7 +494,7 @@ export class NovelTargetHandler {
         'novel',
         (novel, tag) => this.downloadAndDeliver(novel, tag, target)
       );
-      this.handleDownloadResult(result, target, 'user', `user-${userId}`, novels.length);
+      this.handleDownloadResult(result, target, 'user', novels.length);
     } catch (error) {
       this.logError(error, `Failed to download novels for user ${userId}`);
       throw error;

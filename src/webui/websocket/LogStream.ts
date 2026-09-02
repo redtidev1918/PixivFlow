@@ -1,6 +1,6 @@
 import { Server as SocketServer, Socket } from 'socket.io';
 import { logger } from '../../logger';
-import { createReadStream, existsSync, watchFile, unwatchFile } from 'fs';
+import { createReadStream, existsSync } from 'fs';
 import { join, isAbsolute, dirname } from 'path';
 import { loadConfig, getConfigPath } from '../../config';
 import readline from 'readline';

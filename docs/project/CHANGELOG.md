@@ -5,6 +5,21 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [2.10.25] - 2026-09-02
+
+### 新增
+- 🆕 **一次性命令 `pixivflow run-once`**（别名 `refetch` / `now`）：加载配置后
+  把所有**启用的调度计划各跑一轮**（与定时任务完全相同的下载/去重/投递路径），
+  完成后即退出。这是审核群「🔄 重抓/换一张」按钮的后端——此前 TelePost 调用
+  `pixivflow scheduler run`，而那是调度**守护进程**的别名（`longRunning`，
+  永不退出），导致重抓子进程必然 1500 秒超时。守护进程本身行为不变，
+  `scheduler` 仅保留别名 `s`（`run` 别名移除，避免误启守护进程）。
+
+### 重构
+- 抽出 `src/commands/scheduler-runtime.ts` 共享运行时：守护进程与 `run-once`
+  共用同一套配置解析、token 维护、目标选择与下载执行逻辑，杜绝行为分叉。
+- 新增 `run-once` 命令测试（正常运行、无启用计划、失败传播、注册/别名）。
+
 ## [2.10.24] - 2026-09-01
 
 ### 新增

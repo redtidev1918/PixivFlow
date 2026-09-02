@@ -5,7 +5,7 @@
 import { BaseCommand } from './Command';
 import { CommandCategory } from './metadata';
 import { CommandArgs, CommandContext, CommandResult } from './types';
-import { existsSync, readdirSync, statSync, unlinkSync, mkdirSync, chmodSync } from 'fs';
+import { existsSync, readdirSync, statSync, unlinkSync, chmodSync } from 'fs';
 import { join, resolve } from 'path';
 import { Database } from '../storage/Database';
 import { exec } from 'child_process';

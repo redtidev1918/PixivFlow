@@ -47,7 +47,7 @@ export class IllustrationTargetHandler {
         'illustration',
         (illust, tag) => this.downloadAndDeliver(illust, tag, target)
       );
-      this.handleDownloadResult(result, target, mode, displayTag, illusts.length);
+      this.handleDownloadResult(result, target, mode, illusts.length);
     } catch (error) {
       await this.handleError(error, displayTag, mode, target);
     }
@@ -93,10 +93,6 @@ export class IllustrationTargetHandler {
     );
     logger.info(`Topic "${topic}" illustration: tags=${selection.resolvedTagCount} raw=${selection.rawCount} deduped=${selection.dedupedCount} aiExcluded=${selection.aiExcludedCount} accepted=${selection.acceptedCount} candidates=${works.length} target=${limit}`);
     return works;
-  }
-
-  private requestDelayMs(): number {
-    return 500;
   }
 
   private async fetchRankingIllustrations(target: TargetConfig): Promise<PixivIllust[]> {
@@ -171,7 +167,6 @@ export class IllustrationTargetHandler {
     result: { downloaded: number; skipped: number; alreadyDownloaded: number; filteredOut: number },
     target: TargetConfig,
     mode: string,
-    displayTag: string,
     totalFound: number
   ): void {
     const { downloaded, skipped, alreadyDownloaded, filteredOut } = result;
@@ -327,7 +322,7 @@ export class IllustrationTargetHandler {
         'illustration',
         (illust, tag) => this.downloadAndDeliver(illust, tag, target)
       );
-      this.handleDownloadResult(result, target, 'user', `user-${userId}`, illusts.length);
+      this.handleDownloadResult(result, target, 'user', illusts.length);
     } catch (error) {
       this.logError(error, `Failed to download illustrations for user ${userId}`);
       throw error;

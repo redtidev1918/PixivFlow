@@ -18,6 +18,17 @@ export class SchedulerRepository extends BaseRepository {
   }
 
   /**
+   * End time of the most recent recorded execution for a schedule, or null
+   * when the schedule has never run (fresh schedule — do not catch up).
+   */
+  public getLastEnd(scheduleId: string): Date | null {
+    const row = this.db
+      .prepare(`SELECT MAX(end_time) AS last_end FROM scheduler_executions WHERE schedule_id = ?`)
+      .get(scheduleId) as { last_end: string | null } | undefined;
+    return row?.last_end ? new Date(row.last_end) : null;
+  }
+
+  /**
    * Log a scheduler execution
    */
   public logSchedulerExecution(

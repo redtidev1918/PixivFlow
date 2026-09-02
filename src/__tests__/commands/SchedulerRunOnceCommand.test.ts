@@ -10,7 +10,10 @@ import { resolveSchedules } from '../../scheduler/schedules';
 import { CommandArgs, CommandContext } from '../../commands/types';
 import { logger } from '../../logger';
 
-jest.mock('../../commands/scheduler-runtime');
+jest.mock('../../commands/scheduler-runtime', () => ({
+  ...jest.requireActual('../../commands/scheduler-runtime'),
+  createSchedulerRuntime: jest.fn(),
+}));
 jest.mock('../../scheduler/schedules');
 
 const mockedCreateRuntime = createSchedulerRuntime as jest.MockedFunction<typeof createSchedulerRuntime>;

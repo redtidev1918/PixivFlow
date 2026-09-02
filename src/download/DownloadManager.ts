@@ -79,8 +79,8 @@ export class DownloadManager implements IDownloadManager {
 
   constructor(
     private readonly config: StandaloneConfig,
-    private readonly client: IPixivClient,
-    private readonly database: IDatabase,
+    client: IPixivClient,
+    database: IDatabase,
     private readonly fileService: IFileService
   ) {
     this.progressReporter = new ProgressReporter();

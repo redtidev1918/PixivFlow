@@ -38,7 +38,7 @@ export class IllustrationDownloader {
       logger.info(`Found existing files for illustration ${illust.id} but missing database record. Updating database...`);
       
       // Get illustration detail with tags to get full information
-      const { illust: detail, tags } = await Promise.race([
+      const { illust: detail } = await Promise.race([
         this.client.getIllustDetailWithTags(illust.id),
         new Promise<{ illust: PixivIllust; tags: Array<{ name: string; translated_name?: string }> }>((_, reject) => 
           setTimeout(() => reject(new Error(`Timeout: Failed to get illustration detail for ${illust.id} within 60 seconds`)), 60000)

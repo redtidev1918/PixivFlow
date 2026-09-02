@@ -6,6 +6,12 @@ import { isOperationCancelled } from '../utils/errors';
 import { Database } from '../storage/Database';
 
 /**
+ * Watchdog fallback: a schedule without an explicit `timeout` still gets this
+ * cap so a wedged download run cannot occupy the scheduler queue forever.
+ */
+export const DEFAULT_SCHEDULE_TIMEOUT_MS = 30 * 60 * 1000;
+
+/**
  * Optional integration hooks allowing the host command to provide real
  * accounting data and cooperative cancellation to the scheduler.
  */
@@ -29,6 +35,7 @@ export interface JobAdmissionController {
 
 export class Scheduler {
   private task: ScheduledTask | null = null;
+  private job: (() => Promise<void>) | null = null;
   private running = false;
   private lastExecutionTime: number = 0;
   private executionCount: number = 0;
@@ -78,6 +85,16 @@ export class Scheduler {
         timezone: this.config.timezone,
       }
     );
+    this.job = job;
+  }
+
+  /**
+   * Trigger one execution immediately (e.g. catch-up for a missed cron fire).
+   * Honors the same guards as a cron firing; no-op if already running.
+   */
+  public runNow(): void {
+    if (!this.job) return;
+    void this.executeJob(this.job);
   }
 
   private async executeJob(job: () => Promise<void>) {

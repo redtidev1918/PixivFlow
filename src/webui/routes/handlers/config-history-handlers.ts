@@ -6,7 +6,6 @@ import { ErrorCode } from '../../utils/error-codes';
 import { Database } from '../../../storage/Database';
 import { readConfigRaw } from '../config-utils';
 import { validateConfigWithUnifiedStorage } from '../config-utils';
-import { isPlaceholderToken } from '../../../utils/token-manager';
 
 /**
  * GET /api/config/history

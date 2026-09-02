@@ -1,9 +1,17 @@
 import { watchFile, unwatchFile } from 'node:fs';
 
+import cronParser from 'cron-parser';
+
 import { Database } from '../storage/Database';
 import { logger } from '../logger';
 import { ScheduleConfig, StandaloneConfig } from '../config';
-import { JobAdmissionController, JobLease, JobTelemetry, Scheduler } from './Scheduler';
+import {
+  DEFAULT_SCHEDULE_TIMEOUT_MS,
+  JobAdmissionController,
+  JobLease,
+  JobTelemetry,
+  Scheduler,
+} from './Scheduler';
 import { describeSchedule, resolveSchedules } from './schedules';
 
 export interface MultiScheduleManagerOptions {
@@ -96,7 +104,47 @@ export class MultiScheduleManager {
       throw new Error(result.error || 'Failed to start scheduler');
     }
     this.updateWatcher(config);
+    this.catchUpMissedRuns(config);
     return result;
+  }
+
+  /**
+   * Self-healing: if the daemon was down across a cron fire (deploy window,
+   * crash, restart), the last recorded execution for a schedule is older than
+   * an occurrence of its cron expression that has already passed. Run that
+   * schedule once now so the missed window is not silently dropped. Runs only
+   * at daemon start; hot reloads never trigger a surprise run.
+   */
+  private catchUpMissedRuns(config: StandaloneConfig): void {
+    if (!this.options.database) return;
+    const now = new Date();
+    for (const plan of resolveSchedules(config)) {
+      if (!plan.enabled) continue;
+      const scheduler = this.schedulers.get(plan.id);
+      if (!scheduler) continue;
+      const lastEnd = this.options.database.getLastSchedulerEnd(plan.id);
+      if (!lastEnd) continue; // fresh schedule: nothing was ever missed
+      try {
+        const interval = cronParser.parseExpression(plan.cron, {
+          currentDate: lastEnd,
+          tz: plan.timezone ?? 'Asia/Shanghai',
+        });
+        const nextExpected = interval.next().toDate();
+        if (nextExpected.getTime() <= now.getTime()) {
+          logger.warn(
+            `Schedule ${plan.id}: cron fire was missed while the daemon was down ` +
+              `(next expected after last run ${lastEnd.toISOString()} at ${nextExpected.toISOString()}); running catch-up now`
+          );
+          scheduler.runNow();
+        }
+      } catch (error) {
+        logger.warn('Catch-up check failed for schedule', {
+          scheduleId: plan.id,
+          cron: plan.cron,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
   }
 
   public reload(): ConfigReloadResult {
@@ -137,8 +185,12 @@ export class MultiScheduleManager {
     this.admission.setQueueLimit(queueLimit);
 
     for (const plan of enabledPlans) {
+      // Watchdog: schedules without an explicit timeout still get a cap so a
+      // wedged run cannot hold the shared admission queue forever.
+      const schedulerConfig =
+        plan.timeout !== undefined ? plan : { ...plan, timeout: DEFAULT_SCHEDULE_TIMEOUT_MS };
       const scheduler = new Scheduler(
-        plan,
+        schedulerConfig,
         this.options.database,
         this.options.telemetry,
         plan.id,

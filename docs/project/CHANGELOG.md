@@ -5,6 +5,16 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [2.10.27] - 2026-09-03
+
+### 修复
+- 🐛 **中文小说被语言过滤误伤**：franc-min 对"中日混合"文本（Pixiv 中文小说正文
+  常混入日文标签/角色名/拟声词）会把中文误判为日文，导致 `languageFilter: chinese`
+  的目标在数十个候选里一篇中文都不投递。新增 `refineFrancCode`——用 Unicode 假名
+  字符（ひらがな/カタカナ）占比做二次校验：franc 判 `jpn` 但假名占 CJK <10% 且
+  汉字 >20% 时修正为 `cmn`（中文）；真日文（假名占比高）与英/韩等不受影响。
+- 🧪 新增 `language-detection.test.ts`（假名修正 3 例）；559 项测试全过。
+
 ## [2.10.26] - 2026-09-02
 
 ### 新增 · 自我修复（self-healing）

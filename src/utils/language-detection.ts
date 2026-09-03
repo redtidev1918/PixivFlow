@@ -57,6 +57,31 @@ const CHINESE_LANGUAGE_CODES = new Set([
 ]);
 
 /**
+ * 修正 franc 对中日文的误判。
+ *
+ * 中文与日文共享汉字，franc（以及 cld3/lingua 等概率型检测器）对"中日混合"
+ * 文本常把中文正文误判为日文——而 Pixiv 中文小说正文经常混入少量日文标签/
+ * 角色名/拟声词。区分中日文的可靠标准是 Unicode 假名字符：日文正文含大量
+ * 平假名/片假名（U+3040–30FF），中文正文几乎不含假名。
+ *
+ * 规则：franc 判 jpn 时，若假名占 CJK 字符比例 < 10% 且汉字占比 > 20%，
+ * 判定为中文（cmn）；否则维持 franc 原判。仅处理 jpn→cmn 的修正，
+ * 不误伤真日文、也不影响英/韩等其它语言。
+ */
+export function refineFrancCode(detectedCode: string, text: string): string {
+  if (detectedCode !== 'jpn') {
+    return detectedCode;
+  }
+  const kana = (text.match(/[\u3040-\u30ff\u31f0-\u31ff]/g) || []).length;
+  const han = (text.match(/[\u4e00-\u9fff]/g) || []).length;
+  const cjk = kana + han;
+  if (cjk > 0 && kana / cjk < 0.10 && han / text.length > 0.2) {
+    return 'cmn';
+  }
+  return detectedCode;
+}
+
+/**
  * Detect the language of a text string
  * 
  * @param text The text to analyze
@@ -103,16 +128,21 @@ export function detectLanguage(text: string, minLength: number = 50): DetectedLa
       };
     }
 
-    const isChinese = CHINESE_LANGUAGE_CODES.has(detectedCode);
-    const name = LANGUAGE_NAMES[detectedCode] || detectedCode;
+    // franc 对"中日混合"文本常把中文正文误判为日文（Pixiv 中文小说正文
+    // 常混入日文标签/角色名/拟声词）。用假名占比二次校验：日文正文假名
+    // （ひらがな/カタカナ）占比通常 30%+，中文正文几乎不含假名。
+    const code = refineFrancCode(detectedCode, cleanedText);
 
-    logger.debug(`Detected language: ${name} (${detectedCode}), isChinese: ${isChinese}`, {
+    const isChinese = CHINESE_LANGUAGE_CODES.has(code);
+    const name = LANGUAGE_NAMES[code] || code;
+
+    logger.debug(`Detected language: ${name} (${code}), isChinese: ${isChinese}`, {
       textLength: cleanedText.length,
       detectedCode,
     });
 
     return {
-      code: detectedCode,
+      code,
       name,
       isChinese,
     };

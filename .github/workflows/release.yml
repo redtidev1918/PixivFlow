@@ -92,3 +92,8 @@ jobs:
         with:
           tag_name: ${{ steps.rel.outputs.tag }}
           generate_release_notes: true
+
+      - name: Prune old releases (keep latest)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 scripts/prune_releases.py

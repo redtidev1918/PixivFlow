@@ -1,0 +1,43 @@
+# syntax=docker/dockerfile:1.7
+# ============================================================================
+# PixivFlow scheduler worker — 精简镜像（不含 WebUI / Chromium / 登录工具）
+#
+# 与 standalone Dockerfile 的区别：只跑 `pixivflow scheduler`，镜像小、内存低，
+# 用于「解耦部署」场景：作为独立容器与 TelePost 并排运行，通过 HTTP 投递。
+#
+# 用法（compose 片段）：
+#   pixivflow:
+#     image: ghcr.io/redtidev1918/pixivflow:2.10.27
+#     environment:
+#       PIXIV_DOWNLOADER_CONFIG: /app/data/pixivflow/config.json
+#       PIXIV_REFRESH_TOKEN: ${PIXIV_REFRESH_TOKEN}
+#     volumes: ["./data:/app/data"]
+# ============================================================================
+
+FROM node:24-bookworm-slim
+
+ARG PIXIVFLOW_VERSION=2.10.27
+
+# python3/make/g++ 仅在 better-sqlite3 等原生模块无预编译二进制时兜底编译用
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        python3 make g++ ca-certificates \
+    && npm install -g "pixivflow@${PIXIVFLOW_VERSION}" \
+    && npm cache clean --force \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+ENV NODE_ENV=production \
+    TZ=Asia/Shanghai \
+    NODE_OPTIONS="--max-old-space-size=96 --expose-gc" \
+    MALLOC_ARENA_MAX=2 \
+    PIXIV_DOWNLOADER_CONFIG=/app/data/pixivflow/config.json
+
+RUN mkdir -p /app/data /app/downloads
+
+VOLUME ["/app/data"]
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD node -e "process.exit(require('fs').existsSync('/app/data/pixivflow/config.json') ? 0 : 1)"
+
+CMD ["pixivflow", "scheduler"]

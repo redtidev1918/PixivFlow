@@ -218,6 +218,7 @@ export class HttpMultipartDelivery implements DeliveryProvider {
       title: request.context.title,
       pixivId: request.context.pixivId,
       type: request.context.type,
+      targetId: request.context.targetId ?? '',
       tag: request.context.tag ?? '',
       topic: request.context.topic ?? '',
       workTags: request.context.workTags?.join(',') ?? '',
@@ -252,7 +253,7 @@ export class HttpMultipartDelivery implements DeliveryProvider {
         const values = Array.isArray(value) ? value : [value];
         const rendered = values.map((item) =>
           String(item).replace(
-            /\{\{(title|pixivId|type|tag|topic|workTags|link|topicTag|spoiler|xRestrict|xRestrictLabel|xRestrictTag|rankingDate|publishedDate|language|bookmarkCount|viewCount)\}\}/g,
+            /\{\{(title|pixivId|type|targetId|tag|topic|workTags|link|topicTag|spoiler|xRestrict|xRestrictLabel|xRestrictTag|rankingDate|publishedDate|language|bookmarkCount|viewCount)\}\}/g,
             (_, key: string) => variables[key]
           )
         );

@@ -31,6 +31,8 @@ export interface DeliveryContext {
   title: string;
   pixivId: string;
   type: DeliveryItemType;
+  /** The PixivFlow target id (e.g. "bot1-illust-tag-a") that produced this work. */
+  targetId?: string;
   tag?: string;
   topic?: string;
   workTags?: string[];

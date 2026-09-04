@@ -29,7 +29,7 @@ export interface SchedulerRuntime {
   fileService: FileService;
   tokenMaintenance: ReturnType<typeof createTokenMaintenanceService>;
   /** Run one schedule's enabled targets once (the same job the cron fires). */
-  runJob(snapshot: StandaloneConfig, schedule: ScheduleConfig): Promise<void>;
+  runJob(snapshot: StandaloneConfig, schedule: ScheduleConfig, targetFilter?: string): Promise<void>;
   /** Cancel the in-flight download plan, if any. */
   cancelActive(reason: string): void;
   /** Stop token maintenance, cancel any in-flight download and close the DB. */
@@ -150,9 +150,13 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
 
   let activeDownloadManager: DownloadManager | null = null;
 
-  const runJob = async (snapshot: StandaloneConfig, schedule: ScheduleConfig): Promise<void> => {
+  const runJob = async (snapshot: StandaloneConfig, schedule: ScheduleConfig, targetFilter?: string): Promise<void> => {
     const runtimeConfig = processConfigPlaceholders(snapshot);
-    const targets = selectScheduleTargets(runtimeConfig.targets, schedule);
+    let targets = selectScheduleTargets(runtimeConfig.targets, schedule);
+    if (targetFilter) {
+      // "重抓/换一张" 只重跑产生该审核的那一个 target。
+      targets = targets.filter((t) => t.id === targetFilter);
+    }
     const scopedConfig: StandaloneConfig = { ...runtimeConfig, targets };
 
     if (targets.length === 0) {

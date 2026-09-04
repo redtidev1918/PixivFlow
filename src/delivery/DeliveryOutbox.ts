@@ -103,6 +103,7 @@ export class DeliveryOutbox {
           title: artifact.title,
           pixivId: artifact.pixivId,
           type: artifact.type,
+          targetId: target.id,
           // `tag` is the configured target label used by existing templates.
           // Topic targets have neither tag nor filterTag, so include topic in
           // the fallback instead of silently rendering {{tag}} as empty.

@@ -1,0 +1,82 @@
+# 发布 PixivFlow 精简调度镜像到 GHCR（解耦部署用）
+#   - push v* 标签时：构建并推送 ghcr.io/redtidev1918/pixivflow:<version> + :latest
+#   - workflow_dispatch：手动指定版本号构建（用于给已发布的版本补镜像）
+#
+# 与 release.yml（npm 发布）互补：npm 负责 CLI 分发包，这里负责容器镜像。
+
+name: Publish Docker image
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '版本号（留空则取 tag 或 package.json）'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ghcr.io/redtidev1918/pixivflow
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Resolve version
+        id: ver
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            V="${{ inputs.version }}"
+          elif [ "${{ github.ref_type }}" = "tag" ]; then
+            V="${GITHUB_REF_NAME#v}"
+          else
+            V=$(node -p "require('./package.json').version")
+          fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "resolved version: $V"
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=${{ steps.ver.outputs.version }}
+            type=raw,value=latest
+          labels: |
+            org.opencontainers.image.title=PixivFlow scheduler worker
+            org.opencontainers.image.description=PixivFlow scheduler worker (slim, no WebUI/Chromium) for decoupled deployment alongside TelePost
+            org.opencontainers.image.source=https://github.com/redtidev1918/PixivFlow
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.scheduler
+          push: true
+          build-args: |
+            PIXIVFLOW_VERSION=${{ steps.ver.outputs.version }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          platforms: linux/amd64,linux/arm64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

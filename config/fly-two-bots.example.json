@@ -91,6 +91,7 @@
             "{{workTags}}"
           ],
           "note": "Pixiv ID: {{pixivId}}",
+          "target_id": "{{targetId}}",
           "anonymous": true,
           "idempotency_key": "pixiv:bot1:{{type}}:{{pixivId}}"
         },
@@ -120,6 +121,7 @@
             "{{workTags}}"
           ],
           "note": "Pixiv ID: {{pixivId}}",
+          "target_id": "{{targetId}}",
           "anonymous": true,
           "idempotency_key": "pixiv:bot2:{{type}}:{{pixivId}}"
         },

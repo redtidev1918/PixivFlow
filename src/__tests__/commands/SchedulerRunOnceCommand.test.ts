@@ -24,7 +24,7 @@ describe('SchedulerRunOnceCommand', () => {
   const args: CommandArgs = { options: {}, positional: [] };
   const config = { schedulerRuntime: {} } as any;
 
-  const plan = (id: string, enabled: boolean) => ({ id, cron: '0 10 * * *', enabled, targetIds: ['t1'] } as any);
+  const plan = (id: string, enabled: boolean, targetIds: string[] = ['t1']) => ({ id, cron: '0 10 * * *', enabled, targetIds } as any);
 
   let command: SchedulerRunOnceCommand;
   let runJob: jest.Mock;
@@ -50,10 +50,37 @@ describe('SchedulerRunOnceCommand', () => {
 
     expect(mockedCreateRuntime).toHaveBeenCalledWith(undefined);
     expect(runJob).toHaveBeenCalledTimes(2);
-    expect(runJob).toHaveBeenNthCalledWith(1, config, expect.objectContaining({ id: 'a' }));
-    expect(runJob).toHaveBeenNthCalledWith(2, config, expect.objectContaining({ id: 'b' }));
+    expect(runJob).toHaveBeenNthCalledWith(1, config, expect.objectContaining({ id: 'a' }), undefined);
+    expect(runJob).toHaveBeenNthCalledWith(2, config, expect.objectContaining({ id: 'b' }), undefined);
     expect(close).toHaveBeenCalledTimes(1);
     expect(result.success).toBe(true);
+  });
+
+  it('runs only the schedule containing --target', async () => {
+    mockedResolveSchedules.mockReturnValue([
+      plan('a', true, ['t1']),
+      plan('b', true, ['t2']),
+      plan('c', true, ['t1']),
+    ]);
+    const targetArgs: CommandArgs = { options: { target: 't2' }, positional: [] };
+
+    const result = await command.execute(context, targetArgs);
+
+    expect(runJob).toHaveBeenCalledTimes(1);
+    expect(runJob).toHaveBeenCalledWith(config, expect.objectContaining({ id: 'b' }), 't2');
+    expect(close).toHaveBeenCalledTimes(1);
+    expect(result.success).toBe(true);
+  });
+
+  it('fails when --target matches no schedule', async () => {
+    mockedResolveSchedules.mockReturnValue([plan('a', true, ['t1'])]);
+    const targetArgs: CommandArgs = { options: { target: 'missing' }, positional: [] };
+
+    const result = await command.execute(context, targetArgs);
+
+    expect(runJob).not.toHaveBeenCalled();
+    expect(close).toHaveBeenCalledTimes(1);
+    expect(result.success).toBe(false);
   });
 
   it('succeeds without running anything when no schedule is enabled', async () => {

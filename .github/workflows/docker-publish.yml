@@ -44,6 +44,15 @@ jobs:
           echo "version=$V" >> "$GITHUB_OUTPUT"
           echo "resolved version: $V"
 
+      - name: Wait for npm package
+        run: |
+          for attempt in {1..30}; do
+            npm view "pixivflow@${{ steps.ver.outputs.version }}" version >/dev/null 2>&1 && exit 0
+            echo "Waiting for pixivflow@${{ steps.ver.outputs.version }} on npm ($attempt/30)"
+            sleep 10
+          done
+          exit 1
+
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
 

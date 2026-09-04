@@ -8,6 +8,7 @@ import { ScheduleConfig, StandaloneConfig } from '../config';
 import {
   DEFAULT_SCHEDULE_TIMEOUT_MS,
   JobAdmissionController,
+  JobFailure,
   JobLease,
   JobTelemetry,
   Scheduler,
@@ -20,6 +21,11 @@ export interface MultiScheduleManagerOptions {
   execute: (config: StandaloneConfig, schedule: ScheduleConfig) => Promise<void>;
   database?: Database;
   telemetry?: JobTelemetry;
+  onFailure?: (
+    config: StandaloneConfig,
+    schedule: ScheduleConfig,
+    failure: JobFailure
+  ) => Promise<void> | void;
   onReload?: (result: ConfigReloadResult) => void;
 }
 
@@ -194,7 +200,8 @@ export class MultiScheduleManager {
         this.options.database,
         this.options.telemetry,
         plan.id,
-        this.admission
+        this.admission,
+        (failure) => this.options.onFailure?.(config, plan, failure)
       );
       scheduler.start(async () => {
         // The closure keeps the exact validated snapshot for an in-flight run.

@@ -155,10 +155,16 @@ export class HttpMultipartDelivery implements DeliveryProvider {
       }
     }
     this.assertSuccess(response, body);
+    const data = body && typeof body === 'object'
+      ? (body as { data?: Record<string, unknown> }).data
+      : undefined;
     logger.info('HTTP multipart delivery succeeded', {
       url: this.config.url,
       status: response.status,
       files: request.files.length,
+      deliveryStatus: data?.status,
+      reviewId: data?.review_id,
+      reused: data?.reused,
     });
     return { status: response.status, body };
   }

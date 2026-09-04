@@ -160,13 +160,14 @@ pixivflow setup
 
 #### 操作通知（投递结果通知审核群）
 
-交付目标配置了 `notificationUrl` 后，PixivFlow 可向审核群发送两类运维通知，都写入
+交付目标配置了 `notificationUrl` 后，PixivFlow 可向审核群发送三类运维通知，都写入
 delivery outbox 持久化、幂等去重、指数退避重试：
 
 | 触发条件 | 消息 | 说明 |
 | --- | --- | --- |
 | 候选耗尽（无匹配） | `⚠️ PixivFlow 本次没有可投稿内容` | 受 `noMatchPolicy.notify: true` 控制；需目标自身开启该开关。 |
 | **下载硬失败** | `❌ PixivFlow 本次下载失败` | 目标投递过程中发生硬错误（超长标题写入 `ENAMETOOLONG`、网络/权限错误等，导致该目标整条失败）。无需额外开关——只要目标配置了 `delivery.target`（存在通知通道）即发送；无通知端点的目标由投递校验拦下并仅记警告。插画与小说目标均生效。 |
+| **计划失败或超时** | `⚠️ PixivFlow 定时任务失败/超时` | 通知该计划涉及的审核群，包含连续失败次数；达到 `maxConsecutiveFailures` 时明确提示计划已自动停止。 |
 
 硬失败消息含目标名称与错误摘要（错误超 200 字符自动截断），并提示可点「🔄 重抓/换一张」
 重试或等待下次定时任务。这样即便是静默的下载错误，审核员也能第一时间得知，而不必翻日志。
@@ -325,6 +326,9 @@ TelePost 等其他渠道。
 | `timeout` | 不限 | 单次任务超时时间(ms),超时终止本次任务 |
 | `maxConsecutiveFailures` | 不限 | 连续失败 N 次后停止调度器 |
 | `failureRetryDelay` | 0(ms) | 失败后的等待间隔 |
+
+计划失败或超时时，只要对应 target 的交付目标配置了 `notificationUrl`，审核群就会收到
+持久化运维通知；达到 `maxConsecutiveFailures` 自动停止时会在同一条消息中明确说明。
 
 ### 多计划格式
 

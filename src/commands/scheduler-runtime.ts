@@ -19,6 +19,7 @@ import { DeliveryDispatcher } from '../delivery/DeliveryDispatcher';
 import { DeliveryOutbox } from '../delivery/DeliveryOutbox';
 import { createTokenMaintenanceService } from '../utils/token-maintenance';
 import { selectScheduleTargets } from '../scheduler/schedules';
+import { JobFailure } from '../scheduler/Scheduler';
 import { processConfigPlaceholders } from '../config/placeholders';
 import { logger } from '../logger';
 
@@ -32,6 +33,12 @@ export interface SchedulerRuntime {
   runJob(snapshot: StandaloneConfig, schedule: ScheduleConfig, targetFilter?: string): Promise<void>;
   /** Cancel the in-flight download plan, if any. */
   cancelActive(reason: string): void;
+  /** Notify the affected review group after a failed scheduled run. */
+  notifyScheduleFailure(
+    snapshot: StandaloneConfig,
+    schedule: ScheduleConfig,
+    failure: JobFailure
+  ): Promise<void>;
   /** Stop token maintenance, cancel any in-flight download and close the DB. */
   close(): void;
 }
@@ -91,11 +98,17 @@ function openDatabaseWithRecovery(databasePath: string): { database: Database; r
   };
 }
 
-/** Best-effort: alert every delivery target that exposes a notificationUrl. */
-async function notifyRecovery(config: StandaloneConfig, databasePath: string, note: string): Promise<void> {
+async function notifyDeliveryTargets(
+  config: StandaloneConfig,
+  databasePath: string,
+  targetNames: Iterable<string>,
+  text: string,
+  key: string
+): Promise<void> {
   const delivery = config.delivery;
-  const targets = delivery?.targets ?? {};
-  const notifyable = Object.entries(targets).filter(([, t]) => t.notificationUrl?.trim());
+  const notifyable = [...new Set(targetNames)].filter(
+    (name) => delivery?.targets?.[name]?.notificationUrl?.trim()
+  );
   if (notifyable.length === 0) return;
 
   try {
@@ -105,19 +118,53 @@ async function notifyRecovery(config: StandaloneConfig, databasePath: string, no
       dispatcher,
       delivery?.deleteAfterDelivery !== false
     );
-    const text = `⚠️ PixivFlow 数据库自检未通过，已自动隔离并重建\n${note}`;
-    const key = `pixivflow:db-recovery:${new Date().toISOString().slice(0, 10)}`;
-    for (const [name] of notifyable) {
+    for (const name of notifyable) {
       try {
         const syntheticTarget = { type: 'novel', delivery: { target: name } } as unknown as TargetConfig;
         await outbox.notifyNoMatch(syntheticTarget, text, key);
       } catch (error) {
-        logger.warn('Recovery notification failed for delivery target', { target: name, error });
+        logger.warn('Notification failed for delivery target', { target: name, error });
       }
     }
   } catch (error) {
-    logger.warn('Failed to build recovery notification', { error });
+    logger.warn('Failed to build delivery notification', { error });
   }
+}
+
+/** Best-effort: alert every delivery target that exposes a notificationUrl. */
+async function notifyRecovery(config: StandaloneConfig, databasePath: string, note: string): Promise<void> {
+  const targetNames = Object.keys(config.delivery?.targets ?? {});
+  await notifyDeliveryTargets(
+    config,
+    databasePath,
+    targetNames,
+    `⚠️ PixivFlow 数据库自检未通过，已自动隔离并重建\n${note}`,
+    `pixivflow:db-recovery:${new Date().toISOString().slice(0, 10)}`
+  );
+}
+
+export async function notifyScheduleFailure(
+  config: StandaloneConfig,
+  databasePath: string,
+  schedule: ScheduleConfig,
+  failure: JobFailure
+): Promise<void> {
+  const targetNames = selectScheduleTargets(config.targets, schedule)
+    .map((target) => target.delivery?.target?.trim())
+    .filter((name): name is string => Boolean(name));
+  const status = failure.status === 'timeout' ? '超时' : '失败';
+  const stopped = failure.stopped
+    ? '\n计划已达到连续失败上限并自动停止，请检查后重载配置或重启进程。'
+    : '';
+  const error = failure.errorMessage ? `\n错误：${failure.errorMessage.slice(0, 500)}` : '';
+  await notifyDeliveryTargets(
+    config,
+    databasePath,
+    targetNames,
+    `⚠️ PixivFlow 定时任务${status}\n计划：${schedule.name?.trim() || schedule.id}` +
+      `\n连续失败：${failure.consecutiveFailures}${error}${stopped}`,
+    `pixivflow:schedule-failure:${schedule.id}:${failure.executionNumber}`
+  );
 }
 
 export async function createSchedulerRuntime(configPathArg?: string): Promise<SchedulerRuntime> {
@@ -213,7 +260,18 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
     database.close();
   };
 
-  return { config, database, pixivClient, fileService, tokenMaintenance, runJob, cancelActive, close };
+  return {
+    config,
+    database,
+    pixivClient,
+    fileService,
+    tokenMaintenance,
+    runJob,
+    cancelActive,
+    notifyScheduleFailure: (snapshot, schedule, failure) =>
+      notifyScheduleFailure(snapshot, databasePath, schedule, failure),
+    close,
+  };
 }
 
 /**

@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { DeliveryDispatcher } from '../../delivery/DeliveryDispatcher';
 import { DeliveryOutbox } from '../../delivery/DeliveryOutbox';
 import { HttpMultipartDelivery } from '../../delivery/HttpMultipartDelivery';
+import { logger } from '../../logger';
 
 describe('HttpMultipartDelivery', () => {
   let directory: string;
@@ -27,12 +28,16 @@ describe('HttpMultipartDelivery', () => {
     const filePath = join(directory, 'cover.jpg');
     await fs.writeFile(filePath, 'image');
     const fetchMock = jest.fn().mockResolvedValue(
-      new Response(JSON.stringify({ ok: true, data: { id: 1 } }), {
+      new Response(JSON.stringify({
+        ok: true,
+        data: { id: 1, status: 'pending_review', review_id: 42, reused: true },
+      }), {
         status: 201,
         headers: { 'content-type': 'application/json' },
       })
     );
     global.fetch = fetchMock as typeof fetch;
+    const log = jest.spyOn(logger, 'info');
 
     const provider = new HttpMultipartDelivery({
       type: 'httpMultipart',
@@ -62,7 +67,18 @@ describe('HttpMultipartDelivery', () => {
       },
     });
 
-    expect(result).toEqual({ status: 201, body: { ok: true, data: { id: 1 } } });
+    expect(result).toEqual({
+      status: 201,
+      body: {
+        ok: true,
+        data: { id: 1, status: 'pending_review', review_id: 42, reused: true },
+      },
+    });
+    expect(log).toHaveBeenCalledWith('HTTP multipart delivery succeeded', expect.objectContaining({
+      deliveryStatus: 'pending_review',
+      reviewId: 42,
+      reused: true,
+    }));
     const [url, options] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe('https://example.test/submissions');
     expect(options.headers).toEqual(expect.objectContaining({ Authorization: 'Bearer secret' }));

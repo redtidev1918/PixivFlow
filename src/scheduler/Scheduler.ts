@@ -28,6 +28,15 @@ export interface JobLease {
   release(): void;
 }
 
+export interface JobFailure {
+  scheduleId: string;
+  executionNumber: number;
+  status: 'failed' | 'timeout';
+  errorMessage: string | null;
+  consecutiveFailures: number;
+  stopped: boolean;
+}
+
 /** Admission is acquired before timeout/accounting starts. */
 export interface JobAdmissionController {
   acquire(scheduleId: string): Promise<JobLease | null>;
@@ -49,7 +58,8 @@ export class Scheduler {
     private readonly database?: Database,
     private readonly telemetry?: JobTelemetry,
     private readonly scheduleId: string = 'default',
-    private readonly admission?: JobAdmissionController
+    private readonly admission?: JobAdmissionController,
+    private readonly onFailure?: (failure: JobFailure) => Promise<void> | void
   ) {}
 
   public start(job: () => Promise<void>) {
@@ -242,7 +252,9 @@ export class Scheduler {
       if (isOperationCancelled(error)) {
         // Cancelled via telemetry.requestCancel (scheduler timeout or user).
         // Keep the timeout accounting intact instead of reporting a failure.
-        if (!timeoutOccurred) {
+        if (timeoutOccurred) {
+          this.consecutiveFailures++;
+        } else {
           errorMessage = error instanceof Error ? error.message : String(error);
         }
         logger.warn('Scheduled job was cancelled', { executionNumber, reason: errorMessage });
@@ -283,14 +295,34 @@ export class Scheduler {
       this.running = false;
       lease?.release();
 
-      // Check if we should stop after this execution
+      const failureLimitReached = Boolean(
+        this.config.maxConsecutiveFailures &&
+          this.consecutiveFailures >= this.config.maxConsecutiveFailures
+      );
       if (
         (this.config.maxExecutions && this.executionCount >= this.config.maxExecutions) ||
-        (this.config.maxConsecutiveFailures &&
-          this.consecutiveFailures >= this.config.maxConsecutiveFailures)
+        failureLimitReached
       ) {
         logger.info('Stopping scheduler due to limit reached');
         this.stop();
+      }
+
+      if ((status === 'failed' || status === 'timeout') && this.onFailure) {
+        try {
+          await this.onFailure({
+            scheduleId: this.scheduleId,
+            executionNumber,
+            status,
+            errorMessage,
+            consecutiveFailures: this.consecutiveFailures,
+            stopped: failureLimitReached,
+          });
+        } catch (error) {
+          logger.warn('Failed to report scheduled job failure', {
+            scheduleId: this.scheduleId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
       }
     }
   }

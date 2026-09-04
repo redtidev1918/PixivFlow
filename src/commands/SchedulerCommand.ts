@@ -41,6 +41,7 @@ export class SchedulerCommand extends BaseCommand {
         },
         execute: runtime.runJob,
         database: runtime.database,
+        onFailure: runtime.notifyScheduleFailure,
         telemetry: {
           beginRun: () => runtime.database.getOverviewStats().totalDownloads,
           endRun: () => runtime.database.getOverviewStats().totalDownloads,

@@ -5,6 +5,18 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [2.10.29] - 2026-09-04
+
+### 修复
+- 调度计划失败或超时时，会通过该计划对应交付目标的 `notificationUrl` 通知审核群；
+  达到 `maxConsecutiveFailures` 自动停止时会明确提示，超时取消也会正确计入连续失败。
+- 同步 npm 锁文件，恢复 Node.js 22/24 的 `npm ci`；Docker 发布会等待 npm 新版本可见，
+  避免标签触发时因 npm 索引竞态导致镜像构建失败。
+
+### 改进
+- HTTP 投递成功日志增加 TelePost 返回的审核状态、`review_id` 与 `reused`，可直接区分
+  新审核记录和幂等复用记录。
+
 ## [2.10.27] - 2026-09-03
 
 ### 修复

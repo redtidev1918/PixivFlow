@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { getConfigPath, loadConfig } from '../../../../config';
-import { TerminalLogin } from '../../../../terminal-login';
+import { refreshToken as refreshPixivToken } from '../../../../terminal-login/token-refresh';
 import { updateConfigWithToken } from '../../../../utils/login-helper';
 import { logger } from '../../../../logger';
 import { ErrorCode } from '../../../utils/error-codes';
@@ -68,7 +68,7 @@ export async function refreshToken(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    const loginInfo = await TerminalLogin.refresh(tokenToUse);
+    const loginInfo = await refreshPixivToken(tokenToUse);
     
     // Auto-update config file with new refresh token if it changed
     if (loginInfo.refresh_token && loginInfo.refresh_token !== tokenToUse) {
@@ -114,4 +114,3 @@ export async function refreshToken(req: Request, res: Response): Promise<void> {
     });
   }
 }
-

@@ -5,7 +5,7 @@
 import { BaseCommand } from './Command';
 import { CommandCategory } from './metadata';
 import { CommandContext, CommandArgs, CommandResult } from './types';
-import { TerminalLogin, LoginInfo } from '../terminal-login';
+import type { LoginInfo } from '../terminal-login';
 import { updateConfigWithToken } from '../utils/login-helper';
 import { getConfigPath } from '../config';
 
@@ -50,6 +50,7 @@ export class LoginCommand extends BaseCommand {
     const configPath = (args.options.config as string) || context.configPath;
 
     try {
+      const { TerminalLogin } = await import('../terminal-login');
       // Check if credentials were provided via command line arguments
       const credentialsProvided = !!(username && password);
       
@@ -120,7 +121,6 @@ Examples:
   pixivflow login -u user@example.com -p password  # Headless login`;
   }
 }
-
 
 
 

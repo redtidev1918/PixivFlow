@@ -5,7 +5,8 @@
 
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { TerminalLogin, LoginInfo } from '../terminal-login';
+import type { LoginInfo } from '../terminal-login/types';
+import { refreshToken as refreshPixivToken } from '../terminal-login/token-refresh';
 import { loadConfig, StandaloneConfig, getConfigPath } from '../config';
 import { logger } from '../logger';
 import { saveTokenToStorage, clearTokenFromStorage } from './token-manager';
@@ -131,7 +132,8 @@ export async function loginAndUpdateConfig(options: {
   const configPath = options.configPath || getConfigPath();
 
   logger.info('Starting Pixiv login...');
-  
+
+  const { TerminalLogin } = await import('../terminal-login');
   const login = new TerminalLogin({
     headless: options.headless ?? false,
     username: options.username,
@@ -156,7 +158,7 @@ export async function loginAndUpdateConfig(options: {
  */
 export async function isTokenValid(refreshToken: string): Promise<boolean> {
   try {
-    await TerminalLogin.refresh(refreshToken);
+    await refreshPixivToken(refreshToken);
     return true;
   } catch {
     return false;
@@ -226,4 +228,3 @@ export async function ensureValidToken(options: {
     throw error;
   }
 }
-

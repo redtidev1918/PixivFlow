@@ -6,7 +6,7 @@ import { readStdinLine } from '../utils/stdin';
 import { BaseCommand } from './Command';
 import { CommandCategory } from './metadata';
 import { CommandContext, CommandArgs, CommandResult } from './types';
-import { TerminalLogin, LoginInfo } from '../terminal-login';
+import type { LoginInfo } from '../terminal-login';
 import { updateConfigWithToken } from '../utils/login-helper';
 import { getConfigPath } from '../config';
 
@@ -78,6 +78,7 @@ export class LoginHeadlessCommand extends BaseCommand {
     const configPath = (args.options.config as string) || context.configPath;
 
     try {
+      const { TerminalLogin } = await import('../terminal-login');
       const login = new TerminalLogin({
         headless: true,
         username,
@@ -131,7 +132,6 @@ Examples:
   pixivflow login-headless -u user@example.com -p password`;
   }
 }
-
 
 
 

@@ -103,9 +103,13 @@ pixivflow scheduler             # 按 cron 配置长期挂机自动收集
 
 ### 本地留存与缓存交付
 
-每个 target 可选择 `storageMode: "persistent"`（默认，本地永久留存）或
-`storageMode: "cache"`（下载后交给命名 delivery target，成功才删除本地文件）。
-交付层不绑定具体服务；下面只是把一个 HTTP multipart 投稿接口翻译成配置：
+每个 target（一个 tag / 计划）有两种保存方式：
+
+- **`persistent`（默认）**：下载后永久留在本地。
+- **`cache`**：下载后投给一个「交付目标」（比如投稿机器人），对方确认收到后才删本地文件，省磁盘。
+
+「交付目标」就是一段配置：告诉 PixivFlow 把文件 POST 到哪个地址、带哪些字段。
+它不绑定具体服务，可指向任何 HTTP 投稿接口（TelePost、telepress 等）。示例：
 
 ```json
 {
@@ -143,20 +147,16 @@ pixivflow scheduler             # 按 cron 配置长期挂机自动收集
 }
 ```
 
-headers 和 URL 支持任意 `${ENV_NAME}` 环境变量插值。交付失败时文件和
-outbox 清单保留在 SQLite 数据库同级的 `delivery-outbox/`；下一次运行会先
-检查待投递项。作品投递与“最终无候选”状态通知都走同一个持久 outbox；
-即使进程重启或审核端短暂不可用也会继续重试。失败项默认从 5 分钟开始
-指数退避、最长 6 小时，避免浪费带宽；成功后再清理。
-对上面的 TG 示例，可把 `/gen_token` 得到的 `tp_...` 放入
-`TG_SUBMIT_TOKEN` 环境变量；这只是示例服务自己的认证流程。
+`headers` 和 `url` 里可用 `${环境变量名}` 引用环境变量（Token 别写死进配置）。
 
-同样的目标也可以指向 [telepress](https://github.com/redtidev1918/telepress)
-的 `/publish/gallery`，把插画自动发布成 Telegra.ph 相册（自动分页、`#标签`
-与来源链接页脚、R-18 提示），见 [CONFIG.md](docs/CONFIG.md) 的「Telegraph
-（telegra.ph）相册上传」一节。
+投递是「发件箱」式的，进程重启也不丢：失败的文件和待投清单保存在数据库同级的
+`delivery-outbox/`，下次运行先补投，按「5 分钟起步、最长 6 小时」指数退避重试，
+成功后才清理。「今天没有可投稿内容」这类通知也走同一个 outbox，审核端暂时挂掉也能继续重试。
 
-交互式配置向导：`pixivflow setup`。
+- 上面的示例是投稿给一个 HTTP 接口：把 `/gen_token` 得到的 `tp_...` 放进 `TG_SUBMIT_TOKEN` 即可（这是示例服务自己的鉴权方式）。
+- 同一目标也可指向 [telepress](https://github.com/redtidev1918/telepress) 的 `/publish/gallery`，把插画自动发布成 Telegra.ph 相册，见 [CONFIG.md](docs/CONFIG.md) 的「Telegraph（telegra.ph）相册上传」。
+
+不想手写配置？运行交互式向导 `pixivflow setup` 一步步生成。
 
 ## 常用命令
 

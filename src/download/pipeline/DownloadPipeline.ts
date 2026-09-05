@@ -16,6 +16,8 @@ export interface DownloadPipelineResult {
   skipped: number;
   alreadyDownloaded: number;
   filteredOut: number;
+  /** Per-candidate skip reasons (first few), so callers can report the real cause. */
+  skipDetails?: { id: string; error: string }[];
 }
 
 export interface DownloadPipelineDependencies {
@@ -67,6 +69,7 @@ export class DownloadPipeline {
     const state = {
       downloaded: 0,
       skippedCount: 0,
+      skipDetails: [] as { id: string; error: string }[],
     };
     const concurrency = plan.mode === 'sequential' && plan.queue.length > targetLimit
       ? 1
@@ -91,6 +94,7 @@ export class DownloadPipeline {
       skipped: state.skippedCount,
       alreadyDownloaded: alreadyDownloadedCount,
       filteredOut: filteredOutCount,
+      skipDetails: state.skipDetails,
     };
   }
 
@@ -103,7 +107,7 @@ export class DownloadPipeline {
     downloadFn: (item: T, tag: string) => Promise<void>,
     retryAttempts: number,
     concurrency: number,
-    state: { downloaded: number; skippedCount: number }
+    state: { downloaded: number; skippedCount: number; skipDetails: { id: string; error: string }[] }
   ): Promise<void> {
     const candidates = plan.queue;
     if (planAvailableCount === 0) {
@@ -163,6 +167,10 @@ export class DownloadPipeline {
         this.logRecoveryDecision(decision, error, typedItem.id, itemType, typedItem.title);
         if (decision.action === 'skip') {
           state.skippedCount++;
+          const detail = getErrorMessage(error) || decision.reason || 'download failed';
+          if (state.skipDetails.length < 3 && !state.skipDetails.some((d) => d.id === String(typedItem.id))) {
+            state.skipDetails.push({ id: String(typedItem.id), error: detail });
+          }
         }
       },
     });
@@ -182,7 +190,7 @@ export class DownloadPipeline {
     downloadFn: (item: T, tag: string) => Promise<void>,
     retryAttempts: number,
     concurrency: number,
-    state: { downloaded: number; skippedCount: number }
+    state: { downloaded: number; skippedCount: number; skipDetails: { id: string; error: string }[] }
   ): Promise<void> {
     const toProcess = plan.queue;
     const totalPlanned = toProcess.length;
@@ -223,6 +231,10 @@ export class DownloadPipeline {
         this.logRecoveryDecision(decision, error, typedItem.id, itemType, typedItem.title);
         if (decision.action === 'skip') {
           state.skippedCount++;
+          const detail = getErrorMessage(error) || decision.reason || 'download failed';
+          if (state.skipDetails.length < 3 && !state.skipDetails.some((d) => d.id === String(typedItem.id))) {
+            state.skipDetails.push({ id: String(typedItem.id), error: detail });
+          }
         }
       },
     });

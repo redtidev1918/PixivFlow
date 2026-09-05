@@ -42,6 +42,18 @@
 | `./data` | `/app/data` | 读写 | SQLite 数据库、日志 |
 | `./downloads` | `/app/downloads` | 读写 | 下载产物 |
 
+分拆部署只需要调度器时使用 `Dockerfile.scheduler`。它始终编译当前构建上下文的
+`src/`，不会从 npm 安装另一个 PixivFlow 版本。构建时应写入当前提交：
+
+```bash
+docker build -f Dockerfile.scheduler \
+  --build-arg VCS_REF="$(git rev-parse HEAD)" \
+  -t pixivflow-scheduler:local .
+```
+
+镜像标签 `org.opencontainers.image.revision` 与容器内 `PIXIVFLOW_REVISION` 应相同；
+生产部署应在两者匹配后才报告成功。
+
 注意：`./config` 以只读方式挂载，所以 WebUI 不能回写；但宿主机可直接原子替换
 `config/standalone.config.json`。调度器会自动校验并热重载 Cron、targets、delivery
 和 download 设置，无需重启容器。`pixiv`、`network`、`storage` 变更仍需执行

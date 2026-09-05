@@ -128,7 +128,7 @@ executeCommand():command.validate?(args) → command.execute(context, args)
 1. 过滤:`minBookmarks`(取 `total_bookmarks ?? bookmark_count`)、`startDate`/`endDate`(基于 `create_date`)。
 2. 去重:按 `String(item.id)` 建内存 Set,合并多来源结果时消除重复。
 3. 已下载判定:批量调用 `database.getDownloadedIds(itemIds, type)`,命中的直接剔除并计入 `alreadyDownloaded`。
-4. 截断与随机:`limit` 缺省为 10;`target.random` 为 true 时洗牌可用项,`maxAttempts = min(可用数, 50)`。
+4. 截断与随机:`limit` 缺省为 10；topic 模式保留最多 20 个热度有序候选并串行回填，某个作品失效时自动尝试下一部；`target.random` 为 true 时洗牌可用项，`maxAttempts = min(可用数, 50)`。
 
 ### 并发执行与错误恢复
 

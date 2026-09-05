@@ -37,6 +37,17 @@ describe('DefaultErrorRecovery', () => {
     expect(decision.maxAttempts).toBe(4);
   });
 
+  it('retries network timeouts, then skips the inaccessible candidate', () => {
+    const recovery = new DefaultErrorRecovery({ maxAttempts: 2, baseDelayMs: 0 });
+    const error = new NetworkError('Request timeout');
+
+    expect(recovery.decide(error, { attempt: 1, itemId: 111 }).action).toBe('backoff');
+    expect(recovery.decide(error, { attempt: 2, itemId: 111 })).toEqual({
+      action: 'skip',
+      reason: 'network retries exhausted',
+    });
+  });
+
   it('retries generic errors with linear backoff until max attempts', () => {
     const recovery = new DefaultErrorRecovery({ maxAttempts: 3, baseDelayMs: 300, maxDelayMs: 900 });
     const decision = recovery.decide(new Error('Transient glitch'), { attempt: 2, itemId: 222 });
@@ -54,7 +65,6 @@ describe('DefaultErrorRecovery', () => {
     expect(decision).toEqual({ action: 'fail', reason: 'max attempts reached' });
   });
 });
-
 
 
 

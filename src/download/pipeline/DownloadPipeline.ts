@@ -68,7 +68,9 @@ export class DownloadPipeline {
       downloaded: 0,
       skippedCount: 0,
     };
-    const concurrency = itemType === 'novel' && target.languageFilter
+    const concurrency = plan.mode === 'sequential' && plan.queue.length > targetLimit
+      ? 1
+      : itemType === 'novel' && target.languageFilter
       ? 1
       : (this.config.download?.concurrency || 3);
 

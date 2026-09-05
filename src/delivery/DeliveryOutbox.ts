@@ -129,11 +129,12 @@ export class DeliveryOutbox {
     try {
       await this.processManifest(manifestPath, entry);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      throw new PendingDeliveryError(
-        `Delivery failed; files retained for retry in ${manifestPath}: ${message}`,
-        error instanceof Error ? error : undefined
-      );
+      logger.warn('Delivery failed; downloaded files remain queued for retry', {
+        manifestPath,
+        pixivId: artifact.pixivId,
+        type: artifact.type,
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 

@@ -189,5 +189,20 @@ describe('DownloadPlanner', () => {
     expect(plan.limit).toBe(1);
     expect(plan.queue.map((item) => item.id)).toEqual([1, 2, 3]);
   });
-});
 
+  it('keeps a bounded ordered retry pool for topic illustration failures', () => {
+    const { database } = createDatabaseMock();
+    const planner = new DownloadPlanner(database);
+    const items = Array.from({ length: 30 }, (_, index) => createIllustration(index + 1));
+
+    const plan = planner.planDownloads(
+      items,
+      createTarget({ mode: 'topic', topic: '丸呑み', limit: 1 }),
+      'illustration'
+    );
+
+    expect(plan.queue.map((item) => item.id)).toEqual(
+      Array.from({ length: 20 }, (_, index) => index + 1)
+    );
+  });
+});

@@ -43,17 +43,11 @@ export class DefaultErrorRecovery implements ErrorRecoveryStrategy {
       return { action: 'skip', reason: '404 not found or item is private' };
     }
 
-    if (isSkipableError(error)) {
-      return { action: 'skip', reason: 'explicitly marked as skipable' };
-    }
-
-    // Fail fast when attempts exceeded
-    if (attempt >= this.maxAttempts) {
-      return { action: 'fail', reason: 'max attempts reached' };
-    }
-
     // For network errors, respect server-provided wait time or exponential backoff
     if (error instanceof NetworkError) {
+      if (attempt >= this.maxAttempts) {
+        return { action: 'skip', reason: 'network retries exhausted' };
+      }
       const delayFromServer =
         typeof error.waitTime === 'number' && error.waitTime > 0 ? error.waitTime : undefined;
       const backoff = Math.min(this.baseDelayMs * Math.pow(2, attempt - 1), this.maxDelayMs);
@@ -64,6 +58,15 @@ export class DefaultErrorRecovery implements ErrorRecoveryStrategy {
       return { action: 'backoff', delayMs, maxAttempts: this.maxAttempts, reason: 'network error' };
     }
 
+    if (isSkipableError(error)) {
+      return { action: 'skip', reason: 'explicitly marked as skipable' };
+    }
+
+    // Fail fast when attempts exceeded
+    if (attempt >= this.maxAttempts) {
+      return { action: 'fail', reason: 'max attempts reached' };
+    }
+
     const delayMs = Math.min(this.baseDelayMs * attempt, this.maxDelayMs);
     logger.warn(
       `Retrying ${context.itemType ?? 'item'} ${context.itemId ?? ''} (attempt ${attempt}/${this.maxAttempts}) after ${delayMs}ms`
@@ -71,5 +74,4 @@ export class DefaultErrorRecovery implements ErrorRecoveryStrategy {
     return { action: 'retry', delayMs, maxAttempts: this.maxAttempts, reason: 'transient error' };
   }
 }
-
 

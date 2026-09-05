@@ -11,6 +11,14 @@ import { getErrorMessage } from '../utils/errors';
 import { detectAiFileMetadata } from '../utils/ai-detection';
 import { DownloadedArtifact } from '../delivery/types';
 
+function withTimeout<T>(task: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  let timer: NodeJS.Timeout;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(message)), timeoutMs);
+  });
+  return Promise.race([task, timeout]).finally(() => clearTimeout(timer));
+}
+
 /**
  * Service for downloading illustrations
  */
@@ -38,12 +46,11 @@ export class IllustrationDownloader {
       logger.info(`Found existing files for illustration ${illust.id} but missing database record. Updating database...`);
       
       // Get illustration detail with tags to get full information
-      const { illust: detail } = await Promise.race([
+      const { illust: detail } = await withTimeout(
         this.client.getIllustDetailWithTags(illust.id),
-        new Promise<{ illust: PixivIllust; tags: Array<{ name: string; translated_name?: string }> }>((_, reject) => 
-          setTimeout(() => reject(new Error(`Timeout: Failed to get illustration detail for ${illust.id} within 60 seconds`)), 60000)
-        )
-      ]);
+        60000,
+        `Timeout: Failed to get illustration detail for ${illust.id} within 60 seconds`
+      );
       
       // Insert database records for existing files
       for (const filePath of existingFiles) {
@@ -70,12 +77,11 @@ export class IllustrationDownloader {
     }
     
     // Add timeout protection for getIllustDetailWithTags to prevent hanging
-    const { illust: detail, tags } = await Promise.race([
+    const { illust: detail, tags } = await withTimeout(
       this.client.getIllustDetailWithTags(illust.id),
-      new Promise<{ illust: PixivIllust; tags: Array<{ name: string; translated_name?: string }> }>((_, reject) => 
-        setTimeout(() => reject(new Error(`Timeout: Failed to get illustration detail for ${illust.id} within 60 seconds`)), 60000)
-      )
-    ]);
+      60000,
+      `Timeout: Failed to get illustration detail for ${illust.id} within 60 seconds`
+    );
     // Ugoira (animation) works have no original image urls; they are
     // delivered as a zip of frames plus a frame-delay sidecar.
     if (detail.illust_type === 'ugoira' || (illust as any).type === 'ugoira') {
@@ -121,12 +127,11 @@ export class IllustrationDownloader {
         };
 
         // Add timeout protection for image download (2 minutes per image)
-        const buffer = await Promise.race([
+        const buffer = await withTimeout(
           this.client.downloadImage(originalUrl),
-          new Promise<ArrayBuffer>((_, reject) => 
-            setTimeout(() => reject(new Error(`Timeout: Failed to download image for illustration ${detail.id} page ${index + 1} within 120 seconds`)), 120000)
-          )
-        ]);
+          120000,
+          `Timeout: Failed to download image for illustration ${detail.id} page ${index + 1} within 120 seconds`
+        );
         const filePath = await this.fileService.saveImage(buffer, fileName, metadata);
 
         // Release the page buffer promptly: ArrayBuffers are external memory,
@@ -211,7 +216,10 @@ export class IllustrationDownloader {
     }
 
     if (successCount === 0) {
-      throw new Error(`Failed to download any pages for illustration ${detail.id}`);
+      const firstFailure = downloadResults.find((result) => !result.success);
+      throw firstFailure && !firstFailure.success
+        ? firstFailure.error
+        : new Error(`Failed to download any pages for illustration ${detail.id}`);
     }
 
     // Optional content-side AI check: scan the first page's file metadata for
@@ -299,12 +307,11 @@ export class IllustrationDownloader {
     let lastZipError: unknown;
     for (const zipUrl of zipCandidates) {
       try {
-        buffer = await Promise.race([
+        buffer = await withTimeout(
           this.client.downloadImage(zipUrl),
-          new Promise<ArrayBuffer>((_, reject) =>
-            setTimeout(() => reject(new Error(`Timeout: ugoira zip download for ${detail.id}`)), 300000)
-          ),
-        ]);
+          300000,
+          `Timeout: ugoira zip download for ${detail.id}`
+        );
         break;
       } catch (e) {
         lastZipError = e;

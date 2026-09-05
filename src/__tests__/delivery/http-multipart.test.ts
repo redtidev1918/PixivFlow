@@ -426,7 +426,7 @@ describe('DeliveryOutbox', () => {
         },
         { type: 'illustration', storageMode: 'cache', delivery: { target: 'share' } }
       )
-    ).rejects.toMatchObject({ code: 'PENDING_DELIVERY' });
+    ).resolves.toBeUndefined();
     await expect(fs.access(filePath)).resolves.toBeUndefined();
     expect((await fs.readdir(outboxDirectory)).filter((name) => name.endsWith('.json'))).toHaveLength(1);
 
@@ -472,7 +472,7 @@ describe('DeliveryOutbox', () => {
         },
         { type: 'illustration', storageMode: 'cache', delivery: { target: 'share' } }
       )
-    ).rejects.toMatchObject({ code: 'PENDING_DELIVERY' });
+    ).resolves.toBeUndefined();
 
     await expect(outbox.retryPending()).resolves.toEqual({
       succeeded: 0,

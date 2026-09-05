@@ -69,10 +69,12 @@ export class DownloadPlanner {
     // Language is detected from the full novel body during download. Keep a
     // bounded popularity-ordered retry pool so a non-matching Top-1 candidate
     // can be skipped and replaced by the next matching novel.
-    const languageBackfillLimit = itemType === 'novel' && target.languageFilter
+    const backfillLimit = itemType === 'novel' && target.languageFilter
       ? Math.max(limit, Math.min(target.languageCandidateLimit ?? 20, 100))
-      : limit;
-    const queue = available.slice(0, Math.min(available.length, languageBackfillLimit));
+      : target.mode === 'topic'
+        ? Math.max(limit, 20)
+        : limit;
+    const queue = available.slice(0, Math.min(available.length, backfillLimit));
 
     return {
       queue,

@@ -226,7 +226,13 @@ export class NovelTargetHandler {
   }
 
   private async handleDownloadResult(
-    result: { downloaded: number; skipped: number; alreadyDownloaded: number; filteredOut: number },
+    result: {
+      downloaded: number;
+      skipped: number;
+      alreadyDownloaded: number;
+      filteredOut: number;
+      skipDetails?: { id: string; error: string }[];
+    },
     target: TargetConfig,
     mode: string,
     totalFound: number,
@@ -246,7 +252,8 @@ export class NovelTargetHandler {
         mode,
         target,
         totalFound,
-        checkedDays
+        checkedDays,
+        result.skipDetails
       );
       return;
     }
@@ -277,7 +284,8 @@ export class NovelTargetHandler {
     mode: string,
     target: TargetConfig,
     totalFound: number,
-    checkedDays: string[]
+    checkedDays: string[],
+    skipDetails?: { id: string; error: string }[]
   ): Promise<void> {
     const expectedLanguageNoMatch = mode === 'topic' && Boolean(target.languageFilter);
     if (expectedLanguageNoMatch) {
@@ -307,7 +315,17 @@ export class NovelTargetHandler {
         `All ${filteredOut} items were filtered out (no matching items found)`
       );
     } else {
-      const errorMessage = `Failed to download any novels. Requested ${targetLimit}, but all ${skipped} attempt(s) failed or were skipped.`;
+      const reasons = (skipDetails ?? [])
+        .slice(0, 2)
+        .map((d) => `${d.id}: ${d.error}`)
+        .join('; ');
+      const deliveredNote = alreadyDownloaded > 0 ? `（${alreadyDownloaded} 个此前已投递，不会重复下载）` : '';
+      const errorMessage =
+        skipped > 0
+          ? `No new novels for ${tagForLog}: requested ${targetLimit}, ${skipped} candidate(s) errored/skipped` +
+            `${deliveredNote}${reasons ? ` — 示例原因：${reasons}` : ''}. ` +
+            `多为网络/Pixiv 瞬时错误，下次计划会自动重试；持续失败请查日志。`
+          : `Failed to download any novels. Requested ${targetLimit}, but no matching novels were found.`;
       this.database.logExecution(tagForLog, 'novel', 'failed', errorMessage);
       logger.error(`Novel ${mode === 'ranking' ? 'ranking' : 'tag'} ${tagForLog} failed: ${errorMessage}`);
       throw new Error(errorMessage);

@@ -164,7 +164,13 @@ export class IllustrationTargetHandler {
   }
 
   private handleDownloadResult(
-    result: { downloaded: number; skipped: number; alreadyDownloaded: number; filteredOut: number },
+    result: {
+      downloaded: number;
+      skipped: number;
+      alreadyDownloaded: number;
+      filteredOut: number;
+      skipDetails?: { id: string; error: string }[];
+    },
     target: TargetConfig,
     mode: string,
     totalFound: number
@@ -174,7 +180,9 @@ export class IllustrationTargetHandler {
     const tagForLog = getTargetLabel(target);
 
     if (downloaded === 0 && targetLimit > 0) {
-      this.handleZeroDownloads(alreadyDownloaded, skipped, filteredOut, totalFound, targetLimit, tagForLog, mode);
+      this.handleZeroDownloads(
+        alreadyDownloaded, skipped, filteredOut, totalFound, targetLimit, tagForLog, mode, result.skipDetails
+      );
     }
 
     if (downloaded > 0 && downloaded < targetLimit * 0.5 && skipped > 0) {
@@ -201,7 +209,8 @@ export class IllustrationTargetHandler {
     totalFound: number,
     targetLimit: number,
     tagForLog: string,
-    mode: string
+    mode: string,
+    skipDetails?: { id: string; error: string }[]
   ): void {
     if (alreadyDownloaded > 0 && skipped === 0) {
       logger.info(`All ${alreadyDownloaded} illustration(s) for tag ${tagForLog} were already downloaded`);
@@ -218,9 +227,18 @@ export class IllustrationTargetHandler {
       logger.info(`No illustrations found for tag ${tagForLog}`);
       this.database.logExecution(tagForLog, 'illustration', 'success', `No matching illustrations found`);
     } else {
-      const errorMessage = skipped > 0
-        ? `Failed to download any illustrations. Requested ${targetLimit}, but all ${skipped} attempt(s) failed or were skipped (likely inaccessible).`
-        : `Failed to download any illustrations. Requested ${targetLimit}, but no matching illustrations were found.`;
+      // 有候选但一个都没下载成功：报真实原因，不猜测 "likely inaccessible"。
+      const reasons = (skipDetails ?? [])
+        .slice(0, 2)
+        .map((d) => `${d.id}: ${d.error}`)
+        .join('; ');
+      const deliveredNote = alreadyDownloaded > 0 ? `（${alreadyDownloaded} 个此前已投递，不会重复下载）` : '';
+      const errorMessage =
+        skipped > 0
+          ? `No new illustrations for ${tagForLog}: requested ${targetLimit}, ${skipped} candidate(s) errored/skipped` +
+            `${deliveredNote}${reasons ? ` — 示例原因：${reasons}` : ''}. ` +
+            `多为网络/Pixiv 瞬时错误，下次计划会自动重试；同一作品持续失败请查日志（可能为已删除/私密/R-18 权限）。`
+          : `No new illustrations for ${tagForLog}: requested ${targetLimit}, but no matching illustrations were found.`;
       this.database.logExecution(tagForLog, 'illustration', 'failed', errorMessage);
       logger.error(`Illustration ${mode === 'ranking' ? 'ranking' : 'tag'} ${tagForLog} failed: ${errorMessage}`);
       throw new Error(errorMessage);

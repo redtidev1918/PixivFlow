@@ -15,7 +15,7 @@ import { logger } from '../logger';
 import { PixivAuth } from '../pixiv/AuthClient';
 import { Database } from '../storage/Database';
 import { PixivCredentialConfig, NetworkConfig, StandaloneConfig } from '../config';
-import { TerminalLogin } from '../terminal-login';
+import { refreshToken } from '../terminal-login/token-refresh';
 
 export interface TokenMaintenanceConfig {
   /**
@@ -164,7 +164,7 @@ export class TokenMaintenanceService {
       }
 
       // Try to refresh the token to verify it's valid
-      await TerminalLogin.refresh(this.credentials.refreshToken);
+      await refreshToken(this.credentials.refreshToken);
       return true;
     } catch (error) {
       logger.debug('Refresh token validation failed', {
@@ -211,4 +211,3 @@ export function createTokenMaintenanceService(
 
   return service;
 }
-

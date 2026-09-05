@@ -5,7 +5,7 @@
 import { BaseCommand } from './Command';
 import { CommandCategory } from './metadata';
 import { CommandContext, CommandArgs, CommandResult } from './types';
-import { TerminalLogin, LoginInfo } from '../terminal-login';
+import type { LoginInfo } from '../terminal-login/types';
 import { updateConfigWithToken } from '../utils/login-helper';
 import { generateDefaultConfig } from '../config/defaults';
 import { readStdinAll } from '../utils/stdin';
@@ -113,6 +113,7 @@ export class RefreshCommand extends BaseCommand {
     const refreshToken = args.positional[0] || (args.options.token as string);
 
     try {
+      const { TerminalLogin } = await import('../terminal-login');
       const loginInfo = await TerminalLogin.refresh(refreshToken);
       outputLoginResult(loginInfo, json);
       return this.success('Token refresh successful', loginInfo);

@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { getConfigPath, loadConfig } from '../../../../config';
-import { TerminalLogin } from '../../../../terminal-login';
+import { refreshToken as refreshPixivToken } from '../../../../terminal-login/token-refresh';
 import { updateConfigWithToken } from '../../../../utils/login-helper';
 import { logger } from '../../../../logger';
 import { ErrorCode } from '../../../utils/error-codes';
@@ -61,6 +61,7 @@ export async function login(req: Request, res: Response): Promise<void> {
       logger.warn('Recommendation: Use Electron\'s built-in login window from the frontend');
     }
     
+    const { TerminalLogin } = await import('../../../../terminal-login');
     const loginInstance = new TerminalLogin({
       headless: headless as boolean,
       username: username || undefined,
@@ -154,7 +155,7 @@ export async function loginWithToken(req: Request, res: Response): Promise<void>
     // Validate token by attempting to refresh it
     let loginInfo;
     try {
-      loginInfo = await TerminalLogin.refresh(trimmedToken);
+      loginInfo = await refreshPixivToken(trimmedToken);
       logger.info('Refresh token validated successfully');
     } catch (error) {
       logger.error('Refresh token validation failed', { error });
@@ -195,4 +196,3 @@ export async function loginWithToken(req: Request, res: Response): Promise<void>
     });
   }
 }
-

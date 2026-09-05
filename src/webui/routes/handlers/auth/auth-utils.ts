@@ -3,7 +3,7 @@ import { getConfigPath, loadConfig, ConfigValidationError, StandaloneConfig } fr
 import { logger } from '../../../../logger';
 import { ConfigError } from '../../../../utils/errors';
 import { getBestAvailableToken, isPlaceholderToken } from '../../../../utils/token-manager';
-import { TerminalLogin } from '../../../../terminal-login';
+import { refreshToken as refreshPixivToken } from '../../../../terminal-login/token-refresh';
 
 /**
  * Read config file without validation (for checking refreshToken even if validation fails)
@@ -71,7 +71,7 @@ export async function validateToken(refreshToken: string): Promise<{
   loginInfo?: any;
 }> {
   try {
-    const loginInfo = await TerminalLogin.refresh(refreshToken);
+    const loginInfo = await refreshPixivToken(refreshToken);
     return {
       valid: true,
       user: loginInfo.user,
@@ -106,4 +106,3 @@ export function getValidationErrors(error: ConfigError): {
   
   return { errors: validationErrors, warnings: validationWarnings };
 }
-

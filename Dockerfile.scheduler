@@ -14,19 +14,29 @@
 #     volumes: ["./data:/app/data"]
 # ============================================================================
 
+FROM node:24-bookworm-slim AS builder
+
+WORKDIR /src
+COPY package*.json ./
+RUN npm ci
+COPY tsconfig.json ./
+COPY src ./src
+COPY scripts/create-webui-package-json.js ./scripts/create-webui-package-json.js
+RUN npm run build
+
 FROM node:24-bookworm-slim
 
-ARG PIXIVFLOW_VERSION=2.10.27
-
-# python3/make/g++ 仅在 better-sqlite3 等原生模块无预编译二进制时兜底编译用
+WORKDIR /app
+COPY package*.json ./
+# 编译工具只用于安装 better-sqlite3；运行镜像不保留它们。
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-        python3 make g++ ca-certificates \
-    && npm install -g "pixivflow@${PIXIVFLOW_VERSION}" \
+    && apt-get install -y --no-install-recommends python3 make g++ ca-certificates \
+    && npm ci --omit=dev \
+    && apt-get purge -y --auto-remove python3 make g++ \
     && npm cache clean --force \
     && rm -rf /var/lib/apt/lists/*
+COPY --from=builder /src/dist ./dist
 
-WORKDIR /app
 ENV NODE_ENV=production \
     TZ=Asia/Shanghai \
     NODE_OPTIONS="--max-old-space-size=96 --expose-gc" \
@@ -40,4 +50,4 @@ VOLUME ["/app/data"]
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
     CMD node -e "process.exit(require('fs').existsSync('/app/data/pixivflow/config.json') ? 0 : 1)"
 
-CMD ["pixivflow", "scheduler"]
+CMD ["node", "dist/index.js", "scheduler"]

@@ -14,7 +14,7 @@
 | --- | --- |
 | 第一次使用,跑通第一个下载 | [快速开始](QUICKSTART.md) → [账号登录](LOGIN.md) |
 | 了解每种下载方式和全部命令 | [功能与命令](USAGE.md) |
-| 精细控制下载内容(标签、收藏数、日期、排行) | [配置参考](CONFIG.md) + [示例合集](../config/examples/) |
+| 精细控制下载内容(标签、收藏数、日期、排行) | [配置参考](CONFIG.md) + [示例合集](https://github.com/redtidev1918/PixivFlow/tree/master/config/examples) |
 | 部署到服务器长期挂机 | [Docker 部署](DOCKER.md) |
 | 在 Android 手机上运行 | [Termux 安装](TERMUX_INSTALL.md) |
 | 从 v1 升级到 v2 | [迁移指南](CLI_MIGRATION_SUMMARY.md) |
@@ -72,7 +72,7 @@
 - 项目主页:<https://github.com/redtidev1918/PixivFlow>
 - 教程站点(HTML):<https://redtidev1918.github.io/PixivFlow/>
 - npm 包:<https://www.npmjs.com/package/pixivflow>
-- 问题反馈:[Issues](https://github.com/redtidev1918/PixivFlow/issues)(安全漏洞请看 [SECURITY.md](../SECURITY.md))
+- 问题反馈:[Issues](https://github.com/redtidev1918/PixivFlow/issues)(安全漏洞请看 [SECURITY.md](https://github.com/redtidev1918/PixivFlow/blob/master/SECURITY.md))
 
 ---
 

@@ -476,4 +476,4 @@ d
 - [配置说明](./CONFIG.md) —— 配置项详解与示例
 - [登录与令牌](./LOGIN.md) —— 三种登录方式与令牌维护
 - [Docker 部署](./DOCKER.md) —— 容器化运行与数据卷
-- [项目自述](../README.md) —— 功能总览与安装方式
+- [项目自述](https://github.com/redtidev1918/PixivFlow) —— 功能总览与安装方式

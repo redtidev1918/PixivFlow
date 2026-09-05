@@ -455,4 +455,4 @@ i
 - [登录指南](./LOGIN.md) — 三种登录方式与 token 安全
 - [配置手册](./CONFIG.md) — 配置文件全部字段与网络代理
 - [使用指南](./USAGE.md) — 下载模式与全部子命令
-- [README](../README.md) — 项目概览与文档索引
+- [README](https://github.com/redtidev1918/PixivFlow) — 项目概览与文档索引

@@ -451,4 +451,4 @@ Docker 部署正是基于这套机制,完整对照见 [DOCKER](DOCKER.md)。
 - [USAGE](USAGE.md) — 各下载模式的整体用法与示例
 - [LOGIN](LOGIN.md) — refreshToken 从哪里来
 - [DOCKER](DOCKER.md) — 环境变量与容器的对应关系
-- [../config/examples/](../config/examples/) — 官方示例配置合集
+- [../config/examples/](https://github.com/redtidev1918/PixivFlow/tree/master/config/examples) — 官方示例配置合集

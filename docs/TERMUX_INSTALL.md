@@ -248,4 +248,4 @@ pixivflow logs        # 查看运行日志
 - [登录指南](./LOGIN.md) — 三种登录方式与 token 维护
 - [配置手册](./CONFIG.md) — targets、存储路径、代理等全部字段
 - [使用指南](./USAGE.md) — 下载模式与子命令全集
-- [README](../README.md) — 项目概览与文档索引
+- [README](https://github.com/redtidev1918/PixivFlow) — 项目概览与文档索引

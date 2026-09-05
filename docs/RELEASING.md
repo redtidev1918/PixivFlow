@@ -138,4 +138,4 @@ npm run check:version                 # 三方比对应为绿
 - [CHANGELOG](./project/CHANGELOG.md) — 各版本变更记录,Release 正文的唯一来源
 - [SCRIPTS.md](./SCRIPTS.md) — publish/release 系列脚本的参数速查
 - [DOCKER.md](./DOCKER.md) — Docker 场景升级镜像的操作
-- [../README.md](../README.md) — 项目总览
+- [../README.md](https://github.com/redtidev1918/PixivFlow) — 项目总览

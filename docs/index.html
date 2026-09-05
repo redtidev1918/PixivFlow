@@ -3,152 +3,87 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PixivFlow — 智能的 Pixiv 自动化下载工具</title>
-  <meta name="description" content="PixivFlow 是一个开源的 Pixiv 批量下载工具:URL 直链下载、标签搜索、排行榜抓取、Cron 定时任务、自动去重与断点续传,提供 CLI 与 WebUI,Docker 一键部署。">
+  <title>PixivFlow 文档</title>
+  <meta name="description" content="PixivFlow 文档中心：安装、登录、配置、部署与二次开发。内容直接来自仓库里的 Markdown，与代码同步更新。">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐱</text></svg>">
-  <link rel="stylesheet" href="assets/site.css">
-  <script>document.documentElement.setAttribute("data-theme", localStorage.getItem("pf-theme") || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"));</script>
-  <script src="assets/site.js" defer></script>
+  <link id="theme-css" rel="stylesheet" href="assets/vendor/vue.css">
+  <script>
+    (function () {
+      var saved = localStorage.getItem('pf-theme');
+      var dark = saved ? saved === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+      document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+      if (dark) document.write('<link rel="stylesheet" href="assets/vendor/dark.css">');
+    })();
+  </script>
+  <style>
+    .theme-toggle {
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      z-index: 999;
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      border: 1px solid #cbd5e1;
+      background: #fff;
+      color: #334155;
+      font-size: 18px;
+      line-height: 1;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(0,0,0,.12);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    [data-theme="dark"] .theme-toggle {
+      background: #1f2937;
+      border-color: #475569;
+      color: #fbbf24;
+    }
+  </style>
 </head>
 <body>
-<div class="stale-notice">⚠️ 本站页面可能滞后于最新代码，最新最全的文档请看 GitHub：<a href="https://github.com/redtidev1918/PixivFlow/blob/master/docs/CONFIG.md">CONFIG.md（含 storageMode / 缓存交付 / outbox）</a> · <a href="https://github.com/redtidev1918/PixivFlow/blob/master/docs/ARCHITECTURE.md">ARCHITECTURE.md</a> · <a href="https://github.com/redtidev1918/PixivFlow/blob/master/docs/DOCKER.md">DOCKER.md</a> · <a href="https://github.com/redtidev1918/PixivFlow">README</a></div>
-<header class="topbar">
-  <div class="bar">
-    <a class="brand" href="index.html"><span class="logo">🐱</span>PixivFlow</a>
-    <ul class="nav-links">
-      <li><a href="index.html" class="active">首页</a></li>
-      <li><a href="guide.html">使用教程</a></li>
-      <li><a href="config.html">配置参考</a></li>
-      <li><a href="deployment.html">部署指南</a></li>
-      <li><a href="faq.html">常见问题</a></li>
-      <li><a href="tutorial-full.html">完整教程</a></li>
-      <li><a href="acknowledgments.html">致谢</a></li>
-    </ul>
-    <div class="top-actions">
-      <button class="icon-btn js-theme-toggle" aria-label="切换主题">🌙</button>
-      <a class="icon-btn" href="https://github.com/redtidev1918/PixivFlow" target="_blank" rel="noopener" title="GitHub 仓库">⭐</a>
-    </div>
-  </div>
-</header>
-<div class="hero">
-  <div class="container">
-    <h1>🐱 PixivFlow</h1>
-    <p class="tagline">把「刷 Pixiv 手动存图」变成一条命令。批量下载插画与小说,按标签、收藏数、日期筛选,Cron 定时自动收集——CLI 与 WebUI 双形态,Docker 部署即开即用。</p>
-    <div class="cta">
-      <a class="btn btn-primary" href="tutorial-full.html">📖 五分钟上手教程</a>
-      <a class="btn btn-outline" href="guide.html">⌨️ 直接看用法</a>
-      <a class="btn btn-outline" href="https://www.npmjs.com/package/pixivflow" target="_blank" rel="noopener">📦 npm</a>
-      <a class="btn btn-outline" href="https://github.com/redtidev1918/PixivFlow" target="_blank" rel="noopener">🐙 GitHub</a>
-    </div>
-    <p class="meta-line">Node.js 22.12+ · TypeScript · MIT License · Windows / macOS / Linux / Docker / Android(Termux)</p>
-  </div>
-</div>
-
-<main class="container">
-
-  <section class="plain" style="margin-top:34px">
-    <h2 class="section-title">核心能力</h2>
-    <div class="card-grid">
-      <div class="card"><div class="card-icon">🔗</div><h3>任意链接直下</h3><p>插画、小说、系列、用户主页……粘贴 URL 或裸 ID 即可下载,10 种地址形态全部识别。</p></div>
-      <div class="card"><div class="card-icon">🏷️</div><h3>标签搜索与多维筛选</h3><p>标签匹配方式、排序、最低收藏数、发布日期窗口自由组合。</p></div>
-      <div class="card"><div class="card-icon">🏆</div><h3>排行榜模式</h3><p>日榜 / 周榜 / 月榜 / R18 榜直接抓取,先上榜后过滤。</p></div>
-      <div class="card"><div class="card-icon">🎲</div><h3>随机发现</h3><p>从结果中随机挑选下载,每天给它一个小惊喜。</p></div>
-      <div class="card"><div class="card-icon">⏰</div><h3>Cron 定时收集</h3><p>每天凌晨自动收昨日新作;<code>YESTERDAY</code> 占位符免改配置。</p></div>
-      <div class="card"><div class="card-icon">💾</div><h3>去重与断点续传</h3><p>SQLite 记录下载历史,重复执行安全跳过,中断接着传。</p></div>
-      <div class="card"><div class="card-icon">🗂️</div><h3>12 种目录组织</h3><p>按画师、标签、创建日、下载日……任何维度归档,<code>normalize</code> 一键重排。</p></div>
-      <div class="card"><div class="card-icon">🖥️</div><h3>WebUI 管理台</h3><p>统计仪表盘、任务管理、实时日志、在线改配置,端口 3000 开箱即用。</p></div>
-      <div class="card"><div class="card-icon">🐳</div><h3>Docker 双服务</h3><p>定时任务与 WebUI 各自独立容器,健康检查、自动重启、共享数据卷。</p></div>
-    </div>
-  </section>
-
-  <section class="plain">
-    <h2 class="section-title">三步跑起来</h2>
-    <ol class="steps">
-      <li>
-        <h3>安装 CLI</h3>
-        <pre><code>npm install -g pixivflow
-pixivflow --help   <span class="cmt"># 出现帮助信息即成功</span></code></pre>
-        <p>服务器推荐 <a href="deployment.html">Docker Compose</a>;Android 用户走 <a href="deployment.html#termux">Termux 路线</a>。</p>
-      </li>
-      <li>
-        <h3>登录一次 Pixiv 账号</h3>
-        <pre><code>pixivflow login                 <span class="cmt"># 桌面环境,浏览器授权</span>
-pixivflow login-headless -u 用户名 -p 密码   <span class="cmt"># 无图形界面的服务器</span></code></pre>
-        <p>凭据写入本地配置,之后所有命令复用,详见 <a href="https://github.com/redtidev1918/PixivFlow/blob/master/docs/LOGIN.md" target="_blank" rel="noopener">登录指南</a>。</p>
-      </li>
-      <li>
-        <h3>粘贴链接,直接下载</h3>
-        <pre><code>pixivflow download --url https://www.pixiv.net/artworks/123456789
-
-<span class="cmt"># 或者按配置批量收集:</span>
-pixivflow download
-<span class="cmt"># 挂机自动化:</span>
-pixivflow scheduler</code></pre>
-        <p>文件默认保存在 <code>./downloads</code>,运行 <code>pixivflow dirs</code> 查看实际位置。</p>
-      </li>
-    </ol>
-  </section>
-
-  <section class="card-block">
-    <h2 class="section-title">两种形态,一套能力</h2>
-    <table>
-      <thead><tr><th style="width:32%">能力</th><th>CLI</th><th>WebUI(:3000)</th></tr></thead>
-      <tbody>
-        <tr><td>执行下载</td><td><code>download</code> / 定时调度</td><td>任务面板,可启停</td></tr>
-        <tr><td>URL 直链下载</td><td><code>--url</code> 参数</td><td>专用输入框,支持批量粘贴</td></tr>
-        <tr><td>修改配置</td><td><code>config</code> / 编辑 JSON</td><td>表单编辑器 + JSON 高亮 + 历史版本回滚</td></tr>
-        <tr><td>查看成果</td><td><code>status</code> / <code>dirs</code></td><td>统计图表与文件预览缩略图</td></tr>
-        <tr><td>日志</td><td><code>logs</code></td><td>实时滚动 WebSocket 推送</td></tr>
-        <tr><td>适合场景</td><td>脚本化、无人值守、ssh 环境</td><td>日常浏览管理、远程操作</td></tr>
-      </tbody>
-    </table>
-  </section>
-
-  <section class="plain">
-    <h2 class="section-title">从这里继续</h2>
-    <div class="card-grid">
-      <a class="card" href="guide.html"><div class="card-icon">⌨️</div><h3>使用教程</h3><p>六种下载模式逐个演示,附全部 20 条命令速查。<span class="arrow">进入 →</span></p></a>
-      <a class="card" href="config.html"><div class="card-icon">⚙️</div><h3>配置参考</h3><p>targets 全字段、12 种目录组织、环境变量覆盖速查。<span class="arrow">进入 →</span></p></a>
-      <a class="card" href="deployment.html"><div class="card-icon">🚢</div><h3>部署指南</h3><p>npm / Docker Compose / Termux 三条路线任选。<span class="arrow">进入 →</span></p></a>
-      <a class="card" href="faq.html"><div class="card-icon">❓</div><h3>常见问题</h3><p>登录失效、零结果、限流降速……先查这里再提 Issue。<span class="arrow">进入 →</span></p></a>
-      <a class="card" href="tutorial-full.html"><div class="card-icon">📖</div><h3>完整教程</h3><p>从安装到全自动挂机的端到端长文。<span class="arrow">进入 →</span></p></a>
-      <a class="card" href="https://github.com/redtidev1918/PixivFlow/issues" target="_blank" rel="noopener"><div class="card-icon">💬</div><h3>反馈与讨论</h3><p>遇到文档没覆盖的问题?欢迎提 Issue。<span class="arrow">前往 →</span></p></a>
-    </div>
-  </section>
-
-<div class="backtop container"><a href="#">↑ 回到顶部</a></div>
-</main>
-
-<footer class="site-footer">
-  <div class="container cols">
-    <div>
-      <strong>🐱 PixivFlow</strong>
-      <p style="margin:.3rem 0 0">Pixiv 批量下载与定时收集工具<br>CLI 与 WebUI 双形态 · MIT License</p>
-    </div>
-    <div>
-      <strong>文档</strong>
-      <ul>
-        <li><a href="index.html">首页</a></li>
-        <li><a href="guide.html">使用教程</a></li>
-        <li><a href="config.html">配置参考</a></li>
-        <li><a href="deployment.html">部署指南</a></li>
-        <li><a href="faq.html">常见问题</a></li>
-        
-        <li><a href="acknowledgments.html">参考与致谢</a></li><li><a href="tutorial-full.html">完整教程</a></li>
-      </ul>
-    </div>
-    <div>
-      <strong>项目</strong>
-      <ul>
-        <li><a href="https://github.com/redtidev1918/PixivFlow">GitHub 仓库</a></li>
-        <li><a href="https://github.com/redtidev1918/PixivFlow/releases">Releases</a></li>
-        <li><a href="https://www.npmjs.com/package/pixivflow">npm 包</a></li>
-        <li><a href="https://github.com/redtidev1918/PixivFlow/issues">问题反馈</a></li>
-        <li><a href="https://github.com/redtidev1918/pixivflow-webui">WebUI 前端仓库</a></li>
-      </ul>
-    </div>
-  </div>
-  <div class="container foot-note">以 MIT 协议开源 · 请遵守 Pixiv 服务条款理性收藏,尊重创作者版权</div>
-</footer>
+  <div id="app">加载中…</div>
+  <button class="theme-toggle" id="theme-toggle" aria-label="切换明暗主题" title="切换明暗主题">🌙</button>
+  <script>
+    window.$docsify = {
+      name: '🐱 PixivFlow',
+      nameLink: '#/',
+      repo: 'redtidev1918/PixivFlow',
+      loadSidebar: true,
+      subMaxLevel: 2,
+      maxLevel: 3,
+      auto2top: true,
+      search: {
+        placeholder: '搜索文档…',
+        noData: '没有匹配的结果',
+        paths: 'auto',
+        depth: 3
+      }
+    };
+  </script>
+  <script src="assets/vendor/docsify.min.js"></script>
+  <script src="assets/vendor/search.min.js"></script>
+  <script>
+    (function () {
+      var btn = document.getElementById('theme-toggle');
+      var css = document.getElementById('theme-css');
+      var root = document.documentElement;
+      function apply(dark) {
+        root.setAttribute('data-theme', dark ? 'dark' : 'light');
+        css.href = dark ? 'assets/vendor/dark.css' : 'assets/vendor/vue.css';
+        btn.textContent = dark ? '☀️' : '🌙';
+        localStorage.setItem('pf-theme', dark ? 'dark' : 'light');
+      }
+      var dark = localStorage.getItem('pf-theme') === 'dark';
+      if (!localStorage.getItem('pf-theme')) {
+        dark = matchMedia('(prefers-color-scheme: dark)').matches;
+      }
+      apply(dark);
+      btn.addEventListener('click', function () {
+        apply(root.getAttribute('data-theme') !== 'dark');
+      });
+    })();
+  </script>
 </body>
 </html>

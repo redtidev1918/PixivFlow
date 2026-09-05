@@ -516,4 +516,4 @@ d
 - [使用指南](./USAGE.md) —— CLI 与 WebUI 日常操作
 - [Docker 部署](./DOCKER.md) —— 容器端口与环境变量
 - [快速开始](./QUICKSTART.md) —— 从安装到首次下载
-- [项目自述](../README.md) —— 功能总览
+- [项目自述](https://github.com/redtidev1918/PixivFlow) —— 功能总览

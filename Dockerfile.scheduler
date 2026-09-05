@@ -7,7 +7,7 @@
 #
 # 用法（compose 片段）：
 #   pixivflow:
-#     image: ghcr.io/redtidev1918/pixivflow:2.10.27
+#     image: ghcr.io/redtidev1918/pixivflow:2.10.29
 #     environment:
 #       PIXIV_DOWNLOADER_CONFIG: /app/data/pixivflow/config.json
 #       PIXIV_REFRESH_TOKEN: ${PIXIV_REFRESH_TOKEN}
@@ -27,6 +27,7 @@ RUN npm run build
 FROM node:24-bookworm-slim
 
 WORKDIR /app
+ARG VCS_REF=unknown
 COPY package*.json ./
 # 编译工具只用于安装 better-sqlite3；运行镜像不保留它们。
 RUN apt-get update \
@@ -38,10 +39,13 @@ RUN apt-get update \
 COPY --from=builder /src/dist ./dist
 
 ENV NODE_ENV=production \
+    PIXIVFLOW_REVISION=${VCS_REF} \
     TZ=Asia/Shanghai \
     NODE_OPTIONS="--max-old-space-size=96 --expose-gc" \
     MALLOC_ARENA_MAX=2 \
     PIXIV_DOWNLOADER_CONFIG=/app/data/pixivflow/config.json
+
+LABEL org.opencontainers.image.revision=${VCS_REF}
 
 RUN mkdir -p /app/data /app/downloads
 

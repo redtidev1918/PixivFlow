@@ -5,6 +5,12 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### 修复
+- 精简调度镜像直接编译当前 Git 工作区，不再等待或安装同版本 npm 包；镜像写入
+  Git revision，CI 会启动容器验证编译产物、revision 与不存在全局 PixivFlow 替身。
+
 ## [2.10.29] - 2026-09-04
 
 ### 修复

@@ -42,3 +42,18 @@ jobs:
 
       - name: Run tests
         run: npx jest --ci --runInBand
+
+  scheduler-image:
+    name: Scheduler source image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Build current source
+        run: docker build -f Dockerfile.scheduler --build-arg VCS_REF="$GITHUB_SHA" -t pixivflow-scheduler:test .
+
+      - name: Verify source and revision
+        run: |
+          test "$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' pixivflow-scheduler:test)" = "$GITHUB_SHA"
+          docker run --rm -e EXPECTED_REVISION="$GITHUB_SHA" --entrypoint sh pixivflow-scheduler:test -c 'test ! -e /usr/local/bin/pixivflow && test -f /app/dist/index.js && test "$PIXIVFLOW_REVISION" = "$EXPECTED_REVISION"'

@@ -47,6 +47,8 @@ webui-frontend/.vite
 
 # 脚本文件（在 Docker 中不需要）
 scripts/
+!scripts/
+!scripts/create-webui-package-json.js
 
 # 其他
 .env
@@ -54,4 +56,3 @@ scripts/
 *.pem
 *.key
 *.crt
-

@@ -475,3 +475,20 @@ h2[id]:hover .anchor-hint, h3[id]:hover .anchor-hint { opacity: 1; }
   .cta .btn { flex: 1; justify-content: center; }
   main pre { font-size: .8rem; }
 }
+
+/* ---------- 过期文档提示条 ---------- */
+.stale-notice {
+  background: var(--warn-bg);
+  border-bottom: 1px solid var(--warn-border);
+  color: var(--warn-text);
+  text-align: center;
+  padding: .6rem 1rem;
+  font-size: .92rem;
+  line-height: 1.6;
+}
+.stale-notice a {
+  color: var(--warn-text);
+  font-weight: 600;
+  text-decoration: underline;
+}
+.stale-notice a:hover { color: var(--accent-strong); }

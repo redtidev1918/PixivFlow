@@ -84,6 +84,12 @@ jobs:
 
       - run: npm test -- --runInBand --silent
 
+      - name: Verify ugoira GIF conversion
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends python3 ffmpeg
+          python3 src/__tests__/download/test_ugoira_to_gif.py
+
       - name: Publish to npm
         run: npm publish --provenance --access public
 

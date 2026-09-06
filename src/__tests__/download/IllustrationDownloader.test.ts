@@ -1,10 +1,48 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { IllustrationDownloader } from '../../download/IllustrationDownloader';
 import { NetworkError } from '../../utils/errors';
+import { convertUgoira } from '../../download/UgoiraConverter';
+
+jest.mock('../../download/UgoiraConverter');
 
 describe('IllustrationDownloader', () => {
+  it('converts retained ugoira frames before recording or delivering them', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'pixivflow-ugoira-'));
+    const zip = join(directory, '123_work_ugoira.zip');
+    const gif = zip.replace('.zip', '.gif');
+    await writeFile(zip, 'retained zip');
+    const insertDownload = jest.fn();
+    const client = {
+      getIllustDetailWithTags: jest.fn().mockResolvedValue({
+        illust: { id: 123, title: 'work', type: 'ugoira' }, tags: [],
+      }),
+      ugoiraMetadata: jest.fn().mockResolvedValue({
+        zip_urls: { medium: 'https://example.test/ugoira.zip' },
+        frames: [{ file: '000000.jpg', delay: 100 }],
+      }),
+      downloadImage: jest.fn(),
+    };
+    const downloader = new IllustrationDownloader(client as any, {
+      hasDownloaded: () => false, insertDownload,
+    } as any, { sanitizeFileName: (name: string) => name } as any, 1, directory);
+    const converter = jest.mocked(convertUgoira);
+    try {
+      converter.mockRejectedValueOnce(new Error('converter unavailable'));
+      await expect(downloader.downloadIllustration({ id: 123 } as any, 'tag')).rejects.toThrow('converter unavailable');
+      expect(insertDownload).not.toHaveBeenCalled();
+      converter.mockResolvedValueOnce(gif);
+      const result = await downloader.downloadIllustration({ id: 123 } as any, 'tag');
+      expect(result?.files).toEqual([gif]);
+      expect(result?.cleanupFiles).toEqual([zip, zip.replace('.zip', '_frames.json')]);
+      expect(insertDownload).toHaveBeenCalledWith(expect.objectContaining({ filePath: gif }));
+      expect(client.downloadImage).not.toHaveBeenCalled();
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
   it('preserves a page network error so the pipeline can retry and backfill', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'pixivflow-illust-'));
     const networkError = new NetworkError('image unavailable');

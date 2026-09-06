@@ -31,9 +31,9 @@ ARG VCS_REF=unknown
 COPY package*.json ./
 # 编译工具只用于安装 better-sqlite3；运行镜像不保留它们。
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends python3 make g++ ca-certificates \
+    && apt-get install -y --no-install-recommends python3 ffmpeg make g++ ca-certificates \
     && npm ci --omit=dev \
-    && apt-get purge -y --auto-remove python3 make g++ \
+    && apt-get purge -y --auto-remove make g++ \
     && npm cache clean --force \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /src/dist ./dist

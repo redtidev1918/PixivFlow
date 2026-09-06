@@ -115,7 +115,7 @@
     "cron-parser": "^4.9.0",
     "express": "^4.22.2",
     "franc-min": "^6.2.0",
-    "https-proxy-agent": "^7.0.6",
+    "https-proxy-agent": "^9.1.0",
     "node-cron": "^4.6.0",
     "pixiv-token-getter": "^2.2.1",
     "socket.io": "^4.8.3",

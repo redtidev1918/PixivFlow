@@ -10,6 +10,7 @@ import { join } from 'node:path';
 import { getErrorMessage } from '../utils/errors';
 import { detectAiFileMetadata } from '../utils/ai-detection';
 import { DownloadedArtifact } from '../delivery/types';
+import { convertUgoira } from './UgoiraConverter';
 
 function withTimeout<T>(task: Promise<T>, timeoutMs: number, message: string): Promise<T> {
   let timer: NodeJS.Timeout;
@@ -41,16 +42,18 @@ export class IllustrationDownloader {
   ): Promise<DownloadedArtifact | null> {
     // Check if files already exist in file system but not in database
     const existingFiles = await this.findExistingIllustrationFiles(illust.id);
+    const { illust: detail, tags } = await withTimeout(
+      this.client.getIllustDetailWithTags(illust.id),
+      60000,
+      `Timeout: Failed to get illustration detail for ${illust.id} within 60 seconds`
+    );
+    // Raw ZIP/JSON from an earlier attempt must be converted before delivery.
+    if (detail.illust_type === 'ugoira' || detail.type === 'ugoira' || illust.type === 'ugoira') {
+      return this.downloadUgoira(detail, tag, tags, existingFiles);
+    }
     if (existingFiles.length > 0 && !this.database.hasDownloaded(String(illust.id), 'illustration')) {
       // Files exist but not in database - update database and skip download
       logger.info(`Found existing files for illustration ${illust.id} but missing database record. Updating database...`);
-      
-      // Get illustration detail with tags to get full information
-      const { illust: detail } = await withTimeout(
-        this.client.getIllustDetailWithTags(illust.id),
-        60000,
-        `Timeout: Failed to get illustration detail for ${illust.id} within 60 seconds`
-      );
       
       // Insert database records for existing files
       for (const filePath of existingFiles) {
@@ -76,18 +79,6 @@ export class IllustrationDownloader {
       };
     }
     
-    // Add timeout protection for getIllustDetailWithTags to prevent hanging
-    const { illust: detail, tags } = await withTimeout(
-      this.client.getIllustDetailWithTags(illust.id),
-      60000,
-      `Timeout: Failed to get illustration detail for ${illust.id} within 60 seconds`
-    );
-    // Ugoira (animation) works have no original image urls; they are
-    // delivered as a zip of frames plus a frame-delay sidecar.
-    if (detail.illust_type === 'ugoira' || (illust as any).type === 'ugoira') {
-      return this.downloadUgoira(detail, tag, tags);
-    }
-
     const pages = this.getIllustrationPages(detail);
 
     // Safety cap for small machines: skip huge page counts entirely so the
@@ -269,13 +260,14 @@ export class IllustrationDownloader {
 
   /**
    * Download an ugoira (animation) work: fetch metadata, download the frame
-   * zip (original size when available), and save the frame-delay sidecar so
-   * the animation can be reassembled by external tools.
+   * zip and convert using each frame's delay. Only the GIF is delivered;
+   * original ZIP/JSON stay available until successful cache delivery.
    */
   private async downloadUgoira(
     detail: PixivIllust,
     tag: string,
-    tags: Array<{ name: string; translated_name?: string }>
+    tags: Array<{ name: string; translated_name?: string }>,
+    existingFiles: string[]
   ): Promise<DownloadedArtifact | null> {
     if (this.database.hasDownloaded(String(detail.id), 'illustration')) {
       logger.debug(`Ugoira ${detail.id} already downloaded, skipping`);
@@ -303,9 +295,11 @@ export class IllustrationDownloader {
       date: detail.create_date ? new Date(detail.create_date) : new Date(),
     };
 
+    let zipPath = existingFiles.find((path) => /_ugoira\.zip$/i.test(path));
     let buffer: ArrayBuffer | undefined;
     let lastZipError: unknown;
     for (const zipUrl of zipCandidates) {
+      if (zipPath) break;
       try {
         buffer = await withTimeout(
           this.client.downloadImage(zipUrl),
@@ -320,12 +314,13 @@ export class IllustrationDownloader {
         });
       }
     }
-    if (!buffer) {
+    if (!zipPath && !buffer) {
       throw new Error(
         `Ugoira zip download failed for ${detail.id}: ${lastZipError instanceof Error ? lastZipError.message : String(lastZipError)}`
       );
     }
-    const zipPath = await this.fileService.saveImage(buffer, zipFileName, metadata);
+    zipPath = zipPath ?? await this.fileService.saveImage(buffer!, zipFileName, metadata);
+    buffer = undefined;
 
     const framesPath = zipPath.replace(/\.zip$/, '_frames.json');
     await fs.writeFile(
@@ -344,25 +339,27 @@ export class IllustrationDownloader {
       'utf-8'
     );
 
+    const gifPath = await convertUgoira(zipPath, framesPath);
     this.database.insertDownload({
       pixivId: String(detail.id),
       type: 'illustration',
       tag,
       title: detail.title,
-      filePath: zipPath,
+      filePath: gifPath,
       author: detail.user?.name,
       userId: detail.user?.id,
     });
 
-    logger.info(`Saved ugoira ${detail.id} (zip + ${meta.frames?.length ?? 0} frames)`, {
-      filePath: zipPath,
+    logger.info(`Saved ugoira ${detail.id} as GIF (${meta.frames?.length ?? 0} frames)`, {
+      filePath: gifPath,
     });
     return {
       pixivId: String(detail.id),
       type: 'illustration',
       title: detail.title,
       tags: tags.map((item) => item.name).filter(Boolean),
-      files: [zipPath, framesPath],
+      files: [gifPath],
+      cleanupFiles: [zipPath, framesPath],
       spoiler: (detail.x_restrict ?? 0) > 0,
       xRestrict: detail.x_restrict,
       publishedAt: detail.create_date,

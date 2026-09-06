@@ -32,6 +32,7 @@ COPY tsconfig.json ./
 
 # 复制源代码
 COPY src ./src
+COPY scripts/create-webui-package-json.js ./scripts/create-webui-package-json.js
 
 # 构建后端项目
 RUN npm run build
@@ -77,6 +78,7 @@ WORKDIR /app
 RUN apk add --no-cache \
     python3 \
     py3-pip \
+    ffmpeg \
     make \
     g++ \
     chromium \

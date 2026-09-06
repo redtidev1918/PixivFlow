@@ -12,6 +12,7 @@ const webuiDistDir = path.join(distDir, 'webui');
 const distPackageJson = path.join(distDir, 'package.json');
 const webuiPackageJson = path.join(webuiDistDir, 'package.json');
 const rootPackageJson = path.join(__dirname, '..', 'package.json');
+fs.copyFileSync(path.join(__dirname, '..', 'src/download/ugoira_to_gif.py'), path.join(distDir, 'download/ugoira_to_gif.py'));
 
 // Read version from root package.json
 let version = '1.0.0';
@@ -50,4 +51,3 @@ const distPackageJsonContent = {
 
 fs.writeFileSync(distPackageJson, JSON.stringify(distPackageJsonContent, null, 2));
 console.log(`✓ 已创建 ${distPackageJson}`);
-

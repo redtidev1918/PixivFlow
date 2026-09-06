@@ -10,6 +10,8 @@
 | 项目 | 参考内容 |
 | --- | --- |
 | [mikf/gallery-dl](https://github.com/mikf/gallery-dl) | ugoira 元数据/zip 处理;小说正文 webview 回退 |
+| [my-telegram-bots/Pixiv_bot](https://github.com/my-telegram-bots/Pixiv_bot/blob/master/handlers/pixiv/tools.js) | 动图转换后投递 Telegram 的流程参考 |
+| [Notsfsssf/pixez-flutter](https://github.com/Notsfsssf/pixez-flutter/blob/master/lib/page/picture/ugoira_store.dart) | 按逐帧延迟导出 GIF 的思路参考；未复制项目代码 |
 | [azuline/pixiv-api](https://github.com/azuline/pixiv-api) | App API 端点语义 |
 | [akameco/pixiv-app-api](https://github.com/akameco/pixiv-app-api) | 客户端与分页设计 |
 | [eggplants/get-pixivpy-token](https://github.com/eggplants/get-pixivpy-token) | OAuth(PKCE)登录流程 |

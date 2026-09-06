@@ -158,6 +158,19 @@ pixivflow setup
 
 `mode: "topic"` 会先按热度取 `languageCandidateLimit` 个小说候选，再串行检测完整正文并在达到 `limit` 后停止；这样既保证热度顺序，也避免并发检查造成超额投稿。对“最热 1 部中文小说”的低带宽部署，推荐 `limit: 1`、`languageCandidateLimit: 20`、`strictLanguageFilter: true`。需要“尽量补足且不静默”时，可再设置 `noMatchPolicy: { "lookbackDays": 3, "notify": true }`；它最多检查昨天及之前 3 天，不会退化为日文或无关主题。
 
+#### Pixiv 动图（ugoira）
+
+2.10.31 起，ugoira 下载后按 Pixiv 元数据中的逐帧时长合成无限循环 GIF。
+投递目标仅收到 `.gif`，TelePost 会识别为 `animation`，审核群和频道都直接显示动画，
+不会再收到两个 ZIP/JSON 文档。无需新增配置。
+
+- npm/源码安装需让 `python3` 和 `ffmpeg` 在 PATH 中可用；官方完整与调度器 Docker 镜像已包含它们。
+- 原始 ZIP 与帧延迟 JSON 保留在本地；`cache` 模式下随 GIF 在投递成功后一起清理，失败时保留供重试。
+- 转换失败不会登记下载成功；恢复运行时，未完成的本地 ZIP 会重新转换，不会跳过转换直接投递。
+- 输出最长边不超过 640 像素，帧延迟按 GIF 的 10 毫秒精度取整；超过 49 MiB 或转换超时会报错，不截断动画冒充成功。
+- 已进入审核队列的旧 ZIP/JSON 投稿不会因升级自动替换；避免未经确认重复发布同一作品。
+- 验证：`python3 src/__tests__/download/test_ugoira_to_gif.py`，检查真实编码、帧顺序、时长、循环和异常清理。
+
 #### 操作通知（投递结果通知审核群）
 
 交付目标配置了 `notificationUrl` 后，PixivFlow 可向审核群发送三类运维通知，都写入

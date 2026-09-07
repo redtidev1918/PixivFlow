@@ -7,7 +7,7 @@ name: Release
 # 仍支持手动推 v* tag / workflow_dispatch（需填 tag）重跑。
 on:
   push:
-    branches: [main]
+    branches: [master]
     tags: ['v*']
   workflow_dispatch:
     inputs:
@@ -43,7 +43,7 @@ jobs:
     needs: release-please
     if: >-
       github.event_name != 'push' ||
-      github.ref == 'refs/heads/main' && needs.release-please.outputs.releases_created == 'true' ||
+      github.ref == 'refs/heads/master' && needs.release-please.outputs.releases_created == 'true' ||
       startsWith(github.ref, 'refs/tags/')
     env:
       RELEASE_TAG: ${{ needs.release-please.outputs.tag_name || inputs.tag || github.ref_name }}
@@ -90,7 +90,7 @@ jobs:
     needs: [release-please, npm-publish]
     if: >-
       github.event_name != 'push' ||
-      github.ref == 'refs/heads/main' && needs.release-please.outputs.releases_created == 'true' ||
+      github.ref == 'refs/heads/master' && needs.release-please.outputs.releases_created == 'true' ||
       startsWith(github.ref, 'refs/tags/')
     env:
       RELEASE_TAG: ${{ needs.release-please.outputs.tag_name || inputs.tag || github.ref_name }}

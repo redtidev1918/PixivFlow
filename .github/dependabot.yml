@@ -3,19 +3,24 @@ updates:
   - package-ecosystem: npm
     directory: /
     schedule:
-      interval: weekly
-      day: monday
+      interval: monthly
       time: "02:00"
       timezone: Asia/Shanghai
     labels: [dependencies]
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 2
+    groups:
+      minor-and-patch:
+        patterns: ["*"]
+        update-types: [minor, patch]
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
-      day: monday
+      interval: monthly
       time: "02:30"
       timezone: Asia/Shanghai
     labels: [dependencies, github-actions]
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 2
+    groups:
+      github-actions:
+        patterns: ["*"]

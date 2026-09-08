@@ -72,6 +72,38 @@ export class DatabaseMigration {
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
           )`,
+        // Schedule Slots: one business batch (e.g. 2026-09-08:morning). A slot
+        // groups one run of each enabled target (a "cell"). External triggers
+        // and restarts converge on the SAME slot row instead of re-running.
+        `CREATE TABLE IF NOT EXISTS schedule_slots (
+            id TEXT PRIMARY KEY,
+            slot_date TEXT NOT NULL,
+            slot_name TEXT NOT NULL,
+            schedule_id TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending',
+            trigger_source TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            started_at DATETIME,
+            completed_at DATETIME,
+            last_error TEXT
+          )`,
+        // One cell per (slot, target). UNIQUE(slot_id, target_id) is the core
+        // business idempotency: a given slot can never emit two works for one
+        // target even under duplicate triggers / restarts / outbox replay.
+        `CREATE TABLE IF NOT EXISTS schedule_slot_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            slot_id TEXT NOT NULL,
+            target_id TEXT NOT NULL,
+            work_id TEXT,
+            work_type TEXT,
+            status TEXT NOT NULL DEFAULT 'pending',
+            attempt_count INTEGER NOT NULL DEFAULT 0,
+            last_error TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            completed_at DATETIME,
+            UNIQUE(slot_id, target_id)
+          )`,
       ];
 
       // Create indexes for better query performance
@@ -86,6 +118,9 @@ export class DatabaseMigration {
         `CREATE INDEX IF NOT EXISTS idx_task_history_task_id ON task_history(task_id)`,
         `CREATE INDEX IF NOT EXISTS idx_task_history_status ON task_history(status)`,
         `CREATE INDEX IF NOT EXISTS idx_task_history_start_time ON task_history(start_time)`,
+        `CREATE INDEX IF NOT EXISTS idx_slots_date ON schedule_slots(slot_date, slot_name)`,
+        `CREATE INDEX IF NOT EXISTS idx_slot_items_slot ON schedule_slot_items(slot_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_slot_items_work ON schedule_slot_items(work_id, work_type)`,
       ];
 
       const transaction = this.db.transaction((stmts: string[]) => {

@@ -49,6 +49,10 @@ export interface DeliveryContext {
   bookmarkCount?: number;
   /** Pixiv view count — rendered as {{viewCount}}. */
   viewCount?: number;
+  /** Schedule slot provenance for review-source labelling (external/scheduled runs). */
+  slotId?: string;
+  slotName?: string;
+  slotDate?: string;
 }
 
 export interface DeliveryRequest {

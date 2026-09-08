@@ -343,12 +343,27 @@ export function validateConfig(config: Partial<StandaloneConfig>, location: stri
   }
 
   if (config.schedulerRuntime) {
-    const { reloadDebounceMs, queueLimit } = config.schedulerRuntime;
+    const rt = config.schedulerRuntime;
+    const { reloadDebounceMs, queueLimit, mode, trigger } = rt;
+    if (mode !== undefined && mode !== 'internal' && mode !== 'external') {
+      errors.push('schedulerRuntime.mode: Must be "internal" or "external"');
+    }
+    if (rt.catchUpMissedRuns !== undefined && typeof rt.catchUpMissedRuns !== 'boolean') {
+      errors.push('schedulerRuntime.catchUpMissedRuns: Must be a boolean');
+    }
     if (reloadDebounceMs !== undefined && reloadDebounceMs < 100) {
       errors.push('schedulerRuntime.reloadDebounceMs: Must be at least 100');
     }
     if (queueLimit !== undefined && (!Number.isInteger(queueLimit) || queueLimit < 0 || queueLimit > 100)) {
       errors.push('schedulerRuntime.queueLimit: Must be an integer between 0 and 100');
+    }
+    if (trigger) {
+      if (trigger.port !== undefined && (!Number.isInteger(trigger.port) || trigger.port < 1 || trigger.port > 65535)) {
+        errors.push('schedulerRuntime.trigger.port: Must be a valid TCP port');
+      }
+      if (trigger.graceMinutes !== undefined && (!Number.isInteger(trigger.graceMinutes) || trigger.graceMinutes < 1)) {
+        errors.push('schedulerRuntime.trigger.graceMinutes: Must be a positive integer (minutes)');
+      }
     }
   }
 

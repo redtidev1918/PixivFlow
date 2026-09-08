@@ -18,7 +18,7 @@ import { describeSchedule, resolveSchedules } from './schedules';
 export interface MultiScheduleManagerOptions {
   configPath: string;
   loadConfig: () => StandaloneConfig;
-  execute: (config: StandaloneConfig, schedule: ScheduleConfig) => Promise<void>;
+  execute: (config: StandaloneConfig, schedule: ScheduleConfig, slot?: SlotRunContext) => Promise<void>;
   database?: Database;
   telemetry?: JobTelemetry;
   onFailure?: (
@@ -34,6 +34,14 @@ export interface ConfigReloadResult {
   generation: number;
   schedules: string[];
   error?: string;
+}
+
+/** Context for a run driven by an authenticated external Slot trigger. */
+export interface SlotRunContext {
+  slotId: string;
+  slotName: string;
+  slotDate: string;
+  triggerSource: string;
 }
 
 class SerialJobAdmission implements JobAdmissionController {
@@ -100,6 +108,8 @@ export class MultiScheduleManager {
   private reloadTimer: NodeJS.Timeout | null = null;
   private watching = false;
   private readonly admission = new SerialJobAdmission(8);
+  /** Slot context for the next externally-triggered run; consumed once by execute(). */
+  private pendingSlot: SlotRunContext | null = null;
 
   constructor(private readonly options: MultiScheduleManagerOptions) {}
 
@@ -123,6 +133,11 @@ export class MultiScheduleManager {
    */
   private catchUpMissedRuns(config: StandaloneConfig): void {
     if (!this.options.database) return;
+    // External mode (Fly autosleep): a stopped machine is the normal saving
+    // state, not an outage — never self-trigger historical runs on cold start.
+    if (this.isExternalMode(config)) return;
+    // Opt-out for internal hosts that do not want startup catch-up.
+    if (config.schedulerRuntime?.catchUpMissedRuns === false) return;
     const now = new Date();
     for (const plan of resolveSchedules(config)) {
       if (!plan.enabled) continue;
@@ -180,6 +195,7 @@ export class MultiScheduleManager {
     const plans = resolveSchedules(config);
     const enabledPlans = plans.filter((plan) => plan.enabled);
     const queueLimit = config.schedulerRuntime?.queueLimit ?? Math.max(enabledPlans.length, 1);
+    const registerCron = !this.isExternalMode(config);
 
     // loadConfig performs full validation. Stop the previous cron table only
     // after every new definition is available, then publish one snapshot.
@@ -203,10 +219,13 @@ export class MultiScheduleManager {
         this.admission,
         (failure) => this.options.onFailure?.(config, plan, failure)
       );
-      scheduler.start(async () => {
+      scheduler[registerCron ? 'start' : 'init'](async () => {
         // The closure keeps the exact validated snapshot for an in-flight run.
-        // Later runs are attached to the replacement cron table.
-        await this.options.execute(config, plan);
+        // Later runs are attached to the replacement cron table. An external
+        // trigger's slot context is consumed once here (cron fires have none).
+        const slot = this.pendingSlot;
+        this.pendingSlot = null;
+        await this.options.execute(config, plan, slot ?? undefined);
       });
       this.schedulers.set(plan.id, scheduler);
     }
@@ -255,6 +274,28 @@ export class MultiScheduleManager {
     this.watching = false;
     for (const scheduler of this.schedulers.values()) scheduler.stop();
     this.schedulers.clear();
+  }
+
+  /** External scheduler mode: runs are HTTP-triggered, never by internal cron. */
+  public isExternalMode(config: StandaloneConfig = this.activeConfig): boolean {
+    return config.schedulerRuntime?.mode === 'external';
+  }
+
+  /**
+   * Trigger one schedule immediately (external HTTP trigger / run-once). Returns
+   * false if the schedule id is unknown. Honors Scheduler's running/pending and
+   * serial-admission guards, so duplicate triggers never double-run.
+   */
+  public triggerSchedule(scheduleId: string, slot?: SlotRunContext): boolean {
+    const scheduler = this.schedulers.get(scheduleId);
+    if (!scheduler) return false;
+    if (slot) this.pendingSlot = slot;
+    return scheduler.runNow();
+  }
+
+  /** Enabled schedule ids in the active snapshot (for the trigger API / status). */
+  public scheduleIds(): string[] {
+    return [...this.schedulers.keys()];
   }
 
   public getStatus(): ConfigReloadResult {

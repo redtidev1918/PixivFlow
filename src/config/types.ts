@@ -49,6 +49,11 @@ export interface TargetDeliveryConfig {
   target: string;
   /** 覆盖该交付目标的表单字段，支持 {{title}} 等模板变量 */
   fields?: Record<string, DeliveryFieldValue>;
+  /**
+   * Schedule slot provenance injected at runtime for scheduled/external runs
+   * (not authored in config). Rendered as {{slotId}}/{{slotName}}/{{slotDate}}.
+   */
+  slotContext?: { slotId: string; slotName: string; slotDate: string };
 }
 
 export interface TargetConfig {
@@ -394,6 +399,23 @@ export interface ScheduleConfig extends SchedulerConfig {
 }
 
 export interface SchedulerRuntimeConfig {
+  /**
+   * Scheduler trigger source.
+   * - `internal` (default): the daemon owns the cron clock. Used on always-on
+   *   hosts (VPS / Docker / systemd / Fly always-on / Fly Split's PixivFlow).
+   * - `external`: the daemon does NOT fire cron and does NOT catch up on start.
+   *   Runs are driven by an authenticated HTTP Slot trigger (e.g. a Cloudflare
+   *   cron worker waking a stopped Fly machine). Normal Telegram/webhook traffic
+   *   that cold-starts the machine must never trigger a scheduled run.
+   */
+  mode?: 'internal' | 'external';
+  /**
+   * Internal-mode self-healing: at daemon start, if a cron fire was missed
+   * while the process was down (deploy/crash/restart on an always-on host),
+   * run that schedule once. Default true. Forced off in `external` mode where
+   * a stopped machine is the normal cost-saving state, not an outage.
+   */
+  catchUpMissedRuns?: boolean;
   /** Watch the active config and reload valid snapshots automatically. */
   watchConfig?: boolean;
   /** Debounce interval for atomic file replacements. Default: 500ms. */
@@ -403,6 +425,30 @@ export interface SchedulerRuntimeConfig {
    * One pending run per plan is retained; extra ticks are skipped.
    */
   queueLimit?: number;
+  /**
+   * External-mode HTTP trigger settings. Ignored in internal mode.
+   */
+  trigger?: SchedulerTriggerConfig;
+}
+
+/** Authenticated HTTP Slot trigger for `mode: external`. */
+export interface SchedulerTriggerConfig {
+  /** Bind port for the trigger HTTP server. Default 8090. */
+  port?: number;
+  /** Bind host. Default 0.0.0.0 (Fly injects the port; host stays 0.0.0.0). */
+  host?: string;
+  /**
+   * Required bearer token. When unset the server reads SCHEDULER_TRIGGER_TOKEN
+   * from the environment. If neither is set the trigger endpoint refuses all
+   * requests (fails closed).
+   */
+  token?: string;
+  /**
+   * Minutes after a slot's scheduled time during which a trigger is accepted
+   * as a resume of that slot. Older slots are treated as expired and never
+   * back-filled. Default 90 (a 4-cell serial slot can take ~15-30 min).
+   */
+  graceMinutes?: number;
 }
 
 export interface HttpMultipartSuccessConfig {

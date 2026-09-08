@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+rm -rf dist/release
+mkdir -p dist/release
+npm run build --if-present
+npm pack --pack-destination dist/release

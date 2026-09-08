@@ -1,144 +1,32 @@
 name: Release
 
-# 全自动发版，无需 PAT/secret：main 上合入 release-worthy 提交后 release-please 在本
-# 工作流内开/更发版 PR；发版 PR 合并后同一个 run 内推 tag、发布 npm（OIDC）、推 GHCR 镜像、
-# 建 GitHub Release。（内置 GITHUB_TOKEN 推的 tag 不会触发其他工作流，但同一 run 内的
-# job 不受此限制。）
-# 仍支持手动推 v* tag / workflow_dispatch（需填 tag）重跑。
 on:
+  pull_request:
   push:
     branches: [master]
-    tags: ['v*']
+  schedule:
+    - cron: "41 * * * *"
   workflow_dispatch:
     inputs:
-      tag:
-        description: 要重跑/重发布的已有 tag（如 v2.11.0）；main push 自动发版时忽略
-        required: true
-        type: string
+      version: {description: "Existing version; blank reads the manifest", required: false, type: string}
+      dry_run: {description: "Build and validate without publishing", required: false, default: false, type: boolean}
+      force: {description: "Rerun a healthy version", required: false, default: false, type: boolean}
+      repair: {description: "Repair the current incomplete version", required: false, default: false, type: boolean}
+      stage: {description: "Recovery stage label", required: false, default: all, type: string}
 
 permissions:
-  contents: write       # 推 tag / 建 Release
-  pull-requests: write  # release-please 发版 PR
-  id-token: write       # npm OIDC trusted publishing
-  packages: write       # 推 GHCR 镜像
+  contents: write
+  pull-requests: write
+  packages: write
+  id-token: write
 
 jobs:
-  release-please:
-    runs-on: ubuntu-latest
-    outputs:
-      releases_created: ${{ steps.rp.outputs.releases_created }}
-      tag_name: ${{ steps.rp.outputs.tag_name }}
-    steps:
-      - uses: actions/checkout@v7
-      - name: Release Please
-        id: rp
-        uses: googleapis/release-please-action@v5
-        with:
-          config-file: release-please-config.json
-          manifest-file: .release-please-manifest.json
-
-  # 发版门禁：main push 且 release-please 刚发版，或 tag/dispatch 重跑。
-  npm-publish:
-    runs-on: ubuntu-latest
-    needs: release-please
-    if: >-
-      github.event_name != 'push' ||
-      github.ref == 'refs/heads/master' && needs.release-please.outputs.releases_created == 'true' ||
-      startsWith(github.ref, 'refs/tags/')
-    env:
-      RELEASE_TAG: ${{ needs.release-please.outputs.tag_name || inputs.tag || github.ref_name }}
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ needs.release-please.outputs.tag_name || inputs.tag || github.ref }}
-          fetch-depth: 0
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
-          registry-url: https://registry.npmjs.org
-          package-manager-cache: false
-      - name: Use npm with Trusted Publishing support
-        run: npm install --global npm@11
-      - name: Verify tag matches package version
-        run: |
-          PACKAGE_VERSION="v$(node -p "require('./package.json').version")"
-          echo "package: $PACKAGE_VERSION, tag: $RELEASE_TAG"
-          test "$PACKAGE_VERSION" = "$RELEASE_TAG"
-      - run: npm ci
-      - run: npm run build --if-present
-      - run: npm test -- --runInBand --silent
-      - name: Verify ugoira GIF conversion
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends python3 ffmpeg
-          python3 src/__tests__/download/test_ugoira_to_gif.py
-      - name: Publish to npm
-        run: npm publish --provenance --access public
-      - name: Create/update GitHub Release
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: ${{ env.RELEASE_TAG }}
-          generate_release_notes: true
-      - name: Prune old Release objects (preserve Git tags)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          gh release list --limit 100 --json tagName --jq '.[].tagName' |
-          while IFS= read -r old_tag; do
-            [ "$old_tag" = "$RELEASE_TAG" ] || gh release delete "$old_tag" --yes
-          done
-
-  # 精简调度镜像（Dockerfile.scheduler）推 GHCR，与 npm 发布互补。
-  docker:
-    runs-on: ubuntu-latest
-    needs: [release-please, npm-publish]
-    if: >-
-      github.event_name != 'push' ||
-      github.ref == 'refs/heads/master' && needs.release-please.outputs.releases_created == 'true' ||
-      startsWith(github.ref, 'refs/tags/')
-    env:
-      RELEASE_TAG: ${{ needs.release-please.outputs.tag_name || inputs.tag || github.ref_name }}
-      IMAGE_NAME: ghcr.io/redtidev1918/pixivflow
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ needs.release-please.outputs.tag_name || inputs.tag || github.ref }}
-          fetch-depth: 0
-      - name: Resolve version（镜像 tag 不带 v）
-        id: ver
-        run: echo "version=${RELEASE_TAG#v}" >> "$GITHUB_OUTPUT"
-      - uses: docker/setup-qemu-action@v4
-      - uses: docker/setup-buildx-action@v4
-      - name: Log in to GHCR
-        uses: docker/login-action@v4
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Image metadata
-        id: meta
-        uses: docker/metadata-action@v6
-        with:
-          images: ${{ env.IMAGE_NAME }}
-          tags: |
-            type=raw,value=${{ steps.ver.outputs.version }}
-            type=raw,value=latest
-          labels: |
-            org.opencontainers.image.title=PixivFlow scheduler worker
-            org.opencontainers.image.description=PixivFlow scheduler worker (slim, no WebUI/Chromium) for decoupled deployment alongside TelePost
-            org.opencontainers.image.source=https://github.com/redtidev1918/PixivFlow
-            org.opencontainers.image.revision=${{ github.sha }}
-      - name: Build and push
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: Dockerfile.scheduler
-          push: true
-          build-args: |
-            VCS_REF=${{ github.sha }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          platforms: linux/amd64,linux/arm64
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+  release:
+    uses: redtidev1918/release-infra/.github/workflows/reusable-release.yml@v1
+    with:
+      version: ${{ inputs.version || '' }}
+      dry_run: ${{ github.event_name == 'pull_request' || inputs.dry_run || false }}
+      force: ${{ inputs.force || false }}
+      repair: ${{ github.event_name == 'pull_request' || inputs.repair || false }}
+      stage: ${{ inputs.stage || 'all' }}
+    secrets: inherit

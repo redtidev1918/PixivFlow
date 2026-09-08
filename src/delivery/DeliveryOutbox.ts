@@ -124,9 +124,16 @@ export class DeliveryOutbox {
           language: artifact.language,
           bookmarkCount: artifact.bookmarkCount,
           viewCount: artifact.viewCount,
-          slotId: target.delivery?.slotContext?.slotId,
-          slotName: target.delivery?.slotContext?.slotName,
-          slotDate: target.delivery?.slotContext?.slotDate,
+          // Generic schedule-execution provenance (scheduled runs only). The
+          // slot* aliases are kept for existing templates; new fields give any
+          // delivery adapter a stable, schedule-scoped execution identity.
+          scheduleId: target.delivery?.executionContext?.scheduleId,
+          executionId: target.delivery?.executionContext?.slotId,
+          occurrenceAt: target.delivery?.executionContext?.occurrenceAtIso,
+          triggerSource: target.delivery?.executionContext?.triggerSource,
+          slotId: target.delivery?.slotContext?.slotId ?? target.delivery?.executionContext?.slotId,
+          slotName: target.delivery?.slotContext?.slotName ?? target.delivery?.executionContext?.slotName,
+          slotDate: target.delivery?.slotContext?.slotDate ?? target.delivery?.executionContext?.slotDate,
         },
       },
     };

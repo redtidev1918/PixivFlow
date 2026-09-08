@@ -367,13 +367,36 @@ TelePost 等其他渠道。
 }
 ```
 
-`schedulerRuntime` 控制常驻调度器：
+`schedulerRuntime` 控制常驻调度器。**核心只有一个问题：谁拥有 wall clock（由谁触发定时执行）。**
 
 | 字段 | 默认值 | 说明 |
 | --- | --- | --- |
+| `mode` | `"internal"` | `internal`＝本进程用 cron 定时器自己到点执行（VPS / Docker / systemd / Fly always-on / split PixivFlow）。`external`＝本进程**不**起 cron、**不**在启动时补跑历史；定时执行只由外部受认证的 HTTP 触发（scale-to-zero / autosleep 平台，如停机的 Fly machine 被 Cloudflare cron 唤醒）。缺省（旧配置）按 `internal` 处理，升级行为不变。 |
+| `catchUpMissedRuns` | true | 仅 `internal` 生效：进程启动时若发现宕机期间错过一次 cron，按**被错过的那次 canonical occurrence**补跑一次（有界，不做无限历史回放）。`external` 下恒为关：停机是正常省钱状态，冷启动绝不补跑。 |
 | `watchConfig` | true | 监听当前配置文件并自动热重载 |
 | `reloadDebounceMs` | 500 | 文件替换后的去抖时间，最小 100ms |
 | `queueLimit` | 8 | 全局待执行计划上限；同一计划仍只保留一项 |
+| `trigger.enabled` | false | 是否挂载受认证 HTTP 触发服务。`external` 模式**总是**挂载（外部时钟依赖它）；`internal` 模式下置 `true` 可额外开放手动/运维触发。HTTP 触发与“谁拥有时钟”是两件正交的事。 |
+| `trigger.port` / `trigger.host` | 8090 / `0.0.0.0` | 触发服务监听地址。Fly 注入 `PORT` 时优先用 `PORT`。 |
+| `trigger.token` | env | Bearer 令牌；缺省读 `SCHEDULER_TRIGGER_TOKEN` 环境变量。两者都没有则触发端点**拒绝一切请求（fail-closed）**。令牌不进日志/响应。 |
+| `trigger.graceMinutes` | 90 | 一次 occurrence 在其计划时刻之后多久内仍接受外部触发（容忍 watchdog/网络重试/唤醒延迟）。超出窗口判过期，不补历史。 |
+
+**触发端点**（任何 HTTP cron 都可调，Cloudflare 只是官方参考适配器）：
+
+```
+POST /internal/schedules/{scheduleId}/run
+Authorization: Bearer <SCHEDULER_TRIGGER_TOKEN>
+(optional JSON body) { "label": "今日早班" }   # 仅人类可读来源标签，不参与身份
+```
+
+服务端**只**根据该 schedule 自己的 `cron` + `timezone` 与当前时刻解析 canonical occurrence；请求体不接受日期，无法回填历史。重复/并发/重试触发都收敛到同一个 durable occurrence。
+
+> internal 的 cron、外部 HTTP、`run-once` 手动执行，都进入同一个执行服务；差别只是 trigger source（`cron`/`http`/`manual`/`catchup`）。`run-once`（含 TelePost「重抓/换一张」）是 **ad-hoc** 执行：跑下载计划但**不**打开定时 occurrence，绝不会把某次定时任务标记为完成。
+
+**投递模板里的执行来源变量**（scheduled 运行时注入；ad-hoc 为空）：
+`{{scheduleId}}`、`{{executionId}}`（durable occurrence id）、`{{occurrenceAt}}`（ISO）、
+`{{triggerSource}}`，以及兼容别名 `{{slotId}}`/`{{slotName}}`/`{{slotDate}}`。
+它们都是通用执行上下文，可投递到任意 HTTP 端点，不绑定特定下游。
 
 热重载流程为“读入新快照 → 默认值/路径处理 → 完整校验 → 整表替换”。失败时旧计划
 继续运行。正在执行的任务不会被中断；`YESTERDAY` / `TODAY` 在每次真正执行前

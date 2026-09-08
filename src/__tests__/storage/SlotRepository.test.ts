@@ -1,5 +1,6 @@
 /**
- * Schedule Slot ledger tests: business-level idempotency for scheduled batches.
+ * Schedule Slot ledger tests: durable occurrence identity + business-level
+ * idempotency (one slot per occurrence, one cell per target, stable work lock).
  */
 import { Database } from '../../storage/Database';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -16,32 +17,57 @@ function withDb<T>(fn: (db: Database) => Promise<T>): Promise<T> {
   });
 }
 
+// New-style occurrence metadata (schedule-scoped id, frozen membership).
+const meta = (scheduleId: string, targetIds: string[]) => ({
+  scheduleId,
+  occurrenceAt: Date.parse('2026-09-08T02:00:00Z'),
+  occurrenceDate: '2026-09-08',
+  occurrenceLabel: '10:00',
+  timezone: 'Asia/Shanghai',
+  targetIds,
+});
+
 describe('Schedule Slot ledger', () => {
   it('creates a slot once and reports resume on duplicate', async () => {
     await withDb(async (db) => {
-      const meta = { slotDate: '2026-09-08', slotName: 'morning', scheduleId: 'bot1-daily' };
-      const first = db.slots.getOrCreateSlot('2026-09-08:morning', meta);
+      const id = 'schedule-a@2026-09-08T1000';
+      const first = db.slots.getOrCreateSlot(id, meta('schedule-a', ['t1']));
       expect(first.created).toBe(true);
-      const second = db.slots.getOrCreateSlot('2026-09-08:morning', meta);
+      const second = db.slots.getOrCreateSlot(id, meta('schedule-a', ['t1']));
       expect(second.created).toBe(false);
       expect(second.slot.id).toBe(first.slot.id);
     });
   });
 
-  it('morning/evening and different dates are independent slots', async () => {
+  it('different schedules / occurrences are independent slots', async () => {
     await withDb(async (db) => {
-      db.slots.getOrCreateSlot('2026-09-08:morning', { slotDate: '2026-09-08', slotName: 'morning', scheduleId: 's' });
-      db.slots.getOrCreateSlot('2026-09-08:evening', { slotDate: '2026-09-08', slotName: 'evening', scheduleId: 's' });
-      db.slots.getOrCreateSlot('2026-09-09:morning', { slotDate: '2026-09-09', slotName: 'morning', scheduleId: 's' });
+      db.slots.getOrCreateSlot('schedule-a@2026-09-08T1000', meta('schedule-a', ['t1']));
+      db.slots.getOrCreateSlot('schedule-a@2026-09-08T1800', meta('schedule-a', ['t1']));
+      db.slots.getOrCreateSlot('schedule-b@2026-09-08T1000', meta('schedule-b', ['t1']));
       expect(db.slots.getRecentSlots(10)).toHaveLength(3);
     });
   });
 
-  it('UNIQUE(slot,target): one cell per target, ensured idempotently', async () => {
+  it('snapshots target membership at creation and ignores later config reload', async () => {
     await withDb(async (db) => {
-      const slot = '2026-09-08:morning';
-      db.slots.getOrCreateSlot(slot, { slotDate: '2026-09-08', slotName: 'morning', scheduleId: 's' });
-      db.slots.ensureCell(slot, 'bot1-novel', 'novel');
+      const id = 'schedule-a@2026-09-08T1000';
+      db.slots.getOrCreateSlot(id, meta('schedule-a', ['a', 'b']));
+      db.slots.materializeCells(id, ['a', 'b'], () => 'illustration');
+      // A later config with targets [a,b,c] must NOT add c to this occurrence.
+      const again = db.slots.getOrCreateSlot(id, meta('schedule-a', ['a', 'b', 'c']));
+      expect(again.created).toBe(false);
+      expect(db.slots.getSlotTargetIds(id).sort()).toEqual(['a', 'b']);
+      // Re-materializing is idempotent (ON CONFLICT DO NOTHING).
+      db.slots.materializeCells(id, ['a', 'b', 'c'], () => 'illustration');
+      expect(db.slots.getCells(id).map((c) => c.targetId).sort()).toEqual(['a', 'b']);
+    });
+  });
+
+  it('UNIQUE(slot,target): one cell per target, materialized idempotently', async () => {
+    await withDb(async (db) => {
+      const slot = 'schedule-a@2026-09-08T1000';
+      db.slots.getOrCreateSlot(slot, meta('schedule-a', ['bot1-novel']));
+      db.slots.materializeCells(slot, ['bot1-novel'], () => 'novel');
       db.slots.ensureCell(slot, 'bot1-novel', 'novel'); // duplicate guard
       expect(db.slots.getCells(slot).filter((c) => c.targetId === 'bot1-novel')).toHaveLength(1);
     });
@@ -49,8 +75,8 @@ describe('Schedule Slot ledger', () => {
 
   it('locks a selected work and never overwrites it on re-lock', async () => {
     await withDb(async (db) => {
-      const slot = '2026-09-08:morning';
-      db.slots.getOrCreateSlot(slot, { slotDate: '2026-09-08', slotName: 'morning', scheduleId: 's' });
+      const slot = 'schedule-a@2026-09-08T1000';
+      db.slots.getOrCreateSlot(slot, meta('schedule-a', ['bot1-novel']));
       db.slots.ensureCell(slot, 'bot1-novel', 'novel');
       db.slots.lockCellWork(slot, 'bot1-novel', '123', 'novel');
       // A retry must keep the same work id.
@@ -63,8 +89,8 @@ describe('Schedule Slot ledger', () => {
 
   it('clearCellWork is the explicit replace path (allows a new candidate)', async () => {
     await withDb(async (db) => {
-      const slot = '2026-09-08:morning';
-      db.slots.getOrCreateSlot(slot, { slotDate: '2026-09-08', slotName: 'morning', scheduleId: 's' });
+      const slot = 'schedule-a@2026-09-08T1000';
+      db.slots.getOrCreateSlot(slot, meta('schedule-a', ['bot1-novel']));
       db.slots.ensureCell(slot, 'bot1-novel', 'novel');
       db.slots.lockCellWork(slot, 'bot1-novel', '123', 'novel');
       db.slots.clearCellWork(slot, 'bot1-novel');
@@ -75,8 +101,8 @@ describe('Schedule Slot ledger', () => {
 
   it('deriveSlotStatus: all submitted=success, some=partial, none=failed', async () => {
     await withDb(async (db) => {
-      const slot = '2026-09-08:morning';
-      db.slots.getOrCreateSlot(slot, { slotDate: '2026-09-08', slotName: 'morning', scheduleId: 's' });
+      const slot = 'schedule-a@2026-09-08T1000';
+      db.slots.getOrCreateSlot(slot, meta('schedule-a', ['bot1-illust', 'bot1-novel', 'bot2-illust', 'bot2-novel']));
       const targets = [
         ['bot1-illust', 'illustration'],
         ['bot1-novel', 'novel'],

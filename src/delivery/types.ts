@@ -49,6 +49,18 @@ export interface DeliveryContext {
   bookmarkCount?: number;
   /** Pixiv view count — rendered as {{viewCount}}. */
   viewCount?: number;
+  /**
+   * Generic schedule-execution provenance. Attached to scheduled runs only
+   * (absent for ad-hoc/manual runs). Delivery-agnostic: any adapter may surface
+   * these to its endpoint; they are never parsed by PixivFlow Core.
+   */
+  scheduleId?: string;
+  /** Durable occurrence identity (same as slotId); the stable execution ref. */
+  executionId?: string;
+  /** Canonical scheduled fire time, ISO-8601 with the schedule tz offset. */
+  occurrenceAt?: string;
+  /** Why the run started: cron | http | manual | catchup. */
+  triggerSource?: string;
   /** Schedule slot provenance for review-source labelling (external/scheduled runs). */
   slotId?: string;
   slotName?: string;

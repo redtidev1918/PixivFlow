@@ -155,6 +155,9 @@ pixivflow scheduler             # 按 cron 配置长期挂机自动收集
 `delivery-outbox/`，下次运行先补投，按「5 分钟起步、最长 6 小时」指数退避重试，
 成功后才清理。「今天没有可投稿内容」这类通知也走同一个 outbox，审核端暂时挂掉也能继续重试。
 
+运维通知可直接把 `notificationUrl` 指向 [Apprise API](docs/APPRISE.md)，由 Apprise 统一发送
+Email、Telegram、Discord、ntfy 等渠道；PixivFlow 不实现这些通知协议。
+
 - 上面的示例是投稿给一个 HTTP 接口：把 `/gen_token` 得到的 `tp_...` 放进 `TG_SUBMIT_TOKEN` 即可（这是示例服务自己的鉴权方式）。
 - 同一目标也可指向 [telepress](https://github.com/redtidev1918/telepress) 的 `/publish/gallery`，把插画自动发布成 Telegra.ph 相册，见 [CONFIG.md](docs/CONFIG.md) 的「Telegraph（telegra.ph）相册上传」。
 

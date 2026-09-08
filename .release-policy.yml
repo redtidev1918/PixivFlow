@@ -1,0 +1,42 @@
+{
+  "kind": "node-library",
+  "versioning": {
+    "mode": "release-please"
+  },
+  "build": {
+    "test": "npm ci && npm test -- --runInBand --silent",
+    "command": "scripts/build-release",
+    "version_check": "test \"$(node -p \"require('./package.json').version\")\" = \"$RELEASE_VERSION\" && tar -tzf dist/release/pixivflow-*.tgz >/dev/null"
+  },
+  "assets": {
+    "required": [
+      "pixivflow-*.tgz"
+    ],
+    "optional": []
+  },
+  "registries": {
+    "github": {
+      "required": true
+    },
+    "npm": {
+      "required": true,
+      "publish": "npm publish --provenance --access public",
+      "verify": "npm view pixivflow@$RELEASE_VERSION version | grep -Fx $RELEASE_VERSION"
+    },
+    "ghcr": {
+      "required": false,
+      "context": ".",
+      "file": "Dockerfile.scheduler",
+      "image": "ghcr.io/redtidev1918/pixivflow",
+      "platforms": "linux/amd64,linux/arm64",
+      "verify": "docker buildx imagetools inspect ghcr.io/redtidev1918/pixivflow:$RELEASE_VERSION"
+    }
+  },
+  "retention": {
+    "stable": 1,
+    "prerelease": 1,
+    "failed_draft": 2
+  },
+  "checksums": true,
+  "sbom": true
+}

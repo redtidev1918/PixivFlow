@@ -92,6 +92,8 @@
           ],
           "note": "Pixiv ID: {{pixivId}}",
           "target_id": "{{targetId}}",
+          "slot_name": "{{slotName}}",
+          "slot_date": "{{slotDate}}",
           "anonymous": true,
           "idempotency_key": "pixiv:bot1:{{type}}:{{pixivId}}"
         },
@@ -122,6 +124,8 @@
           ],
           "note": "Pixiv ID: {{pixivId}}",
           "target_id": "{{targetId}}",
+          "slot_name": "{{slotName}}",
+          "slot_date": "{{slotDate}}",
           "anonymous": true,
           "idempotency_key": "pixiv:bot2:{{type}}:{{pixivId}}"
         },

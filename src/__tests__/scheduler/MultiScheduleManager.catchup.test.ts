@@ -114,4 +114,86 @@ describe('missed-cron catch-up at daemon start', () => {
       expect(execute).not.toHaveBeenCalled();
     });
   });
+
+  it('external mode never catches up missed runs on cold start', async () => {
+    await withDatabase(async (_dir, database) => {
+      const ancient = new Date('2020-01-01T00:00:00Z');
+      database.logSchedulerExecution(1, 'success', ancient, ancient, 10, null, 1, 'bot1');
+
+      const execute = jest.fn(async () => undefined);
+      const cfg = makeConfig({ schedulerRuntime: { mode: 'external' as const, watchConfig: false } });
+      const manager = new MultiScheduleManager({
+        configPath: '/tmp/not-watched.json',
+        loadConfig: () => cfg,
+        execute,
+        database,
+      });
+      manager.start(cfg);
+      try {
+        await new Promise((resolve) => setTimeout(resolve, 150));
+        // A stopped machine waking for Telegram traffic must not run any slot.
+        expect(execute).not.toHaveBeenCalled();
+      } finally {
+        manager.stop();
+      }
+    });
+  });
+
+  it('internal mode with catchUpMissedRuns=false does not catch up', async () => {
+    await withDatabase(async (_dir, database) => {
+      const ancient = new Date('2020-01-01T00:00:00Z');
+      database.logSchedulerExecution(1, 'success', ancient, ancient, 10, null, 1, 'bot1');
+
+      const execute = jest.fn(async () => undefined);
+      const cfg = makeConfig({
+        schedulerRuntime: { mode: 'internal' as const, catchUpMissedRuns: false, watchConfig: false },
+      });
+      const manager = new MultiScheduleManager({
+        configPath: '/tmp/not-watched.json',
+        loadConfig: () => cfg,
+        execute,
+        database,
+      });
+      manager.start(cfg);
+      try {
+        await new Promise((resolve) => setTimeout(resolve, 150));
+        expect(execute).not.toHaveBeenCalled();
+      } finally {
+        manager.stop();
+      }
+    });
+  });
+
+  it('external triggerSchedule is idempotent under duplicate calls', async () => {
+    await withDatabase(async (_dir, database) => {
+      let active = 0;
+      let maxConcurrent = 0;
+      const execute = jest.fn(async () => {
+        active++;
+        maxConcurrent = Math.max(maxConcurrent, active);
+        await new Promise((resolve) => setTimeout(resolve, 60));
+        active--;
+      });
+      const cfg = makeConfig({ schedulerRuntime: { mode: 'external' as const, watchConfig: false } });
+      const manager = new MultiScheduleManager({
+        configPath: '/tmp/not-watched.json',
+        loadConfig: () => cfg,
+        execute,
+        database,
+      });
+      manager.start(cfg);
+      try {
+        // Cloudflare + watchdog fire the same slot almost simultaneously.
+        manager.triggerSchedule('bot1', { slotId: '2026-09-08:morning', slotName: 'morning', slotDate: '2026-09-08', triggerSource: 'external' });
+        const second = manager.triggerSchedule('bot1', { slotId: '2026-09-08:morning', slotName: 'morning', slotDate: '2026-09-08', triggerSource: 'external' });
+        expect(second).toBe(false); // already running → not admitted a second time
+        await waitFor(() => execute.mock.calls.length >= 1);
+        // Let the admitted run fully settle (it logs to DB) before closing.
+        await new Promise((resolve) => setTimeout(resolve, 120));
+        expect(maxConcurrent).toBe(1);
+      } finally {
+        manager.stop();
+      }
+    });
+  });
 });

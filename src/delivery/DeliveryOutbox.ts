@@ -57,6 +57,13 @@ export interface DeliveryOutboxOptions {
   retryBaseDelayMs?: number;
   retryMaxDelayMs?: number;
   now?: () => number;
+  /**
+   * Called once a work's delivery has succeeded OR been durably queued for
+   * retry. Used by the Slot ledger to lock the selected work id for a cell.
+   * Fires for both fresh deliveries and outbox replays, always with the SAME
+   * artifact (the manifest freezes it), so it never reports a different work.
+   */
+  onDeliver?: (artifact: DownloadedArtifact, target: TargetConfig) => void;
 }
 
 /** Durable, provider-independent delivery outbox for cache-mode downloads. */
@@ -117,6 +124,9 @@ export class DeliveryOutbox {
           language: artifact.language,
           bookmarkCount: artifact.bookmarkCount,
           viewCount: artifact.viewCount,
+          slotId: target.delivery?.slotContext?.slotId,
+          slotName: target.delivery?.slotContext?.slotName,
+          slotDate: target.delivery?.slotContext?.slotDate,
         },
       },
     };
@@ -125,6 +135,11 @@ export class DeliveryOutbox {
       `${artifact.type}-${artifact.pixivId}-${entry.id}.json`
     );
     await this.writeNewManifest(manifestPath, entry);
+
+    // Lock the selected work for this target as soon as it is durably queued —
+    // before the HTTP attempt. Retries/replays always reuse this manifest's
+    // artifact, so the callback reports the same pixivId.
+    this.options.onDeliver?.(artifact, target);
 
     try {
       await this.processManifest(manifestPath, entry);
@@ -228,6 +243,11 @@ export class DeliveryOutbox {
         delete entry.lastError;
         delete entry.nextAttemptAt;
         await this.writeManifest(manifestPath, entry);
+        // Outbox replay (after a restart) that finally succeeds: also report the
+        // locked work so the resuming slot cell converges to submitted.
+        if (entry.kind !== 'notification') {
+          this.options.onDeliver?.(entry.artifact, { id: entry.request.context.targetId } as TargetConfig);
+        }
       } catch (error) {
         entry.attempts++;
         entry.updatedAt = new Date().toISOString();

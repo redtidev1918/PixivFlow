@@ -21,9 +21,16 @@ export const DEFAULT_CONFIG = {
     timezone: 'Asia/Shanghai',
   },
   schedulerRuntime: {
+    mode: 'internal',
+    catchUpMissedRuns: true,
     watchConfig: true,
     reloadDebounceMs: 500,
     queueLimit: 8,
+    trigger: {
+      port: 8090,
+      host: '0.0.0.0',
+      graceMinutes: 90,
+    },
   },
   download: {
     concurrency: 3,

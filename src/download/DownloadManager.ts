@@ -59,6 +59,20 @@ export class DownloadManager implements IDownloadManager {
   private cancelled = false;
   private cancelReason = '';
   private readonly deliveryOutbox: DeliveryOutbox;
+  /** Per-target outcome hook (used by the Slot ledger to record cell results). */
+  private onTargetOutcome: ((target: TargetConfig, error?: string) => void) | null = null;
+  /** Fired when a work is locked for delivery (fresh or outbox replay). */
+  private onWorkLocked: ((artifact: { pixivId: string; type: string }, target: TargetConfig) => void) | null = null;
+
+  /** Register a callback fired after each target with the error if it failed. */
+  public setTargetOutcomeHook(fn: (target: TargetConfig, error?: string) => void): void {
+    this.onTargetOutcome = fn;
+  }
+
+  /** Register a callback fired when a Pixiv work is selected and locked for a target. */
+  public setWorkLockedHook(fn: (artifact: { pixivId: string; type: string }, target: TargetConfig) => void): void {
+    this.onWorkLocked = fn;
+  }
 
   /**
    * Request cooperative cancellation of the current run. In-flight item
@@ -132,6 +146,7 @@ export class DownloadManager implements IDownloadManager {
       {
         retryBaseDelayMs: config.delivery?.outboxRetryBaseMs,
         retryMaxDelayMs: config.delivery?.outboxRetryMaxMs,
+        onDeliver: (artifact, target) => this.onWorkLocked?.(artifact, target),
       }
     );
 
@@ -203,10 +218,12 @@ export class DownloadManager implements IDownloadManager {
 
       try {
         await this.dispatchTarget(target);
+        this.onTargetOutcome?.(target);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
         errors.push({ target: `${targetName} (${target.type})`, error: errorMessage });
         logger.error(`Target ${targetName} (${target.type}) failed, continuing with next target`, { error: errorMessage });
+        this.onTargetOutcome?.(target, errorMessage);
       }
     }
 

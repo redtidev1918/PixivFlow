@@ -10,6 +10,7 @@ import { ExecutionRepository } from './repositories/ExecutionRepository';
 import { SchedulerRepository } from './repositories/SchedulerRepository';
 import { ConfigHistoryRepository } from './repositories/ConfigHistoryRepository';
 import { TaskHistoryRepository } from './repositories/TaskHistoryRepository';
+import { SlotRepository } from './repositories/SlotRepository';
 
 export interface AccessTokenStore {
   accessToken: string;
@@ -51,6 +52,7 @@ export class Database implements IDatabase {
   private schedulerRepo: SchedulerRepository;
   private configHistoryRepo: ConfigHistoryRepository;
   private taskHistoryRepo: TaskHistoryRepository;
+  private slotRepo: SlotRepository;
 
   constructor(private readonly databasePath: string) {
     try {
@@ -74,6 +76,7 @@ export class Database implements IDatabase {
       this.schedulerRepo = new SchedulerRepository(this.db);
       this.configHistoryRepo = new ConfigHistoryRepository(this.db);
       this.taskHistoryRepo = new TaskHistoryRepository(this.db);
+      this.slotRepo = new SlotRepository(this.db);
     } catch (error) {
       throw new DatabaseError(
         `Failed to initialize database at ${this.databasePath}`,
@@ -92,6 +95,11 @@ export class Database implements IDatabase {
     // by better-sqlite3). Normalize to absolute so sibling dirs (topic-cache,
     // delivery-outbox) always land beside the real database regardless of CWD.
     return isAbsolute(this.databasePath) ? this.databasePath : resolve(process.cwd(), this.databasePath);
+  }
+
+  /** Schedule Slot ledger (business-level idempotency for scheduled batches). */
+  public get slots(): SlotRepository {
+    return this.slotRepo;
   }
 
   // Token management - delegated to TokenRepository

@@ -174,7 +174,9 @@ jobs:
           fi
       
       - name: Comment on PR (if applicable)
-        if: github.event_name == 'pull_request'
+        # Dependabot PR 使用只读的 GITHUB_TOKEN，无法发评论（issues:createComment 会 403）；
+        # 检查本身照常跑、结果进 Job Summary，仅跳过对 Dependabot PR 的评论。
+        if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]'
         uses: actions/github-script@v9
         with:
           script: |

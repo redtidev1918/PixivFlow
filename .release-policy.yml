@@ -20,7 +20,7 @@
     },
     "npm": {
       "required": true,
-      "publish": "npm publish --provenance --access public --ignore-scripts \"dist/release/pixivflow-$RELEASE_VERSION.tgz\"",
+      "publish": "trap 'rm -f .npmrc.release' EXIT; printf '//registry.npmjs.org/:_authToken=%s\\n' \"$NPM_TOKEN\" > .npmrc.release; npm --userconfig .npmrc.release publish --provenance --access public --ignore-scripts \"dist/release/pixivflow-$RELEASE_VERSION.tgz\"",
       "verify": "npm view pixivflow@$RELEASE_VERSION version | grep -Fx $RELEASE_VERSION"
     },
     "ghcr": {

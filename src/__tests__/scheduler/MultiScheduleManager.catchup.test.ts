@@ -183,9 +183,20 @@ describe('missed-cron catch-up at daemon start', () => {
       });
       manager.start(cfg);
       try {
-        // Cloudflare + watchdog fire the same slot almost simultaneously.
-        manager.triggerSchedule('bot1', { slotId: '2026-09-08:morning', slotName: 'morning', slotDate: '2026-09-08', triggerSource: 'external' });
-        const second = manager.triggerSchedule('bot1', { slotId: '2026-09-08:morning', slotName: 'morning', slotDate: '2026-09-08', triggerSource: 'external' });
+        // Cloudflare + watchdog fire the same occurrence almost simultaneously.
+        const slot = {
+          slotId: 'bot1@2026-09-08T1000',
+          scheduleId: 'bot1',
+          occurrenceAt: Date.parse('2026-09-08T02:00:00Z'),
+          occurrenceDate: '2026-09-08',
+          occurrenceLabel: '10:00',
+          timezone: 'Asia/Shanghai',
+          triggerSource: 'http' as const,
+          slotName: '10:00',
+          slotDate: '2026-09-08',
+        };
+        manager.triggerSchedule('bot1', { triggerSource: 'http', slot });
+        const second = manager.triggerSchedule('bot1', { triggerSource: 'http', slot });
         expect(second).toBe(false); // already running → not admitted a second time
         await waitFor(() => execute.mock.calls.length >= 1);
         // Let the admitted run fully settle (it logs to DB) before closing.

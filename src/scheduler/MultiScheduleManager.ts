@@ -14,11 +14,13 @@ import {
   Scheduler,
 } from './Scheduler';
 import { describeSchedule, resolveSchedules } from './schedules';
+import { ResolvedOccurrence, ScheduleRunOptions, resolveOccurrence } from './OccurrenceResolver';
+import { SlotContext } from './SlotCoordinator';
 
 export interface MultiScheduleManagerOptions {
   configPath: string;
   loadConfig: () => StandaloneConfig;
-  execute: (config: StandaloneConfig, schedule: ScheduleConfig, slot?: SlotRunContext) => Promise<void>;
+  execute: (config: StandaloneConfig, schedule: ScheduleConfig, options?: ScheduleRunOptions) => Promise<void>;
   database?: Database;
   telemetry?: JobTelemetry;
   onFailure?: (
@@ -34,14 +36,6 @@ export interface ConfigReloadResult {
   generation: number;
   schedules: string[];
   error?: string;
-}
-
-/** Context for a run driven by an authenticated external Slot trigger. */
-export interface SlotRunContext {
-  slotId: string;
-  slotName: string;
-  slotDate: string;
-  triggerSource: string;
 }
 
 class SerialJobAdmission implements JobAdmissionController {
@@ -108,8 +102,6 @@ export class MultiScheduleManager {
   private reloadTimer: NodeJS.Timeout | null = null;
   private watching = false;
   private readonly admission = new SerialJobAdmission(8);
-  /** Slot context for the next externally-triggered run; consumed once by execute(). */
-  private pendingSlot: SlotRunContext | null = null;
 
   constructor(private readonly options: MultiScheduleManagerOptions) {}
 
@@ -148,15 +140,19 @@ export class MultiScheduleManager {
       try {
         const interval = cronParser.parseExpression(plan.cron, {
           currentDate: lastEnd,
-          tz: plan.timezone ?? 'Asia/Shanghai',
+          tz: plan.timezone ?? config.scheduler?.timezone,
         });
         const nextExpected = interval.next().toDate();
         if (nextExpected.getTime() <= now.getTime()) {
+          // Resolve the missed canonical occurrence so catch-up opens the SAME
+          // slot a timely cron tick would have (bounded: only the one missed
+          // fire, never an unbounded historical replay).
+          const missed = resolveOccurrence({ schedule: plan, at: now, triggerSource: 'catchup' });
           logger.warn(
             `Schedule ${plan.id}: cron fire was missed while the daemon was down ` +
               `(next expected after last run ${lastEnd.toISOString()} at ${nextExpected.toISOString()}); running catch-up now`
           );
-          scheduler.runNow();
+          scheduler.runNow({ triggerSource: 'catchup', slot: occurrenceToSlotContext(missed) });
         }
       } catch (error) {
         logger.warn('Catch-up check failed for schedule', {
@@ -219,13 +215,11 @@ export class MultiScheduleManager {
         this.admission,
         (failure) => this.options.onFailure?.(config, plan, failure)
       );
-      scheduler[registerCron ? 'start' : 'init'](async () => {
+      scheduler[registerCron ? 'start' : 'init'](async (options?: ScheduleRunOptions) => {
         // The closure keeps the exact validated snapshot for an in-flight run.
-        // Later runs are attached to the replacement cron table. An external
-        // trigger's slot context is consumed once here (cron fires have none).
-        const slot = this.pendingSlot;
-        this.pendingSlot = null;
-        await this.options.execute(config, plan, slot ?? undefined);
+        // Cron fires pass no options (runJob resolves the occurrence for now);
+        // catch-up and HTTP triggers pass a pre-resolved occurrence / source.
+        await this.options.execute(config, plan, options ?? { triggerSource: 'cron' });
       });
       this.schedulers.set(plan.id, scheduler);
     }
@@ -284,13 +278,14 @@ export class MultiScheduleManager {
   /**
    * Trigger one schedule immediately (external HTTP trigger / run-once). Returns
    * false if the schedule id is unknown. Honors Scheduler's running/pending and
-   * serial-admission guards, so duplicate triggers never double-run.
+   * serial-admission guards, so duplicate triggers never double-run. The trigger
+   * adapter pre-resolves the canonical occurrence and passes it as `options.slot`
+   * with `triggerSource: 'http'`; admission/ledger idempotency are the safety net.
    */
-  public triggerSchedule(scheduleId: string, slot?: SlotRunContext): boolean {
+  public triggerSchedule(scheduleId: string, options?: ScheduleRunOptions): boolean {
     const scheduler = this.schedulers.get(scheduleId);
     if (!scheduler) return false;
-    if (slot) this.pendingSlot = slot;
-    return scheduler.runNow();
+    return scheduler.runNow(options);
   }
 
   /** Enabled schedule ids in the active snapshot (for the trigger API / status). */
@@ -305,4 +300,19 @@ export class MultiScheduleManager {
       schedules: [...this.schedulers.keys()],
     };
   }
+}
+
+/** Map a resolved canonical occurrence to the durable SlotContext runJob uses. */
+export function occurrenceToSlotContext(o: ResolvedOccurrence): SlotContext {
+  return {
+    slotId: o.slotId,
+    scheduleId: o.scheduleId,
+    occurrenceAt: o.occurrenceAt.getTime(),
+    occurrenceDate: o.occurrenceDate,
+    occurrenceLabel: o.occurrenceLabel,
+    timezone: o.timezone,
+    triggerSource: o.triggerSource,
+    slotName: o.occurrenceLabel,
+    slotDate: o.occurrenceDate,
+  };
 }

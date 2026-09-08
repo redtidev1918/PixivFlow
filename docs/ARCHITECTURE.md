@@ -162,6 +162,33 @@ executeCommand():command.validate?(args) → command.execute(context, args)
 4. 收尾:达到次数/失败上限时自动 `stop()`;`stop()` 停掉 cron 任务并清理定时器。`SchedulerCommand` 注册 `SIGINT`/`SIGTERM`,退出前依次停调度器、停令牌维护、关数据库。
 5. 已知简化:`executeWithTracking` 目前只透传 job,`items_downloaded` 始终记录为 0(源码注释已注明)。
 
+## 持久化调度执行（Durable Schedule Occurrence / Slot）
+
+定时执行不依赖“到点那一刻进程正好醒着”。一次 schedule 的某次计划触发，由一条 **durable occurrence（运行中也称 Slot）** 表示，落库在 `schedule_slots` / `schedule_slot_items`。所有触发源——内部 cron、受认证 HTTP、手动 CLI、内部 catch-up——都进入同一个执行服务（`createSchedulerRuntime().runJob`），区别只是 trigger source。
+
+- **身份**：occurrence id 由 `ScheduleDefinition`（id + cron + timezone）与触发时刻推出：`<scheduleId>@<occurrenceStamp>`，stamp 是该 schedule 时区下该次计划时刻（分钟精度）。不假设“一天一次”，任意 cron（每小时 / 每 6 小时 / 每周）都成立。唯一计算位置：`src/scheduler/OccurrenceResolver.ts`。
+- **时区属于 schedule**：用 `schedule.timezone`（回退 `scheduler.timezone` / UTC）解析，从不用服务器本地时区。
+- **Target 成员冻结**：occurrence 首次创建时把当时的 `targetIds` 快照进 `schedule_slots.target_ids` 并物化 item（`UNIQUE(slot_id,target_id)`）。之后配置热重载增删 target **不影响**这次 occurrence，只影响未来 occurrence。
+- **作品锁（最关键不变量）**：target 首次选定作品后，先把 `work_id` 持久化（`lockWork`），再产生下载/投递等外部副作用；自动重试 / 进程重启 / outbox 重放都沿用同一作品。候选 fallback（重复→下一个、过滤→下一个、无效→下一个）**只发生在加锁之前**；加锁之后下载/投递失败继续该作品，不偷偷换候选。已锁作品若永久不可用（删除/禁止），普通重试判 `failed`，由显式 replacement（TelePost「重抓」）决定是否换。
+- **终态**：`submitted`（成功）、`no_candidate`（有界候选集里没有合法作品，正常业务终态，不无限重试）、`failed`（可重试失败）。slot 聚合状态由一处计算（全成功→`success`；成功+no_candidate/失败→`partial`；无一成功且不可恢复→`failed`）。
+- **Outbox 边界**：outbox 只保证“已产生的投递”最终送达，重放**永不**重新进入候选选择。
+- **Scheduled vs Ad-hoc**：`run-once` / 「重抓」是 ad-hoc 执行，跑下载计划但**不**打开 occurrence，绝不能把某次定时 occurrence 标记为完成或被 resume。
+
+**架构不变量（Architecture Invariants）**：
+
+1. daemon 启动 ≠ 触发定时执行（external 模式冷启动零定时执行）。
+2. trigger source 不改变执行语义（cron/http/manual/catchup 走同一管线）。
+3. Slot = 一个 schedule 的一次 canonical occurrence，不是“早班/晚班”数据库行。
+4. (slot, target) 唯一；一个 occurrence 内同一 target 绝不会出两个作品。
+5. 已物化 occurrence 的 target 成员稳定，配置重载不篡改它。
+6. 自动重试不改变已锁定作品。
+7. 候选 fallback 只发生在作品加锁之前。
+8. outbox 重放永不重新进入候选选择。
+9. 成功的 item 永不自动重跑。
+10. external 模式永不做历史 catch-up。
+11. 手动 ad-hoc 执行 ≠ scheduled occurrence。
+12. Core 不依赖 TelePost / Fly / Cloudflare；`if (fly)…`、`morning/evening` 枚举、bot 编号都不属于 Core。
+
 ## 存储层
 
 `src/storage/Database.ts` 使用 better-sqlite3(同步驱动)。初始化时自动建目录,开启 `journal_mode = WAL`、`synchronous = NORMAL`、`cache_size = -64000`(64MB)。`migrate()` 幂等:全部 `CREATE TABLE IF NOT EXISTS` + 索引,并用 `PRAGMA table_info` 判断后补 `config_history.is_active` 列。
@@ -176,6 +203,8 @@ executeCommand():command.validate?(args) → command.execute(context, args)
 | `scheduler_executions` | `execution_number`、`status`、`start/end_time`、`duration_ms`、`items_downloaded` | 调度历史 |
 | `config_history` | `name`、`config_json`、`is_active` | 配置快照,支持保存/应用/删除 |
 | `task_history` | `task_id` UNIQUE、`status`、`progress_*` | WebUI 下载任务状态持久化 |
+| `schedule_slots` | `id` PK（`<scheduleId>@<occurrenceStamp>`）、`schedule_id`、`occurrence_at`、`timezone`、`target_ids`（成员快照 JSON）、`status`、`trigger_source` | 一次 durable schedule occurrence |
+| `schedule_slot_items` | `slot_id`+`target_id` UNIQUE、`work_id`、`status`、`attempt_count`、`last_error` | occurrence 内每个 target 的执行/作品锁状态 |
 
 常用索引覆盖 `downloads(pixiv_id, type)`、`downloads(tag)`、`downloads(downloaded_at)`、`execution_log(tag, type)`、`scheduler_executions(execution_number/status)`、`task_history(task_id/status/start_time)` 等。
 

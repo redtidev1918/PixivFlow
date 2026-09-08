@@ -255,6 +255,10 @@ export class HttpMultipartDelivery implements DeliveryProvider {
       viewCount: formatCount(request.context.viewCount),
       // Schedule slot provenance (e.g. 2026-09-08 / morning / 2026-09-08:morning)
       // so the review card can show "今日早班 · bot1 · 小说" instead of a bare post.
+      scheduleId: request.context.scheduleId ?? '',
+      executionId: request.context.executionId ?? '',
+      occurrenceAt: request.context.occurrenceAt ?? '',
+      triggerSource: request.context.triggerSource ?? '',
       slotId: request.context.slotId ?? '',
       slotName: request.context.slotName ?? '',
       slotDate: request.context.slotDate ?? '',
@@ -264,7 +268,7 @@ export class HttpMultipartDelivery implements DeliveryProvider {
         const values = Array.isArray(value) ? value : [value];
         const rendered = values.map((item) =>
           String(item).replace(
-            /\{\{(title|pixivId|type|targetId|tag|topic|workTags|link|topicTag|spoiler|xRestrict|xRestrictLabel|xRestrictTag|rankingDate|publishedDate|language|bookmarkCount|viewCount|slotId|slotName|slotDate)\}\}/g,
+            /\{\{(title|pixivId|type|targetId|tag|topic|workTags|link|topicTag|spoiler|xRestrict|xRestrictLabel|xRestrictTag|rankingDate|publishedDate|language|bookmarkCount|viewCount|scheduleId|executionId|occurrenceAt|triggerSource|slotId|slotName|slotDate)\}\}/g,
             (_, key: string) => variables[key]
           )
         );

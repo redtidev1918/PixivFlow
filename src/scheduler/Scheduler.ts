@@ -4,6 +4,7 @@ import { SchedulerConfig } from '../config';
 import { logger } from '../logger';
 import { isOperationCancelled } from '../utils/errors';
 import { Database } from '../storage/Database';
+import { ScheduleRunOptions } from './OccurrenceResolver';
 
 /**
  * Watchdog fallback: a schedule without an explicit `timeout` still gets this
@@ -44,7 +45,7 @@ export interface JobAdmissionController {
 
 export class Scheduler {
   private task: ScheduledTask | null = null;
-  private job: (() => Promise<void>) | null = null;
+  private job: ((options?: ScheduleRunOptions) => Promise<void>) | null = null;
   private running = false;
   private lastExecutionTime: number = 0;
   private executionCount: number = 0;
@@ -62,7 +63,7 @@ export class Scheduler {
     private readonly onFailure?: (failure: JobFailure) => Promise<void> | void
   ) {}
 
-  public start(job: () => Promise<void>) {
+  public start(job: (options?: ScheduleRunOptions) => Promise<void>) {
     this.arm(job, true);
   }
 
@@ -71,11 +72,11 @@ export class Scheduler {
    * a cron task. Used in `external` scheduler mode where an authenticated HTTP
    * trigger — not the in-process clock — fires runs.
    */
-  public init(job: () => Promise<void>) {
+  public init(job: (options?: ScheduleRunOptions) => Promise<void>) {
     this.arm(job, false);
   }
 
-  private arm(job: () => Promise<void>, registerCron: boolean) {
+  private arm(job: (options?: ScheduleRunOptions) => Promise<void>, registerCron: boolean) {
     if (registerCron && !cron.validate(this.config.cron)) {
       throw new Error(`Invalid cron expression: ${this.config.cron}`);
     }
@@ -103,7 +104,7 @@ export class Scheduler {
       this.task = cron.schedule(
         this.config.cron,
         async () => {
-          await this.executeJob(job);
+          await this.executeJob(this.job, undefined);
         },
         {
           timezone: this.config.timezone,
@@ -118,21 +119,22 @@ export class Scheduler {
    * run-once). Honors the same guards as a cron firing. Returns false when the
    * run is not admitted (already running/pending, stopped, maxed) so callers
    * can report idempotent "already in progress" instead of assuming a start.
+   * Fire-and-forget: the returned boolean only reports admission.
    */
-  public runNow(): boolean {
+  public runNow(triggerOptions?: ScheduleRunOptions): boolean {
     if (!this.job) return false;
     if (this.running || this.pending || this.stopped) return false;
-    void this.executeJob(this.job);
+    void this.executeJob(this.job, triggerOptions);
     return true;
   }
 
-  private async executeJob(job: () => Promise<void>) {
+  private async executeJob(job: ((options?: ScheduleRunOptions) => Promise<void>) | null, triggerOptions?: ScheduleRunOptions) {
+    if (!job) return;
     // Check if already running
     if (this.running || this.pending) {
       logger.warn('Skipping scheduled job because previous run is still in progress');
       return;
     }
-
     // Check if stopped
     if (this.stopped) {
       logger.info('Scheduler is stopped, skipping execution');
@@ -352,10 +354,11 @@ export class Scheduler {
    * to intercept individual download events.
    */
   private async executeWithTracking(
-    job: () => Promise<void>,
-    onItemsDownloaded: (count: number) => void
+    job: (options?: ScheduleRunOptions) => Promise<void>,
+    onItemsDownloaded: (count: number) => void,
+    triggerOptions?: ScheduleRunOptions
   ) {
-    await job();
+    await job(triggerOptions);
   }
 
   public stop() {

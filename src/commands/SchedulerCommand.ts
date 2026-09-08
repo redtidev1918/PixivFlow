@@ -7,9 +7,21 @@ import { CommandCategory } from './metadata';
 import { CommandContext, CommandArgs, CommandResult } from './types';
 import { getConfigPath, loadConfig, StandaloneConfig } from '../config';
 import { MultiScheduleManager } from '../scheduler/MultiScheduleManager';
-import { ScheduleTriggerServer } from '../scheduler/ScheduleTriggerServer';
+import { ScheduleTriggerServer, TriggerRunResult } from '../scheduler/ScheduleTriggerServer';
 import { SlotCoordinator } from '../scheduler/SlotCoordinator';
+import { TriggerSource } from '../scheduler/OccurrenceResolver';
 import { createSchedulerRuntime } from './scheduler-runtime';
+
+/**
+ * Decide whether the authenticated HTTP trigger server should be mounted. It is
+ * always up in `external` mode (the external clock needs it); in `internal`
+ * mode it is opt-in via `schedulerRuntime.trigger.enabled` for manual/ops
+ * triggers. HTTP trigger is an independent adapter from wall-clock ownership.
+ */
+function triggerEnabled(config: StandaloneConfig): boolean {
+  if (config.schedulerRuntime?.mode === 'external') return true;
+  return config.schedulerRuntime?.trigger?.enabled === true;
+}
 
 /**
  * Scheduler command - Start scheduler (default if enabled in config)
@@ -52,54 +64,91 @@ export class SchedulerCommand extends BaseCommand {
       });
       const status = manager.start(runtime.config);
 
-      // External mode: expose the authenticated Slot trigger HTTP server. The
-      // in-process cron is disabled (manager.init); runs arrive via POST only.
+      // Authenticated HTTP trigger. Mounted in external mode (the external clock
+      // wakes the machine here) and, opt-in, in internal mode for manual/ops
+      // triggers. Business logic lives in runJob/SlotCoordinator; this handler
+      // only authenticates, resolves the occurrence and delegates synchronously
+      // so the open request is the activity lease for the whole run.
       let triggerServer: ScheduleTriggerServer | null = null;
-      if (manager.isExternalMode(runtime.config)) {
+      if (triggerEnabled(runtime.config)) {
         const rt = runtime.config.schedulerRuntime!;
         const coordinator = new SlotCoordinator(runtime.database);
         const resolveConfig = (): StandaloneConfig => manager['activeConfig'] ?? runtime.config;
+        const findPlan = (cfg: StandaloneConfig, scheduleId: string) =>
+          cfg.schedules?.find((s) => s.id === scheduleId && s.enabled !== false);
+
+        // In-process singleflight: coalesce concurrent triggers of the same
+        // occurrence on THIS process. Optimization only — the DB unique
+        // constraints + ledger are the real correctness guarantee across
+        // restarts/processes.
+        const inFlight = new Map<string, Promise<TriggerRunResult>>();
+
         triggerServer = new ScheduleTriggerServer(
           ScheduleTriggerServer.resolveToken(rt.trigger?.token),
           {
-            resolveSlot: (requested) => coordinator.resolveSlot(requested, resolveConfig()),
-            runScheduleSlot: async (scheduleId, slotCtx) => {
+            listSchedules: () => manager.scheduleIds(),
+            resolve: (scheduleId, source, at, label) => {
               const cfg = resolveConfig();
-              const plan = cfg.schedules?.find((s) => s.id === scheduleId);
-              if (!plan) {
-                return { scheduleId, slotId: slotCtx.slotId, status: 'failed', cells: [], alreadyCompleted: false };
-              }
-              const slot = { ...slotCtx, triggerSource: 'external' as const };
-              const before = coordinator.begin(slot, plan);
-              if (before.alreadyCompleted) {
-                return coordinator.completedSummary(slot.slotId, plan);
-              }
-              // runJob performs begin/pendingTargets/finish against the ledger.
-              await runtime.runJob(cfg, plan, slot);
-              const rec = runtime.database.slots.getSlot(slot.slotId);
-              const cells = runtime.database.slots.getCells(slot.slotId).map((c) => ({
-                targetId: c.targetId,
-                status: c.status,
-                workId: c.workId,
-                error: c.lastError,
-              }));
+              const plan = findPlan(cfg, scheduleId);
+              if (!plan) return { error: `unknown schedule: ${scheduleId}`, status: 404 };
+              const resolved = coordinator.resolveOccurrence(plan, cfg, source, at, label);
+              if (!resolved.context) return { error: resolved.error ?? 'could not resolve occurrence', status: resolved.status ?? 400 };
+              return { context: resolved.context };
+            },
+            run: (scheduleId, context) => {
+              const key = context.slotId;
+              const existing = inFlight.get(key);
+              if (existing) return existing;
+              const cfg = resolveConfig();
+              const plan = findPlan(cfg, scheduleId);
+              const promise = (async (): Promise<TriggerRunResult> => {
+                try {
+                  if (!plan) return { scheduleId, slotId: context.slotId, status: 'failed', alreadyCompleted: false };
+                  // Synchronous: awaited so the HTTP response does not return
+                  // (and release the activity lease) until the run finishes.
+                  await runtime.runJob(cfg, plan, { triggerSource: 'http' as TriggerSource, slot: context });
+                  const rec = runtime.database.slots.getSlot(context.slotId);
+                  const cells = runtime.database.slots.getCells(context.slotId).map((c) => ({
+                    targetId: c.targetId,
+                    status: c.status,
+                    workId: c.workId,
+                    error: c.lastError,
+                  }));
+                  return {
+                    scheduleId,
+                    slotId: context.slotId,
+                    status: rec?.status ?? 'failed',
+                    alreadyCompleted: rec?.status === 'success' || rec?.status === 'partial',
+                    cells,
+                  };
+                } finally {
+                  inFlight.delete(key);
+                }
+              })();
+              inFlight.set(key, promise);
+              return promise;
+            },
+            status: (scheduleId) => {
+              const cfg = resolveConfig();
+              const plan = findPlan(cfg, scheduleId);
+              const resolved = plan ? coordinator.resolveOccurrence(plan, cfg, 'manual', new Date()) : null;
+              const ctx = resolved && 'context' in resolved ? resolved.context : null;
               return {
                 scheduleId,
-                slotId: slot.slotId,
-                status: rec?.status ?? 'failed',
-                alreadyCompleted: false,
-                cells,
+                mode: rt.mode ?? 'internal',
+                occurrence: ctx?.slotId ?? null,
               };
             },
-            status: () => ({
-              mode: 'external',
-              schedules: manager.scheduleIds(),
-            }),
           }
         );
         const port = rt.trigger?.port ?? (Number(process.env.PORT) || 8090);
         triggerServer.start(rt.trigger?.host ?? '0.0.0.0', port);
-        context.logger.info('External scheduler mode: internal cron disabled, awaiting authenticated Slot triggers', { port });
+        context.logger.info(
+          rt.mode === 'external'
+            ? 'External scheduler mode: internal cron disabled, awaiting authenticated schedule triggers'
+            : 'Internal scheduler mode with authenticated HTTP trigger enabled',
+          { port }
+        );
       }
 
       const cleanup = () => {

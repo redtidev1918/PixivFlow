@@ -3,33 +3,47 @@ import { timingSafeEqual } from 'node:crypto';
 import { Server } from 'node:http';
 
 import { logger } from '../logger';
+import { SlotContext } from './SlotCoordinator';
+import { TriggerSource } from './OccurrenceResolver';
 
 /**
- * Authenticated HTTP Slot trigger for `schedulerRuntime.mode: external`.
+ * Authenticated HTTP schedule trigger.
  *
  * A dumb external clock (Cloudflare cron worker, cron-job.org, GitHub Actions)
- * POSTs the slot name; this server wakes with the machine, verifies a bearer
- * token, and runs the schedules' slot **synchronously** so the open HTTP
- * request keeps the Fly machine active for the whole run (the request itself
- * is the activity lease — no background fire-and-forget that lets Fly stop the
- * machine mid-slot). All business state lives in the Slot ledger; the handler
- * never trusts a client-supplied past date and never back-fills old slots.
+ * POSTs a schedule id; this server wakes with the machine, verifies a bearer
+ * token, resolves the canonical occurrence from the schedule's OWN cron +
+ * timezone (never a client-supplied date), and runs that schedule synchronously
+ * so the open HTTP request keeps the machine active for the whole run — the
+ * request itself is the activity lease (no background fire-and-forget that lets
+ * a scale-to-zero host stop mid-run). All business state lives in the Slot
+ * ledger; the handler only authenticates, validates, resolves and delegates. It
+ * never queries Pixiv, loops targets, or touches the Slot DB itself.
+ *
+ * Mounting is independent of `schedulerRuntime.mode`: external mode mounts it as
+ * the primary clock; always-on/internal mode may also mount it for manual ops.
  */
-export interface TriggerHandlers {
-  /** Resolve the canonical slot for a requested name (validated to now). */
-  resolveSlot(requested: string | undefined): { slotId: string; slotName: string; slotDate: string } | { error: string; status: number };
-  /** Run one schedule's slot; idempotent. Returns the schedule's slot summary. */
-  runScheduleSlot(scheduleId: string, slot: { slotId: string; slotName: string; slotDate: string }): Promise<ScheduleSlotResult>;
-  /** List enabled schedules + today's slot status (for GET). */
-  status(): unknown;
-}
-
-export interface ScheduleSlotResult {
+export interface TriggerRunResult {
   scheduleId: string;
   slotId: string;
   status: string;
-  cells: Array<{ targetId: string; status: string; workId: string | null; error?: string | null }>;
   alreadyCompleted?: boolean;
+  cells?: Array<{ targetId: string; status: string; workId: string | null; error?: string | null }>;
+}
+
+export interface TriggerHandlers {
+  /** Enabled schedule ids (for 404 on unknown / GET listing). */
+  listSchedules(): string[];
+  /**
+   * Resolve the canonical occurrence for a trigger to `scheduleId` at `at`.
+   * Returns a durable SlotContext or an HTTP error ({ status, error }).
+   */
+  resolve(scheduleId: string, source: TriggerSource, at: Date, label?: string):
+    | { context: SlotContext }
+    | { error: string; status: number };
+  /** Run the schedule for a resolved occurrence; idempotent. */
+  run(scheduleId: string, context: SlotContext): Promise<TriggerRunResult>;
+  /** Read-only snapshot of a schedule's current occurrence (for GET). */
+  status(scheduleId: string): unknown;
 }
 
 export class ScheduleTriggerServer {
@@ -53,53 +67,51 @@ export class ScheduleTriggerServer {
       res.json({ status: 'ok', service: 'pixivflow-scheduler-trigger' });
     });
 
+    // Read-only: list enabled schedules + their current occurrence status.
     app.get('/internal/schedules', this.auth, (_req: Request, res: Response) => {
-      res.json(this.handlers.status());
+      const schedules = this.handlers.listSchedules().map((id) => this.handlers.status(id));
+      res.json({ schedules });
     });
 
-    app.post('/internal/schedules/run', this.auth, async (req: Request, res: Response) => {
+    // Trigger one schedule by id. The server resolves the occurrence from the
+    // schedule cron; the body carries no date and cannot back-fill history.
+    app.post('/internal/schedules/:scheduleId/run', this.auth, async (req: Request, res: Response) => {
       try {
-        const slotName = typeof req.body?.slot === 'string' ? req.body.slot : undefined;
-        const resolved = this.handlers.resolveSlot(slotName);
-        if ('error' in resolved) {
+        const scheduleId = req.params.scheduleId;
+        if (!this.handlers.listSchedules().includes(scheduleId)) {
+          res.status(404).json({ status: 'error', error: `unknown schedule: ${scheduleId}` });
+          return;
+        }
+
+        // Optional human label for provenance (e.g. a deploy-layer "今日早班").
+        // Bounded; never parsed; identity always derives from the cron occurrence.
+        const label =
+          typeof req.body?.label === 'string' ? req.body.label.slice(0, 80) : undefined;
+
+        const resolved = this.handlers.resolve(scheduleId, 'http', new Date(), label);
+        if (!('context' in resolved)) {
           res.status(resolved.status).json({ status: 'error', error: resolved.error });
           return;
         }
 
-        const schedules = this.scheduleIds();
-        if (schedules.length === 0) {
-          res.status(409).json({ status: 'error', error: 'No enabled schedules' });
-          return;
-        }
-
-        // Run schedules serially (low-memory). The first schedule's run returns
-        // false-admission (already running) only under a true concurrent dup.
-        const results: ScheduleSlotResult[] = [];
-        for (const scheduleId of schedules) {
-          results.push(await this.handlers.runScheduleSlot(scheduleId, resolved));
-        }
-
-        const anyWork = results.some((r) => !r.alreadyCompleted);
-        res.json({
-          status: results.some((r) => r.status === 'partial') ? 'partial' : 'ok',
-          slot: resolved.slotId,
-          note: results.every((r) => r.alreadyCompleted) ? 'already_completed' : anyWork ? 'completed' : 'noop',
-          schedules: results,
+        const result = await this.handlers.run(scheduleId, resolved.context);
+        // alreadyCompleted => 200 with a clear note; real run => 200 completed.
+        res.status(result.alreadyCompleted ? 200 : 200).json({
+          status: result.status === 'failed' ? 'failed' : 'ok',
+          schedule: result,
+          note: result.alreadyCompleted ? 'already_completed' : 'completed',
         });
       } catch (error) {
-        logger.error('Slot trigger failed', { error: error instanceof Error ? error.message : String(error) });
-        res.status(500).json({ status: 'error', error: 'slot run failed; the slot ledger will resume on the next trigger' });
+        logger.error('Schedule trigger failed', { error: error instanceof Error ? error.message : String(error) });
+        // The slot ledger resumes on the next trigger; a 500 tells the clock to
+        // retry safely (idempotent — the same occurrence/ slot is reused).
+        res.status(500).json({ status: 'error', error: 'schedule run failed; the occurrence will resume on the next trigger' });
       }
     });
 
     this.server = app.listen(port, host, () => {
       logger.info('Schedule trigger server listening', { host, port, auth: this.token ? 'bearer' : 'DISABLED (no token)' });
     });
-  }
-
-  private scheduleIds(): string[] {
-    const s = this.handlers.status() as { schedules?: string[] };
-    return s.schedules ?? [];
   }
 
   private auth = (req: Request, res: Response, next: () => void): void => {

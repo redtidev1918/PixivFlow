@@ -1,9 +1,38 @@
 /**
- * Schedule trigger server auth and slot-resolution tests (no live socket).
+ * Schedule trigger server auth + per-schedule dispatch tests (live ephemeral
+ * express socket). The server is a thin adapter: authenticate, resolve the
+ * canonical occurrence, delegate, serialize. It never knows business state.
  */
 import http from 'node:http';
 
 import { ScheduleTriggerServer } from '../../scheduler/ScheduleTriggerServer';
+
+const ctx = {
+  slotId: 'schedule-a@2026-09-08T1000',
+  scheduleId: 'schedule-a',
+  occurrenceAt: Date.parse('2026-09-08T02:00:00Z'),
+  occurrenceDate: '2026-09-08',
+  occurrenceLabel: '10:00',
+  timezone: 'Asia/Shanghai',
+  triggerSource: 'http' as const,
+  slotName: '10:00',
+  slotDate: '2026-09-08',
+};
+
+function handlers(overrides: Record<string, unknown> = {}) {
+  return {
+    listSchedules: () => ['schedule-a', 'schedule-b'],
+    resolve: jest.fn(() => ({ context: { ...ctx } })),
+    run: jest.fn(async (id: string) => ({
+      scheduleId: id,
+      slotId: ctx.slotId,
+      status: 'success',
+      cells: [{ targetId: 't', status: 'submitted', workId: '1' }],
+    })),
+    status: jest.fn((id: string) => ({ scheduleId: id, mode: 'external' })),
+    ...overrides,
+  };
+}
 
 describe('ScheduleTriggerServer token resolution', () => {
   it('fails closed with no token (config nor env)', () => {
@@ -19,20 +48,14 @@ describe('ScheduleTriggerServer token resolution', () => {
   });
 });
 
-describe('trigger endpoint auth (live ephemeral express)', () => {
-  it('rejects requests without a valid bearer token', async () => {
-    const { base, close } = await boot('secret-token', {
-      resolveSlot: () => ({ slotId: 'x', slotName: 'morning', slotDate: '2026-09-08' }),
-      runScheduleSlot: jest.fn(),
-      status: () => ({ schedules: ['s1'] }),
-    });
+describe('trigger endpoint auth + dispatch (live ephemeral express)', () => {
+  it('rejects requests without a valid bearer token (401)', async () => {
+    const { base, close } = await boot('secret-token', handlers());
     try {
-      const noAuth = await fetch(`${base}/internal/schedules/run`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
-      });
+      const url = `${base}/internal/schedules/schedule-a/run`;
+      const noAuth = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
       expect(noAuth.status).toBe(401);
-
-      const badAuth = await fetch(`${base}/internal/schedules/run`, {
+      const badAuth = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer wrong' },
         body: '{}',
@@ -43,40 +66,76 @@ describe('trigger endpoint auth (live ephemeral express)', () => {
     }
   });
 
-  it('runs schedules with a valid token and returns summary', async () => {
-    const run = jest.fn(async (id: string) => ({
-      scheduleId: id, slotId: '2026-09-08:morning', status: 'success',
-      cells: [{ targetId: 't', status: 'submitted', workId: '1' }],
-    }));
-    const { base, close } = await boot('secret-token', {
-      resolveSlot: () => ({ slotId: '2026-09-08:morning', slotName: 'morning', slotDate: '2026-09-08' }),
-      runScheduleSlot: run,
-      status: () => ({ schedules: ['bot1', 'bot2'] }),
-    });
+  it('returns 503 when no token configured (fail closed)', async () => {
+    const { base, close } = await boot(undefined, handlers());
     try {
-      const res = await fetch(`${base}/internal/schedules/run`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer secret-token' },
-        body: JSON.stringify({ slot: 'morning' }),
-      });
-      expect(res.status).toBe(200);
-      const body = (await res.json()) as { slot?: string };
-      expect(body.slot).toBe('2026-09-08:morning');
-      expect(run).toHaveBeenCalledTimes(2); // bot1 + bot2
+      const res = await fetch(`${base}/internal/schedules/schedule-a/run`, { method: 'POST', body: '{}' });
+      expect(res.status).toBe(503);
     } finally {
       close();
     }
   });
 
-  it('returns 503 when no token configured (fail closed)', async () => {
-    const { base, close } = await boot(undefined, {
-      resolveSlot: () => ({ slotId: 'x', slotName: 'morning', slotDate: '2026-09-08' }),
-      runScheduleSlot: jest.fn(),
-      status: () => ({ schedules: [] }),
-    });
+  it('404 on unknown schedule id and does not run', async () => {
+    const h = handlers();
+    const { base, close } = await boot('secret-token', h);
     try {
-      const res = await fetch(`${base}/internal/schedules/run`, { method: 'POST', body: '{}' });
-      expect(res.status).toBe(503);
+      const res = await fetch(`${base}/internal/schedules/nope/run`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer secret-token' },
+        body: '{}',
+      });
+      expect(res.status).toBe(404);
+      expect(h.run).not.toHaveBeenCalled();
+    } finally {
+      close();
+    }
+  });
+
+  it('runs only the requested schedule with a valid token and returns its summary', async () => {
+    const h = handlers();
+    const { base, close } = await boot('secret-token', h);
+    try {
+      const res = await fetch(`${base}/internal/schedules/schedule-a/run`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer secret-token' },
+        body: JSON.stringify({ label: '今日早班' }),
+      });
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { schedule?: { scheduleId: string; slotId: string } };
+      expect(body.schedule?.scheduleId).toBe('schedule-a');
+      expect(body.schedule?.slotId).toBe(ctx.slotId);
+      expect(h.run).toHaveBeenCalledTimes(1); // exactly one schedule, not all of them
+      expect(h.run).toHaveBeenCalledWith('schedule-a', expect.objectContaining({ slotId: ctx.slotId }));
+    } finally {
+      close();
+    }
+  });
+
+  it('surfaces resolver window errors (e.g. expired occurrence) as 4xx', async () => {
+    const h = handlers({
+      resolve: jest.fn(() => ({ error: 'occurrence expired (grace 90m)', status: 410 })),
+    });
+    const { base, close } = await boot('secret-token', h);
+    try {
+      const res = await fetch(`${base}/internal/schedules/schedule-a/run`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer secret-token' },
+        body: '{}',
+      });
+      expect(res.status).toBe(410);
+      expect(h.run).not.toHaveBeenCalled();
+    } finally {
+      close();
+    }
+  });
+
+  it('GET /health is open and reports ok', async () => {
+    const { base, close } = await boot('secret-token', handlers());
+    try {
+      const res = await fetch(`${base}/health`);
+      expect(res.status).toBe(200);
+      expect(((await res.json()) as { status: string }).status).toBe('ok');
     } finally {
       close();
     }
@@ -84,13 +143,13 @@ describe('trigger endpoint auth (live ephemeral express)', () => {
 });
 
 // Boot the real ScheduleTriggerServer on an ephemeral port.
-async function boot(token: string | undefined, handlers: any): Promise<{ base: string; close: () => void }> {
-  const server = new ScheduleTriggerServer(token, handlers);
+async function boot(token: string | undefined, h: ReturnType<typeof handlers>): Promise<{ base: string; close: () => void }> {
+  const server = new ScheduleTriggerServer(token, h);
   server.start('127.0.0.1', 0);
   return new Promise((resolve) => {
     setTimeout(() => {
-      const srv: http.Server = (server as any).server;
-      const address = srv.address() as any;
+      const srv: http.Server = (server as unknown as { server: http.Server }).server;
+      const address = srv.address() as { port: number };
       resolve({
         base: `http://127.0.0.1:${address.port}`,
         close: () => server.stop(),

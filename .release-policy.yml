@@ -20,7 +20,7 @@
     },
     "npm": {
       "required": true,
-      "publish": "npm publish --provenance --access public",
+      "publish": "npm publish --provenance --access public --ignore-scripts \"dist/release/pixivflow-$RELEASE_VERSION.tgz\"",
       "verify": "npm view pixivflow@$RELEASE_VERSION version | grep -Fx $RELEASE_VERSION"
     },
     "ghcr": {

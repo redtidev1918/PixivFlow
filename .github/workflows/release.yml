@@ -22,14 +22,13 @@ permissions:
 
 jobs:
   release:
-    # release-infra#4 and #5: fixed finalize Git identity and exposed NPM_TOKEN.
-    # Keep this SHA pinned until the v1 floating tag advances past 028db35.
-    uses: redtidev1918/release-infra/.github/workflows/reusable-release.yml@028db352d25eb84c6775c6b6be33fe838231b847
+    # release-infra v1 includes the finalize Git-identity fix and npm secret
+    # interface; npm itself uses GitHub OIDC Trusted Publishing.
+    uses: redtidev1918/release-infra/.github/workflows/reusable-release.yml@v1
     with:
       version: ${{ inputs.version || '' }}
       dry_run: ${{ github.event_name == 'pull_request' || inputs.dry_run || false }}
       force: ${{ inputs.force || false }}
       repair: ${{ github.event_name == 'pull_request' || inputs.repair || false }}
       stage: ${{ inputs.stage || 'all' }}
-    secrets:
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+    secrets: inherit

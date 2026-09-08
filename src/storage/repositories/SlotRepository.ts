@@ -5,11 +5,22 @@ export type CellStatus = 'pending' | 'selected' | 'submitted' | 'no_candidate' |
 
 export interface SlotRecord {
   id: string;
-  slotDate: string;
-  slotName: string;
+  /** Schedule this occurrence belongs to (id is already schedule-scoped). */
   scheduleId: string;
+  /** Canonical scheduled fire time (epoch ms, UTC); null for legacy rows. */
+  occurrenceAt: number | null;
+  /** Schedule date (YYYY-MM-DD) in the schedule timezone — display only. */
+  occurrenceDate: string;
+  /** Wall-clock time-of-day label in tz, e.g. "10:00" — display only. */
+  occurrenceLabel: string;
+  timezone: string;
+  /** Materialized target membership snapshot (JSON array of target ids). */
+  targetIds: string[];
   status: SlotStatus;
   triggerSource: string | null;
+  // Legacy display columns retained for backward compatibility.
+  slotDate: string;
+  slotName: string;
   createdAt: string;
   startedAt: string | null;
   completedAt: string | null;
@@ -41,25 +52,46 @@ export interface SlotItemRecord {
  */
 export class SlotRepository extends BaseRepository {
   /**
-   * Fetch an existing slot or create it. Returns the row plus `created:false`
-   * when a slot with this id already existed (the caller should resume it, not
-   * start a fresh run).
+   * Fetch an existing slot or create it. On creation the schedule's target
+   * membership is snapshotted (target_ids); a later config reload never mutates
+   * this occurrence. Returns `created:false` when the id already existed so the
+   * caller resumes rather than restarting.
    */
   public getOrCreateSlot(
     id: string,
-    data: { slotDate: string; slotName: string; scheduleId: string; triggerSource?: string }
+    data: {
+      scheduleId: string;
+      occurrenceAt?: number | null;
+      occurrenceDate?: string;
+      occurrenceLabel?: string;
+      timezone?: string;
+      targetIds: string[];
+      triggerSource?: string;
+      // Legacy display fields (optional).
+      slotDate?: string;
+      slotName?: string;
+    }
   ): { slot: SlotRecord; created: boolean } {
     const insert = this.db.prepare(
-      `INSERT INTO schedule_slots (id, slot_date, slot_name, schedule_id, status, trigger_source)
-       VALUES (@id, @slotDate, @slotName, @scheduleId, 'pending', @triggerSource)
+      `INSERT INTO schedule_slots
+         (id, schedule_id, occurrence_at, occurrence_date, occurrence_label, timezone, target_ids,
+          status, trigger_source, slot_date, slot_name)
+       VALUES
+         (@id, @scheduleId, @occurrenceAt, @occurrenceDate, @occurrenceLabel, @timezone, @targetIds,
+          'pending', @triggerSource, @slotDate, @slotName)
        ON CONFLICT(id) DO NOTHING`
     );
     const info = insert.run({
       id,
-      slotDate: data.slotDate,
-      slotName: data.slotName,
       scheduleId: data.scheduleId,
+      occurrenceAt: data.occurrenceAt ?? null,
+      occurrenceDate: data.occurrenceDate ?? '',
+      occurrenceLabel: data.occurrenceLabel ?? '',
+      timezone: data.timezone ?? 'UTC',
+      targetIds: JSON.stringify(data.targetIds),
       triggerSource: data.triggerSource ?? null,
+      slotDate: data.slotDate ?? data.occurrenceDate ?? '',
+      slotName: data.slotName ?? '',
     });
     const created = info.changes > 0;
     return { slot: this.getSlot(id)!, created };
@@ -70,16 +102,23 @@ export class SlotRepository extends BaseRepository {
     return row ? this.toSlot(row) : null;
   }
 
-  public getSlotsForDate(slotDate: string): SlotRecord[] {
-    const rows = this.db
-      .prepare(`SELECT * FROM schedule_slots WHERE slot_date = ? ORDER BY id ASC`)
-      .all(slotDate) as any[];
-    return rows.map((r) => this.toSlot(r));
+  /** Target ids materialized for a slot (stable membership; falls back to []). */
+  public getSlotTargetIds(id: string): string[] {
+    const row = this.db.prepare(`SELECT target_ids FROM schedule_slots WHERE id = ?`).get(id) as
+      | { target_ids: string | null }
+      | undefined;
+    if (!row?.target_ids) return [];
+    try {
+      const parsed = JSON.parse(row.target_ids);
+      return Array.isArray(parsed) ? parsed.map(String) : [];
+    } catch {
+      return [];
+    }
   }
 
   public getRecentSlots(limit = 14): SlotRecord[] {
     const rows = this.db
-      .prepare(`SELECT * FROM schedule_slots ORDER BY id DESC LIMIT ?`)
+      .prepare(`SELECT * FROM schedule_slots ORDER BY COALESCE(occurrence_at, 0) DESC, id DESC LIMIT ?`)
       .all(limit) as any[];
     return rows.map((r) => this.toSlot(r));
   }
@@ -107,6 +146,32 @@ export class SlotRepository extends BaseRepository {
       .prepare(`SELECT * FROM schedule_slot_items WHERE slot_id = ? AND target_id = ?`)
       .get(slotId, targetId) as any;
     return row ? this.toItem(row) : null;
+  }
+
+  /**
+   * Ensure a cell exists for every target id in the slot's materialized
+   * membership. The cell set is fixed at first materialization (the snapshot in
+   * schedule_slots.target_ids); a config reload cannot add/remove cells here.
+   * Returns the authoritative target ids for this occurrence.
+   */
+  public materializeCells(slotId: string, targetIds: string[], workTypeByTarget: (id: string) => string): string[] {
+    // The frozen snapshot (schedule_slots.target_ids) is the authority for which
+    // cells belong to this occurrence. Intersect with the requested ids so a
+    // later config reload can never materialize a cell outside the snapshot.
+    const snapshot = new Set(this.getSlotTargetIds(slotId));
+    const authorized = snapshot.size > 0 ? targetIds.filter((id) => snapshot.has(id)) : targetIds;
+    const insert = this.db.prepare(
+      `INSERT INTO schedule_slot_items (slot_id, target_id, work_type, status)
+       VALUES (@slotId, @targetId, @workType, 'pending')
+       ON CONFLICT(slot_id, target_id) DO NOTHING`
+    );
+    const tx = this.db.transaction((ids: string[]) => {
+      for (const targetId of ids) {
+        insert.run({ slotId, targetId, workType: workTypeByTarget(targetId) || 'unknown' });
+      }
+    });
+    tx(authorized);
+    return authorized;
   }
 
   /** Create the cell row if it does not exist (idempotent). */
@@ -182,13 +247,25 @@ export class SlotRepository extends BaseRepository {
   }
 
   private toSlot(row: any): SlotRecord {
+    let targetIds: string[] = [];
+    try {
+      const parsed = row.target_ids ? JSON.parse(row.target_ids) : [];
+      if (Array.isArray(parsed)) targetIds = parsed.map(String);
+    } catch {
+      targetIds = [];
+    }
     return {
       id: row.id,
-      slotDate: row.slot_date,
-      slotName: row.slot_name,
       scheduleId: row.schedule_id,
+      occurrenceAt: row.occurrence_at ?? null,
+      occurrenceDate: row.occurrence_date ?? '',
+      occurrenceLabel: row.occurrence_label ?? '',
+      timezone: row.timezone ?? 'UTC',
+      targetIds,
       status: row.status,
       triggerSource: row.trigger_source,
+      slotDate: row.slot_date ?? '',
+      slotName: row.slot_name ?? '',
       createdAt: row.created_at,
       startedAt: row.started_at,
       completedAt: row.completed_at,

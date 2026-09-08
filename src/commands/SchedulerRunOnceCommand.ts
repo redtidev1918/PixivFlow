@@ -55,7 +55,10 @@ export class SchedulerRunOnceCommand extends BaseCommand {
       for (const plan of plans) {
         const timeoutMs = plan.timeout ?? DEFAULT_SCHEDULE_TIMEOUT_MS;
         await runWithTimeout(
-          runtime.runJob(runtime.config, plan, targetFilter),
+          // adhoc: a manual/operator run executes the download plan but never
+          // opens a scheduled Slot, so it can neither mark a scheduled
+          // occurrence complete nor be resumed as one. Explicit replacement.
+          runtime.runJob(runtime.config, plan, { adhoc: true, triggerSource: 'manual', onlyTarget: targetFilter }),
           timeoutMs,
           () => runtime.cancelActive(`run timeout after ${timeoutMs}ms`),
           `plan ${plan.id}`

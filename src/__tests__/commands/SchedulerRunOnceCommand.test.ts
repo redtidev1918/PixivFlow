@@ -50,8 +50,18 @@ describe('SchedulerRunOnceCommand', () => {
 
     expect(mockedCreateRuntime).toHaveBeenCalledWith(undefined);
     expect(runJob).toHaveBeenCalledTimes(2);
-    expect(runJob).toHaveBeenNthCalledWith(1, config, expect.objectContaining({ id: 'a' }), undefined);
-    expect(runJob).toHaveBeenNthCalledWith(2, config, expect.objectContaining({ id: 'b' }), undefined);
+    // A manual run is ad-hoc: it executes the plan but never opens a scheduled
+    // slot, so it cannot mark a scheduled occurrence complete.
+    expect(runJob).toHaveBeenNthCalledWith(1, config, expect.objectContaining({ id: 'a' }), {
+      adhoc: true,
+      triggerSource: 'manual',
+      onlyTarget: undefined,
+    });
+    expect(runJob).toHaveBeenNthCalledWith(2, config, expect.objectContaining({ id: 'b' }), {
+      adhoc: true,
+      triggerSource: 'manual',
+      onlyTarget: undefined,
+    });
     expect(close).toHaveBeenCalledTimes(1);
     expect(result.success).toBe(true);
   });
@@ -67,7 +77,11 @@ describe('SchedulerRunOnceCommand', () => {
     const result = await command.execute(context, targetArgs);
 
     expect(runJob).toHaveBeenCalledTimes(1);
-    expect(runJob).toHaveBeenCalledWith(config, expect.objectContaining({ id: 'b' }), 't2');
+    expect(runJob).toHaveBeenCalledWith(config, expect.objectContaining({ id: 'b' }), {
+      adhoc: true,
+      triggerSource: 'manual',
+      onlyTarget: 't2',
+    });
     expect(close).toHaveBeenCalledTimes(1);
     expect(result.success).toBe(true);
   });

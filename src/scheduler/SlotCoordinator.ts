@@ -1,13 +1,39 @@
 import { ScheduleConfig, StandaloneConfig, TargetConfig } from '../config';
 import { Database } from '../storage/Database';
-import { CellStatus, SlotItemRecord, SlotRecord, SlotStatus } from '../storage/repositories/SlotRepository';
+import {
+  CellStatus,
+  SlotItemRecord,
+  SlotRecord,
+  SlotStatus,
+} from '../storage/repositories/SlotRepository';
 import { logger } from '../logger';
+import {
+  ResolvedOccurrence,
+  TriggerSource,
+  checkOccurrenceWindow,
+  resolveOccurrence,
+  scheduleTimezone,
+} from './OccurrenceResolver';
 
+/**
+ * Durable execution context attached to a run. A scheduled occurrence always
+ * has a slotId; an ad-hoc/manual run has none (it never touches the slot ledger).
+ */
 export interface SlotContext {
   slotId: string;
+  scheduleId: string;
+  occurrenceAt: number;
+  occurrenceDate: string;
+  occurrenceLabel: string;
+  timezone: string;
+  triggerSource: TriggerSource;
+  /**
+   * Generic execution provenance, surfaced to delivery templates. `slotName` is
+   * an optional human label (e.g. a deploy-layer "今日早班"); it is never parsed
+   * by Core and defaults to the scheduled time label.
+   */
   slotName: string;
   slotDate: string;
-  triggerSource: string;
 }
 
 export interface SlotCellSummary {
@@ -25,95 +51,121 @@ export interface SlotRunSummary {
   cells: SlotCellSummary[];
 }
 
-/** Morning cron fires before noon; evening from noon onward (config tz). */
-export function slotNameForNow(timezone: string | undefined): 'morning' | 'evening' {
-  const hour = new Date(
-    new Date().toLocaleString('en-US', { timeZone: timezone || 'Asia/Shanghai' })
-  ).getHours();
-  return hour < 13 ? 'morning' : 'evening';
-}
-
-/** Today's date (YYYY-MM-DD) in the configured scheduler timezone. */
-export function slotDateForNow(timezone: string | undefined): string {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: timezone || 'Asia/Shanghai',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(new Date());
-  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? '';
-  return `${get('year')}-${get('month')}-${get('day')}`;
-}
-
-function todayInTz(timezone: string | undefined): string {
-  return slotDateForNow(timezone);
+export interface SlotResolveResult {
+  context?: SlotContext;
+  error?: string;
+  status?: number;
 }
 
 /**
- * Owns the Schedule Slot ledger for one scheduler run. Ensures duplicate
- * triggers / restarts converge on one slot, completed cells are not re-run, and
- * a selected work id stays locked across automatic retries.
+ * Owns the Schedule Slot ledger for one scheduler run. A Slot is one durable
+ * execution occurrence of a Schedule (NOT a morning/evening row). It ensures
+ * duplicate/concurrent/retry triggers converge on one slot, completed cells are
+ * not re-run, target membership is stable once materialized, and a selected
+ * work id stays locked across automatic retries.
+ *
+ * This class is delivery-agnostic: it knows nothing about TelePost, bots, or any
+ * hosting platform — only schedules, targets and the slot ledger.
  */
 export class SlotCoordinator {
   constructor(private readonly database: Database) {}
 
-  /** Resolve + validate a requested slot against now (never trusts client date). */
-  resolveSlot(requested: string | undefined, config: StandaloneConfig): SlotContext | { error: string; status: number } {
-    const tz = this.primaryTimezone(config);
-    const name = requested === 'evening' ? 'evening' : requested === 'morning' ? 'morning' : slotNameForNow(tz);
-    const date = todayInTz(tz);
+  /**
+   * Resolve + validate the canonical occurrence for a trigger. Uses ONLY the
+   * schedule's cron + timezone and the trigger instant (never a client-supplied
+   * past date). `requestedSlotName` is an optional human label for provenance;
+   * identity always derives from the resolved canonical fire time.
+   */
+  resolveOccurrence(
+    schedule: ScheduleConfig,
+    config: StandaloneConfig,
+    triggerSource: TriggerSource,
+    at: Date = new Date(),
+    requestedSlotName?: string
+  ): SlotResolveResult {
     const graceMin = config.schedulerRuntime?.trigger?.graceMinutes ?? 90;
-    const now = Date.now();
+    let occurrence: ResolvedOccurrence;
+    try {
+      occurrence = resolveOccurrence({ schedule, at, triggerSource });
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error), status: 400 };
+    }
 
-    // Grace window: a slot is runnable if its scheduled time was within the last
-    // `graceMin` minutes (resume after a crash) or is still upcoming today.
-    const scheduledHour = name === 'morning' ? 10 : 18;
-    const sched = new Date(`${date}T${String(scheduledHour).padStart(2, '0')}:00:00`);
-    // Compare in tz-agnostic wall clock is imprecise; use a coarse grace check:
-    // allow when within [scheduled - small lead, scheduled + grace]. Lead 15m.
-    const leadMs = 15 * 60_000;
-    const graceMs = graceMin * 60_000;
-    if (now < sched.getTime() - leadMs) {
-      return { error: `slot ${name} for ${date} is not due yet`, status: 425 };
+    // Internal cron/catch-up are trusted to fire on their own occurrence; the
+    // HTTP adapter validates the public grace window so an external clock cannot
+    // back-fill history.
+    if (triggerSource === 'http' || triggerSource === 'manual') {
+      const window = checkOccurrenceWindow(occurrence, at, graceMin);
+      if (!window.ok) {
+        return { error: window.error!, status: window.status };
+      }
     }
-    if (now > sched.getTime() + graceMs) {
-      return { error: `slot ${name} for ${date} has expired (grace ${graceMin}m)`, status: 410 };
-    }
-    return { slotId: `${date}:${name}`, slotName: name, slotDate: date, triggerSource: 'external' };
+
+    return {
+      context: {
+        slotId: occurrence.slotId,
+        scheduleId: occurrence.scheduleId,
+        occurrenceAt: occurrence.occurrenceAt.getTime(),
+        occurrenceDate: occurrence.occurrenceDate,
+        occurrenceLabel: occurrence.occurrenceLabel,
+        timezone: occurrence.timezone,
+        triggerSource: occurrence.triggerSource,
+        slotName: requestedSlotName?.trim() || occurrence.occurrenceLabel,
+        slotDate: occurrence.occurrenceDate,
+      },
+    };
   }
 
-  private primaryTimezone(config: StandaloneConfig): string | undefined {
-    return config.schedules?.[0]?.timezone ?? config.scheduler?.timezone;
-  }
-
-  /** The targets that still need to run for this slot (skips terminal cells). */
-  pendingTargets(slotId: string, targets: TargetConfig[]): { target: TargetConfig; cell: SlotItemRecord }[] {
-    const out: { target: TargetConfig; cell: SlotItemRecord }[] = [];
-    for (const target of targets) {
-      if (!target.id) continue;
-      const cell = this.database.slots.ensureCell(slotId, target.id, target.type);
-      if (cell.status === 'submitted' || cell.status === 'no_candidate') continue;
-      out.push({ target, cell });
-    }
-    return out;
-  }
-
-  /** Open (or resume) a slot and return whether the whole slot is already done. */
-  begin(slot: SlotContext, schedule: ScheduleConfig): { slotRec: SlotRecord; alreadyCompleted: boolean } {
+  /**
+   * Open (or resume) an occurrence and snapshot its target membership on first
+   * creation. A later config reload cannot add/remove cells for this occurrence.
+   */
+  begin(slot: SlotContext, schedule: ScheduleConfig, targets: TargetConfig[]): { slotRec: SlotRecord; alreadyCompleted: boolean } {
+    const targetIds = targets.map((t) => t.id).filter((id): id is string => Boolean(id));
     const { slot: slotRec, created } = this.database.slots.getOrCreateSlot(slot.slotId, {
+      scheduleId: slot.scheduleId,
+      occurrenceAt: slot.occurrenceAt,
+      occurrenceDate: slot.occurrenceDate,
+      occurrenceLabel: slot.occurrenceLabel,
+      timezone: slot.timezone,
+      targetIds,
+      triggerSource: slot.triggerSource,
       slotDate: slot.slotDate,
       slotName: slot.slotName,
-      scheduleId: schedule.id,
-      triggerSource: slot.triggerSource,
     });
-    if (created) logger.info('Slot started', { slot: slot.slotId, schedule: schedule.id });
-    else logger.info('Slot resumed (duplicate trigger or restart)', { slot: slot.slotId, status: slotRec.status });
+    if (created) {
+      // Freeze membership: materialize one cell per target id from the snapshot.
+      const workTypeById = new Map(targets.map((t) => [t.id as string, t.type ?? 'unknown']));
+      this.database.slots.materializeCells(slot.slotId, targetIds, (id) => workTypeById.get(id) ?? 'unknown');
+      logger.info('Slot started', { slot: slot.slotId, schedule: schedule.id, targets: targetIds.length });
+    } else {
+      logger.info('Slot resumed (duplicate trigger or restart)', { slot: slot.slotId, status: slotRec.status });
+    }
 
     if (slotRec.status === 'success' || slotRec.status === 'partial') {
       return { slotRec, alreadyCompleted: true };
     }
     this.database.slots.markSlotStatus(slot.slotId, 'running');
     return { slotRec, alreadyCompleted: false };
+  }
+
+  /**
+   * The targets that still need to run for this occurrence. Membership comes
+   * from the materialized snapshot (stable), intersected with the targets the
+   * caller currently knows about; terminal cells are skipped on resume.
+   */
+  pendingTargets(slotId: string, targets: TargetConfig[]): { target: TargetConfig; cell: SlotItemRecord }[] {
+    const membership = new Set(this.database.slots.getSlotTargetIds(slotId));
+    const out: { target: TargetConfig; cell: SlotItemRecord }[] = [];
+    for (const target of targets) {
+      if (!target.id) continue;
+      if (membership.size > 0 && !membership.has(target.id)) continue; // config reload: not part of this occurrence
+      const cell = this.database.slots.getCell(slotId, target.id);
+      if (!cell) continue;
+      if (cell.status === 'submitted' || cell.status === 'no_candidate') continue;
+      out.push({ target, cell });
+    }
+    return out;
   }
 
   /** Lock the selected work for a cell (first selection wins; retries keep it). */
@@ -130,14 +182,16 @@ export class SlotCoordinator {
     this.database.slots.setCellStatus(slotId, targetId, status, error);
   }
 
-  /** Roll cell results up into the slot status and log a readable summary. */
+  /** Roll cell results up into the slot status (one place computes the aggregate). */
   finish(slot: SlotContext, schedule: ScheduleConfig, targets: TargetConfig[]): SlotRunSummary {
-    for (const t of targets) {
-      if (!t.id) continue;
-      const cell = this.database.slots.getCell(slot.slotId, t.id);
-      if (!cell || cell.status === 'pending' || cell.status === 'selected') {
+    const membership = this.database.slots.getSlotTargetIds(slot.slotId);
+    const ids = membership.length > 0 ? membership : targets.map((t) => t.id).filter(Boolean) as string[];
+    for (const targetId of ids) {
+      const cell = this.database.slots.getCell(slot.slotId, targetId);
+      if (!cell) continue;
+      if (cell.status === 'pending' || cell.status === 'selected') {
         // Ran but never reached a terminal state (target threw before delivery).
-        if (cell) this.database.slots.setCellStatus(slot.slotId, t.id, 'failed', cell.lastError ?? 'target did not complete');
+        this.database.slots.setCellStatus(slot.slotId, targetId, 'failed', cell.lastError ?? 'target did not complete');
       }
     }
     const status = this.database.slots.deriveSlotStatus(slot.slotId);
@@ -177,4 +231,9 @@ export class SlotCoordinator {
       cells,
     };
   }
+}
+
+/** Resolve the timezone a schedule runs in (never the server's local tz). */
+export function timezoneForSchedule(schedule: ScheduleConfig | undefined, config: StandaloneConfig): string {
+  return scheduleTimezone(schedule, config.scheduler?.timezone);
 }

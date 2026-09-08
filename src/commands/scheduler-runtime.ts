@@ -19,10 +19,14 @@ import { DeliveryDispatcher } from '../delivery/DeliveryDispatcher';
 import { DeliveryOutbox } from '../delivery/DeliveryOutbox';
 import { createTokenMaintenanceService } from '../utils/token-maintenance';
 import { selectScheduleTargets } from '../scheduler/schedules';
-import { SlotContext, SlotCoordinator, slotNameForNow, slotDateForNow } from '../scheduler/SlotCoordinator';
+import { SlotContext, SlotCoordinator } from '../scheduler/SlotCoordinator';
+import { ScheduleRunOptions, TriggerSource } from '../scheduler/OccurrenceResolver';
 import { JobFailure } from '../scheduler/Scheduler';
 import { processConfigPlaceholders } from '../config/placeholders';
 import { logger } from '../logger';
+
+/** Options for a single schedule run; see ScheduleRunOptions for semantics. */
+export type RunJobOptions = ScheduleRunOptions;
 
 export interface SchedulerRuntime {
   config: StandaloneConfig;
@@ -31,12 +35,7 @@ export interface SchedulerRuntime {
   fileService: FileService;
   tokenMaintenance: ReturnType<typeof createTokenMaintenanceService>;
   /** Run one schedule's enabled targets once (the same job the cron fires). */
-  runJob(
-    snapshot: StandaloneConfig,
-    schedule: ScheduleConfig,
-    targetFilter?: string | SlotContext,
-    slot?: SlotContext
-  ): Promise<void>;
+  runJob(snapshot: StandaloneConfig, schedule: ScheduleConfig, options?: RunJobOptions): Promise<void>;
   /** Cancel the in-flight download plan, if any. */
   cancelActive(reason: string): void;
   /** Notify the affected review group after a failed scheduled run. */
@@ -206,15 +205,11 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
   const runJob = async (
     snapshot: StandaloneConfig,
     schedule: ScheduleConfig,
-    targetFilter?: string | SlotContext,
-    slotArg?: SlotContext
+    options: RunJobOptions = {}
   ): Promise<void> => {
-    // External trigger passes a SlotContext as the 3rd arg (no targetFilter);
-    // internal cron passes none. Normalize both.
-    const slot: SlotContext | undefined =
-      slotArg ?? (targetFilter && typeof targetFilter === 'object' ? (targetFilter as SlotContext) : undefined);
-    const onlyTarget: string | undefined =
-      targetFilter && typeof targetFilter === 'string' ? targetFilter : undefined;
+    const { onlyTarget, adhoc = false, slot: providedSlot } = options;
+    // A scheduled run is cron by default; an HTTP/manual trigger passes its own.
+    const triggerSource: TriggerSource = options.triggerSource ?? 'cron';
 
     const runtimeConfig = processConfigPlaceholders(snapshot);
     let targets = selectScheduleTargets(runtimeConfig.targets, schedule);
@@ -231,41 +226,73 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
       return;
     }
 
-    // Slot ledger: in external mode every run belongs to a named slot. Internal
-    // cron runs also get a slot (so the same idempotency/resume rules apply).
     const coordinator = new SlotCoordinator(database);
-    let slotCtx: SlotContext;
-    if (slot) {
-      slotCtx = slot;
-    } else {
-      const tz = schedule.timezone ?? runtimeConfig.scheduler?.timezone;
-      const name = slotNameForNow(tz);
-      const date = slotDateForNow(tz);
-      slotCtx = { slotId: `${date}:${name}`, slotName: name, slotDate: date, triggerSource: 'cron' };
-    }
-    const begin = coordinator.begin(slotCtx, schedule);
-    if (begin.alreadyCompleted && !onlyTarget) {
-      logger.info('Slot already terminal; nothing to do', { slot: slotCtx.slotId, status: begin.slotRec.status });
-      return;
+
+    // Ad-hoc/manual execution (run-once / explicit refetch) runs the download
+    // plan WITHOUT a scheduled Slot: it can never mark a scheduled occurrence
+    // complete or be resumed as one. Scheduled runs (cron/http/catchup) always
+    // resolve a canonical occurrence and converge on one durable Slot.
+    let slotCtx: SlotContext | null = null;
+    if (!adhoc) {
+      if (providedSlot) {
+        slotCtx = providedSlot;
+      } else {
+        // Internal cron tick / catch-up: resolve the canonical occurrence from
+        // the schedule's own cron + timezone (never the server local tz).
+        const resolved = coordinator.resolveOccurrence(schedule, runtimeConfig, triggerSource);
+        if (!resolved.context) {
+          logger.warn('Skipping scheduled run: occurrence not resolvable', {
+            scheduleId: schedule.id,
+            error: resolved.error,
+          });
+          return;
+        }
+        slotCtx = resolved.context;
+      }
+
+      const begin = coordinator.begin(slotCtx, schedule, targets);
+      if (begin.alreadyCompleted && !onlyTarget) {
+        logger.info('Slot already terminal; nothing to do', {
+          slot: slotCtx.slotId,
+          status: begin.slotRec.status,
+        });
+        return;
+      }
     }
 
-    // Skip cells that already reached a terminal state in this slot (resume
-    // never re-runs a finished cell — that is what prevents a second post).
-    const pending = coordinator.pendingTargets(slotCtx.slotId, targets);
-    const runTargets = (onlyTarget ? pending.filter((p) => p.target.id === onlyTarget) : pending).map((p) => p.target);
+    // For a scheduled run, skip cells already in a terminal state (resume never
+    // re-runs a finished cell — that is what prevents a second post). Membership
+    // comes from the materialized snapshot, so a config reload cannot add cells.
+    const pending = slotCtx ? coordinator.pendingTargets(slotCtx.slotId, targets) : targets.map((target) => ({ target, cell: null }));
+    let runTargets = (onlyTarget ? pending.filter((p) => p.target.id === onlyTarget) : pending).map((p) => p.target);
 
-    if (runTargets.length === 0) {
+    if (slotCtx && runTargets.length === 0) {
       logger.info('All slot cells already complete', { slot: slotCtx.slotId });
       coordinator.finish(slotCtx, schedule, targets);
       return;
     }
+    // Ad-hoc refetch with a filter that matched no target (or all filtered out):
+    // nothing to do; no Slot to finish.
+    if (runTargets.length === 0) return;
+
+    const executionContext = slotCtx
+      ? {
+          slotId: slotCtx.slotId,
+          slotName: slotCtx.slotName,
+          slotDate: slotCtx.slotDate,
+          scheduleId: slotCtx.scheduleId,
+          occurrenceAt: slotCtx.occurrenceAt,
+          occurrenceAtIso: new Date(slotCtx.occurrenceAt).toISOString(),
+          triggerSource: slotCtx.triggerSource,
+        }
+      : undefined;
 
     const scopedConfig: StandaloneConfig = {
       ...runtimeConfig,
       targets: runTargets.map((t) => ({
         ...t,
         delivery: t.delivery
-          ? { ...t.delivery, slotContext: { slotId: slotCtx.slotId, slotName: slotCtx.slotName, slotDate: slotCtx.slotDate } }
+          ? { ...t.delivery, slotContext: slotCtx ?? undefined, executionContext }
           : t.delivery,
       })),
     };
@@ -273,25 +300,27 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
     activeDownloadManager = downloadManager;
     await downloadManager.initialise();
 
-    // Record cell outcomes into the slot ledger.
-    downloadManager.setWorkLockedHook((artifact, target) => {
-      if (!target.id) return;
-      // First selection wins; retries/replays carry the same pixivId and the
-      // ledger COALESCE keeps it, so a retry never silently swaps the work.
-      coordinator.lockWork(slotCtx.slotId, target.id, artifact.pixivId, artifact.type);
-    });
-    downloadManager.setTargetOutcomeHook((target, error) => {
-      if (!target.id) return;
-      if (!error) {
-        // Delivered (or queued in outbox, which retries the SAME work). Mark
-        // submitted; the work id is best-effort from the most recent download.
-        coordinator.markCell(slotCtx.slotId, target.id, 'submitted');
-      } else if (/no matching|no_candidate|all .*filtered|already downloaded/i.test(error)) {
-        coordinator.markCell(slotCtx.slotId, target.id, 'no_candidate', error);
-      } else {
-        coordinator.markCell(slotCtx.slotId, target.id, 'failed', error);
-      }
-    });
+    if (slotCtx) {
+      // Record cell outcomes into the slot ledger.
+      downloadManager.setWorkLockedHook((artifact, target) => {
+        if (!target.id || !slotCtx) return;
+        // First selection wins; retries/replays carry the same pixivId and the
+        // ledger COALESCE keeps it, so a retry never silently swaps the work.
+        coordinator.lockWork(slotCtx.slotId, target.id, artifact.pixivId, artifact.type);
+      });
+      downloadManager.setTargetOutcomeHook((target, error) => {
+        if (!target.id || !slotCtx) return;
+        if (!error) {
+          // Delivered (or queued in outbox, which retries the SAME work). Mark
+          // submitted; the work id is best-effort from the most recent download.
+          coordinator.markCell(slotCtx.slotId, target.id, 'submitted');
+        } else if (/no matching|no_candidate|all .*filtered|already downloaded/i.test(error)) {
+          coordinator.markCell(slotCtx.slotId, target.id, 'no_candidate', error);
+        } else {
+          coordinator.markCell(slotCtx.slotId, target.id, 'failed', error);
+        }
+      });
+    }
 
     // Apply initial delay if configured
     if (runtimeConfig.initialDelay && runtimeConfig.initialDelay > 0) {
@@ -304,7 +333,8 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
     logger.info('='.repeat(60));
     logger.info('Starting scheduled Pixiv download plan', {
       scheduleId: schedule.id,
-      slot: slotCtx.slotId,
+      slot: slotCtx?.slotId ?? '(ad-hoc)',
+      trigger: triggerSource,
       targets: runTargets.map((target) => target.id ?? target.tag ?? target.filterTag ?? target.type),
     });
     logger.info('='.repeat(60));
@@ -317,12 +347,12 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
     }
     const duration = Math.round((Date.now() - startTime) / 1000);
 
-    coordinator.finish(slotCtx, schedule, targets);
+    if (slotCtx) coordinator.finish(slotCtx, schedule, targets);
 
     logger.info('='.repeat(60));
     logger.info(`Scheduled download plan finished (took ${duration}s)`, {
       scheduleId: schedule.id,
-      slot: slotCtx.slotId,
+      slot: slotCtx?.slotId ?? '(ad-hoc)',
     });
     logger.info('='.repeat(60));
   };

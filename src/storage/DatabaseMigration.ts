@@ -75,13 +75,24 @@ export class DatabaseMigration {
         // Schedule Slots: one business batch (e.g. 2026-09-08:morning). A slot
         // groups one run of each enabled target (a "cell"). External triggers
         // and restarts converge on the SAME slot row instead of re-running.
+        //
+        // A Slot is one durable execution occurrence of a Schedule. Its id is
+        // schedule-scoped (`<scheduleId>@<occurrenceStamp>`); occurrence_at is
+        // the canonical scheduled fire time in the schedule's own timezone.
+        // target_ids snapshots the membership materialized at first run so a
+        // later config reload cannot mutate an in-flight occurrence.
         `CREATE TABLE IF NOT EXISTS schedule_slots (
             id TEXT PRIMARY KEY,
-            slot_date TEXT NOT NULL,
-            slot_name TEXT NOT NULL,
             schedule_id TEXT NOT NULL,
+            occurrence_at INTEGER,
+            occurrence_date TEXT NOT NULL DEFAULT '',
+            occurrence_label TEXT NOT NULL DEFAULT '',
+            timezone TEXT NOT NULL DEFAULT 'UTC',
+            target_ids TEXT,
             status TEXT NOT NULL DEFAULT 'pending',
             trigger_source TEXT,
+            slot_date TEXT NOT NULL DEFAULT '',
+            slot_name TEXT NOT NULL DEFAULT '',
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             started_at DATETIME,
             completed_at DATETIME,
@@ -106,6 +117,33 @@ export class DatabaseMigration {
           )`,
       ];
 
+      // Phase 1: create tables (idempotent). Must run before any PRAGMA-based
+      // column check, otherwise a fresh DB would report the table as missing and
+      // both CREATE and ADD COLUMN would create the same column.
+      const createTables = this.db.transaction((stmts: string[]) => {
+        for (const sql of stmts) {
+          this.db.prepare(sql).run();
+        }
+      });
+      createTables(migrations);
+
+      // Phase 2: additive column migrations for databases created before the
+      // canonical occurrence model. The table now exists, so PRAGMA reports the
+      // true current columns; ALTER only the ones missing on upgraded DBs (fresh
+      // DBs already have them from the CREATE above and skip these).
+      const slotCols = (this.db.prepare(`PRAGMA table_info(schedule_slots)`).all() as Array<{ name: string }>).map((c) => c.name);
+      const slotColumnMigrations: Record<string, string> = {
+        occurrence_at: 'ALTER TABLE schedule_slots ADD COLUMN occurrence_at INTEGER',
+        occurrence_date: `ALTER TABLE schedule_slots ADD COLUMN occurrence_date TEXT NOT NULL DEFAULT ''`,
+        occurrence_label: `ALTER TABLE schedule_slots ADD COLUMN occurrence_label TEXT NOT NULL DEFAULT ''`,
+        timezone: `ALTER TABLE schedule_slots ADD COLUMN timezone TEXT NOT NULL DEFAULT 'UTC'`,
+        target_ids: 'ALTER TABLE schedule_slots ADD COLUMN target_ids TEXT',
+      };
+      const columnAlters: string[] = [];
+      for (const [col, sql] of Object.entries(slotColumnMigrations)) {
+        if (!slotCols.includes(col)) columnAlters.push(sql);
+      }
+
       // Create indexes for better query performance
       const indexes = [
         `CREATE INDEX IF NOT EXISTS idx_downloads_pixiv_id_type ON downloads(pixiv_id, type)`,
@@ -118,18 +156,17 @@ export class DatabaseMigration {
         `CREATE INDEX IF NOT EXISTS idx_task_history_task_id ON task_history(task_id)`,
         `CREATE INDEX IF NOT EXISTS idx_task_history_status ON task_history(status)`,
         `CREATE INDEX IF NOT EXISTS idx_task_history_start_time ON task_history(start_time)`,
-        `CREATE INDEX IF NOT EXISTS idx_slots_date ON schedule_slots(slot_date, slot_name)`,
+        `CREATE INDEX IF NOT EXISTS idx_slots_schedule_occ ON schedule_slots(schedule_id, occurrence_at DESC)`,
         `CREATE INDEX IF NOT EXISTS idx_slot_items_slot ON schedule_slot_items(slot_id)`,
         `CREATE INDEX IF NOT EXISTS idx_slot_items_work ON schedule_slot_items(work_id, work_type)`,
       ];
 
-      const transaction = this.db.transaction((stmts: string[]) => {
+      const postMigration = this.db.transaction((stmts: string[]) => {
         for (const sql of stmts) {
           this.db.prepare(sql).run();
         }
       });
-
-      transaction([...migrations, ...indexes]);
+      postMigration([...columnAlters, ...indexes]);
 
       // Add is_active column to config_history if it doesn't exist
       try {

@@ -52,8 +52,24 @@ export interface TargetDeliveryConfig {
   /**
    * Schedule slot provenance injected at runtime for scheduled/external runs
    * (not authored in config). Rendered as {{slotId}}/{{slotName}}/{{slotDate}}.
+   * Retained for backward compatibility; `executionContext` is the superset.
    */
   slotContext?: { slotId: string; slotName: string; slotDate: string };
+  /**
+   * Generic schedule-execution provenance injected at runtime for a scheduled
+   * occurrence (not authored in config). Delivery-agnostic: surfaced to any
+   * delivery adapter as {{scheduleId}}/{{executionId}}/{{occurrenceAt}}/
+   * {{triggerSource}} (plus the legacy slot* aliases). Never parsed by Core.
+   */
+  executionContext?: {
+    slotId: string;
+    slotName: string;
+    slotDate: string;
+    scheduleId: string;
+    occurrenceAt: number;
+    occurrenceAtIso: string;
+    triggerSource: string;
+  };
 }
 
 export interface TargetConfig {
@@ -431,8 +447,15 @@ export interface SchedulerRuntimeConfig {
   trigger?: SchedulerTriggerConfig;
 }
 
-/** Authenticated HTTP Slot trigger for `mode: external`. */
+/** Authenticated HTTP schedule trigger adapter. */
 export interface SchedulerTriggerConfig {
+  /**
+   * Mount the authenticated HTTP trigger server. In `external` mode it is always
+   * mounted (the external clock depends on it); in `internal` mode set this true
+   * to also expose manual/ops triggers while the in-process cron owns the clock.
+   * Default: false in internal mode.
+   */
+  enabled?: boolean;
   /** Bind port for the trigger HTTP server. Default 8090. */
   port?: number;
   /** Bind host. Default 0.0.0.0 (Fly injects the port; host stays 0.0.0.0). */

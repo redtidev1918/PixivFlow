@@ -79,10 +79,15 @@ jobs:
         with:
           tag_name: ${{ env.RELEASE_TAG }}
           generate_release_notes: true
-      - name: Prune old releases (keep latest)
+      - name: Prune old Release objects (preserve Git tags)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: python3 scripts/prune_releases.py
+        run: |
+          set -euo pipefail
+          gh release list --limit 100 --json tagName --jq '.[].tagName' |
+          while IFS= read -r old_tag; do
+            [ "$old_tag" = "$RELEASE_TAG" ] || gh release delete "$old_tag" --yes
+          done
 
   # 精简调度镜像（Dockerfile.scheduler）推 GHCR，与 npm 发布互补。
   docker:

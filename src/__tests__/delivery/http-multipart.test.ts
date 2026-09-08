@@ -123,6 +123,37 @@ describe('HttpMultipartDelivery', () => {
     });
   });
 
+  it('does not log notification URL credentials or query secrets', async () => {
+    const fetchMock = jest.fn()
+      .mockResolvedValueOnce(new Response('boom', { status: 500 }))
+      .mockResolvedValueOnce(new Response('ok', { status: 200 }));
+    global.fetch = fetchMock as typeof fetch;
+    const warn = jest.spyOn(logger, 'warn').mockImplementation(() => undefined);
+    const info = jest.spyOn(logger, 'info').mockImplementation(() => undefined);
+    const provider = new HttpMultipartDelivery({
+      type: 'httpMultipart',
+      url: 'https://example.test/submissions',
+      notificationUrl: 'https://notify:webhook-secret@example.test/notify/key?:text=body&token=query-secret',
+      maxAttempts: 2,
+      retryDelayMs: 0,
+    });
+
+    await provider.notify({ text: 'no matching work', idempotencyKey: 'empty:2023-06-14' });
+
+    const loggedUrls = [...warn.mock.calls, ...info.mock.calls]
+      .flatMap((call) => call.slice(1))
+      .map((entry) => (entry as { url?: string }).url)
+      .filter((url): url is string => Boolean(url));
+    expect(loggedUrls).not.toHaveLength(0);
+    for (const url of loggedUrls) {
+      expect(url).not.toContain('webhook-secret');
+      expect(url).not.toContain('query-secret');
+      expect(url).not.toContain(':text=body');
+      expect(url).toContain('redacted@');
+      expect(url).toContain('?…');
+    }
+  });
+
   it('renders link / topicTag / spoiler / x_restrict template variables', async () => {
     const filePath = join(directory, 'cover.jpg');
     await fs.writeFile(filePath, 'image');

@@ -26,6 +26,19 @@ function formatCount(value?: number): string {
   return String(n);
 }
 
+/** Hide URL userinfo and query secrets from operational logs. */
+function redactUrl(value: string): string {
+  try {
+    const url = new URL(value);
+    const authority = (url.username || url.password ? 'redacted@' : '') + url.host;
+
+    const suffix = url.searchParams.size > 0 ? '?…' : '';
+    return `${url.protocol}//${authority}${url.pathname}${suffix}`;
+  } catch {
+    return value;
+  }
+}
+
 /** Generic streaming HTTP multipart delivery provider. */
 export class HttpMultipartDelivery implements DeliveryProvider {
   private readonly dispatcher?: unknown;
@@ -102,12 +115,12 @@ export class HttpMultipartDelivery implements DeliveryProvider {
           try { body = JSON.parse(text); } catch { /* plain text is valid */ }
         }
         this.assertSuccess(response, body);
-        logger.info('HTTP delivery notification succeeded', { url, status: response.status });
+        logger.info('HTTP delivery notification succeeded', { url: redactUrl(url), status: response.status });
         return { status: response.status, body };
       } catch (error) {
         lastError = error;
         logger.warn(`HTTP delivery notification attempt ${attempt}/${maxAttempts} failed`, {
-          url,
+          url: redactUrl(url),
           error: error instanceof Error ? error.message : String(error),
         });
         if (attempt < maxAttempts) {

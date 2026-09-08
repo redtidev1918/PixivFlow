@@ -1,0 +1,27 @@
+# Minimal Apprise API sidecar for PixivFlow operational notifications.
+# Start from your existing PixivFlow repository so both Compose files attach to
+# the same default network. Set APPRISE_CONFIG_FILE to an absolute path for a
+# copied production config (relative paths resolve from this repository root):
+#   docker compose -f docker-compose.yml -f docker-compose.apprise.example.yml up -d
+#
+# The base compose uses network_mode: bridge, so PixivFlow reaches the API via
+# its existing host-gateway mapping. Bind to loopback only; this is not public.
+
+services:
+  apprise:
+    image: caronc/apprise:latest
+    restart: unless-stopped
+    environment:
+      APPRISE_WORKER_COUNT: "1"
+      APPRISE_STATEFUL_MODE: simple
+      APPRISE_CONFIG_DIR: /config
+      # PixivFlow calls the stateful key /notify/pixivflow. In simple mode the
+      # key reads /config/pixivflow.cfg; channel URLs never enter PixivFlow.
+      TZ: ${TZ:-Asia/Shanghai}
+    volumes:
+      - ${APPRISE_CONFIG_FILE:-./examples/apprise/pixivflow.example.cfg}:/config/pixivflow.cfg:ro
+    ports:
+      - "127.0.0.1:8000:8000"
+    tmpfs:
+      - /tmp
+    # PixivFlow reaches it at http://host.docker.internal:8000 inside Docker.

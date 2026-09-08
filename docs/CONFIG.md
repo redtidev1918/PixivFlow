@@ -173,14 +173,16 @@ pixivflow setup
 
 #### 操作通知（投递结果通知审核群）
 
-交付目标配置了 `notificationUrl` 后，PixivFlow 可向审核群发送三类运维通知，都写入
-delivery outbox 持久化、幂等去重、指数退避重试：
+交付目标配置了 `notificationUrl` 后，PixivFlow 可向审核群发送运维通知，都写入
+delivery outbox 持久化、携带稳定幂等标识、指数退避重试。`notificationUrl` 可直接指向
+[Apprise API](APPRISE.md)，由 Apprise 转发到 Email、Telegram、Discord、ntfy 等渠道：
 
 | 触发条件 | 消息 | 说明 |
 | --- | --- | --- |
 | 候选耗尽（无匹配） | `⚠️ PixivFlow 本次没有可投稿内容` | 受 `noMatchPolicy.notify: true` 控制；需目标自身开启该开关。 |
 | **下载硬失败** | `❌ PixivFlow 本次下载失败` | 目标投递过程中发生硬错误（超长标题写入 `ENAMETOOLONG`、网络/权限错误等，导致该目标整条失败）。无需额外开关——只要目标配置了 `delivery.target`（存在通知通道）即发送；无通知端点的目标由投递校验拦下并仅记警告。插画与小说目标均生效。 |
 | **计划失败或超时** | `⚠️ PixivFlow 定时任务失败/超时` | 通知该计划涉及的审核群，包含连续失败次数；达到 `maxConsecutiveFailures` 时明确提示计划已自动停止。 |
+| **数据库恢复** | `⚠️ PixivFlow 数据库自检未通过` | 启动时损坏库被隔离并重建，通知所有配置了 `notificationUrl` 的目标。 |
 
 硬失败消息含目标名称与错误摘要（错误超 200 字符自动截断），并提示可点「🔄 重抓/换一张」
 重试或等待下次定时任务。这样即便是静默的下载错误，审核员也能第一时间得知，而不必翻日志。

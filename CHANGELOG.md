@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.12.1](https://github.com/redtidev1918/PixivFlow/compare/v2.12.0...v2.12.1) (2026-09-08)
+
+
+### Bug Fixes
+
+* **notifications:** support Apprise notification gateway ([553b9a3](https://github.com/redtidev1918/PixivFlow/commit/553b9a3be18b2259c87a628222bfd7242a74a7fa))
+
 ## [2.12.0](https://github.com/redtidev1918/PixivFlow/compare/v2.11.0...v2.12.0) (2026-09-08)
 
 

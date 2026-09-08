@@ -5,7 +5,8 @@
       "release-type": "node",
       "package-name": "PixivFlow",
       "include-v-in-tag": true,
-      "include-component-in-tag": false
+      "include-component-in-tag": false,
+      "skip-github-release": true
     }
   }
 }

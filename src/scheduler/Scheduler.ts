@@ -63,7 +63,20 @@ export class Scheduler {
   ) {}
 
   public start(job: () => Promise<void>) {
-    if (!cron.validate(this.config.cron)) {
+    this.arm(job, true);
+  }
+
+  /**
+   * Arm the scheduler for external/manual triggers (runNow) WITHOUT registering
+   * a cron task. Used in `external` scheduler mode where an authenticated HTTP
+   * trigger — not the in-process clock — fires runs.
+   */
+  public init(job: () => Promise<void>) {
+    this.arm(job, false);
+  }
+
+  private arm(job: () => Promise<void>, registerCron: boolean) {
+    if (registerCron && !cron.validate(this.config.cron)) {
       throw new Error(`Invalid cron expression: ${this.config.cron}`);
     }
 
@@ -75,7 +88,7 @@ export class Scheduler {
     }
 
     logger.info('Scheduler initialised', {
-      cron: this.config.cron,
+      cron: registerCron ? this.config.cron : '(external trigger)',
       timezone: this.config.timezone ?? 'system',
       maxExecutions: this.config.maxExecutions ?? 'unlimited',
       minInterval: this.config.minInterval ? `${this.config.minInterval}ms` : 'none',
@@ -86,25 +99,31 @@ export class Scheduler {
       scheduleId: this.scheduleId,
     });
 
-    this.task = cron.schedule(
-      this.config.cron,
-      async () => {
-        await this.executeJob(job);
-      },
-      {
-        timezone: this.config.timezone,
-      }
-    );
+    if (registerCron) {
+      this.task = cron.schedule(
+        this.config.cron,
+        async () => {
+          await this.executeJob(job);
+        },
+        {
+          timezone: this.config.timezone,
+        }
+      );
+    }
     this.job = job;
   }
 
   /**
-   * Trigger one execution immediately (e.g. catch-up for a missed cron fire).
-   * Honors the same guards as a cron firing; no-op if already running.
+   * Trigger one execution immediately (external HTTP trigger / catch-up /
+   * run-once). Honors the same guards as a cron firing. Returns false when the
+   * run is not admitted (already running/pending, stopped, maxed) so callers
+   * can report idempotent "already in progress" instead of assuming a start.
    */
-  public runNow(): void {
-    if (!this.job) return;
+  public runNow(): boolean {
+    if (!this.job) return false;
+    if (this.running || this.pending || this.stopped) return false;
     void this.executeJob(this.job);
+    return true;
   }
 
   private async executeJob(job: () => Promise<void>) {

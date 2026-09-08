@@ -7,6 +7,8 @@ import { CommandCategory } from './metadata';
 import { CommandContext, CommandArgs, CommandResult } from './types';
 import { getConfigPath, loadConfig, StandaloneConfig } from '../config';
 import { MultiScheduleManager } from '../scheduler/MultiScheduleManager';
+import { ScheduleTriggerServer } from '../scheduler/ScheduleTriggerServer';
+import { SlotCoordinator } from '../scheduler/SlotCoordinator';
 import { createSchedulerRuntime } from './scheduler-runtime';
 
 /**
@@ -50,8 +52,59 @@ export class SchedulerCommand extends BaseCommand {
       });
       const status = manager.start(runtime.config);
 
+      // External mode: expose the authenticated Slot trigger HTTP server. The
+      // in-process cron is disabled (manager.init); runs arrive via POST only.
+      let triggerServer: ScheduleTriggerServer | null = null;
+      if (manager.isExternalMode(runtime.config)) {
+        const rt = runtime.config.schedulerRuntime!;
+        const coordinator = new SlotCoordinator(runtime.database);
+        const resolveConfig = (): StandaloneConfig => manager['activeConfig'] ?? runtime.config;
+        triggerServer = new ScheduleTriggerServer(
+          ScheduleTriggerServer.resolveToken(rt.trigger?.token),
+          {
+            resolveSlot: (requested) => coordinator.resolveSlot(requested, resolveConfig()),
+            runScheduleSlot: async (scheduleId, slotCtx) => {
+              const cfg = resolveConfig();
+              const plan = cfg.schedules?.find((s) => s.id === scheduleId);
+              if (!plan) {
+                return { scheduleId, slotId: slotCtx.slotId, status: 'failed', cells: [], alreadyCompleted: false };
+              }
+              const slot = { ...slotCtx, triggerSource: 'external' as const };
+              const before = coordinator.begin(slot, plan);
+              if (before.alreadyCompleted) {
+                return coordinator.completedSummary(slot.slotId, plan);
+              }
+              // runJob performs begin/pendingTargets/finish against the ledger.
+              await runtime.runJob(cfg, plan, slot);
+              const rec = runtime.database.slots.getSlot(slot.slotId);
+              const cells = runtime.database.slots.getCells(slot.slotId).map((c) => ({
+                targetId: c.targetId,
+                status: c.status,
+                workId: c.workId,
+                error: c.lastError,
+              }));
+              return {
+                scheduleId,
+                slotId: slot.slotId,
+                status: rec?.status ?? 'failed',
+                alreadyCompleted: false,
+                cells,
+              };
+            },
+            status: () => ({
+              mode: 'external',
+              schedules: manager.scheduleIds(),
+            }),
+          }
+        );
+        const port = rt.trigger?.port ?? (Number(process.env.PORT) || 8090);
+        triggerServer.start(rt.trigger?.host ?? '0.0.0.0', port);
+        context.logger.info('External scheduler mode: internal cron disabled, awaiting authenticated Slot triggers', { port });
+      }
+
       const cleanup = () => {
         context.logger.info('Shutting down PixivFlow');
+        triggerServer?.stop();
         manager.stop();
         runtime.close();
         process.exit(0);

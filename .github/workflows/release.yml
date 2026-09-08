@@ -22,7 +22,9 @@ permissions:
 
 jobs:
   release:
-    uses: redtidev1918/release-infra/.github/workflows/reusable-release.yml@v1
+    # release-infra#4: fixed missing Git identity in finalize. Keep this SHA
+    # pinned until the v1 floating tag is advanced beyond 60a64028.
+    uses: redtidev1918/release-infra/.github/workflows/reusable-release.yml@60a64028ab912028e6600e0ef66b1fb296de2761
     with:
       version: ${{ inputs.version || '' }}
       dry_run: ${{ github.event_name == 'pull_request' || inputs.dry_run || false }}

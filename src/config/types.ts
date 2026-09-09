@@ -35,9 +35,9 @@ export interface CandidateCollectionConfig {
 /** Behaviour when a target cannot produce the requested number of works. */
 export interface NoMatchPolicyConfig {
   /**
-   * For topic novels with a language filter, inspect this many additional
-   * preceding publication days, one day at a time (default 0, max 7).
-   * Topic and language constraints are never relaxed implicitly.
+   * For topic targets, inspect this many additional preceding publication
+   * days, one day at a time (default 0, max 7). Topic, AI and language
+   * constraints are never relaxed implicitly.
    */
   lookbackDays?: number;
   /** Send a best-effort notice through the target's delivery endpoint. */
@@ -600,7 +600,6 @@ export interface StandaloneConfig {
     timeout?: number;
   };
 }
-
 
 
 

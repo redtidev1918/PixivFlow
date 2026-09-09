@@ -51,6 +51,8 @@
       nameLink: '#/',
       repo: 'redtidev1918/PixivFlow',
       loadSidebar: true,
+      // 子目录页面（如 zh-CN/）也统一用根侧边栏；链接用根绝对路径（/FOO.md）
+      alias: { '/.*/_sidebar.md': '/_sidebar.md' },
       subMaxLevel: 2,
       maxLevel: 3,
       auto2top: true,

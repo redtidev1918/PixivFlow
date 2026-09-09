@@ -128,8 +128,16 @@ export class DownloadManager implements IDownloadManager {
       downloadConcurrency,
       storagePath
     );
-    this.novelDownloader = new NovelDownloader(client, database, fileService);
-    this.planner = new DownloadPlanner(database);
+    this.novelDownloader = new NovelDownloader(
+      client,
+      database,
+      fileService,
+      database as unknown as import('../storage/Database').Database
+    );
+    this.planner = new DownloadPlanner(database, {
+      deliveredIds: (target, type, ids) =>
+        this.deliveryService.deliveredIds(target, type, ids),
+    });
     this.executor = new DownloadExecutor();
 
     const downloadConfig = config.download ?? {};
@@ -166,6 +174,13 @@ export class DownloadManager implements IDownloadManager {
         retryMaxDelayMs: config.delivery?.outboxRetryMaxMs,
         onDeliver: (artifact, target) => this.onWorkLocked?.(artifact, target),
       }
+    );
+
+    // Delivery ledger + SQLite outbox. Requires the concrete Database (with the
+    // deliveries/outbox repositories). Unit tests pass plain mock databases; in
+    // that case delivery dedupe/enqueue is simply inactive.
+    this.deliveryService = new DeliveryService(
+      database as unknown as import('../storage/Database').Database
     );
 
     // One lazily-created topic pipeline (shared resolver/cache) for this run.

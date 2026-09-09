@@ -23,6 +23,7 @@ import { SlotContext, SlotCoordinator } from '../scheduler/SlotCoordinator';
 import { TargetOutcome } from '../scheduler/TargetOutcome';
 import { DeliveryService } from '../delivery/DeliveryService';
 import { OutboxWorker } from '../delivery/OutboxWorker';
+import { migrateLegacyOutbox } from '../delivery/LegacyOutboxMigration';
 import { DeliveryAck } from '../delivery/DeliveryAck';
 import { NotificationPolicy } from '../notification/NotificationPolicy';
 import { randomUUID } from 'node:crypto';
@@ -192,6 +193,9 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
 
   const databasePath = config.storage!.databasePath!;
   const { database, recoveryNote } = openDatabaseWithRecovery(databasePath);
+  // One-time, idempotent import of any file-based outbox manifests. Safe to run
+  // every start: committed rows are archived; a crash mid-way resumes here.
+  migrateLegacyOutbox(database);
   if (recoveryNote) {
     await notifyRecovery(config, database, recoveryNote);
   }

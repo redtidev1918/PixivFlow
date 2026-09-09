@@ -340,14 +340,24 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
     logger.info('='.repeat(60));
 
     const startTime = Date.now();
+    let allTargetsFailed: Error | undefined;
     try {
       await downloadManager.runAllTargets();
+    } catch (error) {
+      if (!slotCtx || !(error instanceof Error) || !/^All \d+ target\(s\) failed\./.test(error.message)) {
+        throw error;
+      }
+      // Scheduled Slots treat terminal target failures (failed/no_candidate) as
+      // a finished partial/failed aggregate. Finish before returning so the HTTP
+      // trigger can report the durable state instead of 500 and never roll up.
+      allTargetsFailed = error;
     } finally {
       if (activeDownloadManager === downloadManager) activeDownloadManager = null;
     }
     const duration = Math.round((Date.now() - startTime) / 1000);
 
     if (slotCtx) coordinator.finish(slotCtx, schedule, targets);
+    if (!slotCtx && allTargetsFailed) throw allTargetsFailed;
 
     logger.info('='.repeat(60));
     logger.info(`Scheduled download plan finished (took ${duration}s)`, {

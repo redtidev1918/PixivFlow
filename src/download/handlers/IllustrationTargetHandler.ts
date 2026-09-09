@@ -40,6 +40,10 @@ export class IllustrationTargetHandler {
     logger.info(`Processing illustration ${mode === 'ranking' ? 'ranking' : 'tag'} ${displayTag}`);
 
     try {
+      if (mode === 'topic') {
+        await this.handleTopicWithLookback(target, displayTag);
+        return;
+      }
       const illusts = await this.fetchIllustrations(target, mode);
       const result = await this.pipeline.run(
         illusts,
@@ -49,6 +53,9 @@ export class IllustrationTargetHandler {
       );
       this.handleDownloadResult(result, target, mode, illusts.length);
     } catch (error) {
+      if (error instanceof Error && error.message.startsWith('No matching illustrations found after checking')) {
+        throw error;
+      }
       await this.handleError(error, displayTag, mode, target);
     }
   }
@@ -66,11 +73,7 @@ export class IllustrationTargetHandler {
 
   private async fetchTopicIllustrations(target: TargetConfig): Promise<PixivIllust[]> {
     const topic = (target.topic ?? '').trim();
-    const day = target.date === 'TODAY'
-      ? getTodayDate()
-      : target.date && target.date !== 'YESTERDAY'
-        ? target.date
-        : getYesterdayDate();
+    const day = this.resolveTopicDay(target);
     const limit = target.limit || 1;
     // TopicPipeline ranks before DownloadPlanner removes works recorded in the
     // download database. Keep a small, bounded ranked pool so a second run for
@@ -93,6 +96,57 @@ export class IllustrationTargetHandler {
     );
     logger.info(`Topic "${topic}" illustration: tags=${selection.resolvedTagCount} raw=${selection.rawCount} deduped=${selection.dedupedCount} aiExcluded=${selection.aiExcludedCount} accepted=${selection.acceptedCount} candidates=${works.length} target=${limit}`);
     return works;
+  }
+
+  private async handleTopicWithLookback(target: TargetConfig, displayTag: string): Promise<void> {
+    const requested = target.limit || 1;
+    const additionalDays = Math.max(0, Math.min(target.noMatchPolicy?.lookbackDays ?? 0, 7));
+    const baseDay = this.resolveTopicDay(target);
+    const checkedDays: string[] = [];
+
+    for (let offset = 0; offset <= additionalDays; offset++) {
+      const day = this.shiftDay(baseDay, -offset);
+      const attemptTarget = offset === 0 ? target : { ...target, date: day };
+      checkedDays.push(day);
+      if (offset > 0) {
+        logger.warn(`No matching illustration found yet; checking fallback day ${day}`, {
+          topic: target.topic,
+          requestedDay: baseDay,
+          fallbackOffset: offset,
+        });
+      }
+      const illusts = await this.fetchTopicIllustrations(attemptTarget);
+      const result = await this.pipeline.run(
+        illusts,
+        attemptTarget,
+        'illustration',
+        (illust, tag) => this.downloadAndDeliver(illust, tag, attemptTarget)
+      );
+      if (result.downloaded > 0) {
+        this.handleDownloadResult(result, target, 'topic', illusts.length);
+        return;
+      }
+    }
+
+    const message = `No matching illustrations found after checking ${checkedDays.length} day(s): ${checkedDays.join(', ')}`;
+    this.database.logExecution(displayTag, 'illustration', 'success', message);
+    logger.warn(`Illustration topic ${displayTag} produced no matching result`, { checkedDays });
+    await this.notifyNoMatch(target, displayTag, checkedDays);
+    throw new Error(message);
+  }
+
+  private resolveTopicDay(target: TargetConfig): string {
+    return target.date === 'TODAY'
+      ? getTodayDate()
+      : target.date && target.date !== 'YESTERDAY'
+        ? target.date
+        : getYesterdayDate();
+  }
+
+  private shiftDay(day: string, offset: number): string {
+    const date = new Date(`${day}T00:00:00.000Z`);
+    date.setUTCDate(date.getUTCDate() + offset);
+    return date.toISOString().slice(0, 10);
   }
 
   private async fetchRankingIllustrations(target: TargetConfig): Promise<PixivIllust[]> {
@@ -288,6 +342,22 @@ export class IllustrationTargetHandler {
       await this.deliveryOutbox.notifyNoMatch(target, text, key);
     } catch (notifyError) {
       logger.warn('Failed to send download-failure notification', { label, errorMessage, notifyError });
+    }
+  }
+
+  private async notifyNoMatch(target: TargetConfig, label: string, checkedDays: string[]): Promise<void> {
+    if (target.noMatchPolicy?.notify !== true || !this.deliveryOutbox) return;
+    const text = [
+      '⚠️ PixivFlow 本次没有可投稿内容',
+      `目标：${target.id || label}（${label} · 插画）`,
+      `检查日期：${checkedDays.join('、')}`,
+      '处理结果：未创建空投稿；下次定时任务会继续正常执行。',
+    ].join('\n');
+    const key = `pixivflow:no-match:${target.id || label}:illustration:${checkedDays[0]}:${checkedDays.at(-1)}`;
+    try {
+      await this.deliveryOutbox.notifyNoMatch(target, text, key);
+    } catch (error) {
+      logger.warn('Failed to send no-match notification', { label, error });
     }
   }
 

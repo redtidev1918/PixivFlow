@@ -207,6 +207,63 @@ describe('IllustrationTargetHandler', () => {
       );
     });
 
+    it('checks preceding days until a topic illustration is downloaded', async () => {
+      const selectWorks = jest.fn().mockResolvedValue({
+        works: [createMockIllust(1)],
+        selection: {
+          candidates: [], selected: [], resolvedTagCount: 1, rawCount: 1,
+          dedupedCount: 1, acceptedCount: 1, aiExcludedCount: 0,
+        },
+      });
+      mockPipeline.run
+        .mockResolvedValueOnce({ downloaded: 0, skipped: 0, alreadyDownloaded: 0, filteredOut: 0 })
+        .mockResolvedValueOnce({ downloaded: 1, skipped: 0, alreadyDownloaded: 0, filteredOut: 0 });
+      const outbox = { notifyNoMatch: jest.fn() } as any;
+      const topicHandler = new IllustrationTargetHandler(
+        mockClient, mockDatabase, mockRankingService, mockIllustrationDownloader,
+        mockPipeline, outbox, () => ({ selectWorks } as any)
+      );
+
+      await topicHandler.handle({
+        id: 'daily-image', type: 'illustration', mode: 'topic', topic: 'ボテ腹',
+        date: 'YESTERDAY', limit: 1, noMatchPolicy: { lookbackDays: 3, notify: true },
+      });
+
+      expect(selectWorks).toHaveBeenCalledTimes(2);
+      expect(selectWorks.mock.calls[0][2]).toBe('2023-06-14');
+      expect(selectWorks.mock.calls[1][2]).toBe('2023-06-13');
+      expect(outbox.notifyNoMatch).not.toHaveBeenCalled();
+    });
+
+    it('reports no_candidate after exhausting illustration lookback', async () => {
+      const selectWorks = jest.fn().mockResolvedValue({
+        works: [],
+        selection: {
+          candidates: [], selected: [], resolvedTagCount: 1, rawCount: 0,
+          dedupedCount: 0, acceptedCount: 0, aiExcludedCount: 0,
+        },
+      });
+      mockPipeline.run.mockResolvedValue({
+        downloaded: 0, skipped: 0, alreadyDownloaded: 0, filteredOut: 0,
+      });
+      const outbox = { notifyNoMatch: jest.fn().mockResolvedValue(undefined) } as any;
+      const topicHandler = new IllustrationTargetHandler(
+        mockClient, mockDatabase, mockRankingService, mockIllustrationDownloader,
+        mockPipeline, outbox, () => ({ selectWorks } as any)
+      );
+
+      await expect(topicHandler.handle({
+        id: 'daily-image', type: 'illustration', mode: 'topic', topic: 'ボテ腹',
+        date: 'YESTERDAY', limit: 1, storageMode: 'cache', delivery: { target: 'telepost' },
+        noMatchPolicy: { lookbackDays: 1, notify: true },
+      })).rejects.toThrow('No matching illustrations found after checking 2 day(s)');
+
+      expect(outbox.notifyNoMatch).toHaveBeenCalledTimes(1);
+      expect(mockDatabase.logExecution).toHaveBeenCalledWith(
+        'ボテ腹', 'illustration', 'success', expect.stringContaining('checking 2 day(s)')
+      );
+    });
+
     it('should handle errors and log them', async () => {
       const target: TargetConfig = {
         type: 'illustration',

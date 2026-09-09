@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.12.3](https://github.com/redtidev1918/PixivFlow/compare/v2.12.2...v2.12.3) (2026-09-09)
+
+
+### Bug Fixes
+
+* **scheduler:** finish slots after terminal target failures ([#21](https://github.com/redtidev1918/PixivFlow/issues/21)) ([2ea2769](https://github.com/redtidev1918/PixivFlow/commit/2ea27690f245b947064fab4353c7245ed715c898))
+
 ## [2.12.2](https://github.com/redtidev1918/PixivFlow/compare/v2.12.1...v2.12.2) (2026-09-09)
 
 

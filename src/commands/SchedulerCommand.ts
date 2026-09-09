@@ -133,6 +133,7 @@ export class SchedulerCommand extends BaseCommand {
               inFlight.set(key, promise);
               return promise;
             },
+            drainOutbox: () => runtime.drainOutbox(),
             status: (scheduleId) => {
               const cfg = resolveConfig();
               const plan = findPlan(cfg, scheduleId);

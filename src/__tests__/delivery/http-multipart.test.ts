@@ -579,4 +579,43 @@ describe('DeliveryOutbox', () => {
     expect(dispatcher.deliver).not.toHaveBeenCalled();
     await expect(fs.access(filePath)).resolves.toBeUndefined();
   });
+  it('sends the occurrence-scoped idempotency_key field so ACK-loss retries converge as idempotent_replay', async () => {
+    const filePath = join(directory, 'cover.jpg');
+    await fs.writeFile(filePath, 'image');
+
+    const fetchMock = jest.fn().mockImplementation(async (_url: string, init: any) => {
+      // Body is a streaming hand-built multipart Readable; drain and inspect raw.
+      const chunks: Buffer[] = [];
+      for await (const chunk of init.body as AsyncIterable<Buffer>) chunks.push(Buffer.from(chunk));
+      const raw = Buffer.concat(chunks).toString('utf8');
+      expect(raw).toContain('name="idempotency_key"');
+      expect(raw).toContain(
+        'pixivflow:bot1:illustration:999:sched-a@202609081000:t-a'
+      );
+      return new Response(JSON.stringify({
+        ok: true,
+        data: { status: 'published', reused: false, message_id: 7 },
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+    });
+    global.fetch = fetchMock as typeof fetch;
+
+    const provider = new HttpMultipartDelivery({
+      type: 'httpMultipart',
+      url: 'https://example.test/submissions',
+      fileField: 'files',
+      fields: { tags: 'Pixiv', idempotency_key: '{{idempotencyKey}}' },
+      success: { statuses: [200, 201], jsonPath: 'ok', equals: true },
+    });
+
+    const result = await provider.deliver({
+      files: [filePath],
+      context: {
+        title: 'W', pixivId: '999', type: 'illustration',
+        idempotencyKey: 'pixivflow:bot1:illustration:999:sched-a@202609081000:t-a',
+      } as any,
+    });
+    expect(result.ack?.kind).toBe('accepted');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
 });

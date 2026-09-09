@@ -24,7 +24,7 @@ jobs:
   release:
     # release-infra v1 includes the finalize Git-identity fix and npm secret
     # interface; npm itself uses GitHub OIDC Trusted Publishing.
-    uses: redtidev1918/release-infra/.github/workflows/reusable-release.yml@v1
+    uses: redtidev1918/releasegraph/.github/workflows/reusable-release.yml@v1
     with:
       version: ${{ inputs.version || '' }}
       dry_run: ${{ github.event_name == 'pull_request' || inputs.dry_run || false }}

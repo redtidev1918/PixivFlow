@@ -44,6 +44,8 @@ export interface TriggerHandlers {
   run(scheduleId: string, context: SlotContext): Promise<TriggerRunResult>;
   /** Read-only snapshot of a schedule's current occurrence (for GET). */
   status(scheduleId: string): unknown;
+  /** Optional: pump due durable outbox rows (used to converge after cold start). */
+  drainOutbox?(): Promise<{ processed?: number; done?: number; retried?: number; dead?: number }>;
 }
 
 export class ScheduleTriggerServer {
@@ -106,6 +108,23 @@ export class ScheduleTriggerServer {
         // The slot ledger resumes on the next trigger; a 500 tells the clock to
         // retry safely (idempotent — the same occurrence/ slot is reused).
         res.status(500).json({ status: 'error', error: 'schedule run failed; the occurrence will resume on the next trigger' });
+      }
+    });
+
+    // Convergence endpoint: after a machine stop/start, an operator or an
+    // external watcher can ask the process to flush due deliveries/notifications
+    // without running candidate selection. Deployment-agnostic (no platform refs).
+    app.post('/internal/outbox/drain', this.auth, async (_req: Request, res: Response) => {
+      try {
+        if (!this.handlers.drainOutbox) {
+          res.status(503).json({ status: 'error', error: 'outbox worker not available in this runtime' });
+          return;
+        }
+        const result = await this.handlers.drainOutbox();
+        res.json({ status: 'ok', result });
+      } catch (error) {
+        logger.error('Outbox drain failed', { error: error instanceof Error ? error.message : String(error) });
+        res.status(500).json({ status: 'error', error: 'outbox drain failed; rows remain durable and retry' });
       }
     });
 

@@ -66,7 +66,7 @@ export interface SchedulerRuntime {
  * the caller surfaces to the review group. Schema/migration errors are NOT
  * treated as corruption and propagate normally.
  */
-function openDatabaseWithRecovery(databasePath: string): { database: Database; recoveryNote?: string } {
+function openDatabaseWithRecovery(databasePath: string): { database: Database; recoveryNote?: string; degraded: boolean } {
   const openFresh = (): Database => {
     const db = new Database(databasePath);
     db.migrate();
@@ -84,14 +84,15 @@ function openDatabaseWithRecovery(databasePath: string): { database: Database; r
     database = openFresh();
     return {
       database,
-      recoveryNote: `数据库无法打开（${message}），已隔离损坏文件 ${isolated} 并重建空库；下载去重记录已重置，将重新下载近期作品。`,
+      recoveryNote: `数据库无法打开（${message}），已隔离损坏文件 ${isolated} 并重建空库；已进入降级模式：自动选择/投递已暂停，请执行 doctor --repair 或确认历史后再恢复，以避免空库重复发布。`,
+      degraded: true,
     };
   }
 
   const check = database.checkIntegrity();
   if (check === 'ok') {
     database.migrate();
-    return { database };
+    return { database, degraded: false };
   }
 
   // Structurally corrupt: isolate (preserving evidence) and recreate fresh.
@@ -110,7 +111,8 @@ function openDatabaseWithRecovery(databasePath: string): { database: Database; r
   database = openFresh();
   return {
     database,
-    recoveryNote: `数据库完整性检查未通过（${message}），已隔离损坏文件 ${isolated} 并重建空库；下载去重记录已重置，将重新下载近期作品。`,
+    recoveryNote: `数据库完整性检查未通过（${message}），已隔离损坏文件 ${isolated} 并重建空库；已进入降级模式：自动选择/投递已暂停，请运行 pixivflow doctor --repair / reconcile 确认历史后再恢复，以避免空库批量重复发布。`,
+    degraded: true,
   };
 }
 
@@ -192,7 +194,7 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
   const config = loadConfig(configPath, false, false);
 
   const databasePath = config.storage!.databasePath!;
-  const { database, recoveryNote } = openDatabaseWithRecovery(databasePath);
+  const { database, recoveryNote, degraded } = openDatabaseWithRecovery(databasePath);
   // One-time, idempotent import of any file-based outbox manifests. Safe to run
   // every start: committed rows are archived; a crash mid-way resumes here.
   migrateLegacyOutbox(database);

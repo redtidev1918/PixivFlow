@@ -15,6 +15,8 @@ import { MigrateConfigCommand } from './MigrateConfigCommand';
 import { NormalizeCommand } from './NormalizeCommand';
 import { WebUICommand } from './WebUICommand';
 import { HealthCommand } from './HealthCommand';
+import { DoctorCommand } from './DoctorCommand';
+import { ReconcileCommand } from './ReconcileCommand';
 import { StatusCommand } from './StatusCommand';
 import { LogsCommand } from './LogsCommand';
 import { ConfigCommand } from './ConfigCommand';
@@ -43,6 +45,8 @@ export function registerAllCommands(registry: CommandRegistry): void {
   registry.register(new NormalizeCommand());
   registry.register(new WebUICommand());
   registry.register(new HealthCommand());
+  registry.register(new DoctorCommand());
+  registry.register(new ReconcileCommand());
   registry.register(new StatusCommand());
   registry.register(new LogsCommand());
   registry.register(new ConfigCommand());
@@ -72,6 +76,8 @@ export {
   NormalizeCommand,
   WebUICommand,
   HealthCommand,
+  DoctorCommand,
+  ReconcileCommand,
   StatusCommand,
   LogsCommand,
   ConfigCommand,

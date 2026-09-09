@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.12.2](https://github.com/redtidev1918/PixivFlow/compare/v2.12.1...v2.12.2) (2026-09-09)
+
+
+### Bug Fixes
+
+* **ci:** follow releasegraph rename ([#19](https://github.com/redtidev1918/PixivFlow/issues/19)) ([1b10bce](https://github.com/redtidev1918/PixivFlow/commit/1b10bced9dd69f3d59c3e15afa9751a3291e1aed))
+* **topic:** backfill empty illustration days ([#18](https://github.com/redtidev1918/PixivFlow/issues/18)) ([c33d21b](https://github.com/redtidev1918/PixivFlow/commit/c33d21baa996145c2e77953bb9a9d4051cc9e31e))
+
 ## [2.12.1](https://github.com/redtidev1918/PixivFlow/compare/v2.12.0...v2.12.1) (2026-09-08)
 
 

@@ -93,6 +93,9 @@ export class DatabaseMigration {
             trigger_source TEXT,
             slot_date TEXT NOT NULL DEFAULT '',
             slot_name TEXT NOT NULL DEFAULT '',
+            lease_owner TEXT,
+            lease_until INTEGER,
+            heartbeat_at INTEGER,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             started_at DATETIME,
             completed_at DATETIME,
@@ -114,6 +117,61 @@ export class DatabaseMigration {
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             completed_at DATETIME,
             UNIQUE(slot_id, target_id)
+          )`,
+        // Delivery ledger: confirmed downstream submissions. This is separate
+        // from downloads (local file facts). The natural idempotency key makes
+        // ACK-lost retries converge to one row; (target, type, pixiv_id) marks
+        // which works are already CONFIRMED delivered to which target.
+        `CREATE TABLE IF NOT EXISTS deliveries (
+            id TEXT PRIMARY KEY,
+            delivery_target TEXT NOT NULL,
+            work_type TEXT NOT NULL,
+            pixiv_id TEXT NOT NULL,
+            slot_id TEXT,
+            target_id TEXT,
+            idempotency_key TEXT NOT NULL UNIQUE,
+            status TEXT NOT NULL DEFAULT 'pending',
+            remote_id TEXT,
+            remote_status TEXT,
+            reuse_reason TEXT,
+            attempts INTEGER NOT NULL DEFAULT 0,
+            last_error TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            delivered_at DATETIME
+          )`,
+        // Durable transactional outbox: every external side effect (content
+        // delivery or notification) originates from one row here. The worker
+        // leases due rows; crashes leave an expired lease that a restart claims.
+        `CREATE TABLE IF NOT EXISTS outbox (
+            id TEXT PRIMARY KEY,
+            kind TEXT NOT NULL,
+            idempotency_key TEXT,
+            delivery_id TEXT,
+            delivery_target TEXT NOT NULL,
+            payload_json TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending',
+            attempts INTEGER NOT NULL DEFAULT 0,
+            max_attempts INTEGER NOT NULL DEFAULT 12,
+            next_attempt_at INTEGER NOT NULL,
+            lease_owner TEXT,
+            lease_until INTEGER,
+            last_error TEXT,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL,
+            completed_at INTEGER
+          )`,
+        // Lightweight Pixiv metadata cache (novel language, rating) to cut
+        // repeated detail/full-text requests and 429 amplification.
+        `CREATE TABLE IF NOT EXISTS pixiv_metadata (
+            pixiv_id TEXT NOT NULL,
+            work_type TEXT NOT NULL,
+            language TEXT,
+            x_restrict INTEGER,
+            published_at TEXT,
+            title TEXT,
+            checked_at INTEGER NOT NULL,
+            PRIMARY KEY (pixiv_id, work_type)
           )`,
       ];
 
@@ -138,6 +196,9 @@ export class DatabaseMigration {
         occurrence_label: `ALTER TABLE schedule_slots ADD COLUMN occurrence_label TEXT NOT NULL DEFAULT ''`,
         timezone: `ALTER TABLE schedule_slots ADD COLUMN timezone TEXT NOT NULL DEFAULT 'UTC'`,
         target_ids: 'ALTER TABLE schedule_slots ADD COLUMN target_ids TEXT',
+        lease_owner: 'ALTER TABLE schedule_slots ADD COLUMN lease_owner TEXT',
+        lease_until: 'ALTER TABLE schedule_slots ADD COLUMN lease_until INTEGER',
+        heartbeat_at: 'ALTER TABLE schedule_slots ADD COLUMN heartbeat_at INTEGER',
       };
       const columnAlters: string[] = [];
       for (const [col, sql] of Object.entries(slotColumnMigrations)) {
@@ -159,6 +220,11 @@ export class DatabaseMigration {
         `CREATE INDEX IF NOT EXISTS idx_slots_schedule_occ ON schedule_slots(schedule_id, occurrence_at DESC)`,
         `CREATE INDEX IF NOT EXISTS idx_slot_items_slot ON schedule_slot_items(slot_id)`,
         `CREATE INDEX IF NOT EXISTS idx_slot_items_work ON schedule_slot_items(work_id, work_type)`,
+        `CREATE INDEX IF NOT EXISTS idx_deliveries_dedupe ON deliveries(delivery_target, work_type, pixiv_id, status)`,
+        `CREATE UNIQUE INDEX IF NOT EXISTS idx_outbox_key ON outbox(kind, idempotency_key) WHERE idempotency_key IS NOT NULL`,
+        `CREATE INDEX IF NOT EXISTS idx_outbox_due ON outbox(status, next_attempt_at)`,
+        `CREATE INDEX IF NOT EXISTS idx_outbox_delivery ON outbox(delivery_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_slots_lease ON schedule_slots(lease_until)`,
       ];
 
       const postMigration = this.db.transaction((stmts: string[]) => {
@@ -218,7 +284,6 @@ export class DatabaseMigration {
     }
   }
 }
-
 
 
 

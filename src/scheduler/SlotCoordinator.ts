@@ -14,6 +14,7 @@ import {
   resolveOccurrence,
   scheduleTimezone,
 } from './OccurrenceResolver';
+import { TargetOutcome } from './TargetOutcome';
 
 /**
  * Durable execution context attached to a run. A scheduled occurrence always
@@ -182,6 +183,84 @@ export class SlotCoordinator {
     this.database.slots.setCellStatus(slotId, targetId, status, error);
   }
 
+  /**
+   * Map a typed TargetOutcome onto the explicit cell FSM. This is the ONLY
+   * place a target result becomes a cell state, and it never infers success
+   * from a missing exception. A confirmed downstream ACK ('submitted') is the
+   * sole path to the submitted cell state.
+   */
+  applyOutcome(slotId: string, targetId: string, outcome: TargetOutcome): void {
+    const cell = this.database.slots.getCell(slotId, targetId);
+    if (!cell) return;
+    switch (outcome.kind) {
+      case 'submitted':
+        this.database.slots.lockCellWork(slotId, targetId, outcome.workId, outcome.workType);
+        this.safeTransition(slotId, targetId, 'submitted');
+        return;
+      case 'stored':
+        // No downstream delivery target (persistent/download-only): a finished
+        // cell, but labelled via the ledger-free 'submitted' aggregate state so
+        // download-only schedules do not rerun forever.
+        this.database.slots.lockCellWork(slotId, targetId, outcome.workId, outcome.workType);
+        this.safeTransition(slotId, targetId, 'submitted');
+        return;
+      case 'delivery_pending':
+        this.database.slots.lockCellWork(slotId, targetId, outcome.workId, outcome.workType);
+        this.safeTransition(slotId, targetId, 'delivery_pending');
+        return;
+      case 'no_candidate':
+        // Only terminal if the cell never locked a work; a locked work whose
+        // delivery is still pending must not be collapsed to no_candidate.
+        if (!cell.workId) this.safeTransition(slotId, targetId, 'no_candidate', outcome.reason);
+        return;
+      case 'duplicate':
+        this.database.slots.lockCellWork(slotId, targetId, outcome.workId, cell.workType ?? 'unknown');
+        this.safeTransition(slotId, targetId, 'duplicate', outcome.reason);
+        return;
+      case 'failed':
+        if (outcome.retryable) {
+          // Leave non-terminal (selected/delivery_pending) so a later trigger
+          // resumes the SAME work. Record the error without a terminal state.
+          this.database.slots.setCellError?.(slotId, targetId, outcome.error);
+          return;
+        }
+        this.safeTransition(slotId, targetId, 'failed', outcome.error);
+        return;
+    }
+  }
+
+  /** Promote a delivery_pending cell to submitted from a confirmed ACK. */
+  markDelivered(slotId: string, targetId: string, workId: string, workType: string): void {
+    this.database.slots.lockCellWork(slotId, targetId, workId, workType);
+    this.safeTransition(slotId, targetId, 'submitted');
+  }
+
+  private safeTransition(
+    slotId: string,
+    targetId: string,
+    next: import('../storage/repositories/SlotRepository').CellStatus,
+    error?: string
+  ): void {
+    try {
+      this.database.slots.transitionCell(slotId, targetId, next, error);
+    } catch (e) {
+      logger.debug('Cell transition rejected', { slotId, targetId, next, error: (e as Error).message });
+    }
+  }
+
+  /** Cross-process execution lease. Duplicate triggers converge, never parallel-run. */
+  claimRunLease(slotId: string, owner: string, leaseMs: number): boolean {
+    return this.database.slots.claimSlotLease(slotId, owner, Date.now() + leaseMs);
+  }
+
+  heartbeatLease(slotId: string, owner: string, leaseMs: number): void {
+    this.database.slots.heartbeatSlotLease(slotId, owner, Date.now() + leaseMs);
+  }
+
+  releaseRunLease(slotId: string, owner: string): void {
+    this.database.slots.releaseSlotLease(slotId, owner);
+  }
+
   /** Roll cell results up into the slot status (one place computes the aggregate). */
   finish(slot: SlotContext, schedule: ScheduleConfig, targets: TargetConfig[]): SlotRunSummary {
     const membership = this.database.slots.getSlotTargetIds(slot.slotId);
@@ -189,6 +268,9 @@ export class SlotCoordinator {
     for (const targetId of ids) {
       const cell = this.database.slots.getCell(slot.slotId, targetId);
       if (!cell) continue;
+      // delivery_pending / artifact_ready are recoverable: the OutboxWorker (or
+      // the next trigger) resumes the SAME work, so the slot stays running.
+      if (cell.status === 'delivery_pending' || cell.status === 'artifact_ready') continue;
       if (cell.status === 'pending' || cell.status === 'selected') {
         // Ran but never reached a terminal state (target threw before delivery).
         this.database.slots.setCellStatus(slot.slotId, targetId, 'failed', cell.lastError ?? 'target did not complete');

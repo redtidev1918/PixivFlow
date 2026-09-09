@@ -159,7 +159,7 @@ describe('NovelTargetHandler', () => {
       const error = new Error('Test error');
       mockClient.searchNovels.mockRejectedValue(error);
 
-      await expect(handler.handle(target)).rejects.toThrow('Test error');
+      await expect(handler.handle(target)).resolves.toMatchObject({ kind: 'failed', retryable: false, error: 'Test error' });
 
       expect(mockDatabase.logExecution).toHaveBeenCalledWith(
         'test-tag',
@@ -179,7 +179,7 @@ describe('NovelTargetHandler', () => {
       const error = new NetworkError('Rate limited', 'https://api.pixiv.net', cause);
       mockClient.searchNovels.mockRejectedValue(error);
 
-      await expect(handler.handle(target)).rejects.toThrow();
+      await expect(handler.handle(target)).resolves.toMatchObject({ kind: 'failed' });
 
       expect(mockDatabase.logExecution).toHaveBeenCalledWith(
         'test-tag',
@@ -284,9 +284,10 @@ describe('NovelTargetHandler', () => {
         novelId: NaN as any,
       };
 
-      // The handler checks Number.isFinite(novelId) in handleSingleNovel
-      // NaN is not finite, so it should throw
-      await expect(handler.handle(target)).rejects.toThrow();
+      // Invalid id is a permanent failure outcome (not a throw).
+      await expect(handler.handle(target)).resolves.toMatchObject({
+        kind: 'failed', retryable: false, error: expect.stringContaining('Invalid novelId'),
+      });
     });
 
     it('should handle errors during single novel download', async () => {
@@ -390,9 +391,10 @@ describe('NovelTargetHandler', () => {
         seriesId: NaN as any,
       };
 
-      // The handler checks Number.isFinite(seriesId) in handleSeries
-      // NaN is not finite, so it should throw
-      await expect(handler.handle(target)).rejects.toThrow();
+      // Invalid series id is a permanent failure outcome (not a throw).
+      await expect(handler.handle(target)).resolves.toMatchObject({
+        kind: 'failed', retryable: false, error: expect.stringContaining('Invalid seriesId'),
+      });
     });
 
     it('should handle errors when fetching series', async () => {
@@ -702,7 +704,7 @@ describe('NovelTargetHandler', () => {
       );
     });
 
-    it('should throw error when zero downloads and items were skipped', async () => {
+    it('returns retryable failed outcome when zero downloads and items were skipped', async () => {
       const target: TargetConfig = {
         type: 'novel',
         tag: 'test-tag',
@@ -718,7 +720,7 @@ describe('NovelTargetHandler', () => {
         filteredOut: 0,
       });
 
-      await expect(handler.handle(target)).rejects.toThrow();
+      await expect(handler.handle(target)).resolves.toMatchObject({ kind: 'failed', retryable: true });
     });
 
     it('should warn when downloaded count is less than 50% of limit', async () => {
@@ -820,16 +822,15 @@ describe('NovelTargetHandler', () => {
         { downloaded: 0, skipped: 1, alreadyDownloaded: 0, filteredOut: 0 },
         { downloaded: 0, skipped: 1, alreadyDownloaded: 0, filteredOut: 0 },
       ]);
-      await topicHandler.handle({
+      const outcome = await topicHandler.handle({
         id: 'daily-cn', type: 'novel', mode: 'topic', topic: 'ボテ腹',
         date: 'YESTERDAY', limit: 1, languageFilter: 'chinese',
         noMatchPolicy: { lookbackDays: 1, notify: true },
         storageMode: 'cache', delivery: { target: 'telepost' },
       });
-
-      expect(outbox.notifyNoMatch).toHaveBeenCalledTimes(1);
-      expect(outbox.notifyNoMatch.mock.calls[0][1]).toContain('没有可投稿内容');
-      expect(mockDatabase.logExecution).toHaveBeenCalledTimes(1);
+      // Per-handler notifications are removed (centralized NotificationPolicy).
+      expect(outbox.notifyNoMatch).not.toHaveBeenCalled();
+      expect(outcome).toMatchObject({ kind: 'no_candidate' });
       expect(mockDatabase.logExecution).toHaveBeenCalledWith(
         'ボテ腹', 'novel', 'success', expect.stringContaining('across 2 day(s)')
       );
@@ -888,7 +889,7 @@ describe('NovelTargetHandler', () => {
       });
 
       // When no novels found and limit > 0, it should throw an error
-      await expect(handler.handle(target)).rejects.toThrow();
+      await expect(handler.handle(target)).resolves.toMatchObject({ kind: 'failed' });
     });
   });
 
@@ -914,14 +915,8 @@ describe('NovelTargetHandler', () => {
       mockClient.searchNovels.mockResolvedValue([createMockNovel(1)]);
       mockPipeline.run.mockRejectedValue(new Error('ENAMETOOLONG: name too long'));
 
-      await expect(h.handle(target)).rejects.toThrow('ENAMETOOLONG');
-
-      expect(mockOutbox.notifyNoMatch).toHaveBeenCalledTimes(1);
-      const [calledTarget, text, key] = mockOutbox.notifyNoMatch.mock.calls[0];
-      expect(calledTarget.id || calledTarget.tag).toBe('botefuku');
-      expect(text).toContain('下载失败');
-      expect(text).toContain('ENAMETOOLONG');
-      expect(key).toBe('pixivflow:hard-fail:botefuku:novel:2023-06-15');
+      await expect(h.handle(target)).resolves.toMatchObject({ kind: 'failed', retryable: false });
+      expect(mockOutbox.notifyNoMatch).not.toHaveBeenCalled();
     });
 
     it('does not notify when the target has no delivery destination', async () => {
@@ -945,7 +940,7 @@ describe('NovelTargetHandler', () => {
       mockClient.searchNovels.mockResolvedValue([createMockNovel(1)]);
       mockPipeline.run.mockRejectedValue(new Error('ENAMETOOLONG: name too long'));
 
-      await expect(h.handle(target)).rejects.toThrow('ENAMETOOLONG');
+      await expect(h.handle(target)).resolves.toMatchObject({ kind: 'failed', retryable: false });
       expect(mockOutbox.notifyNoMatch).not.toHaveBeenCalled();
     });
   });

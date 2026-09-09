@@ -73,9 +73,13 @@ export interface DeliveryRequest {
   context: DeliveryContext;
 }
 
+import type { DeliveryAck } from './DeliveryAck';
+
 export interface DeliveryResult {
   status?: number;
   body?: unknown;
+  /** Normalized business acknowledgement (present on delivery attempts). */
+  ack?: DeliveryAck;
 }
 
 export interface DeliveryNotificationRequest {
@@ -85,5 +89,6 @@ export interface DeliveryNotificationRequest {
 
 export interface DeliveryProvider {
   deliver(request: DeliveryRequest): Promise<DeliveryResult>;
+  /** One notification attempt; the durable outbox owns retries. */
   notify?(request: DeliveryNotificationRequest): Promise<DeliveryResult>;
 }

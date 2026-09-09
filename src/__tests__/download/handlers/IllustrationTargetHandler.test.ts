@@ -256,9 +256,9 @@ describe('IllustrationTargetHandler', () => {
         id: 'daily-image', type: 'illustration', mode: 'topic', topic: 'ボテ腹',
         date: 'YESTERDAY', limit: 1, storageMode: 'cache', delivery: { target: 'telepost' },
         noMatchPolicy: { lookbackDays: 1, notify: true },
-      })).rejects.toThrow('No matching illustrations found after checking 2 day(s)');
+      })).resolves.toMatchObject({ kind: 'no_candidate' });
 
-      expect(outbox.notifyNoMatch).toHaveBeenCalledTimes(1);
+      // Notifications are now centralized (NotificationPolicy), not sent per-handler.
       expect(mockDatabase.logExecution).toHaveBeenCalledWith(
         'ボテ腹', 'illustration', 'success', expect.stringContaining('checking 2 day(s)')
       );
@@ -273,7 +273,7 @@ describe('IllustrationTargetHandler', () => {
       const error = new Error('Test error');
       mockClient.searchIllustrations.mockRejectedValue(error);
 
-      await expect(handler.handle(target)).rejects.toThrow('Test error');
+      await expect(handler.handle(target)).resolves.toMatchObject({ kind: 'failed', retryable: false, error: 'Test error' });
 
       expect(mockDatabase.logExecution).toHaveBeenCalledWith(
         'test-tag',
@@ -293,7 +293,7 @@ describe('IllustrationTargetHandler', () => {
       const error = new NetworkError('Rate limited', 'https://api.pixiv.net', cause);
       mockClient.searchIllustrations.mockRejectedValue(error);
 
-      await expect(handler.handle(target)).rejects.toThrow();
+      await expect(handler.handle(target)).resolves.toMatchObject({ kind: 'failed', retryable: true });
 
       expect(mockDatabase.logExecution).toHaveBeenCalledWith(
         'test-tag',
@@ -675,7 +675,7 @@ describe('IllustrationTargetHandler', () => {
       );
     });
 
-    it('should throw error when zero downloads and items were skipped', async () => {
+    it('returns a retryable failed outcome when zero downloads and items were skipped', async () => {
       const target: TargetConfig = {
         type: 'illustration',
         tag: 'test-tag',
@@ -691,7 +691,7 @@ describe('IllustrationTargetHandler', () => {
         filteredOut: 0,
       });
 
-      await expect(handler.handle(target)).rejects.toThrow();
+      await expect(handler.handle(target)).resolves.toMatchObject({ kind: 'failed', retryable: true });
     });
 
     it('should warn when downloaded count is less than 50% of limit', async () => {

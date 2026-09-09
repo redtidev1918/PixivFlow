@@ -39,6 +39,8 @@ describe('SchedulerRunOnceCommand', () => {
       runJob,
       close,
       cancelActive: jest.fn(),
+      startOutboxWorker: jest.fn(),
+      drainOutbox: jest.fn().mockResolvedValue({ processed: 0, done: 0, retried: 0, dead: 0 }),
     } as any);
     command = new SchedulerRunOnceCommand();
   });

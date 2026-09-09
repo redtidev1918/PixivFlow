@@ -10,10 +10,15 @@ import { NetworkError } from '../../utils/errors';
 import { calculatePopularityScore } from '../../utils/pixiv-utils';
 import { PixivIllust } from '../../pixiv/PixivClient';
 import { DeliveryOutbox } from '../../delivery/DeliveryOutbox';
+import { DeliveryService } from '../../delivery/DeliveryService';
+import { TargetOutcome } from '../../scheduler/TargetOutcome';
 import type { TopicPipelineFactory } from '../../topic/createTopicPipeline';
 import { getTargetLabel } from '../../utils/target-label';
 
 export class IllustrationTargetHandler {
+  /** Outcomes produced during this handle() call (deliveries + terminal non-matches). */
+  private outcomes: TargetOutcome[] = [];
+
   constructor(
     private readonly client: IPixivClient,
     private readonly database: IDatabase,
@@ -21,18 +26,20 @@ export class IllustrationTargetHandler {
     private readonly illustrationDownloader: IllustrationDownloader,
     private readonly pipeline: DownloadPipeline,
     private readonly deliveryOutbox?: DeliveryOutbox,
-    private readonly topicPipelineFactory?: TopicPipelineFactory
+    private readonly topicPipelineFactory?: TopicPipelineFactory,
+    private readonly deliveryService?: DeliveryService
   ) {}
 
-  async handle(target: TargetConfig): Promise<void> {
+  async handle(target: TargetConfig): Promise<TargetOutcome> {
+    this.outcomes = [];
     if (target.illustId) {
       await this.handleSingleIllustration(target);
-      return;
+      return this.summarize(target);
     }
 
     if (target.userId) {
       await this.handleUserIllustrations(target);
-      return;
+      return this.summarize(target);
     }
 
     const mode = target.mode || 'search';
@@ -42,7 +49,7 @@ export class IllustrationTargetHandler {
     try {
       if (mode === 'topic') {
         await this.handleTopicWithLookback(target, displayTag);
-        return;
+        return this.summarize(target);
       }
       const illusts = await this.fetchIllustrations(target, mode);
       const result = await this.pipeline.run(
@@ -52,12 +59,41 @@ export class IllustrationTargetHandler {
         (illust, tag) => this.downloadAndDeliver(illust, tag, target)
       );
       this.handleDownloadResult(result, target, mode, illusts.length);
+      return this.summarize(target);
     } catch (error) {
-      if (error instanceof Error && error.message.startsWith('No matching illustrations found after checking')) {
-        throw error;
-      }
-      await this.handleError(error, displayTag, mode, target);
+      return this.classifyError(error, displayTag, mode, target);
     }
+  }
+
+  /** Reduce the outcomes collected while processing one target to one cell result. */
+  private summarize(target: TargetConfig): TargetOutcome {
+    const submitted = this.outcomes.find((o) => o.kind === 'submitted');
+    if (submitted) return submitted;
+    const stored = this.outcomes.find((o) => o.kind === 'stored');
+    if (stored) return stored;
+    const pending = this.outcomes.find((o) => o.kind === 'delivery_pending');
+    if (pending) return pending;
+    const duplicate = this.outcomes.find((o) => o.kind === 'duplicate');
+    if (duplicate) return duplicate;
+    const failed = this.outcomes.find((o) => o.kind === 'failed');
+    if (failed) return failed;
+    return { kind: 'no_candidate', reason: 'no matching illustration after filtering/dedupe' };
+  }
+
+  private classifyError(error: unknown, displayTag: string, mode: string, target: TargetConfig): TargetOutcome {
+    const message = error instanceof Error ? error.message : String(error);
+    this.database.logExecution(displayTag, 'illustration', 'failed', message);
+    logger.error(`Illustration ${mode === 'ranking' ? 'ranking' : 'tag'} ${displayTag} failed`, {
+      error: message,
+      errorType: error instanceof Error ? error.constructor.name : typeof error,
+    });
+    // Explicit no-candidate signals are business outcomes, not failures.
+    if (/no matching|all .*filtered|no_candidate/i.test(message)) {
+      return { kind: 'no_candidate', reason: message };
+    }
+    // Network/transient => retryable so the SAME work resumes on next trigger.
+    const retryable = error instanceof NetworkError || /timeout|econn|enotfound|etimed|429|5dd/i.test(message);
+    return { kind: 'failed', retryable, error: message };
   }
 
   private async fetchIllustrations(target: TargetConfig, mode: string): Promise<PixivIllust[]> {
@@ -131,8 +167,7 @@ export class IllustrationTargetHandler {
     const message = `No matching illustrations found after checking ${checkedDays.length} day(s): ${checkedDays.join(', ')}`;
     this.database.logExecution(displayTag, 'illustration', 'success', message);
     logger.warn(`Illustration topic ${displayTag} produced no matching result`, { checkedDays });
-    await this.notifyNoMatch(target, displayTag, checkedDays);
-    throw new Error(message);
+    this.outcomes.push({ kind: 'no_candidate', reason: message });
   }
 
   private resolveTopicDay(target: TargetConfig): string {
@@ -294,72 +329,18 @@ export class IllustrationTargetHandler {
             `多为网络/Pixiv 瞬时错误，下次计划会自动重试；同一作品持续失败请查日志（可能为已删除/私密/R-18 权限）。`
           : `No new illustrations for ${tagForLog}: requested ${targetLimit}, but no matching illustrations were found.`;
       this.database.logExecution(tagForLog, 'illustration', 'failed', errorMessage);
-      logger.error(`Illustration ${mode === 'ranking' ? 'ranking' : 'tag'} ${tagForLog} failed: ${errorMessage}`);
-      throw new Error(errorMessage);
+      logger.warn(`Illustration ${mode === 'ranking' ? 'ranking' : 'tag'} ${tagForLog}: ${errorMessage}`);
+      // Skipped due to transient errors => no terminal submitted; caller retries.
+      this.outcomes.push({
+        kind: 'failed',
+        retryable: skipped > 0,
+        error: errorMessage,
+      });
     }
   }
 
-  private async handleError(error: unknown, displayTag: string, mode: string, target?: TargetConfig): Promise<void> {
-    let errorMessage = error instanceof Error ? error.message : String(error);
-
-    if (error instanceof NetworkError && error.cause) {
-      const causeMsg = error.cause instanceof Error ? error.cause.message : String(error.cause);
-      errorMessage = `${errorMessage} (原因: ${causeMsg})`;
-    }
-
-    if (error instanceof NetworkError && error.url) {
-      errorMessage = `${errorMessage} [URL: ${error.url}]`;
-    }
-
-    this.database.logExecution(displayTag, 'illustration', 'failed', errorMessage);
-    logger.error(`Illustration ${mode === 'ranking' ? 'ranking' : 'tag'} ${displayTag} failed`, {
-      error: errorMessage,
-      errorType: error instanceof Error ? error.constructor.name : typeof error,
-      stack: error instanceof Error ? error.stack : undefined,
-    });
-
-    await this.notifyDownloadFailure(target, displayTag, errorMessage);
-
-    throw error;
-  }
-
-  /** Notify the review group when a target's download hard-fails (not just a no-match). */
-  private async notifyDownloadFailure(target: TargetConfig | undefined, label: string, errorMessage: string): Promise<void> {
-    if (!target?.delivery?.target?.trim()) return;
-    if (!this.deliveryOutbox) {
-      logger.warn('Download-failure notification requested but delivery outbox is unavailable');
-      return;
-    }
-    const truncated = errorMessage.length > 200 ? `${errorMessage.slice(0, 200)}…` : errorMessage;
-    const text = [
-      '❌ PixivFlow 本次下载失败',
-      `目标：${target.id || label}（${label} · 插画）`,
-      `错误：${truncated}`,
-      '处理结果：本次未投递；可点击「🔄 重抓/换一张」重试，或等待下次定时任务。',
-    ].join('\n');
-    const key = `pixivflow:hard-fail:${target.id || label}:illustration:${getTodayDate()}`;
-    try {
-      await this.deliveryOutbox.notifyNoMatch(target, text, key);
-    } catch (notifyError) {
-      logger.warn('Failed to send download-failure notification', { label, errorMessage, notifyError });
-    }
-  }
-
-  private async notifyNoMatch(target: TargetConfig, label: string, checkedDays: string[]): Promise<void> {
-    if (target.noMatchPolicy?.notify !== true || !this.deliveryOutbox) return;
-    const text = [
-      '⚠️ PixivFlow 本次没有可投稿内容',
-      `目标：${target.id || label}（${label} · 插画）`,
-      `检查日期：${checkedDays.join('、')}`,
-      '处理结果：未创建空投稿；下次定时任务会继续正常执行。',
-    ].join('\n');
-    const key = `pixivflow:no-match:${target.id || label}:illustration:${checkedDays[0]}:${checkedDays.at(-1)}`;
-    try {
-      await this.deliveryOutbox.notifyNoMatch(target, text, key);
-    } catch (error) {
-      logger.warn('Failed to send no-match notification', { label, error });
-    }
-  }
+  // Notifications are produced centrally by NotificationPolicy (slot-scoped
+  // keys), not per-handler with date-based keys. See noteOutcome/sendSlotSummary.
 
   private async handleSingleIllustration(target: TargetConfig): Promise<void> {
     const illustId = Number(target.illustId);
@@ -481,8 +462,54 @@ export class IllustrationTargetHandler {
         maxPageCount: target.maxPageCount,
       }
     );
-    if (artifact && this.deliveryOutbox) {
-      await this.deliveryOutbox.deliver(artifact, target);
+    if (!artifact) return;
+    this.recordArtifactOutcome(artifact, target);
+  }
+
+  /**
+   * Turn a downloaded artifact into the target's business outcome. In cache
+   * delivery mode the DeliveryService creates the durable intent atomically and
+   * the result is 'delivery_pending' (NOT submitted — the OutboxWorker confirms
+   * the ACK). Persistent/download-only runs are 'stored'.
+   */
+  private recordArtifactOutcome(
+    artifact: import('../../delivery/types').DownloadedArtifact,
+    target: TargetConfig
+  ): void {
+    const isDelivery = target.storageMode === 'cache' && target.delivery?.target?.trim();
+    if (!isDelivery || !this.deliveryService) {
+      this.outcomes.push({ kind: 'stored', workId: artifact.pixivId, workType: artifact.type });
+      return;
     }
+    // Pre-lock delivery dedupe (after selection): if the ledger already knows it,
+    // that is a confirmed fact, not a new submission.
+    const slotId = (target.delivery as { executionContext?: { slotId?: string } } | undefined)?.executionContext?.slotId;
+    if (this.deliveryService.isAlreadyDelivered(target.delivery!.target!, artifact.type, artifact.pixivId)) {
+      this.outcomes.push({ kind: 'duplicate', workId: artifact.pixivId, reason: 'already delivered to target (ledger)' });
+      return;
+    }
+    const res = this.deliveryService.enqueue(artifact, target, {
+      slotId,
+      fields: target.delivery?.fields as Record<string, unknown> | undefined,
+      extraContext: this.executionContextFields(target),
+    });
+    if (res.duplicate) {
+      this.outcomes.push({ kind: 'duplicate', workId: artifact.pixivId, reason: 'already delivered to target (ledger)' });
+    } else {
+      this.outcomes.push({ kind: 'delivery_pending', workId: artifact.pixivId, workType: artifact.type, deliveryId: res.deliveryId });
+    }
+  }
+
+  private executionContextFields(target: TargetConfig): Record<string, unknown> {
+    const ec = (target.delivery as { executionContext?: Record<string, unknown>; slotContext?: Record<string, unknown> } | undefined);
+    return {
+      scheduleId: ec?.executionContext?.scheduleId,
+      executionId: ec?.executionContext?.slotId,
+      occurrenceAt: ec?.executionContext?.occurrenceAtIso,
+      triggerSource: ec?.executionContext?.triggerSource,
+      slotId: ec?.slotContext?.slotId ?? ec?.executionContext?.slotId,
+      slotName: ec?.slotContext?.slotName ?? ec?.executionContext?.slotName,
+      slotDate: ec?.slotContext?.slotDate ?? ec?.executionContext?.slotDate,
+    };
   }
 }

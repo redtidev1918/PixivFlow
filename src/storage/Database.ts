@@ -11,6 +11,9 @@ import { SchedulerRepository } from './repositories/SchedulerRepository';
 import { ConfigHistoryRepository } from './repositories/ConfigHistoryRepository';
 import { TaskHistoryRepository } from './repositories/TaskHistoryRepository';
 import { SlotRepository } from './repositories/SlotRepository';
+import { DeliveryRepository } from './repositories/DeliveryRepository';
+import { OutboxRepository } from './repositories/OutboxRepository';
+import { MetadataRepository } from './repositories/MetadataRepository';
 
 export interface AccessTokenStore {
   accessToken: string;
@@ -53,6 +56,9 @@ export class Database implements IDatabase {
   private configHistoryRepo: ConfigHistoryRepository;
   private taskHistoryRepo: TaskHistoryRepository;
   private slotRepo: SlotRepository;
+  private deliveryRepo: DeliveryRepository;
+  private outboxRepo: OutboxRepository;
+  private metadataRepo: MetadataRepository;
 
   constructor(private readonly databasePath: string) {
     try {
@@ -77,6 +83,9 @@ export class Database implements IDatabase {
       this.configHistoryRepo = new ConfigHistoryRepository(this.db);
       this.taskHistoryRepo = new TaskHistoryRepository(this.db);
       this.slotRepo = new SlotRepository(this.db);
+      this.deliveryRepo = new DeliveryRepository(this.db);
+      this.outboxRepo = new OutboxRepository(this.db);
+      this.metadataRepo = new MetadataRepository(this.db);
     } catch (error) {
       throw new DatabaseError(
         `Failed to initialize database at ${this.databasePath}`,
@@ -100,6 +109,31 @@ export class Database implements IDatabase {
   /** Schedule Slot ledger (business-level idempotency for scheduled batches). */
   public get slots(): SlotRepository {
     return this.slotRepo;
+  }
+
+  /** Confirmed downstream delivery facts (delivery dedupe, distinct from downloads). */
+  public get deliveries(): DeliveryRepository {
+    return this.deliveryRepo;
+  }
+
+  /** Durable transactional outbox for content delivery and notifications. */
+  public get outbox(): OutboxRepository {
+    return this.outboxRepo;
+  }
+
+  /** Lightweight Pixiv metadata cache (novel language / rating). */
+  public get metadata(): MetadataRepository {
+    return this.metadataRepo;
+  }
+
+  /** Raw transactional boundary for atomic multi-table intents. */
+  public transaction<T>(fn: () => T): T {
+    return this.db.transaction(fn)();
+  }
+
+  /** Expose a prepared-statement helper if needed by services (pragmas etc). */
+  public pragma(sql: string): unknown {
+    return this.db.pragma(sql);
   }
 
   // Token management - delegated to TokenRepository
@@ -561,4 +595,3 @@ export function isolateCorruptDatabase(databasePath: string): string {
   }
   return isolatedPath;
 }
-

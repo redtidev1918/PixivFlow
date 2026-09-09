@@ -64,6 +64,11 @@ export class SchedulerCommand extends BaseCommand {
       });
       const status = manager.start(runtime.config);
 
+      // Independent outbox pump: deliveries/notifications retry promptly on a
+      // timer and resume after crash/machine-stop without waiting for the next
+      // scheduled run. It never gates Telegram/scheduler readiness.
+      runtime.startOutboxWorker();
+
       // Authenticated HTTP trigger. Mounted in external mode (the external clock
       // wakes the machine here) and, opt-in, in internal mode for manual/ops
       // triggers. Business logic lives in runJob/SlotCoordinator; this handler
@@ -128,6 +133,7 @@ export class SchedulerCommand extends BaseCommand {
               inFlight.set(key, promise);
               return promise;
             },
+            drainOutbox: () => runtime.drainOutbox(),
             status: (scheduleId) => {
               const cfg = resolveConfig();
               const plan = findPlan(cfg, scheduleId);

@@ -15,6 +15,8 @@ import { DownloadPipeline } from './pipeline/DownloadPipeline';
 import { OperationCancelledError } from '../utils/errors';
 import { DeliveryDispatcher } from '../delivery/DeliveryDispatcher';
 import { DeliveryOutbox } from '../delivery/DeliveryOutbox';
+import { DeliveryService } from '../delivery/DeliveryService';
+import { TargetOutcome } from '../scheduler/TargetOutcome';
 import { dirname, join } from 'node:path';
 import { IllustrationTargetHandler } from './handlers/IllustrationTargetHandler';
 import { NovelTargetHandler } from './handlers/NovelTargetHandler';
@@ -59,13 +61,14 @@ export class DownloadManager implements IDownloadManager {
   private cancelled = false;
   private cancelReason = '';
   private readonly deliveryOutbox: DeliveryOutbox;
-  /** Per-target outcome hook (used by the Slot ledger to record cell results). */
-  private onTargetOutcome: ((target: TargetConfig, error?: string) => void) | null = null;
-  /** Fired when a work is locked for delivery (fresh or outbox replay). */
+  private readonly deliveryService!: DeliveryService;
+  /** Per-target TYPED outcome hook (the Slot ledger maps it to cell transitions). */
+  private onTargetOutcome: ((target: TargetConfig, outcome: TargetOutcome) => void) | null = null;
+  /** Fired when a Pixiv work is selected and locked for a target. */
   private onWorkLocked: ((artifact: { pixivId: string; type: string }, target: TargetConfig) => void) | null = null;
 
-  /** Register a callback fired after each target with the error if it failed. */
-  public setTargetOutcomeHook(fn: (target: TargetConfig, error?: string) => void): void {
+  /** Register a callback fired after each target with its explicit business outcome. */
+  public setTargetOutcomeHook(fn: (target: TargetConfig, outcome: TargetOutcome) => void): void {
     this.onTargetOutcome = fn;
   }
 
@@ -73,6 +76,21 @@ export class DownloadManager implements IDownloadManager {
   public setWorkLockedHook(fn: (artifact: { pixivId: string; type: string }, target: TargetConfig) => void): void {
     this.onWorkLocked = fn;
   }
+
+  /** Expose delivery service for handlers (preflight + intent creation). */
+  public get deliveries(): DeliveryService {
+    return this.deliveryService;
+  }
+
+  /** Slot context propagated to delivery templates/outcomes for scheduled runs. */
+  public slotContext?: {
+    slotId: string;
+    scheduleId: string;
+    occurrenceAtIso: string;
+    triggerSource: string;
+    slotName: string;
+    slotDate: string;
+  };
 
   /**
    * Request cooperative cancellation of the current run. In-flight item
@@ -110,8 +128,16 @@ export class DownloadManager implements IDownloadManager {
       downloadConcurrency,
       storagePath
     );
-    this.novelDownloader = new NovelDownloader(client, database, fileService);
-    this.planner = new DownloadPlanner(database);
+    this.novelDownloader = new NovelDownloader(
+      client,
+      database,
+      fileService,
+      database as unknown as import('../storage/Database').Database
+    );
+    this.planner = new DownloadPlanner(database, {
+      deliveredIds: (target, type, ids) =>
+        this.deliveryService.deliveredIds(target, type, ids),
+    });
     this.executor = new DownloadExecutor();
 
     const downloadConfig = config.download ?? {};
@@ -150,6 +176,13 @@ export class DownloadManager implements IDownloadManager {
       }
     );
 
+    // Delivery ledger + SQLite outbox. Requires the concrete Database (with the
+    // deliveries/outbox repositories). Unit tests pass plain mock databases; in
+    // that case delivery dedupe/enqueue is simply inactive.
+    this.deliveryService = new DeliveryService(
+      database as unknown as import('../storage/Database').Database
+    );
+
     // One lazily-created topic pipeline (shared resolver/cache) for this run.
     const topicFactory = createTopicPipelineFactory(
       client,
@@ -166,7 +199,8 @@ export class DownloadManager implements IDownloadManager {
       this.illustrationDownloader,
       this.pipeline,
       this.deliveryOutbox,
-      topicFactory
+      topicFactory,
+      this.deliveryService
     );
 
     this.novelHandler = new NovelTargetHandler(
@@ -176,7 +210,8 @@ export class DownloadManager implements IDownloadManager {
       this.pipeline,
       this.novelDownloader,
       this.deliveryOutbox,
-      topicFactory
+      topicFactory,
+      this.deliveryService
     );
   }
 
@@ -189,13 +224,8 @@ export class DownloadManager implements IDownloadManager {
   }
 
   public async runAllTargets() {
-    const pending = await this.deliveryOutbox.retryPending();
-    if (pending.succeeded > 0 || pending.failed > 0) {
-      logger.info('Processed pending deliveries', { ...pending });
-    } else if (pending.deferred > 0) {
-      logger.debug('Pending deliveries remain in backoff', { ...pending });
-    }
-
+    // NOTE: pending deliveries are pumped independently by the OutboxWorker,
+    // not piggy-backed onto the next download run. No retryPending() here.
     const totalTargets = this.config.targets.length;
 
     if (totalTargets === 0) {
@@ -217,13 +247,17 @@ export class DownloadManager implements IDownloadManager {
       this.updateProgress(currentTarget, totalTargets, `处理目标: ${targetName} (${target.type})`);
 
       try {
-        await this.dispatchTarget(target);
-        this.onTargetOutcome?.(target);
+        const outcome = await this.dispatchTarget(target);
+        this.onTargetOutcome?.(target, outcome);
+        if (outcome.kind === 'failed' && !outcome.retryable) {
+          errors.push({ target: `${targetName} (${target.type})`, error: outcome.error });
+        }
       } catch (error) {
+        // A raw escape means an unexpected/retryable infrastructure failure.
         const errorMessage = error instanceof Error ? error.message : String(error);
         errors.push({ target: `${targetName} (${target.type})`, error: errorMessage });
         logger.error(`Target ${targetName} (${target.type}) failed, continuing with next target`, { error: errorMessage });
-        this.onTargetOutcome?.(target, errorMessage);
+        this.onTargetOutcome?.(target, { kind: 'failed', retryable: true, error: errorMessage });
       }
     }
 
@@ -246,16 +280,15 @@ export class DownloadManager implements IDownloadManager {
     }
   }
 
-  private async dispatchTarget(target: TargetConfig): Promise<void> {
+  private async dispatchTarget(target: TargetConfig): Promise<TargetOutcome> {
     switch (target.type) {
       case 'illustration':
-        await this.illustrationHandler.handle(target);
-            break;
+        return await this.illustrationHandler.handle(target);
       case 'novel':
-        await this.novelHandler.handle(target);
-              break;
+        return await this.novelHandler.handle(target);
       default:
         logger.warn(`Unsupported target type ${target.type}`);
+        return { kind: 'failed', retryable: false, error: `unsupported target type ${target.type}` };
     }
   }
 

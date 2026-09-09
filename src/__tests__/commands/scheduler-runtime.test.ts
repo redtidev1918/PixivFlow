@@ -7,6 +7,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { notifyScheduleFailure, runWithTimeout } from '../../commands/scheduler-runtime';
+import { Database } from '../../storage/Database';
+import { DeliveryDispatcher } from '../../delivery/DeliveryDispatcher';
+import { OutboxWorker } from '../../delivery/OutboxWorker';
 
 describe('runWithTimeout watchdog', () => {
   it('resolves when the task finishes before the deadline', async () => {
@@ -44,6 +47,8 @@ describe('runWithTimeout watchdog', () => {
 
 it('notifies only the delivery targets assigned to the failed schedule', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'pixivflow-scheduler-notify-'));
+  const db = new Database(join(directory, 'pixivflow.db'));
+  db.migrate();
   const originalFetch = global.fetch;
   const fetchMock = jest.fn().mockResolvedValue(
     new Response(JSON.stringify({ ok: true }), { status: 201 })
@@ -67,7 +72,7 @@ it('notifies only the delivery targets assigned to the failed schedule', async (
 
     await notifyScheduleFailure(
       config,
-      join(directory, 'pixivflow.db'),
+      db,
       { id: 'morning', name: 'Morning', enabled: true, cron: '0 10 * * *', targetIds: ['t1'] },
       {
         scheduleId: 'morning',
@@ -79,6 +84,11 @@ it('notifies only the delivery targets assigned to the failed schedule', async (
       }
     );
 
+    // Notifications are durable outbox rows; pump them once to observe the POST.
+    const worker = new OutboxWorker(db, new DeliveryDispatcher(config.delivery));
+    const res = await worker.drainOnce();
+    expect(res.done).toBe(1);
+
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls[0][0]).toBe('https://example.test/bot1/notify');
     expect(JSON.parse(String(fetchMock.mock.calls[0][1].body))).toEqual(expect.objectContaining({
@@ -87,6 +97,7 @@ it('notifies only the delivery targets assigned to the failed schedule', async (
     }));
   } finally {
     global.fetch = originalFetch;
+    db.close();
     await rm(directory, { recursive: true, force: true });
   }
 });

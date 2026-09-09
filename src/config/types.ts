@@ -498,10 +498,19 @@ export interface HttpMultipartDeliveryConfig {
   /** 数组字段编码方式，默认 comma */
   arrayFormat?: 'comma' | 'repeat' | 'json';
   success?: HttpMultipartSuccessConfig;
-  /** 单次交付的最大尝试次数（含首次），默认 3 */
+  /** 单次交付的最大尝试次数（含首次），默认 3（遗留即时重试；SQLite outbox 是主重试层） */
   maxAttempts?: number;
   /** 重试基础间隔（毫秒），默认 2000 */
   retryDelayMs?: number;
+  /** 业务 ACK 信封字段映射（默认解析 TelePost {data:{review_id,reused,...}}）。 */
+  ack?: {
+    dataPath?: string;
+    idField?: string;
+    statusField?: string;
+    reusedField?: string;
+    reasonField?: string;
+    keyField?: string;
+  };
 }
 
 export type DeliveryTargetConfig = HttpMultipartDeliveryConfig;
@@ -600,7 +609,6 @@ export interface StandaloneConfig {
     timeout?: number;
   };
 }
-
 
 
 

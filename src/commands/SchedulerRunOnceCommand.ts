@@ -65,8 +65,14 @@ export class SchedulerRunOnceCommand extends BaseCommand {
         );
       }
 
+      // Flush deliveries/notifications created by this one-shot before exit.
+      // A bounded drain: durable rows survive if they cannot finish now and the
+      // scheduler daemon (or a later run-once) retries them.
+      const drained = await runtime.drainOutbox();
+      context.logger.info('Outbox drain complete', drained);
       return this.success('Scheduled plans completed', {
         schedules: plans.map((plan) => plan.id),
+        outbox: drained,
       });
     } catch (error) {
       context.logger.error('Fatal error while running schedules once', {

@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.13.0](https://github.com/redtidev1918/PixivFlow/compare/v2.12.3...v2.13.0) (2026-09-09)
+
+
+### Features
+
+* **delivery:** typed outcomes, delivery ledger, SQLite outbox + worker, slot FSM/lease, slot notifications ([c6ffad8](https://github.com/redtidev1918/PixivFlow/commit/c6ffad87f8627f15634a8a84361c42d034012f88))
+* **ops:** doctor/reconcile CLIs, authenticated outbox drain endpoint, degraded mode after corrupt-DB recovery ([9b35a85](https://github.com/redtidev1918/PixivFlow/commit/9b35a8576903678bc4049054ba60d403001e18f6))
+* **reliability:** durable occurrence outbox/ledger, typed outcomes, global 429 gate, doctor/reconcile, occurrence-scoped idempotency key ([e9c4c7d](https://github.com/redtidev1918/PixivFlow/commit/e9c4c7dd97410e3cc8f72e480e20742da21bba52))
+* **reliability:** global 429 gate, novel metadata cache, pre-lock delivery dedupe, legacy JSON outbox migration ([3d4fed1](https://github.com/redtidev1918/PixivFlow/commit/3d4fed1bddaf0810581aac97b970e414fd26b722))
+
+
+### Bug Fixes
+
+* **delivery:** actually send occurrence-scoped idempotency_key in multipart content delivery (was generated but never transmitted; ACK-loss retry could double-post / misclassify as historical duplicate) ([4f1b377](https://github.com/redtidev1918/PixivFlow/commit/4f1b377703964f895da897012b13e92f96db545e))
+
 ## [2.12.3](https://github.com/redtidev1918/PixivFlow/compare/v2.12.2...v2.12.3) (2026-09-09)
 
 

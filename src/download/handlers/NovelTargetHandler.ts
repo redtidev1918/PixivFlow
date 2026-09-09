@@ -10,10 +10,14 @@ import { getTodayDate, getYesterdayDate } from '../../utils/pixiv-date-utils';
 import { calculatePopularityScore } from '../../utils/pixiv-utils';
 import { PixivNovel } from '../../pixiv/PixivClient';
 import { DeliveryOutbox } from '../../delivery/DeliveryOutbox';
+import { DeliveryService } from '../../delivery/DeliveryService';
+import { TargetOutcome } from '../../scheduler/TargetOutcome';
 import type { TopicPipelineFactory } from '../../topic/createTopicPipeline';
 import { getTargetLabel } from '../../utils/target-label';
 
 export class NovelTargetHandler {
+  private outcomes: TargetOutcome[] = [];
+
   constructor(
     private readonly client: IPixivClient,
     private readonly database: IDatabase,
@@ -21,23 +25,33 @@ export class NovelTargetHandler {
     private readonly pipeline: DownloadPipeline,
     private readonly novelDownloader: NovelDownloader,
     private readonly deliveryOutbox?: DeliveryOutbox,
-    private readonly topicPipelineFactory?: TopicPipelineFactory
+    private readonly topicPipelineFactory?: TopicPipelineFactory,
+    private readonly deliveryService?: DeliveryService
   ) {}
 
-  async handle(target: TargetConfig): Promise<void> {
-    if (target.novelId) {
+  async handle(target: TargetConfig): Promise<TargetOutcome> {
+    this.outcomes = [];
+    if (target.novelId !== undefined && target.novelId !== null && target.novelId !== ('' as unknown)) {
+      const novelNum = typeof target.novelId === 'number' ? target.novelId : Number(target.novelId);
+      if (!Number.isFinite(novelNum)) {
+        return { kind: 'failed', retryable: false, error: `Invalid novelId: ${String(target.novelId)}` };
+      }
       await this.handleSingleNovel(target);
-      return;
+      return this.summarize();
     }
 
-    if (target.seriesId) {
+    if (target.seriesId !== undefined && target.seriesId !== null && target.seriesId !== ('' as unknown)) {
+      const seriesNum = typeof target.seriesId === 'number' ? target.seriesId : Number(target.seriesId);
+      if (!Number.isFinite(seriesNum)) {
+        return { kind: 'failed', retryable: false, error: `Invalid seriesId: ${String(target.seriesId)}` };
+      }
       await this.handleSeries(target);
-      return;
+      return this.summarize();
     }
 
     if (target.userId) {
       await this.handleUserNovels(target);
-      return;
+      return this.summarize();
     }
 
     const mode = target.mode || 'search';
@@ -47,7 +61,7 @@ export class NovelTargetHandler {
     try {
       if (mode === 'topic' && target.languageFilter && (target.noMatchPolicy?.lookbackDays ?? 0) > 0) {
         await this.handleTopicWithLookback(target, displayTag);
-        return;
+        return this.summarize();
       }
       const novels = await this.fetchNovels(target, mode);
       const result = await this.pipeline.run(
@@ -57,9 +71,34 @@ export class NovelTargetHandler {
         (novel, tag) => this.downloadAndDeliver(novel, tag, target)
       );
       await this.handleDownloadResult(result, target, mode, novels.length);
+      return this.summarize();
     } catch (error) {
-      await this.handleError(error, displayTag, mode, target);
+      return this.classifyError(error, displayTag, mode);
     }
+  }
+
+  private summarize(): TargetOutcome {
+    return (
+      this.outcomes.find((o) => o.kind === 'submitted') ??
+      this.outcomes.find((o) => o.kind === 'stored') ??
+      this.outcomes.find((o) => o.kind === 'delivery_pending') ??
+      this.outcomes.find((o) => o.kind === 'duplicate') ??
+      this.outcomes.find((o) => o.kind === 'failed') ?? {
+        kind: 'no_candidate',
+        reason: 'no matching novel after filtering/dedupe',
+      }
+    );
+  }
+
+  private classifyError(error: unknown, displayTag: string, mode: string): TargetOutcome {
+    const message = error instanceof Error ? error.message : String(error);
+    this.database.logExecution(displayTag, 'novel', 'failed', message);
+    logger.error(`Novel ${mode === 'ranking' ? 'ranking' : 'tag'} ${displayTag} failed`, { error: message });
+    if (/no matching|all .*filtered|no_candidate|language filter/i.test(message)) {
+      return { kind: 'no_candidate', reason: message };
+    }
+    const retryable = error instanceof NetworkError || /timeout|econn|enotfound|etimed|429|5\d\d/i.test(message);
+    return { kind: 'failed', retryable, error: message };
   }
 
   private async fetchNovels(target: TargetConfig, mode: string): Promise<PixivNovel[]> {
@@ -297,7 +336,7 @@ export class NovelTargetHandler {
         candidates: totalFound,
         checkedDays: days,
       });
-      await this.notifyNoMatch(target, tagForLog, totalFound, days);
+      this.outcomes.push({ kind: 'no_candidate', reason: message });
     } else if (alreadyDownloaded > 0 && skipped === 0) {
       logger.info(`All ${alreadyDownloaded} novel(s) for tag ${tagForLog} were already downloaded`);
       this.database.logExecution(
@@ -327,87 +366,12 @@ export class NovelTargetHandler {
             `多为网络/Pixiv 瞬时错误，下次计划会自动重试；持续失败请查日志。`
           : `Failed to download any novels. Requested ${targetLimit}, but no matching novels were found.`;
       this.database.logExecution(tagForLog, 'novel', 'failed', errorMessage);
-      logger.error(`Novel ${mode === 'ranking' ? 'ranking' : 'tag'} ${tagForLog} failed: ${errorMessage}`);
-      throw new Error(errorMessage);
+      logger.warn(`Novel ${mode === 'ranking' ? 'ranking' : 'tag'} ${tagForLog}: ${errorMessage}`);
+      this.outcomes.push({ kind: 'failed', retryable: skipped > 0, error: errorMessage });
     }
   }
 
-  private async notifyNoMatch(
-    target: TargetConfig,
-    label: string,
-    candidateCount: number,
-    checkedDays: string[]
-  ): Promise<void> {
-    if (target.noMatchPolicy?.notify !== true) return;
-    if (!this.deliveryOutbox) {
-      logger.warn('No-match notification requested but delivery outbox is unavailable');
-      return;
-    }
-    const language = target.languageFilter === 'chinese' ? '中文正文' : '非中文正文';
-    const text = [
-      '⚠️ PixivFlow 本次没有可投稿内容',
-      `目标：${target.id || label}（${label} · 小说）`,
-      `要求：${language}，主题与语言条件未放宽`,
-      `检查日期：${checkedDays.join('、')}`,
-      `候选数量：${candidateCount}`,
-      '处理结果：未创建空投稿；下次定时任务会继续正常执行。',
-    ].join('\n');
-    const key = `pixivflow:no-match:${target.id || label}:novel:${checkedDays[0]}:${checkedDays.at(-1)}`;
-    try {
-      await this.deliveryOutbox.notifyNoMatch(target, text, key);
-    } catch (error) {
-      logger.warn('Failed to send no-match notification', {
-        target: target.id || label,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }
-
-  private async handleError(error: unknown, displayTag: string, mode: string, target?: TargetConfig): Promise<void> {
-    let errorMessage = error instanceof Error ? error.message : String(error);
-
-    if (error instanceof NetworkError && error.cause) {
-      const causeMsg = error.cause instanceof Error ? error.cause.message : String(error.cause);
-      errorMessage = `${errorMessage} (原因: ${causeMsg})`;
-    }
-
-    if (error instanceof NetworkError && error.url) {
-      errorMessage = `${errorMessage} [URL: ${error.url}]`;
-    }
-
-    this.database.logExecution(displayTag, 'novel', 'failed', errorMessage);
-    logger.error(`Novel ${mode === 'ranking' ? 'ranking' : 'tag'} ${displayTag} failed`, {
-      error: errorMessage,
-      errorType: error instanceof Error ? error.constructor.name : typeof error,
-      stack: error instanceof Error ? error.stack : undefined,
-    });
-
-    await this.notifyDownloadFailure(target, displayTag, errorMessage);
-
-    throw error;
-  }
-
-  /** Notify the review group when a target's download hard-fails (not just a no-match). */
-  private async notifyDownloadFailure(target: TargetConfig | undefined, label: string, errorMessage: string): Promise<void> {
-    if (!target?.delivery?.target?.trim()) return;
-    if (!this.deliveryOutbox) {
-      logger.warn('Download-failure notification requested but delivery outbox is unavailable');
-      return;
-    }
-    const truncated = errorMessage.length > 200 ? `${errorMessage.slice(0, 200)}…` : errorMessage;
-    const text = [
-      '❌ PixivFlow 本次下载失败',
-      `目标：${target.id || label}（${label} · 小说）`,
-      `错误：${truncated}`,
-      '处理结果：本次未投递；可点击「🔄 重抓/换一张」重试，或等待下次定时任务。',
-    ].join('\n');
-    const key = `pixivflow:hard-fail:${target.id || label}:novel:${getTodayDate()}`;
-    try {
-      await this.deliveryOutbox.notifyNoMatch(target, text, key);
-    } catch (notifyError) {
-      logger.warn('Failed to send download-failure notification', { label, errorMessage, notifyError });
-    }
-  }
+  // Notifications are centralized in NotificationPolicy (slot-scoped keys).
 
   private async handleSingleNovel(target: TargetConfig): Promise<void> {
     const novelId = Number(target.novelId);
@@ -571,8 +535,26 @@ export class NovelTargetHandler {
     target: TargetConfig
   ): Promise<void> {
     const artifact = await this.novelDownloader.download(novel, tag, target);
-    if (artifact && this.deliveryOutbox) {
-      await this.deliveryOutbox.deliver(artifact, target);
+    if (!artifact) return;
+    const isDelivery = target.storageMode === 'cache' && target.delivery?.target?.trim();
+    if (!isDelivery || !this.deliveryService) {
+      this.outcomes.push({ kind: 'stored', workId: artifact.pixivId, workType: artifact.type });
+      return;
     }
+    const ec = target.delivery as { executionContext?: { slotId?: string } } | undefined;
+    const slotId = ec?.executionContext?.slotId;
+    if (this.deliveryService.isAlreadyDelivered(target.delivery!.target!, artifact.type, artifact.pixivId)) {
+      this.outcomes.push({ kind: 'duplicate', workId: artifact.pixivId, reason: 'already delivered to target (ledger)' });
+      return;
+    }
+    const res = this.deliveryService.enqueue(artifact, target, {
+      slotId,
+      fields: target.delivery?.fields as Record<string, unknown> | undefined,
+    });
+    this.outcomes.push(
+      res.duplicate
+        ? { kind: 'duplicate', workId: artifact.pixivId, reason: 'already delivered (ledger)' }
+        : { kind: 'delivery_pending', workId: artifact.pixivId, workType: artifact.type, deliveryId: res.deliveryId }
+    );
   }
 }

@@ -151,9 +151,15 @@ pixivflow scheduler             # 按 cron 配置长期挂机自动收集
 
 `headers` 和 `url` 里可用 `${环境变量名}` 引用环境变量（Token 别写死进配置）。
 
-投递是「发件箱」式的，进程重启也不丢：失败的文件和待投清单保存在数据库同级的
-`delivery-outbox/`，下次运行先补投，按「5 分钟起步、最长 6 小时」指数退避重试，
-成功后才清理。「今天没有可投稿内容」这类通知也走同一个 outbox，审核端暂时挂掉也能继续重试。
+投递是**事务发件箱（SQLite outbox）**式的，at-least-once 执行、effectively-once
+可见效果：每个外部副作用（一次内容投递、一条通知）在 `outbox` 表落一行，带幂等键和
+行级租约，独立 worker 立即泵送、指数退避重试（默认 5 分钟起步、最长 6 小时），超过
+`maxAttempts` 进 dead 状态并在投递账记 `failed`。进程崩溃 / 机器挂起后重启，残留的
+`processing` 租约过期即被新进程接管，重试同一个幂等意图——下游按
+`idempotent_replay`（同键，ACK 丢失重试）或 `duplicate_existing`（历史重复）收敛，
+频道里仍然只有一条消息。旧版文件型 `delivery-outbox/*.json` 清单在启动时自动一次性
+迁移进 SQLite，迁移幂等。「今天没有可投稿内容」这类通知与内容投递走同一张表、独立泵送，
+审核端暂时挂掉不会互相阻塞。
 
 运维通知可直接把 `notificationUrl` 指向 [Apprise API](docs/APPRISE.md)，由 Apprise 统一发送
 Email、Telegram、Discord、ntfy 等渠道；PixivFlow 不实现这些通知协议。
@@ -174,6 +180,8 @@ Email、Telegram、Discord、ntfy 等渠道；PixivFlow 不实现这些通知协
 | `pixivflow config` | 配置管理（查看 / 编辑 / 备份 / 恢复） |
 | `pixivflow status` | 下载统计与最近记录 |
 | `pixivflow health` | 健康检查：配置、目录可写性、连通性 |
+| `pixivflow doctor` | 可靠性体检：卡住的 slot/outbox 租约、pending 投递、dead 行；`--repair` 收敛 |
+| `pixivflow reconcile` | 把下游已确认的历史重复登记进投递账本（默认 dry-run，`--repair` 落库） |
 | `pixivflow tags discover <词>` | 发现相关 Tag（Pixiv 联想 + 作品标签共现），只列候选不改配置 |
 | `pixivflow tags apply <清单> --target <id> --select <tag1,tag2>` | 人工确认后把所选 Tag 原子写入配置并触发热重载 |
 | `pixivflow topic resolve <主题>` | 查看自动推导出的相关 Tag 空间（`--type illustration\|novel`、`--refresh`） |

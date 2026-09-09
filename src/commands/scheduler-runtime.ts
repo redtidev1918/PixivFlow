@@ -20,6 +20,13 @@ import { DeliveryOutbox } from '../delivery/DeliveryOutbox';
 import { createTokenMaintenanceService } from '../utils/token-maintenance';
 import { selectScheduleTargets } from '../scheduler/schedules';
 import { SlotContext, SlotCoordinator } from '../scheduler/SlotCoordinator';
+import { TargetOutcome } from '../scheduler/TargetOutcome';
+import { DeliveryService } from '../delivery/DeliveryService';
+import { OutboxWorker } from '../delivery/OutboxWorker';
+import { migrateLegacyOutbox } from '../delivery/LegacyOutboxMigration';
+import { DeliveryAck } from '../delivery/DeliveryAck';
+import { NotificationPolicy } from '../notification/NotificationPolicy';
+import { randomUUID } from 'node:crypto';
 import { ScheduleRunOptions, TriggerSource } from '../scheduler/OccurrenceResolver';
 import { JobFailure } from '../scheduler/Scheduler';
 import { processConfigPlaceholders } from '../config/placeholders';
@@ -44,6 +51,10 @@ export interface SchedulerRuntime {
     schedule: ScheduleConfig,
     failure: JobFailure
   ): Promise<void>;
+  /** Start the independent outbox pump (long-running daemon). */
+  startOutboxWorker(): void;
+  /** Drain due outbox rows once (run-once / watchdog wake). */
+  drainOutbox(): Promise<{ processed: number; done: number; retried: number; dead: number }>;
   /** Stop token maintenance, cancel any in-flight download and close the DB. */
   close(): void;
 }
@@ -55,7 +66,7 @@ export interface SchedulerRuntime {
  * the caller surfaces to the review group. Schema/migration errors are NOT
  * treated as corruption and propagate normally.
  */
-function openDatabaseWithRecovery(databasePath: string): { database: Database; recoveryNote?: string } {
+function openDatabaseWithRecovery(databasePath: string): { database: Database; recoveryNote?: string; degraded: boolean } {
   const openFresh = (): Database => {
     const db = new Database(databasePath);
     db.migrate();
@@ -73,14 +84,15 @@ function openDatabaseWithRecovery(databasePath: string): { database: Database; r
     database = openFresh();
     return {
       database,
-      recoveryNote: `数据库无法打开（${message}），已隔离损坏文件 ${isolated} 并重建空库；下载去重记录已重置，将重新下载近期作品。`,
+      recoveryNote: `数据库无法打开（${message}），已隔离损坏文件 ${isolated} 并重建空库；已进入降级模式：自动选择/投递已暂停，请执行 doctor --repair 或确认历史后再恢复，以避免空库重复发布。`,
+      degraded: true,
     };
   }
 
   const check = database.checkIntegrity();
   if (check === 'ok') {
     database.migrate();
-    return { database };
+    return { database, degraded: false };
   }
 
   // Structurally corrupt: isolate (preserving evidence) and recreate fresh.
@@ -99,13 +111,14 @@ function openDatabaseWithRecovery(databasePath: string): { database: Database; r
   database = openFresh();
   return {
     database,
-    recoveryNote: `数据库完整性检查未通过（${message}），已隔离损坏文件 ${isolated} 并重建空库；下载去重记录已重置，将重新下载近期作品。`,
+    recoveryNote: `数据库完整性检查未通过（${message}），已隔离损坏文件 ${isolated} 并重建空库；已进入降级模式：自动选择/投递已暂停，请运行 pixivflow doctor --repair / reconcile 确认历史后再恢复，以避免空库批量重复发布。`,
+    degraded: true,
   };
 }
 
 async function notifyDeliveryTargets(
   config: StandaloneConfig,
-  databasePath: string,
+  database: Database,
   targetNames: Iterable<string>,
   text: string,
   key: string
@@ -116,32 +129,25 @@ async function notifyDeliveryTargets(
   );
   if (notifyable.length === 0) return;
 
+  // Notifications are durable SQLite outbox rows (kind=notification), pumped by
+  // the OutboxWorker — never fire-and-forget, never swallowed silently.
   try {
-    const dispatcher = new DeliveryDispatcher(delivery, undefined);
-    const outbox = new DeliveryOutbox(
-      join(dirname(databasePath), 'delivery-outbox'),
-      dispatcher,
-      delivery?.deleteAfterDelivery !== false
-    );
+    const { DeliveryService } = await import('../delivery/DeliveryService');
+    const service = new DeliveryService(database);
     for (const name of notifyable) {
-      try {
-        const syntheticTarget = { type: 'novel', delivery: { target: name } } as unknown as TargetConfig;
-        await outbox.notifyNoMatch(syntheticTarget, text, key);
-      } catch (error) {
-        logger.warn('Notification failed for delivery target', { target: name, error });
-      }
+      service.enqueueNotification(name, text, key);
     }
   } catch (error) {
-    logger.warn('Failed to build delivery notification', { error });
+    logger.warn('Failed to enqueue delivery notification', { error });
   }
 }
 
 /** Best-effort: alert every delivery target that exposes a notificationUrl. */
-async function notifyRecovery(config: StandaloneConfig, databasePath: string, note: string): Promise<void> {
+async function notifyRecovery(config: StandaloneConfig, database: Database, note: string): Promise<void> {
   const targetNames = Object.keys(config.delivery?.targets ?? {});
   await notifyDeliveryTargets(
     config,
-    databasePath,
+    database,
     targetNames,
     `⚠️ PixivFlow 数据库自检未通过，已自动隔离并重建\n${note}`,
     `pixivflow:db-recovery:${new Date().toISOString().slice(0, 10)}`
@@ -149,11 +155,11 @@ async function notifyRecovery(config: StandaloneConfig, databasePath: string, no
 }
 
 export async function notifyScheduleFailure(
-  config: StandaloneConfig,
-  databasePath: string,
-  schedule: ScheduleConfig,
-  failure: JobFailure
-): Promise<void> {
+    config: StandaloneConfig,
+    database: Database,
+    schedule: ScheduleConfig,
+    failure: JobFailure
+  ): Promise<void> {
   const targetNames = selectScheduleTargets(config.targets, schedule)
     .map((target) => target.delivery?.target?.trim())
     .filter((name): name is string => Boolean(name));
@@ -164,12 +170,21 @@ export async function notifyScheduleFailure(
   const error = failure.errorMessage ? `\n错误：${failure.errorMessage.slice(0, 500)}` : '';
   await notifyDeliveryTargets(
     config,
-    databasePath,
+    database,
     targetNames,
     `⚠️ PixivFlow 定时任务${status}\n计划：${schedule.name?.trim() || schedule.id}` +
       `\n连续失败：${failure.consecutiveFailures}${error}${stopped}`,
     `pixivflow:schedule-failure:${schedule.id}:${failure.executionNumber}`
   );
+}
+
+function buildProxyUrl(network: StandaloneConfig['network']): string | undefined {
+  const proxy = network?.proxy;
+  if (!proxy?.enabled) return undefined;
+  const protocol = proxy.protocol ?? 'http';
+  if (protocol !== 'http' && protocol !== 'https') return undefined;
+  const auth = proxy.username ? `${proxy.username}:${proxy.password ?? ''}@` : '';
+  return `${protocol}://${auth}${proxy.host}:${proxy.port}`;
 }
 
 export async function createSchedulerRuntime(configPathArg?: string): Promise<SchedulerRuntime> {
@@ -179,9 +194,12 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
   const config = loadConfig(configPath, false, false);
 
   const databasePath = config.storage!.databasePath!;
-  const { database, recoveryNote } = openDatabaseWithRecovery(databasePath);
+  const { database, recoveryNote, degraded } = openDatabaseWithRecovery(databasePath);
+  // One-time, idempotent import of any file-based outbox manifests. Safe to run
+  // every start: committed rows are archived; a crash mid-way resumes here.
+  migrateLegacyOutbox(database);
   if (recoveryNote) {
-    await notifyRecovery(config, databasePath, recoveryNote);
+    await notifyRecovery(config, database, recoveryNote);
   }
 
   const auth = new PixivAuth(config.pixiv, config.network!, database, configPath);
@@ -201,6 +219,31 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
   }
 
   let activeDownloadManager: DownloadManager | null = null;
+
+  // Independently-pumped durable outbox (content + notifications). Started in
+  // the long-running scheduler daemon; run-once drains explicitly before exit.
+  const deliveryDispatcher = new DeliveryDispatcher(config.delivery, buildProxyUrl(config.network));
+  const outboxWorker = new OutboxWorker(database, deliveryDispatcher, {
+    retryBaseMs: config.delivery?.outboxRetryBaseMs,
+    retryMaxMs: config.delivery?.outboxRetryMaxMs,
+    // A confirmed ACK promotes the delivery_pending cell to submitted.
+    onDeliveryTerminal: (deliveryId, ack) => {
+      const row = database.deliveries.getById(deliveryId);
+      if (!row || !row.slotId || !row.targetId) return;
+      if (ack.kind === 'duplicate_existing') {
+        const coord = new SlotCoordinator(database);
+        coord.applyOutcome(row.slotId, row.targetId, {
+          kind: 'duplicate',
+          workId: row.pixivId,
+          reason: 'downstream attested historical duplicate',
+        });
+        return;
+      }
+      const coord = new SlotCoordinator(database);
+      coord.markDelivered(row.slotId, row.targetId, row.pixivId, row.workType as 'illustration' | 'novel');
+    },
+  });
+  const notificationPolicy = new NotificationPolicy(database, config);
 
   const runJob = async (
     snapshot: StandaloneConfig,
@@ -233,6 +276,7 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
     // complete or be resumed as one. Scheduled runs (cron/http/catchup) always
     // resolve a canonical occurrence and converge on one durable Slot.
     let slotCtx: SlotContext | null = null;
+    let varReleaseLease: (() => void) | null = null;
     if (!adhoc) {
       if (providedSlot) {
         slotCtx = providedSlot;
@@ -250,14 +294,38 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
         slotCtx = resolved.context;
       }
 
+      const activeSlot = slotCtx!;
+      const runOwner = `run-${process.pid}-${randomUUID().slice(0, 8)}`;
+      const leaseMs = Math.max(60_000, (schedule.timeout ?? 30 * 60_000) + 60_000);
       const begin = coordinator.begin(slotCtx, schedule, targets);
       if (begin.alreadyCompleted && !onlyTarget) {
         logger.info('Slot already terminal; nothing to do', {
-          slot: slotCtx.slotId,
+          slot: activeSlot.slotId,
           status: begin.slotRec.status,
         });
         return;
       }
+      // Cross-process lease: a concurrent Cloudflare + watchdog + manual
+      // trigger on a SECOND process sees an active lease and converges instead
+      // of running the same targets in parallel.
+      const claimed = coordinator.claimRunLease(activeSlot.slotId, runOwner, leaseMs);
+      if (!claimed) {
+        const lease = database.slots.getSlotLease(activeSlot.slotId);
+        logger.info('Slot run already leased by another worker; converging', {
+          slot: activeSlot.slotId,
+          leaseOwner: lease.owner,
+        });
+        // Resume-only: the OutboxWorker drains pending deliveries; do not run
+        // candidate selection again. Drain due rows and return.
+        await outboxWorker.drainOnce(1);
+        return;
+      }
+      const heartbeat = setInterval(() => coordinator.heartbeatLease(activeSlot.slotId, runOwner, leaseMs), Math.floor(leaseMs / 3));
+      heartbeat.unref?.();
+      varReleaseLease = () => {
+        clearInterval(heartbeat);
+        coordinator.releaseRunLease(activeSlot.slotId, runOwner);
+      };
     }
 
     // For a scheduled run, skip cells already in a terminal state (resume never
@@ -301,25 +369,28 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
     await downloadManager.initialise();
 
     if (slotCtx) {
-      // Record cell outcomes into the slot ledger.
+      const slot = slotCtx; // stable for callbacks
+      // Record the locked work as soon as a candidate is chosen. First
+      // selection wins; retries/replays keep the SAME work id.
       downloadManager.setWorkLockedHook((artifact, target) => {
-        if (!target.id || !slotCtx) return;
-        // First selection wins; retries/replays carry the same pixivId and the
-        // ledger COALESCE keeps it, so a retry never silently swaps the work.
-        coordinator.lockWork(slotCtx.slotId, target.id, artifact.pixivId, artifact.type);
+        if (!target.id) return;
+        coordinator.lockWork(slot.slotId, target.id, artifact.pixivId, artifact.type);
       });
-      downloadManager.setTargetOutcomeHook((target, error) => {
-        if (!target.id || !slotCtx) return;
-        if (!error) {
-          // Delivered (or queued in outbox, which retries the SAME work). Mark
-          // submitted; the work id is best-effort from the most recent download.
-          coordinator.markCell(slotCtx.slotId, target.id, 'submitted');
-        } else if (/no matching|no_candidate|all .*filtered|already downloaded/i.test(error)) {
-          coordinator.markCell(slotCtx.slotId, target.id, 'no_candidate', error);
-        } else {
-          coordinator.markCell(slotCtx.slotId, target.id, 'failed', error);
-        }
+      // TYPED outcome -> explicit FSM transition. No message regex, no
+      // "no throw => submitted". Only a confirmed ACK yields 'submitted'.
+      downloadManager.setTargetOutcomeHook((target, outcome: TargetOutcome) => {
+        if (!target.id) return;
+        coordinator.applyOutcome(slot.slotId, target.id, outcome);
+        notificationPolicy.noteOutcome(slot.slotId, slot, schedule, target, outcome);
       });
+      downloadManager.slotContext = {
+        slotId: slot.slotId,
+        scheduleId: slot.scheduleId,
+        occurrenceAtIso: new Date(slot.occurrenceAt).toISOString(),
+        triggerSource: slot.triggerSource,
+        slotName: slot.slotName,
+        slotDate: slot.slotDate,
+      };
     }
 
     // Apply initial delay if configured
@@ -341,6 +412,8 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
 
     const startTime = Date.now();
     let allTargetsFailed: Error | undefined;
+    let releaseLease: () => void = () => undefined;
+    if (slotCtx && varReleaseLease) releaseLease = varReleaseLease;
     try {
       await downloadManager.runAllTargets();
     } catch (error) {
@@ -353,10 +426,29 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
       allTargetsFailed = error;
     } finally {
       if (activeDownloadManager === downloadManager) activeDownloadManager = null;
+      releaseLease?.();
     }
     const duration = Math.round((Date.now() - startTime) / 1000);
 
-    if (slotCtx) coordinator.finish(slotCtx, schedule, targets);
+    if (slotCtx) {
+      const summary = coordinator.finish(slotCtx, schedule, targets);
+      notificationPolicy.sendSlotSummary(
+        slotCtx,
+        schedule,
+        summary.cells.map((c) => {
+          const t = targets.find((x) => x.id === c.targetId);
+          return {
+            targetId: c.targetId,
+            label: c.targetId,
+            workType: t?.type ?? 'unknown',
+            status: c.status,
+            workId: c.workId,
+            error: c.error ?? null,
+          };
+        })
+      );
+      releaseLease();
+    }
     if (!slotCtx && allTargetsFailed) throw allTargetsFailed;
 
     logger.info('='.repeat(60));
@@ -372,6 +464,7 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
   };
 
   const close = (): void => {
+    outboxWorker.stop();
     cancelActive('process shutdown');
     if (tokenMaintenance) {
       tokenMaintenance.stop();
@@ -387,8 +480,10 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
     tokenMaintenance,
     runJob,
     cancelActive,
+    startOutboxWorker: () => outboxWorker.start(),
+    drainOutbox: () => outboxWorker.drainOnce(),
     notifyScheduleFailure: (snapshot, schedule, failure) =>
-      notifyScheduleFailure(snapshot, databasePath, schedule, failure),
+      notifyScheduleFailure(snapshot, database, schedule, failure),
     close,
   };
 }

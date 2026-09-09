@@ -67,14 +67,15 @@ describe('HttpMultipartDelivery', () => {
       },
     });
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       status: 201,
+      ack: { kind: 'idempotent_replay', remoteId: '42', remoteStatus: 'pending_review' },
       body: {
         ok: true,
         data: { id: 1, status: 'pending_review', review_id: 42, reused: true },
       },
     });
-    expect(log).toHaveBeenCalledWith('HTTP multipart delivery succeeded', expect.objectContaining({
+    expect(log).toHaveBeenCalledWith('HTTP multipart delivery response', expect.objectContaining({
       deliveryStatus: 'pending_review',
       reviewId: 42,
       reused: true,
@@ -109,7 +110,7 @@ describe('HttpMultipartDelivery', () => {
       maxAttempts: 1,
     });
 
-    await provider.notify({ text: 'no matching work', idempotencyKey: 'empty:2023-06-14' });
+    await provider.notifyOnce({ text: 'no matching work', idempotencyKey: 'empty:2023-06-14' });
 
     const [url, options] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe('https://example.test/notifications');
@@ -124,23 +125,19 @@ describe('HttpMultipartDelivery', () => {
   });
 
   it('does not log notification URL credentials or query secrets', async () => {
-    const fetchMock = jest.fn()
-      .mockResolvedValueOnce(new Response('boom', { status: 500 }))
-      .mockResolvedValueOnce(new Response('ok', { status: 200 }));
+    // One attempt (retries live in the durable outbox, not the HTTP adapter).
+    const fetchMock = jest.fn().mockResolvedValue(new Response('ok', { status: 200 }));
     global.fetch = fetchMock as typeof fetch;
-    const warn = jest.spyOn(logger, 'warn').mockImplementation(() => undefined);
     const info = jest.spyOn(logger, 'info').mockImplementation(() => undefined);
     const provider = new HttpMultipartDelivery({
       type: 'httpMultipart',
       url: 'https://example.test/submissions',
       notificationUrl: 'https://notify:webhook-secret@example.test/notify/key?:text=body&token=query-secret',
-      maxAttempts: 2,
-      retryDelayMs: 0,
     });
 
-    await provider.notify({ text: 'no matching work', idempotencyKey: 'empty:2023-06-14' });
+    await provider.notifyOnce({ text: 'no matching work', idempotencyKey: 'empty:2023-06-14' });
 
-    const loggedUrls = [...warn.mock.calls, ...info.mock.calls]
+    const loggedUrls = info.mock.calls
       .flatMap((call) => call.slice(1))
       .map((entry) => (entry as { url?: string }).url)
       .filter((url): url is string => Boolean(url));
@@ -324,8 +321,9 @@ describe('HttpMultipartDelivery', () => {
         files: [filePath],
         context: { title: 'Work', pixivId: '1', type: 'novel' },
       })
-    ).resolves.toMatchObject({ status: 204 });
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    ).resolves.toMatchObject({ status: 503, ack: { kind: 'retryable_failure' } });
+    // Exactly one HTTP attempt; the durable outbox owns the retry budget.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -581,4 +579,43 @@ describe('DeliveryOutbox', () => {
     expect(dispatcher.deliver).not.toHaveBeenCalled();
     await expect(fs.access(filePath)).resolves.toBeUndefined();
   });
+  it('sends the occurrence-scoped idempotency_key field so ACK-loss retries converge as idempotent_replay', async () => {
+    const filePath = join(directory, 'cover.jpg');
+    await fs.writeFile(filePath, 'image');
+
+    const fetchMock = jest.fn().mockImplementation(async (_url: string, init: any) => {
+      // Body is a streaming hand-built multipart Readable; drain and inspect raw.
+      const chunks: Buffer[] = [];
+      for await (const chunk of init.body as AsyncIterable<Buffer>) chunks.push(Buffer.from(chunk));
+      const raw = Buffer.concat(chunks).toString('utf8');
+      expect(raw).toContain('name="idempotency_key"');
+      expect(raw).toContain(
+        'pixivflow:bot1:illustration:999:sched-a@202609081000:t-a'
+      );
+      return new Response(JSON.stringify({
+        ok: true,
+        data: { status: 'published', reused: false, message_id: 7 },
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+    });
+    global.fetch = fetchMock as typeof fetch;
+
+    const provider = new HttpMultipartDelivery({
+      type: 'httpMultipart',
+      url: 'https://example.test/submissions',
+      fileField: 'files',
+      fields: { tags: 'Pixiv', idempotency_key: '{{idempotencyKey}}' },
+      success: { statuses: [200, 201], jsonPath: 'ok', equals: true },
+    });
+
+    const result = await provider.deliver({
+      files: [filePath],
+      context: {
+        title: 'W', pixivId: '999', type: 'illustration',
+        idempotencyKey: 'pixivflow:bot1:illustration:999:sched-a@202609081000:t-a',
+      } as any,
+    });
+    expect(result.ack?.kind).toBe('accepted');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
 });

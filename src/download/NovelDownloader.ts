@@ -7,15 +7,42 @@ import { IFileService } from '../interfaces/IFileService';
 import { PixivNovel } from '../pixiv/PixivClient';
 import { detectLanguage } from '../utils/language-detection';
 import { DownloadedArtifact } from '../delivery/types';
+import type { Database } from '../storage/Database';
+
+const LANGUAGE_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 export class NovelDownloader {
   constructor(
     private readonly client: IPixivClient,
     private readonly database: IDatabase,
-    private readonly fileService: IFileService
+    private readonly fileService: IFileService,
+    private readonly metadataDb?: Database
   ) {}
 
   async download(novel: PixivNovel, tag: string, target: TargetConfig): Promise<DownloadedArtifact | undefined> {
+    // Metadata cache: language filtering otherwise pulls FULL text per candidate
+    // on every fallback run. A cached classification short-circuits to the same
+    // skip decision without any Pixiv request (bounded detail/text fetch volume).
+    if (target.languageFilter && this.metadataDb) {
+      const cached = this.metadataDb?.metadata?.fresh?.(String(novel.id), 'novel', LANGUAGE_CACHE_TTL_MS);
+      if (cached?.language) {
+        const isChinese = cached.language.includes('Chinese') || cached.language.startsWith('zh');
+        const wanted =
+          (target.languageFilter === 'chinese' && isChinese) ||
+          (target.languageFilter === 'non-chinese' && !isChinese);
+        if (!wanted) {
+          const reason = target.languageFilter === 'chinese' ? 'not Chinese' : 'is Chinese';
+          logger.info(`Novel ${novel.id} language filter from cache (${cached.language}): ${reason}`, {
+            novelId: novel.id, filter: target.languageFilter, cached: true,
+          });
+          throw new Error(
+            `Novel ${novel.id} skipped: language filter mismatch (cached: ${cached.language}, required: ${target.languageFilter})`
+          );
+        }
+        // Cached match: still need full text to deliver; fall through to fetch.
+      }
+    }
+
     const { novel: detail, tags } = await this.client.getNovelDetailWithTags(novel.id);
     // getNovelText resolves to the API envelope { novel_text }; unwrap it here,
     // otherwise the object gets stringified to "[object Object]" and the
@@ -38,7 +65,7 @@ export class NovelDownloader {
 
     if (enableDetection) {
       const fullContent = `${detail.title}\n${text}`;
-      detectedLang = detectLanguage(fullContent);
+      detectedLang = await detectLanguage(fullContent);
 
       if (detectedLang) {
         logger.info(`Detected language for novel ${detail.id}: ${detectedLang.name} (${detectedLang.code})`, {
@@ -46,6 +73,12 @@ export class NovelDownloader {
           language: detectedLang.name,
           code: detectedLang.code,
           isChinese: detectedLang.isChinese,
+        });
+        this.metadataDb?.metadata?.put?.(String(detail.id), 'novel', {
+          language: detectedLang.name,
+          xRestrict: (detail as { x_restrict?: number }).x_restrict ?? (novel as { x_restrict?: number }).x_restrict ?? null,
+          publishedAt: detail.create_date ?? novel.create_date ?? null,
+          title: detail.title,
         });
       } else {
         logger.debug(`Language detection inconclusive for novel ${detail.id} (text may be too short)`);

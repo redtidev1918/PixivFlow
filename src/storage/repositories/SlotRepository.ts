@@ -1,7 +1,15 @@
 import { BaseRepository } from './BaseRepository';
 
 export type SlotStatus = 'pending' | 'running' | 'success' | 'partial' | 'failed' | 'expired';
-export type CellStatus = 'pending' | 'selected' | 'submitted' | 'no_candidate' | 'failed';
+export type CellStatus =
+  | 'pending'
+  | 'selected'
+  | 'artifact_ready'
+  | 'delivery_pending'
+  | 'submitted'
+  | 'no_candidate'
+  | 'duplicate'
+  | 'failed';
 
 export interface SlotRecord {
   id: string;
@@ -25,6 +33,9 @@ export interface SlotRecord {
   startedAt: string | null;
   completedAt: string | null;
   lastError: string | null;
+  leaseOwner: string | null;
+  leaseUntil: number | null;
+  heartbeatAt: number | null;
 }
 
 export interface SlotItemRecord {
@@ -219,12 +230,103 @@ export class SlotRepository extends BaseRepository {
   }
 
   public setCellStatus(slotId: string, targetId: string, status: CellStatus, error?: string): void {
-    const terminal = status === 'submitted' || status === 'no_candidate' || status === 'failed';
+    const terminal =
+      status === 'submitted' ||
+      status === 'no_candidate' ||
+      status === 'duplicate' ||
+      status === 'failed';
     const sets = ['status = @status', 'last_error = @error', 'updated_at = CURRENT_TIMESTAMP'];
     if (terminal) sets.push('completed_at = CURRENT_TIMESTAMP');
     this.db
       .prepare(`UPDATE schedule_slot_items SET ${sets.join(', ')} WHERE slot_id = @slotId AND target_id = @targetId`)
       .run({ slotId, targetId, status, error: error ?? null });
+  }
+
+  /**
+   * Transition a cell with FSM validation. Never downgrades a confirmed cell;
+   * an illegal transition throws rather than silently corrupting state.
+   */
+  public transitionCell(
+    slotId: string,
+    targetId: string,
+    next: CellStatus,
+    error?: string
+  ): SlotItemRecord {
+    const cell = this.getCell(slotId, targetId);
+    if (!cell) throw new Error(`cell not found: ${slotId}/${targetId}`);
+    if (cell.status === next) return cell;
+    // Imported lazily to keep the repository free of a circular module graph.
+    // The FSM table is the single authority for legal moves.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { assertTransition } = require('../../scheduler/SlotStateMachine') as typeof import('../../scheduler/SlotStateMachine');
+    assertTransition(cell.status as Parameters<typeof assertTransition>[0], next as Parameters<typeof assertTransition>[1]);
+    this.setCellStatus(slotId, targetId, next, error);
+    return this.getCell(slotId, targetId)!;
+  }
+
+  /**
+   * Claim execution ownership of a slot for `owner` until `leaseUntil`
+   * (epoch ms). Returns true when this caller now owns the lease. A second
+   * process/trigger sees an active lease and must converge (resume/observe),
+   * not start a parallel run. An expired lease is reclaimable.
+   */
+  public claimSlotLease(slotId: string, owner: string, leaseUntil: number, now: number = Date.now()): boolean {
+    const info = this.db
+      .prepare(
+        `UPDATE schedule_slots
+         SET lease_owner = @owner, lease_until = @leaseUntil, heartbeat_at = @now
+         WHERE id = @id
+           AND (lease_until IS NULL OR lease_until <= @now OR lease_owner = @owner)`
+      )
+      .run({ id: slotId, owner, leaseUntil, now });
+    return info.changes > 0;
+  }
+
+  public heartbeatSlotLease(slotId: string, owner: string, leaseUntil: number, now: number = Date.now()): void {
+    this.db
+      .prepare(
+        `UPDATE schedule_slots SET lease_until = @leaseUntil, heartbeat_at = @now
+         WHERE id = @id AND lease_owner = @owner`
+      )
+      .run({ id: slotId, owner, leaseUntil, now });
+  }
+
+  public releaseSlotLease(slotId: string, owner: string): void {
+    this.db
+      .prepare(
+        `UPDATE schedule_slots SET lease_owner = NULL, lease_until = NULL
+         WHERE id = @id AND lease_owner = @owner`
+      )
+      .run({ id: slotId, owner });
+  }
+
+  public getSlotLease(slotId: string): { owner: string | null; until: number | null } {
+    const row = this.db
+      .prepare(`SELECT lease_owner, lease_until FROM schedule_slots WHERE id = ?`)
+      .get(slotId) as { lease_owner: string | null; lease_until: number | null } | undefined;
+    return { owner: row?.lease_owner ?? null, until: row?.lease_until ?? null };
+  }
+
+  /** Slots whose lease expired while still non-terminal (crashed workers). */
+  public slotsWithStaleLease(now: number = Date.now()): string[] {
+    const rows = this.db
+      .prepare(
+        `SELECT id FROM schedule_slots
+         WHERE lease_until IS NOT NULL AND lease_until < @now
+           AND status IN ('pending','running')`
+      )
+      .all({ now }) as Array<{ id: string }>;
+    return rows.map((r) => r.id);
+  }
+
+  /** Record an error without changing terminality (retryable failure keeps the cell resumable). */
+  public setCellError(slotId: string, targetId: string, error: string): void {
+    this.db
+      .prepare(
+        `UPDATE schedule_slot_items SET last_error = @error, updated_at = CURRENT_TIMESTAMP
+         WHERE slot_id = @slotId AND target_id = @targetId`
+      )
+      .run({ slotId, targetId, error: error.slice(0, 1000) });
   }
 
   /** Work ids already locked in THIS slot (to stop two cells taking the same work). */
@@ -239,7 +341,8 @@ export class SlotRepository extends BaseRepository {
   public deriveSlotStatus(slotId: string): SlotStatus {
     const cells = this.getCells(slotId);
     if (cells.length === 0) return 'pending';
-    const terminal = cells.filter((c) => c.status === 'submitted' || c.status === 'no_candidate' || c.status === 'failed');
+    const isTerminal = (s: string) => s === 'submitted' || s === 'no_candidate' || s === 'duplicate' || s === 'failed';
+    const terminal = cells.filter((c) => isTerminal(c.status));
     if (terminal.length < cells.length) return 'running';
     if (cells.every((c) => c.status === 'submitted')) return 'success';
     if (cells.some((c) => c.status === 'submitted')) return 'partial';
@@ -270,6 +373,9 @@ export class SlotRepository extends BaseRepository {
       startedAt: row.started_at,
       completedAt: row.completed_at,
       lastError: row.last_error,
+      leaseOwner: row.lease_owner ?? null,
+      leaseUntil: row.lease_until ?? null,
+      heartbeatAt: row.heartbeat_at ?? null,
     };
   }
 

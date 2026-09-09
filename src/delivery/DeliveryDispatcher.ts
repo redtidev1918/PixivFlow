@@ -38,6 +38,6 @@ export class DeliveryDispatcher {
     if (!target.notificationUrl?.trim()) {
       throw new ConfigError(`Delivery target does not configure notificationUrl: ${name}`);
     }
-    return new HttpMultipartDelivery(target, this.proxyUrl).notify(request);
+    return new HttpMultipartDelivery(target, this.proxyUrl).notifyOnce(request);
   }
 }

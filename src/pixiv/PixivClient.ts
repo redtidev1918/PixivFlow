@@ -10,6 +10,7 @@ import { PixivAuth } from './AuthClient';
 import { IPixivClient } from '../interfaces/IPixivClient';
 import type { PixivUser, PixivIllust, PixivNovel, PixivIllustPage, PixivNovelTextResponse, PixivTag } from './types';
 import { PixivApiCore } from './client/PixivApiCore';
+import { RateLimitCoordinator } from './RateLimitCoordinator';
 import { IllustService } from './client/IllustService';
 import { NovelService } from './client/NovelService';
 import { MediaDownloadService } from './client/MediaDownloadService';
@@ -22,6 +23,7 @@ export class PixivClient implements IPixivClient {
   private readonly baseUrl = 'https://app-api.pixiv.net/';
   private readonly proxyAgent?: ProxyAgent;
   private readonly apiCore: PixivApiCore;
+  private readonly rateLimiter: RateLimitCoordinator;
   private readonly illustService: IllustService;
   private readonly novelService: NovelService;
   private readonly mediaService: MediaDownloadService;
@@ -77,14 +79,21 @@ export class PixivClient implements IPixivClient {
       }
       return undefined;
     })();
+    // ONE global gate: a 429 anywhere parks the whole Pixiv client, avoiding
+    // inner*outer request amplification. Default request retry is small (the
+    // outbox/scheduler own durable retry across runs).
+    // Default pacing is 0: the gate's job is the shared 429 cooldown, not an
+    // artificial per-request delay. Operators can opt into pacing explicitly.
+    const pace = (network as { requestPacingMs?: number }).requestPacingMs ?? 0;
+    this.rateLimiter = new RateLimitCoordinator(pace);
     this.apiCore = new PixivApiCore({
       baseUrl: 'https://app-api.pixiv.net',
       userAgent: this.config.pixiv.userAgent,
       defaultTimeoutMs: network.timeoutMs ?? 30_000,
-      maxRetries: network.retries ?? 10,
-      rateLimitPerSecond: undefined,
+      maxRetries: network.retries ?? 2,
       proxyUrl: proxyUrlStr,
       getAccessToken: () => this.auth.getAccessToken(),
+      rateLimiter: this.rateLimiter,
     });
 
     // Initialize domain services
@@ -92,6 +101,11 @@ export class PixivClient implements IPixivClient {
     this.novelService = new NovelService(this.apiCore);
     this.mediaService = new MediaDownloadService(this.apiCore);
     this.searchService = new SearchService(this.apiCore);
+  }
+
+  /** Process-wide Pixiv rate-limit gate (used by doctor/health). */
+  getRateLimiter(): RateLimitCoordinator {
+    return this.rateLimiter;
   }
 
   /**

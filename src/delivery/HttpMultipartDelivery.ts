@@ -233,13 +233,17 @@ export class HttpMultipartDelivery implements DeliveryProvider {
       slotId: request.context.slotId ?? '',
       slotName: request.context.slotName ?? '',
       slotDate: request.context.slotDate ?? '',
+      // The occurrence-scoped intent key. MUST be sent so an ACK-loss retry
+      // (same key) converges remotely as idempotent_replay instead of being
+      // mistaken for a historical duplicate or, worse, double-posting.
+      idempotencyKey: (request.context.idempotencyKey as string) ?? '',
     };
     return Object.fromEntries(
       Object.entries(fields).map(([name, value]) => {
         const values = Array.isArray(value) ? value : [value];
         const rendered = values.map((item) =>
           String(item).replace(
-            /\{\{(title|pixivId|type|targetId|tag|topic|workTags|link|topicTag|spoiler|xRestrict|xRestrictLabel|xRestrictTag|rankingDate|publishedDate|language|bookmarkCount|viewCount|scheduleId|executionId|occurrenceAt|triggerSource|slotId|slotName|slotDate)\}\}/g,
+            /\{\{(title|pixivId|type|targetId|tag|topic|workTags|link|topicTag|spoiler|xRestrict|xRestrictLabel|xRestrictTag|rankingDate|publishedDate|language|bookmarkCount|viewCount|scheduleId|executionId|occurrenceAt|triggerSource|slotId|slotName|slotDate|idempotencyKey)\}\}/g,
             (_, key: string) => variables[key]
           )
         );

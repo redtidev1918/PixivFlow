@@ -127,7 +127,7 @@ export class DeliveryService {
               files: artifact.files,
               cleanupFiles: artifact.cleanupFiles ?? [],
               fields: context.fields ?? null,
-              context: { ...this.contextFrom(artifact, target), ...(context.extraContext ?? {}) },
+              context: { ...this.contextFrom(artifact, target), idempotencyKey, ...(context.extraContext ?? {}) },
             },
           },
           Date.now()
@@ -147,7 +147,7 @@ export class DeliveryService {
           files: artifact.files,
           cleanupFiles: artifact.cleanupFiles ?? [],
           fields: context.fields ?? null,
-          context: { ...this.contextFrom(artifact, target), ...(context.extraContext ?? {}) },
+          context: { ...this.contextFrom(artifact, target), idempotencyKey, ...(context.extraContext ?? {}) },
         },
       });
 

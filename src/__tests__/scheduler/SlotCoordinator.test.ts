@@ -97,3 +97,88 @@ describe('SlotCoordinator', () => {
     });
   });
 });
+
+
+describe('SlotCoordinator failure injection', () => {
+  it('duplicate triggers converge: a live run lease rejects a parallel second trigger', async () => {
+    await withDb(async (db) => {
+      const coord = new SlotCoordinator(db);
+      const slot = coord.resolveOccurrence(schedule, config, 'http', AT).context!;
+      coord.begin(slot, schedule, [target('a')]);
+
+      expect(coord.claimRunLease(slot.slotId, 'trigger-1', 60_000)).toBe(true);
+      // A duplicate HTTP trigger arriving while trigger-1 is live must NOT
+      // acquire a parallel lease (which would double-post).
+      expect(coord.claimRunLease(slot.slotId, 'trigger-2', 60_000)).toBe(false);
+      // Same owner may heartbeat/renew.
+      coord.heartbeatLease(slot.slotId, 'trigger-1', 60_000);
+      // After a crash the stored lease expiry passes and a restart reclaims it
+      // (simulated by a lease that expired 1s ago relative to a later clock).
+      expect(db.slots.claimSlotLease(slot.slotId, 'restart', 60_000, Date.now() + 61_000)).toBe(true);
+    });
+  });
+
+  it('a confirmed submitted cell can never be downgraded by a late duplicate/failure', async () => {
+    await withDb(async (db) => {
+      const coord = new SlotCoordinator(db);
+      const slot = coord.resolveOccurrence(schedule, config, 'http', AT).context!;
+      coord.begin(slot, schedule, [target('a')]);
+
+      coord.lockWork(slot.slotId, 'a', '100', 'illustration');
+      coord.applyOutcome(slot.slotId, 'a', { kind: 'submitted', workId: '100', workType: 'illustration' });
+      expect(db.slots.getCell(slot.slotId, 'a')!.status).toBe('submitted');
+
+      // ACK lost -> a retry reports the historical duplicate of the SAME work.
+      // It must stay submitted, not move to the 'duplicate' drift state.
+      coord.applyOutcome(slot.slotId, 'a', {
+        kind: 'duplicate', workId: '100', reason: 'already posted',
+      });
+      expect(db.slots.getCell(slot.slotId, 'a')!.status).toBe('submitted');
+
+      // A spurious retryable failure also cannot un-confirm it.
+      coord.applyOutcome(slot.slotId, 'a', { kind: 'failed', retryable: true, error: 'late timeout' });
+      expect(db.slots.getCell(slot.slotId, 'a')!.status).toBe('submitted');
+    });
+  });
+
+  it('retryable failure before ACK keeps the locked work so a resume posts the SAME work', async () => {
+    await withDb(async (db) => {
+      const coord = new SlotCoordinator(db);
+      const slot = coord.resolveOccurrence(schedule, config, 'http', AT).context!;
+      coord.begin(slot, schedule, [target('a')]);
+
+      coord.lockWork(slot.slotId, 'a', '100', 'illustration');
+      coord.applyOutcome(slot.slotId, 'a', { kind: 'failed', retryable: true, error: 'connection reset' });
+
+      const cell = db.slots.getCell(slot.slotId, 'a')!;
+      expect(cell.status).toBe('selected'); // still non-terminal
+      expect(cell.workId).toBe('100'); // resume must not swap to another work
+
+      // Resume path immediately re-runs this cell.
+      expect(coord.pendingTargets(slot.slotId, [target('a')]).map((p) => p.target.id)).toEqual(['a']);
+
+      // The eventual ACK promotes it exactly once.
+      coord.markDelivered(slot.slotId, 'a', '100', 'illustration');
+      expect(db.slots.getCell(slot.slotId, 'a')!.status).toBe('submitted');
+      expect(coord.pendingTargets(slot.slotId, [target('a')])).toEqual([]);
+    });
+  });
+
+  it('delivery_pending survives a crash and resumes toward submitted on the ACK', async () => {
+    await withDb(async (db) => {
+      const coord = new SlotCoordinator(db);
+      const slot = coord.resolveOccurrence(schedule, config, 'http', AT).context!;
+      coord.begin(slot, schedule, [target('a')]);
+
+      coord.applyOutcome(slot.slotId, 'a', {
+        kind: 'delivery_pending', workId: '100', workType: 'illustration', deliveryId: 'd-1',
+      });
+      expect(db.slots.getCell(slot.slotId, 'a')!.status).toBe('delivery_pending');
+      // Not terminal: a restart still owes this cell an ACK.
+      expect(coord.pendingTargets(slot.slotId, [target('a')])).toHaveLength(1);
+
+      coord.markDelivered(slot.slotId, 'a', '100', 'illustration');
+      expect(db.slots.getCell(slot.slotId, 'a')!.status).toBe('submitted');
+    });
+  });
+});

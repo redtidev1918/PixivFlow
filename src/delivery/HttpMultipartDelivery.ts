@@ -5,6 +5,7 @@ import { Readable } from 'node:stream';
 import { DeliveryFieldValue, HttpMultipartDeliveryConfig } from '../config';
 import { logger } from '../logger';
 import { DeliveryNotificationRequest, DeliveryProvider, DeliveryRequest, DeliveryResult } from './types';
+import { parseDeliveryAck } from './DeliveryAck';
 
 /** Render an ISO timestamp to YYYY-MM-DD (create_date is JST). */
 function formatPublishedDate(iso?: string): string {
@@ -54,85 +55,41 @@ export class HttpMultipartDelivery implements DeliveryProvider {
     }
   }
 
+  /**
+   * One delivery attempt. Retry/backoff/dead-letter belong to the outbox worker,
+   * not here, so this performs exactly ONE HTTP call and normalizes the result
+   * into a DeliveryAck. HTTP status/body is never silently treated as success.
+   */
   async deliver(request: DeliveryRequest): Promise<DeliveryResult> {
     if (request.files.length === 0) {
       throw new Error('HTTP multipart delivery requires at least one file');
     }
-
-    const maxAttempts = Math.max(1, this.config.maxAttempts ?? 3);
-    const retryDelayMs = Math.max(0, this.config.retryDelayMs ?? 2000);
-    let lastError: unknown;
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      try {
-        return await this.attempt(request);
-      } catch (error) {
-        lastError = error;
-        logger.warn(`HTTP multipart delivery attempt ${attempt}/${maxAttempts} failed`, {
-          url: this.config.url,
-          error: error instanceof Error ? error.message : String(error),
-          files: request.files.length,
-        });
-        if (attempt < maxAttempts) {
-          await new Promise((resolve) => setTimeout(resolve, retryDelayMs * attempt));
-        }
-      }
-    }
-    throw new Error(
-      `HTTP multipart delivery failed after ${maxAttempts} attempts: ${
-        lastError instanceof Error ? lastError.message : String(lastError)
-      }`
-    );
+    const { status, body } = await this.attempt(request);
+    const httpStatus = status ?? 0;
+    return { status: httpStatus, body, ack: parseDeliveryAck(httpStatus, body, this.config.ack) };
   }
 
-  async notify(request: DeliveryNotificationRequest): Promise<DeliveryResult> {
+  /** Single notification attempt; the outbox owns retries. */
+  async notifyOnce(request: DeliveryNotificationRequest): Promise<{ status: number; body: unknown }> {
     const url = this.config.notificationUrl?.trim();
     if (!url) throw new Error('HTTP delivery notificationUrl is not configured');
-    const maxAttempts = Math.max(1, this.config.maxAttempts ?? 3);
-    const retryDelayMs = Math.max(0, this.config.retryDelayMs ?? 2000);
-    let lastError: unknown;
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      try {
-        const headers = {
-          ...this.resolveHeaders(this.config.headers ?? {}),
-          'Content-Type': 'application/json',
-        };
-        const options: Record<string, unknown> = {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            text: request.text,
-            idempotency_key: request.idempotencyKey,
-          }),
-        };
-        if (this.dispatcher) options.dispatcher = this.dispatcher;
-        const response = await fetch(
-          this.interpolateEnvironment(url),
-          options as Parameters<typeof fetch>[1]
-        );
-        const text = await response.text();
-        let body: unknown = text;
-        if (text) {
-          try { body = JSON.parse(text); } catch { /* plain text is valid */ }
-        }
-        this.assertSuccess(response, body);
-        logger.info('HTTP delivery notification succeeded', { url: redactUrl(url), status: response.status });
-        return { status: response.status, body };
-      } catch (error) {
-        lastError = error;
-        logger.warn(`HTTP delivery notification attempt ${attempt}/${maxAttempts} failed`, {
-          url: redactUrl(url),
-          error: error instanceof Error ? error.message : String(error),
-        });
-        if (attempt < maxAttempts) {
-          await new Promise((resolve) => setTimeout(resolve, retryDelayMs * attempt));
-        }
-      }
-    }
-    throw new Error(
-      `HTTP delivery notification failed after ${maxAttempts} attempts: ${
-        lastError instanceof Error ? lastError.message : String(lastError)
-      }`
-    );
+    const headers = {
+      ...this.resolveHeaders(this.config.headers ?? {}),
+      'Content-Type': 'application/json',
+    };
+    const options: Record<string, unknown> = {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ text: request.text, idempotency_key: request.idempotencyKey }),
+    };
+    if (this.dispatcher) options.dispatcher = this.dispatcher;
+    const response = await fetch(this.interpolateEnvironment(url), options as Parameters<typeof fetch>[1]);
+    const text = await response.text();
+    let body: unknown = text;
+    if (text) { try { body = JSON.parse(text); } catch { /* plain ok */ } }
+    if (!response.ok) throw new Error(`notification endpoint returned HTTP ${response.status}`);
+    logger.info('HTTP delivery notification sent', { url: redactUrl(url), status: response.status });
+    return { status: response.status, body };
   }
 
   private async attempt(request: DeliveryRequest): Promise<DeliveryResult> {
@@ -167,11 +124,12 @@ export class HttpMultipartDelivery implements DeliveryProvider {
         // Non-JSON responses are valid when only HTTP status is configured.
       }
     }
-    this.assertSuccess(response, body);
     const data = body && typeof body === 'object'
       ? (body as { data?: Record<string, unknown> }).data
       : undefined;
-    logger.info('HTTP multipart delivery succeeded', {
+    // Classification happens in parseDeliveryAck (DeliveryResult.ack). We keep
+    // the raw status/body and only log for correlation.
+    logger.info('HTTP multipart delivery response', {
       url: this.config.url,
       status: response.status,
       files: request.files.length,
@@ -275,13 +233,17 @@ export class HttpMultipartDelivery implements DeliveryProvider {
       slotId: request.context.slotId ?? '',
       slotName: request.context.slotName ?? '',
       slotDate: request.context.slotDate ?? '',
+      // The occurrence-scoped intent key. MUST be sent so an ACK-loss retry
+      // (same key) converges remotely as idempotent_replay instead of being
+      // mistaken for a historical duplicate or, worse, double-posting.
+      idempotencyKey: (request.context.idempotencyKey as string) ?? '',
     };
     return Object.fromEntries(
       Object.entries(fields).map(([name, value]) => {
         const values = Array.isArray(value) ? value : [value];
         const rendered = values.map((item) =>
           String(item).replace(
-            /\{\{(title|pixivId|type|targetId|tag|topic|workTags|link|topicTag|spoiler|xRestrict|xRestrictLabel|xRestrictTag|rankingDate|publishedDate|language|bookmarkCount|viewCount|scheduleId|executionId|occurrenceAt|triggerSource|slotId|slotName|slotDate)\}\}/g,
+            /\{\{(title|pixivId|type|targetId|tag|topic|workTags|link|topicTag|spoiler|xRestrict|xRestrictLabel|xRestrictTag|rankingDate|publishedDate|language|bookmarkCount|viewCount|scheduleId|executionId|occurrenceAt|triggerSource|slotId|slotName|slotDate|idempotencyKey)\}\}/g,
             (_, key: string) => variables[key]
           )
         );

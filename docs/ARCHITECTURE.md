@@ -170,8 +170,10 @@ executeCommand():command.validate?(args) → command.execute(context, args)
 - **时区属于 schedule**：用 `schedule.timezone`（回退 `scheduler.timezone` / UTC）解析，从不用服务器本地时区。
 - **Target 成员冻结**：occurrence 首次创建时把当时的 `targetIds` 快照进 `schedule_slots.target_ids` 并物化 item（`UNIQUE(slot_id,target_id)`）。之后配置热重载增删 target **不影响**这次 occurrence，只影响未来 occurrence。
 - **作品锁（最关键不变量）**：target 首次选定作品后，先把 `work_id` 持久化（`lockWork`），再产生下载/投递等外部副作用；自动重试 / 进程重启 / outbox 重放都沿用同一作品。候选 fallback（重复→下一个、过滤→下一个、无效→下一个）**只发生在加锁之前**；加锁之后下载/投递失败继续该作品，不偷偷换候选。已锁作品若永久不可用（删除/禁止），普通重试判 `failed`，由显式 replacement（TelePost「重抓」）决定是否换。
-- **终态**：`submitted`（成功）、`no_candidate`（有界候选集里没有合法作品，正常业务终态，不无限重试）、`failed`（可重试失败）。slot 聚合状态由一处计算（全成功→`success`；成功+no_candidate/失败→`partial`；无一成功且不可恢复→`failed`）。
+- **Cell FSM**：`pending → selected → artifact_ready → delivery_pending → submitted`，另有终态 `no_candidate`（有界候选集里没有合法作品，正常业务终态）、`duplicate`（对账证实该作品已被**另一次意图**投递的历史漂移）、`failed`（仅不可重试失败）。可重试失败与 `delivery_pending` 都不是终态：重启/重复触发会沿同一 `work_id` 继续，永不下调已确认的 `submitted`。slot 聚合状态由一处计算（全成功→`success`；成功+no_candidate/duplicate/失败→`partial`；无一成功且不可恢复→`failed`）。
+- **投递账本 + Outbox**：`deliveries` 表回答“此作品是否已**确认**送达此 target”（去重域 = delivery_target + work_type + pixiv_id；只有 delivered/duplicate 算数，pending 不阻塞选择）；`outbox` 表是每种外部副作用（内容投递、通知）一行的事务性发件箱，worker 以租约认领、指数退避重试、超 maxAttempts 进 dead 状态并记 `deliveries.status=failed`。ACK 丢失后的重试由下游用 `idempotent_replay` 确认收敛为一条远端记录。
 - **Outbox 边界**：outbox 只保证“已产生的投递”最终送达，重放**永不**重新进入候选选择。
+- **运行租约**：重复 HTTP 触发对同一 slot 只会有一个 owner（`claimSlotLease` 比较-设置）；冲突触发观察/恢复而非并行执行，崩溃后租约过期才可被接管。
 - **Scheduled vs Ad-hoc**：`run-once` / 「重抓」是 ad-hoc 执行，跑下载计划但**不**打开 occurrence，绝不能把某次定时 occurrence 标记为完成或被 resume。
 
 **架构不变量（Architecture Invariants）**：
@@ -184,10 +186,11 @@ executeCommand():command.validate?(args) → command.execute(context, args)
 6. 自动重试不改变已锁定作品。
 7. 候选 fallback 只发生在作品加锁之前。
 8. outbox 重放永不重新进入候选选择。
-9. 成功的 item 永不自动重跑。
-10. external 模式永不做历史 catch-up。
-11. 手动 ad-hoc 执行 ≠ scheduled occurrence。
-12. Core 不依赖 TelePost / Fly / Cloudflare；`if (fly)…`、`morning/evening` 枚举、bot 编号都不属于 Core。
+9. 成功的 item 永不自动重跑；已确认的 `submitted` 永不被迟到结果降级。
+10. HTTP 状态码不是业务结果——只有解析后的 `DeliveryAck`（accepted/idempotent_replay/duplicate_existing/retryable/permanent）驱动账本。
+11. external 模式永不做历史 catch-up。
+12. 手动 ad-hoc 执行 ≠ scheduled occurrence。
+13. Core 不依赖 TelePost / Fly / Cloudflare；`if (fly)…`、`morning/evening` 枚举、bot 编号都不属于 Core。
 
 ## 存储层
 
@@ -204,7 +207,9 @@ executeCommand():command.validate?(args) → command.execute(context, args)
 | `config_history` | `name`、`config_json`、`is_active` | 配置快照,支持保存/应用/删除 |
 | `task_history` | `task_id` UNIQUE、`status`、`progress_*` | WebUI 下载任务状态持久化 |
 | `schedule_slots` | `id` PK（`<scheduleId>@<occurrenceStamp>`）、`schedule_id`、`occurrence_at`、`timezone`、`target_ids`（成员快照 JSON）、`status`、`trigger_source` | 一次 durable schedule occurrence |
-| `schedule_slot_items` | `slot_id`+`target_id` UNIQUE、`work_id`、`status`、`attempt_count`、`last_error` | occurrence 内每个 target 的执行/作品锁状态 |
+| `schedule_slot_items` | `slot_id`+`target_id` UNIQUE、`work_id`、`status`、`work_type`、`attempt_count`、`last_error` | occurrence 内每个 target 的执行/作品锁/FSM 状态 |
+| `deliveries` | `idempotency_key` UNIQUE、`delivery_target`+`work_type`+`pixiv_id`、`status`、`remote_id`、`reuse_reason` | 投递账本：确认送达事实，选择期/对账双重去重 |
+| `outbox` | `kind`、`idempotency_key` UNIQUE、`status`、`attempts`、`next_attempt_at`、`lease_owner/until` | 事务发件箱：内容投递与通知的崩溃安全重试 |
 
 常用索引覆盖 `downloads(pixiv_id, type)`、`downloads(tag)`、`downloads(downloaded_at)`、`execution_log(tag, type)`、`scheduler_executions(execution_number/status)`、`task_history(task_id/status/start_time)` 等。
 

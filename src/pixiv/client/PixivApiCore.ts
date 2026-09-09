@@ -5,6 +5,7 @@ import { SocksProxyAgent } from 'socks-proxy-agent';
 import axios, { AxiosInstance } from 'axios';
 import { logger } from '../../logger';
 import { NetworkError, is404Error } from '../../utils/errors';
+import { RateLimitCoordinator } from '../RateLimitCoordinator';
 
 export interface PixivApiCoreOptions {
   baseUrl?: string;
@@ -18,6 +19,8 @@ export interface PixivApiCoreOptions {
    * If provided, it will be attached as Authorization: Bearer <token>.
    */
   getAccessToken?: () => Promise<string> | string;
+  /** Shared process-wide 429 gate. When provided all requests share one cooldown. */
+  rateLimiter?: RateLimitCoordinator;
 }
 
 export interface PixivApiErrorBody {
@@ -39,6 +42,7 @@ export class PixivApiCore {
   private readonly socksAgent?: SocksProxyAgent;
   private readonly useAxiosForProxy: boolean;
   private readonly axiosInstance?: AxiosInstance;
+  private readonly rateLimiter?: RateLimitCoordinator;
 
   constructor(options: PixivApiCoreOptions = {}) {
     this.baseUrl = options.baseUrl ?? 'https://app-api.pixiv.net';
@@ -48,6 +52,7 @@ export class PixivApiCore {
     this.rateLimitPerSecond = options.rateLimitPerSecond;
     this.proxyUrl = options.proxyUrl ? new URL(options.proxyUrl) : undefined;
     this.getAccessToken = options.getAccessToken;
+    this.rateLimiter = options.rateLimiter;
     
     // Determine if we need to use axios for SOCKS proxy
     let useAxios = false;
@@ -132,10 +137,12 @@ export class PixivApiCore {
             }
           }
 
-          // Basic client-side rate limiting
-          const waitMs = this.calculateRateLimitWaitTime();
-          if (waitMs > 0) {
-            await delay(waitMs);
+          // Shared global rate-limit gate (429 cooldown + pacing).
+          if (this.rateLimiter) {
+            await this.rateLimiter.acquire(controller.signal);
+          } else {
+            const waitMs = this.calculateRateLimitWaitTime();
+            if (waitMs > 0) await delay(waitMs);
           }
 
           let res: Response;
@@ -249,9 +256,11 @@ export class PixivApiCore {
             }
           }
 
-          const waitMs = this.calculateRateLimitWaitTime();
-          if (waitMs > 0) {
-            await delay(waitMs);
+          if (this.rateLimiter) {
+            await this.rateLimiter.acquire(controller.signal);
+          } else {
+            const waitMs = this.calculateRateLimitWaitTime();
+            if (waitMs > 0) await delay(waitMs);
           }
 
           if (this.useAxiosForProxy && this.axiosInstance) {
@@ -388,12 +397,14 @@ export class PixivApiCore {
     if (response.status === 429) {
       const body = await this.tryReadText(response);
       const retryAfter = response.headers.get('Retry-After');
-      const explicitWaitMs = retryAfter ? Math.max(parseInt(retryAfter, 10) * 1000, 60_000) : undefined;
+      const waitMs = this.rateLimiter
+        ? this.rateLimiter.reportRateLimited(retryAfter)
+        : this.parseRetryAfterHeader(retryAfter) ?? this.exponentialBackoffMs(attempt);
       throw new NetworkError(
-        `Pixiv API error: 429 Rate Limit${body ? ` - ${body}` : ''}`,
+        `Pixiv API error: 429 Rate Limit${body ? ` - ${body.slice(0, 120)}` : ''}`,
         url,
         undefined,
-        { isRateLimit: true, waitTime: explicitWaitMs ?? this.exponentialBackoffMs(attempt) }
+        { isRateLimit: true, waitTime: waitMs }
       );
     }
 
@@ -405,11 +416,21 @@ export class PixivApiCore {
       );
     }
 
+    this.rateLimiter?.reportSuccess();
+
     if (responseType === 'text') {
       return (await response.text()) as unknown as T;
     }
 
     return (await response.json()) as T;
+  }
+
+  private parseRetryAfterHeader(value: string | null): number | undefined {
+    if (!value) return undefined;
+    const seconds = Number(value);
+    if (Number.isFinite(seconds)) return seconds * 1000;
+    const date = Date.parse(value);
+    return Number.isFinite(date) ? Math.max(0, date - Date.now()) : undefined;
   }
 
   private resolveUrl(pathOrUrl: string): string {

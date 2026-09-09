@@ -61,6 +61,13 @@ export interface DeliveryContext {
   occurrenceAt?: string;
   /** Why the run started: cron | http | manual | catchup. */
   triggerSource?: string;
+  /**
+   * Occurrence-scoped intent key (e.g. pixivflow:<target>:<type>:<id>:<slot>:<targetId>).
+   * Sent downstream as idempotency_key so an ACK-loss retry carrying the SAME
+   * key converges to one remote record (idempotent_replay), distinct from a
+   * historical duplicate of the same work from a different occurrence.
+   */
+  idempotencyKey?: string;
   /** Schedule slot provenance for review-source labelling (external/scheduled runs). */
   slotId?: string;
   slotName?: string;
@@ -73,9 +80,13 @@ export interface DeliveryRequest {
   context: DeliveryContext;
 }
 
+import type { DeliveryAck } from './DeliveryAck';
+
 export interface DeliveryResult {
   status?: number;
   body?: unknown;
+  /** Normalized business acknowledgement (present on delivery attempts). */
+  ack?: DeliveryAck;
 }
 
 export interface DeliveryNotificationRequest {
@@ -85,5 +96,6 @@ export interface DeliveryNotificationRequest {
 
 export interface DeliveryProvider {
   deliver(request: DeliveryRequest): Promise<DeliveryResult>;
+  /** One notification attempt; the durable outbox owns retries. */
   notify?(request: DeliveryNotificationRequest): Promise<DeliveryResult>;
 }

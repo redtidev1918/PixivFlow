@@ -140,6 +140,39 @@ describe('trigger endpoint auth + dispatch (live ephemeral express)', () => {
       close();
     }
   });
+
+  it('POST /internal/outbox/drain requires auth and delegates to the handler', async () => {
+    const drain = jest.fn(async () => ({ processed: 2, done: 2, retried: 0, dead: 0 }));
+    const { base, close } = await boot('secret-token', handlers({ drainOutbox: drain }));
+    try {
+      const unauth = await fetch(`${base}/internal/outbox/drain`, { method: 'POST' });
+      expect(unauth.status).toBe(401);
+      expect(drain).not.toHaveBeenCalled();
+
+      const res = await fetch(`${base}/internal/outbox/drain`, {
+        method: 'POST',
+        headers: { Authorization: 'Bearer secret-token' },
+      });
+      expect(res.status).toBe(200);
+      expect(await res.json()).toMatchObject({ status: 'ok', result: { processed: 2, done: 2 } });
+      expect(drain).toHaveBeenCalledTimes(1);
+    } finally {
+      close();
+    }
+  });
+
+  it('POST /internal/outbox/drain is 503 when the runtime provides no pump', async () => {
+    const { base, close } = await boot('secret-token', handlers({ drainOutbox: undefined }));
+    try {
+      const res = await fetch(`${base}/internal/outbox/drain`, {
+        method: 'POST',
+        headers: { Authorization: 'Bearer secret-token' },
+      });
+      expect(res.status).toBe(503);
+    } finally {
+      close();
+    }
+  });
 });
 
 // Boot the real ScheduleTriggerServer on an ephemeral port.

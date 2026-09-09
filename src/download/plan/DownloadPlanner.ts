@@ -30,8 +30,16 @@ export interface PlannedDownload<T extends DownloadItem> {
 /**
  * Centralizes planning logic (filtering, deduplication, already-downloaded detection, random selection).
  */
+export interface DeliveryDedupeSource {
+  /** Returns the subset of ids already CONFIRMED delivered to this target. */
+  deliveredIds?(deliveryTarget: string, workType: 'illustration' | 'novel', ids: string[]): Set<string>;
+}
+
 export class DownloadPlanner {
-  constructor(private readonly database: IDatabase) {}
+  constructor(
+    private readonly database: IDatabase,
+    private readonly deliveryDedupe?: DeliveryDedupeSource
+  ) {}
 
   planDownloads<T extends DownloadItem>(
     items: T[],
@@ -44,8 +52,38 @@ export class DownloadPlanner {
     const itemIds = deduplicatedItems.map((item) => String(item.id));
     const downloadedIds =
       itemIds.length > 0 ? this.database.getDownloadedIds(itemIds, itemType) : new Set<string>();
-    const available = deduplicatedItems.filter((item) => !downloadedIds.has(String(item.id)));
+    let available = deduplicatedItems.filter((item) => !downloadedIds.has(String(item.id)));
     const alreadyDownloadedCount = deduplicatedItems.length - available.length;
+
+    // DELIVERY dedupe (pre-lock, distinct from download dedupe): skip works
+    // already CONFIRMED delivered to THIS target so ranking falls through to
+    // the next valid candidate instead of selecting a historical duplicate.
+    // Best-effort only: downstream reconciliation remains the final safety net.
+    const deliveryTarget = target.delivery?.target?.trim();
+    let deliveryDuplicateCount = 0;
+    if (
+      deliveryTarget &&
+      this.deliveryDedupe?.deliveredIds &&
+      typeof (this.database as { deliveries?: unknown }).deliveries === 'object'
+    ) {
+      try {
+        const delivered = this.deliveryDedupe.deliveredIds(
+          deliveryTarget,
+          itemType,
+          available.map((item) => String(item.id))
+        );
+        const before = available.length;
+        available = available.filter((item) => !delivered.has(String(item.id)));
+        deliveryDuplicateCount = before - available.length;
+        if (deliveryDuplicateCount > 0) {
+          logger.info(`Delivery dedupe skipped ${deliveryDuplicateCount} already-delivered ${itemType}(s) for ${deliveryTarget}`);
+        }
+      } catch (error) {
+        logger.warn('Delivery dedupe preflight failed; continuing (downstream net remains)', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
 
     const limit = target.limit && target.limit > 0 ? target.limit : 10;
 

@@ -60,6 +60,18 @@ export interface BatchExecutionResult {
   outbox?: BatchOutboxSummary;
   /** Process-level failure (config, auth, crash): not a per-target outcome. */
   error?: string;
+  /**
+   * The category that best explains a failed run, and the server's own cooldown
+   * hint when it gave one.
+   *
+   * The control plane needs these to choose a retry delay: a rate-limited account
+   * should wait for the server, while a broken provider should not be retried on the
+   * same schedule. Exit codes alone cannot express that difference.
+   */
+  errorClass?: string;
+  retryAfterMs?: number | null;
+  /** How many Pixiv 429s this run observed; 0 or absent means none. */
+  rateLimitHits?: number;
 }
 
 export const EXIT_SUCCESS = 0;

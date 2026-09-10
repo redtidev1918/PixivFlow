@@ -1,4 +1,6 @@
 import { logger } from '../logger';
+import { rateLimitWaitMs } from './errors';
+import { recordRateLimit } from '../batch/runDiagnostics';
 import { NetworkError, PixivRateLimitError } from './errors';
 
 /**
@@ -125,6 +127,12 @@ export async function processInParallel<T, R>(
         (error instanceof NetworkError && error.isRateLimit === true) ||
         error instanceof PixivRateLimitError;
       
+      if (isRateLimit) {
+        // Record it even when dynamic concurrency is off: the control plane needs
+        // to know this run was throttled in order to wait for the server.
+        recordRateLimit(rateLimitWaitMs(error));
+      }
+
       if (isRateLimit && dynamicConcurrency) {
         rateLimitCount++;
         const previousConcurrency = currentConcurrency;

@@ -31,6 +31,11 @@ import {
   runWithTimeout,
 } from './scheduler-runtime';
 import {
+  recordRunError,
+  resetRunDiagnostics,
+  runDiagnostics,
+} from '../batch/runDiagnostics';
+import {
   EXIT_ERROR,
   outcomeToTargetResult,
   summarizeExecution,
@@ -97,6 +102,8 @@ export class ExecuteSlotCommand extends BaseCommand {
 
     const startedAt = new Date();
     const startedMs = Date.now();
+    // Counts must not leak between runs (the scheduler calls this in-process too).
+    resetRunDiagnostics();
     const outcomes: BatchTargetResult[] = [];
     let runtime: Awaited<ReturnType<typeof createSchedulerRuntime>> | undefined;
     let expectedTargetIds: string[] = [];
@@ -148,6 +155,9 @@ export class ExecuteSlotCommand extends BaseCommand {
           deliveryMode: mode,
           onTargetOutcome: (targetId: string, outcome: TargetOutcome) => {
             outcomes.push(outcomeToTargetResult(targetId, outcome));
+            // The typed Pixiv errors are recorded where they are raised; this catches
+            // the paths that only keep a message.
+            if (outcome.kind === 'failed' && outcome.error) recordRunError(outcome.error);
           },
           ...(excludedWorkIds ? { excludedWorkIds } : {}),
         }),
@@ -173,6 +183,8 @@ export class ExecuteSlotCommand extends BaseCommand {
 
     const summary = summarizeExecution(outcomes, expectedTargetIds);
     const finishedAt = new Date();
+    if (fatal) recordRunError(fatal);
+    const diagnostics = runDiagnostics();
     const result: BatchExecutionResult = {
       slotId,
       scheduleId,
@@ -188,6 +200,12 @@ export class ExecuteSlotCommand extends BaseCommand {
       targets: summary.targets,
       ...(outbox ? { outbox } : {}),
       ...(fatal ? { error: fatal } : {}),
+      // What went wrong, in a form the control plane can act on: a rate-limited
+      // account needs to wait for the server, a broken provider must not be retried
+      // on the same schedule, and the exit code cannot tell them apart.
+      ...(diagnostics.dominantCategory ? { errorClass: diagnostics.dominantCategory } : {}),
+      ...(diagnostics.maxRetryAfterMs !== null ? { retryAfterMs: diagnostics.maxRetryAfterMs } : {}),
+      ...(diagnostics.rateLimitHits > 0 ? { rateLimitHits: diagnostics.rateLimitHits } : {}),
     };
 
     const serialized = JSON.stringify(result, null, 2);

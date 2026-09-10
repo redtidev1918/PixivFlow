@@ -26,8 +26,9 @@ function handlers(overrides: Record<string, unknown> = {}) {
     run: jest.fn(async (id: string) => ({
       scheduleId: id,
       slotId: ctx.slotId,
-      status: 'success',
-      cells: [{ targetId: 't', status: 'submitted', workId: '1' }],
+      disposition: 'accepted' as const,
+      status: 'pending',
+      cells: [{ targetId: 't', status: 'pending', workId: null }],
     })),
     status: jest.fn((id: string) => ({ scheduleId: id, mode: 'external' })),
     ...overrides,
@@ -92,7 +93,7 @@ describe('trigger endpoint auth + dispatch (live ephemeral express)', () => {
     }
   });
 
-  it('runs only the requested schedule with a valid token and returns its summary', async () => {
+  it('dispatches only the requested schedule and answers 202 queued, not "completed"', async () => {
     const h = handlers();
     const { base, close } = await boot('secret-token', h);
     try {
@@ -101,12 +102,98 @@ describe('trigger endpoint auth + dispatch (live ephemeral express)', () => {
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer secret-token' },
         body: JSON.stringify({ label: '今日早班' }),
       });
-      expect(res.status).toBe(200);
-      const body = (await res.json()) as { schedule?: { scheduleId: string; slotId: string } };
+      // 202 Accepted: the run was admitted, NOT finished. A clock that reads this
+      // as "done" is the bug that silently lost slots in production.
+      expect(res.status).toBe(202);
+      const body = (await res.json()) as {
+        status: string;
+        note: string;
+        schedule?: { scheduleId: string; slotId: string; disposition: string };
+      };
+      expect(body.status).toBe('accepted');
+      expect(body.note).toBe('queued');
+      expect(body.schedule?.disposition).toBe('accepted');
       expect(body.schedule?.scheduleId).toBe('schedule-a');
       expect(body.schedule?.slotId).toBe(ctx.slotId);
       expect(h.run).toHaveBeenCalledTimes(1); // exactly one schedule, not all of them
       expect(h.run).toHaveBeenCalledWith('schedule-a', expect.objectContaining({ slotId: ctx.slotId }));
+    } finally {
+      close();
+    }
+  });
+
+  it('a still-running occurrence answers 202 already_running and is never called completed', async () => {
+    const h = handlers({
+      run: jest.fn(async (id: string) => ({
+        scheduleId: id,
+        slotId: ctx.slotId,
+        disposition: 'already_running' as const,
+        status: 'running',
+      })),
+    });
+    const { base, close } = await boot('secret-token', h);
+    try {
+      const res = await fetch(`${base}/internal/schedules/schedule-a/run`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer secret-token' },
+        body: '{}',
+      });
+      expect(res.status).toBe(202);
+      const body = (await res.json()) as { status: string; note: string };
+      expect(body.note).toBe('already_running');
+      expect(body.status).toBe('running');
+      expect(body.note).not.toBe('already_completed');
+    } finally {
+      close();
+    }
+  });
+
+  it('a terminal occurrence answers 200 already_completed', async () => {
+    const h = handlers({
+      run: jest.fn(async (id: string) => ({
+        scheduleId: id,
+        slotId: ctx.slotId,
+        disposition: 'already_completed' as const,
+        status: 'success',
+        alreadyCompleted: true,
+      })),
+    });
+    const { base, close } = await boot('secret-token', h);
+    try {
+      const res = await fetch(`${base}/internal/schedules/schedule-a/run`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer secret-token' },
+        body: '{}',
+      });
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { status: string; note: string };
+      expect(body.note).toBe('already_completed');
+      expect(body.status).toBe('completed');
+    } finally {
+      close();
+    }
+  });
+
+  it('a refusal answers 503 rejected so the clock keeps its retry eligibility', async () => {
+    const h = handlers({
+      run: jest.fn(async (id: string) => ({
+        scheduleId: id,
+        slotId: ctx.slotId,
+        disposition: 'rejected' as const,
+        status: 'pending',
+      })),
+    });
+    const { base, close } = await boot('secret-token', h);
+    try {
+      const res = await fetch(`${base}/internal/schedules/schedule-a/run`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer secret-token' },
+        body: '{}',
+      });
+      expect(res.status).toBe(503);
+      const body = (await res.json()) as { status: string; note: string };
+      expect(body.status).toBe('rejected');
+      expect(body.note).toBe('rejected');
     } finally {
       close();
     }

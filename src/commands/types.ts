@@ -39,5 +39,11 @@ export interface CommandResult {
   message?: string;
   data?: unknown;
   error?: Error;
+  /**
+   * Explicit process exit code. Batch/CI commands need meaningful codes (a
+   * partial run and a failed run are different outcomes for a supervisor), so a
+   * command may override the default 0/1.
+   */
+  exitCode?: number;
 }
 

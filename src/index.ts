@@ -73,7 +73,9 @@ async function executeCommand(registry: CommandRegistry, commandName: string, co
     const result = await command.execute(context, args);
     if (!result.success) {
       logger.error('Command execution failed', { command: commandName, error: result.error });
-      process.exit(1);
+      // A batch command distinguishes "nothing succeeded" from "the process could
+      // not run at all"; honour the explicit code when it provides one.
+      process.exit(result.exitCode ?? 1);
     }
 
     // Decide exit behavior based on command metadata (long running)
@@ -81,7 +83,7 @@ async function executeCommand(registry: CommandRegistry, commandName: string, co
       ? (command as any).getMetadata().longRunning === true
       : false;
     if (!isLongRunning) {
-      process.exit(0);
+      process.exit(result.exitCode ?? 0);
     }
   } catch (error) {
     logger.error('Unexpected error during command execution', {

@@ -1,6 +1,39 @@
 import { randomUUID } from 'node:crypto';
 import { BaseRepository } from './BaseRepository';
 
+export interface DeliveryEvent {
+  id: number;
+  ts: number;
+  deliveryId: string | null;
+  outboxId: string | null;
+  executionId: string | null;
+  slotId: string | null;
+  pixivId: string | null;
+  deliveryTarget: string | null;
+  event: string;
+  errorClass: string | null;
+  retryable: number | null;
+  countsAsAttempt: number;
+  actor: string | null;
+  detail: string | null;
+}
+
+export interface RecordEventInput {
+  deliveryId?: string | null;
+  outboxId?: string | null;
+  executionId?: string | null;
+  slotId?: string | null;
+  pixivId?: string | null;
+  deliveryTarget?: string | null;
+  event: string;
+  errorClass?: string | null;
+  retryable?: boolean | null;
+  countsAsAttempt?: 0 | 1;
+  actor?: string | null;
+  /** Short pre-sanitized JSON-able detail. Never put secrets here. */
+  detail?: Record<string, unknown> | null;
+}
+
 export type OutboxKind = 'delivery' | 'notification';
 export type OutboxStatus = 'pending' | 'processing' | 'retry_wait' | 'done' | 'dead' | 'cancelled';
 
@@ -248,6 +281,215 @@ export class OutboxRepository extends BaseRepository {
       .prepare(`SELECT * FROM outbox WHERE status='processing' AND lease_until IS NOT NULL AND lease_until <= ?`)
       .all(now) as any[];
     return rows.map((r) => this.toRow(r));
+  }
+
+  // --- delivery_events (durable audit log) ---
+
+  /**
+   * Append one audit event. Append-only; the event stream is the source for
+   * `runs show` and incident reconstruction.
+   *
+   * ponytail: unbounded append — no DB-table pruner exists yet (MaintainCommand
+   * prunes log files/cache, not tables). When a retention knob is added, hook a
+   * `DELETE FROM delivery_events WHERE ts < ?` there (same age constant).
+   */
+  recordEvent(input: RecordEventInput, now: number = Date.now()): void {
+    this.db
+      .prepare(
+        `INSERT INTO delivery_events
+           (ts, delivery_id, outbox_id, execution_id, slot_id, pixiv_id, delivery_target,
+            event, error_class, retryable, counts_as_attempt, actor, detail)
+         VALUES
+           (@ts, @deliveryId, @outboxId, @executionId, @slotId, @pixivId, @deliveryTarget,
+            @event, @errorClass, @retryable, @countsAsAttempt, @actor, @detail)`
+      )
+      .run({
+        ts: now,
+        deliveryId: input.deliveryId ?? null,
+        outboxId: input.outboxId ?? null,
+        executionId: input.executionId ?? null,
+        slotId: input.slotId ?? null,
+        pixivId: input.pixivId ?? null,
+        deliveryTarget: input.deliveryTarget ?? null,
+        event: input.event,
+        errorClass: input.errorClass ?? null,
+        retryable: input.retryable === undefined || input.retryable === null ? null : input.retryable ? 1 : 0,
+        countsAsAttempt: input.countsAsAttempt ?? 0,
+        actor: input.actor ?? null,
+        detail: input.detail ? JSON.stringify(input.detail) : null,
+      });
+  }
+
+  listEvents(filter: { executionId?: string; outboxId?: string; limit?: number } = {}): DeliveryEvent[] {
+    const clauses: string[] = [];
+    const params: unknown[] = [];
+    if (filter.executionId) { clauses.push('execution_id = ?'); params.push(filter.executionId); }
+    if (filter.outboxId) { clauses.push('outbox_id = ?'); params.push(filter.outboxId); }
+    const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+    const limit = Math.max(1, Math.min(filter.limit ?? 100, 500));
+    const rows = this.db
+      .prepare(`SELECT * FROM delivery_events ${where} ORDER BY ts DESC, id DESC LIMIT ?`)
+      .all(...params, limit) as any[];
+    return rows.map((r) => this.toEvent(r));
+  }
+
+  /** Most recent recorded event for an outbox row (used to rate-limit defers). */
+  lastEvent(outboxId: string, event?: string): DeliveryEvent | null {
+    const row = event
+      ? this.db
+          .prepare(`SELECT * FROM delivery_events WHERE outbox_id = ? AND event = ? ORDER BY ts DESC, id DESC LIMIT 1`)
+          .get(outboxId, event)
+      : this.db
+          .prepare(`SELECT * FROM delivery_events WHERE outbox_id = ? ORDER BY ts DESC, id DESC LIMIT 1`)
+          .get(outboxId);
+    return row ? this.toEvent(row) : null;
+  }
+
+  /**
+   * Compact read model for one scheduler occurrence. Assembled purely from
+   * existing tables + delivery_events; unavailable facts stay null rather than
+   * being fabricated.
+   */
+  executionSummary(executionId: string): Record<string, unknown> {
+    const slot = this.db
+      .prepare(`SELECT * FROM schedule_slots WHERE id = ?`)
+      .get(executionId) as
+      | { schedule_id: string; status: string; started_at: string | null; completed_at: string | null }
+      | undefined;
+    const cells = this.db
+      .prepare(`SELECT target_id, work_id, work_type, status, last_error FROM schedule_slot_items WHERE slot_id = ?`)
+      .all(executionId) as Array<{
+      target_id: string; work_id: string | null; work_type: string | null;
+      status: string; last_error: string | null;
+    }>;
+
+    const selected = cells.filter((c) => c.work_id).length;
+    const none = cells
+      .filter((c) => c.status === 'no_candidate')
+      .map((c) => ({ target: c.target_id, reason: c.last_error ?? 'no_candidate' }));
+    const failedTargets = cells
+      .filter((c) => c.status === 'failed')
+      .map((c) => ({ target: c.target_id, reason: c.last_error ?? 'failed' }));
+
+    const workIds = [...new Set(cells.map((c) => c.work_id).filter((v): v is string => Boolean(v)))];
+    const downloads = workIds.map((pixivId) => {
+      const rows = this.db
+        .prepare(`SELECT type, COUNT(*) AS files FROM downloads WHERE pixiv_id = ? GROUP BY type`)
+        .all(pixivId) as Array<{ type: string; files: number }>;
+      return {
+        pixivId,
+        workType: cells.find((c) => c.work_id === pixivId)?.work_type ?? rows[0]?.type ?? null,
+        files: rows.reduce((n, r) => n + r.files, 0),
+        bytes: null, // not stored in the downloads schema; do not invent it
+      };
+    });
+
+    const deliveries = this.db
+      .prepare(
+        `SELECT delivery_target, pixiv_id, status, attempts, remote_status, remote_id
+         FROM deliveries WHERE slot_id = ? ORDER BY created_at ASC`
+      )
+      .all(executionId) as Array<{
+      delivery_target: string; pixiv_id: string; status: string; attempts: number;
+      remote_status: string | null; remote_id: string | null;
+    }>;
+
+    // media fallback facts are not a table today; derive them from recorded
+    // media.fallback events only (originals/previews counts stay null).
+    const media = deliveries.map((d) => {
+      const fallbacks = this.db
+        .prepare(
+          `SELECT detail FROM delivery_events
+           WHERE event = 'media.fallback' AND pixiv_id = ? AND delivery_target = ?
+           ORDER BY ts DESC`
+        )
+        .all(d.pixiv_id, d.delivery_target) as Array<{ detail: string | null }>;
+      const reasons = fallbacks
+        .map((f) => {
+          try { return f.detail ? (JSON.parse(f.detail) as { reason?: string }).reason : undefined; }
+          catch { return undefined; }
+        })
+        .filter((r): r is string => Boolean(r));
+      return { pixivId: d.pixiv_id, originals: null, previews: null, documentFallback: reasons.length > 0, reasons };
+    });
+
+    const tail = this.db
+      .prepare(
+        `SELECT event, error_class, ts FROM delivery_events
+         WHERE execution_id = ? AND event != 'execution.summary'
+         ORDER BY ts DESC, id DESC LIMIT 8`
+      )
+      .all(executionId) as Array<{ event: string; error_class: string | null; ts: number }>;
+
+    const status = (() => {
+      switch (slot?.status) {
+        case 'success': return 'completed';
+        case 'partial': return 'partial';
+        case 'failed': return 'failed';
+        default:
+          if (failedTargets.length > 0) return 'failed';
+          if (none.length > 0) return 'partial';
+          return slot?.status ?? null;
+      }
+    })();
+
+    const warnings: string[] = [];
+    for (const n of none) warnings.push(`no_candidate: ${n.target} (${n.reason})`);
+    for (const f of failedTargets) warnings.push(`failed: ${f.target} (${f.reason})`);
+
+    let durationMs: number | null = null;
+    if (slot?.started_at && slot.completed_at) {
+      durationMs = Math.max(0, new Date(slot.completed_at).getTime() - new Date(slot.started_at).getTime());
+    }
+
+    return {
+      executionId,
+      scheduleId: slot?.schedule_id ?? null,
+      slotId: executionId,
+      status,
+      candidates: { selected, none },
+      downloads,
+      media,
+      deliveries: deliveries.map((d) => ({
+        target: d.delivery_target,
+        pixivId: d.pixiv_id,
+        status: d.status,
+        attempts: d.attempts,
+        remoteStatus: d.remote_status,
+        reviewId: d.remote_id,
+      })),
+      outboxEventsTail: tail.map((e) => ({ event: e.event, errorClass: e.error_class, ts: e.ts })),
+      warnings,
+      durationMs,
+    };
+  }
+
+  /** True when an execution.summary event for this occurrence was already stored. */
+  hasExecutionSummary(executionId: string): boolean {
+    return Boolean(
+      this.db
+        .prepare(`SELECT 1 FROM delivery_events WHERE execution_id = ? AND event = 'execution.summary' LIMIT 1`)
+        .get(executionId)
+    );
+  }
+
+  private toEvent(row: any): DeliveryEvent {
+    return {
+      id: row.id,
+      ts: row.ts,
+      deliveryId: row.delivery_id,
+      outboxId: row.outbox_id,
+      executionId: row.execution_id,
+      slotId: row.slot_id,
+      pixivId: row.pixiv_id,
+      deliveryTarget: row.delivery_target,
+      event: row.event,
+      errorClass: row.error_class,
+      retryable: row.retryable,
+      countsAsAttempt: row.counts_as_attempt,
+      actor: row.actor,
+      detail: row.detail,
+    };
   }
 
   private toRow(row: any): OutboxRow {

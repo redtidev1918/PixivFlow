@@ -161,6 +161,25 @@ export class DatabaseMigration {
             updated_at INTEGER NOT NULL,
             completed_at INTEGER
           )`,
+        // Durable delivery/audit event log (observability). Append-only; one
+        // row per outbox state transition / readiness deferral / operator
+        // action. Never stores secrets (detail is short sanitized JSON).
+        `CREATE TABLE IF NOT EXISTS delivery_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ts INTEGER NOT NULL,
+            delivery_id TEXT,
+            outbox_id TEXT,
+            execution_id TEXT,
+            slot_id TEXT,
+            pixiv_id TEXT,
+            delivery_target TEXT,
+            event TEXT NOT NULL,
+            error_class TEXT,
+            retryable INTEGER,
+            counts_as_attempt INTEGER NOT NULL DEFAULT 0,
+            actor TEXT,
+            detail TEXT
+          )`,
         // Lightweight Pixiv metadata cache (novel language, rating) to cut
         // repeated detail/full-text requests and 429 amplification.
         `CREATE TABLE IF NOT EXISTS pixiv_metadata (
@@ -225,6 +244,9 @@ export class DatabaseMigration {
         `CREATE INDEX IF NOT EXISTS idx_outbox_due ON outbox(status, next_attempt_at)`,
         `CREATE INDEX IF NOT EXISTS idx_outbox_delivery ON outbox(delivery_id)`,
         `CREATE INDEX IF NOT EXISTS idx_slots_lease ON schedule_slots(lease_until)`,
+        `CREATE INDEX IF NOT EXISTS idx_delivery_events_execution ON delivery_events(execution_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_delivery_events_outbox ON delivery_events(outbox_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_delivery_events_ts ON delivery_events(ts)`,
       ];
 
       const postMigration = this.db.transaction((stmts: string[]) => {

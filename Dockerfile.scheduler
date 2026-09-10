@@ -17,11 +17,16 @@
 FROM node:24-bookworm-slim AS builder
 
 WORKDIR /src
+# Release commit SHA baked by scripts/write-version.js; the shared releasegraph
+# workflow passes GIT_SHA as a build-arg (package.json supplies the version).
+ARG GIT_SHA=dev
+ENV GITHUB_SHA=${GIT_SHA}
 COPY package*.json ./
 RUN npm ci
 COPY tsconfig.json ./
 COPY src ./src
 COPY scripts/create-webui-package-json.js ./scripts/create-webui-package-json.js
+COPY scripts/write-version.js ./scripts/write-version.js
 RUN npm run build
 
 FROM node:24-bookworm-slim

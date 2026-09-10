@@ -9,7 +9,6 @@ import { getTodayDate, getYesterdayDate } from '../../utils/pixiv-date-utils';
 import { NetworkError } from '../../utils/errors';
 import { calculatePopularityScore } from '../../utils/pixiv-utils';
 import { PixivIllust } from '../../pixiv/PixivClient';
-import { DeliveryOutbox } from '../../delivery/DeliveryOutbox';
 import { DeliveryService } from '../../delivery/DeliveryService';
 import { TargetOutcome } from '../../scheduler/TargetOutcome';
 import type { TopicPipelineFactory } from '../../topic/createTopicPipeline';
@@ -25,7 +24,6 @@ export class IllustrationTargetHandler {
     private readonly rankingService: RankingService,
     private readonly illustrationDownloader: IllustrationDownloader,
     private readonly pipeline: DownloadPipeline,
-    private readonly deliveryOutbox?: DeliveryOutbox,
     private readonly topicPipelineFactory?: TopicPipelineFactory,
     private readonly deliveryService?: DeliveryService
   ) {}

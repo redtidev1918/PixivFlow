@@ -44,6 +44,15 @@ export class PixivAuth {
     return refreshed.accessToken;
   }
 
+  /**
+   * Refresh via the OAuth endpoint and persist the new access/refresh tokens.
+   * Public for the kit token-provider adapter ({@link PixivAuthTokenProvider}).
+   */
+  async refreshAccessTokenForClient(): Promise<string> {
+    const stored = await this.refreshAccessToken();
+    return stored.accessToken;
+  }
+
   private async refreshAccessToken(): Promise<AccessTokenStore> {
     const url = 'https://oauth.secure.pixiv.net/auth/token';
 

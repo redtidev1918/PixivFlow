@@ -193,6 +193,19 @@ export class HealthCommand extends BaseCommand {
         // Ignore stat errors
       }
 
+      // Persisted Pixiv 429 gate state (from @redtidev/pixiv-client).
+      const nowMs = Date.now();
+      for (const row of db.rateLimitState.getAll()) {
+        const remaining = Math.ceil((row.state.cooldownUntil - nowMs) / 1000);
+        if (row.state.circuitState === 'open' && remaining > 0) {
+          warnings.push(`Pixiv rate-limit circuit OPEN for ${row.scope}: ~${remaining}s cooldown remaining`);
+          console.log(`  ⚠ Pixiv rate-limit circuit OPEN (${row.scope}): ~${remaining}s cooldown, penalty level ${row.state.penaltyLevel}`);
+        } else {
+          info.push(`✓ Pixiv rate-limit gate healthy (${row.scope})`);
+          console.log(`  ✓ Pixiv rate-limit gate healthy (${row.scope})`);
+        }
+      }
+
       db.close();
     } catch (error) {
       issues.push('Database connection failed or corrupted');
@@ -248,7 +261,7 @@ export class HealthCommand extends BaseCommand {
       const testUrl = 'https://www.pixiv.net';
 
       // Honor network.proxy from the config: the download pipeline routes
-      // requests through PixivApiCore with undici ProxyAgent/socks, so the
+      // requests through @redtidev/pixiv-client (undici ProxyAgent / socks), so the
       // connectivity probe must use the same path — a raw https.get here
       // always reports timeout for proxied setups.
       const proxy = context.config?.network?.proxy;

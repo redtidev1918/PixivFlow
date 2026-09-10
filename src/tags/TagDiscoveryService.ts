@@ -1,4 +1,4 @@
-import type { PixivTag } from '../pixiv/types';
+import type { PixivTag } from '@redtidev/pixiv-client';
 import type {
   TagDiscoveryCandidate,
   TagDiscoveryClient,

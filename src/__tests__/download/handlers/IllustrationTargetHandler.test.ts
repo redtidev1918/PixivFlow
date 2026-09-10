@@ -5,7 +5,7 @@ import { IDatabase } from '../../../interfaces/IDatabase';
 import { RankingService } from '../../../download/RankingService';
 import { IllustrationDownloader } from '../../../download/IllustrationDownloader';
 import { DownloadPipeline } from '../../../download/pipeline/DownloadPipeline';
-import { PixivIllust } from '../../../pixiv/PixivClient';
+import { PixivIllust } from '@redtidev/pixiv-client';
 import { NetworkError } from '../../../utils/errors';
 import { logger } from '../../../logger';
 

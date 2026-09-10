@@ -2,7 +2,7 @@ import { IPixivClient } from '../interfaces/IPixivClient';
 import { IDatabase } from '../interfaces/IDatabase';
 import { IFileService } from '../interfaces/IFileService';
 import { FileMetadata, PixivMetadata } from './FileService';
-import { PixivIllust, PixivIllustPage } from '../pixiv/PixivClient';
+import { PixivIllust, PixivIllustPage } from '@redtidev/pixiv-client';
 import { logger } from '../logger';
 import { processInParallel } from '../utils/concurrency';
 import { promises as fs } from 'node:fs';

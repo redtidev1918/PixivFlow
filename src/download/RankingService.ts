@@ -1,5 +1,5 @@
 import { IPixivClient } from '../interfaces/IPixivClient';
-import { PixivIllust, PixivNovel } from '../pixiv/PixivClient';
+import { PixivIllust, PixivNovel } from '@redtidev/pixiv-client';
 import { getThisWeekMonday, getLastWeekMonday } from '../utils/pixiv-date-utils';
 import { logger } from '../logger';
 

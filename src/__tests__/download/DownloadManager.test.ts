@@ -3,7 +3,8 @@
  */
 
 import { DownloadManager } from '../../download/DownloadManager';
-import { PixivClient, PixivIllust, PixivNovel } from '../../pixiv/PixivClient';
+import type { PixivIllust, PixivNovel } from '@redtidev/pixiv-client';
+import type { IPixivClient as PixivClient } from '../../interfaces/IPixivClient';
 import { Database } from '../../storage/Database';
 import { FileService } from '../../download/FileService';
 import { StandaloneConfig, TargetConfig } from '../../config';

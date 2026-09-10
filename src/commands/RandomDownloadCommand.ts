@@ -7,8 +7,8 @@ import { CommandCategory } from './metadata';
 import { CommandContext, CommandArgs, CommandResult } from './types';
 import { getConfigPath, loadConfig } from '../config';
 import { Database } from '../storage/Database';
-import { PixivAuth } from '../pixiv/AuthClient';
-import { PixivClient } from '../pixiv/PixivClient';
+import { PixivAuth } from '../auth/PixivAuth';
+import { createPixivFlowClient } from '../pixiv-client/createPixivFlowClient';
 import { FileService } from '../download/FileService';
 import { DownloadManager } from '../download/DownloadManager';
 import { ensureValidToken } from '../utils/login-helper';
@@ -149,7 +149,7 @@ export class RandomDownloadCommand extends BaseCommand {
         }, 'Database'));
 
         const auth = new PixivAuth(config.pixiv, config.network!, database, resolvedConfigPath);
-        const pixivClient = new PixivClient(auth, config);
+        const pixivClient = createPixivFlowClient(auth, config, database);
         const fileService = new FileService(config.storage!);
         const downloadManager = new DownloadManager(tempConfig, pixivClient, database, fileService);
 

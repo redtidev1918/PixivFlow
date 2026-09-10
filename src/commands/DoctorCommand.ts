@@ -86,6 +86,28 @@ export class DoctorCommand extends BaseCommand {
         findings.push({ level: 'info', code: 'cells-delivery-pending', message: unfinishedCells + ' cell(s) waiting on durable delivery confirmation (outbox converges them)' });
       }
 
+      // Persisted 429 gate state (no client/network call; SQLite only).
+      const nowMs = Date.now();
+      for (const row of db.rateLimitState.getAll()) {
+        const s = row.state;
+        if (s.circuitState === 'open' && s.cooldownUntil > nowMs) {
+          const remainingSec = Math.ceil((s.cooldownUntil - nowMs) / 1000);
+          findings.push({
+            level: 'warn',
+            code: 'rate-limit-open',
+            message: row.scope + ' circuit OPEN: pixiv 429 cooldown active for ~' + remainingSec + 's (penalty level ' + s.penaltyLevel + ')',
+          });
+        } else if (s.cooldownUntil > nowMs) {
+          findings.push({
+            level: 'info',
+            code: 'rate-limit-cooldown',
+            message: row.scope + ' cooldown ~' + Math.ceil((s.cooldownUntil - nowMs) / 1000) + 's remaining (penalty level ' + s.penaltyLevel + ')',
+          });
+        } else if (s.penaltyLevel > 0) {
+          findings.push({ level: 'info', code: 'rate-limit-decaying', message: row.scope + ' healthy, penalty level ' + s.penaltyLevel + ' decaying (' + s.consecutiveSuccesses + ' successes since last 429)' });
+        }
+      }
+
       if (repair) {
         const worker = new OutboxWorker(db, new DeliveryDispatcher(context.config.delivery));
         const res = await worker.drainOnce(20);

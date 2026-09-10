@@ -1,5 +1,5 @@
+import type { PixivIllust, PixivNovel, PixivNovelTextResponse, PixivUser } from '@redtidev/pixiv-client';
 import { TargetConfig } from '../config';
-import { PixivIllust, PixivNovel, PixivNovelTextResponse, PixivUser } from '../pixiv/PixivClient';
 
 /**
  * Interface for Pixiv API client

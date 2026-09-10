@@ -12,6 +12,7 @@
   - [Termux 安装](/TERMUX_INSTALL.md)
 - 开发者
   - [架构说明](/ARCHITECTURE.md)
+  - [Pixiv Client Kit](/PIXIV_CLIENT_KIT.md)
   - [WebUI API](/API.md)
   - [迁移指南](/CLI_MIGRATION_SUMMARY.md)
   - [发版流程](/RELEASING.md)

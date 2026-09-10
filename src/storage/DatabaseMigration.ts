@@ -173,6 +173,14 @@ export class DatabaseMigration {
             checked_at INTEGER NOT NULL,
             PRIMARY KEY (pixiv_id, work_type)
           )`,
+        // Persistent state for the @redtidev/pixiv-client shared 429 gate so
+        // restarts/deploys (and Fly suspend/resume) do not forget an active
+        // Pixiv cooldown. The kit defines the shape; this is the host adapter.
+        `CREATE TABLE IF NOT EXISTS rate_limit_state (
+            scope TEXT PRIMARY KEY,
+            state TEXT NOT NULL,
+            updated_at INTEGER NOT NULL
+          )`,
       ];
 
       // Phase 1: create tables (idempotent). Must run before any PRAGMA-based

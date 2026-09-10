@@ -9,8 +9,9 @@
 
 import { getConfigPath, loadConfig, ScheduleConfig, StandaloneConfig, TargetConfig } from '../config';
 import { Database, isolateCorruptDatabase } from '../storage/Database';
-import { PixivAuth } from '../pixiv/AuthClient';
-import { PixivClient } from '../pixiv/PixivClient';
+import { PixivAuth } from '../auth/PixivAuth';
+import { createPixivFlowClient } from '../pixiv-client/createPixivFlowClient';
+import type { IPixivClient } from '../interfaces/IPixivClient';
 import { FileService } from '../download/FileService';
 import { DownloadManager } from '../download/DownloadManager';
 import { DeliveryDispatcher } from '../delivery/DeliveryDispatcher';
@@ -35,7 +36,7 @@ export type RunJobOptions = ScheduleRunOptions;
 export interface SchedulerRuntime {
   config: StandaloneConfig;
   database: Database;
-  pixivClient: PixivClient;
+  pixivClient: IPixivClient;
   fileService: FileService;
   tokenMaintenance: ReturnType<typeof createTokenMaintenanceService>;
   /** Run one schedule's enabled targets once (the same job the cron fires). */
@@ -200,7 +201,7 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
   }
 
   const auth = new PixivAuth(config.pixiv, config.network!, database, configPath);
-  const pixivClient = new PixivClient(auth, config);
+  const pixivClient = createPixivFlowClient(auth, config, database);
   const fileService = new FileService(config.storage!);
   await fileService.initialise();
 

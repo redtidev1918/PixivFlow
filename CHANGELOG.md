@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [2.14.0](https://github.com/redtidev1918/PixivFlow/compare/v2.13.0...v2.14.0) (2026-09-10)
 
 ### Features
 

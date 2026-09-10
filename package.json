@@ -22,6 +22,7 @@
   "scripts": {
     "prepublishOnly": "npm run build",
     "build:kit": "npm run build -w @redtidev/pixiv-client",
+    "typecheck": "npm run build:kit && tsc --noEmit",
     "build": "npm run build:kit && node scripts/write-version.js && tsc && node scripts/create-webui-package-json.js",
     "build:watch": "tsc --watch",
     "start": "npm run build && node dist/index.js",
@@ -30,8 +31,8 @@
     "refresh": "npm run build && node dist/index.js refresh",
     "download": "npm run build && node dist/index.js download",
     "scheduler": "npm run build && node dist/index.js scheduler",
-    "test": "npm run test:kit && jest --runInBand",
-    "test:app": "jest --runInBand",
+    "test": "npm run test:kit && npm run test:app",
+    "test:app": "npm run build:kit && jest --runInBand",
     "test:kit": "npm run test -w @redtidev/pixiv-client",
     "test:scheduled": "jest --runTestsByPath src/__tests__/integration/download-flow.test.ts",
     "test:concurrency": "jest --runTestsByPath src/__tests__/utils/concurrency.test.ts",

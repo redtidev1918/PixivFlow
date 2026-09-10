@@ -7,6 +7,7 @@ import { logger } from '../logger';
 import { ScheduleConfig, StandaloneConfig } from '../config';
 import {
   DEFAULT_SCHEDULE_TIMEOUT_MS,
+  JobAbandoned,
   JobAdmissionController,
   JobFailure,
   JobLease,
@@ -27,6 +28,17 @@ export interface MultiScheduleManagerOptions {
     config: StandaloneConfig,
     schedule: ScheduleConfig,
     failure: JobFailure
+  ) => Promise<void> | void;
+  /**
+   * A run outlived its timeout AND the drain window, so it will never be
+   * awaited again. The host must finish the bookkeeping the run cannot: stop
+   * renewing its lease and take its Slot terminal, otherwise the recovery sweep
+   * re-dispatches the same occurrence next to a still-running job.
+   */
+  onAbandoned?: (
+    config: StandaloneConfig,
+    schedule: ScheduleConfig,
+    abandoned: JobAbandoned
   ) => Promise<void> | void;
   onReload?: (result: ConfigReloadResult) => void;
 }
@@ -137,6 +149,11 @@ export class MultiScheduleManager {
 
   private startRecoveryLoop(): void {
     if (!this.options.database) return;
+    if (this.isExternalMode()) {
+      logger.info('External scheduler mode: internal cron disabled, awaiting authenticated schedule triggers', {
+        recoveryIntervalMs: RECOVERY_INTERVAL_MS,
+      });
+    }
     this.recoveryTimer = setInterval(() => {
       try {
         this.recoverInterruptedSlots();
@@ -324,7 +341,8 @@ export class MultiScheduleManager {
         this.options.telemetry,
         plan.id,
         this.admission,
-        (failure) => this.options.onFailure?.(config, plan, failure)
+        (failure) => this.options.onFailure?.(config, plan, failure),
+        (abandoned) => this.options.onAbandoned?.(config, plan, abandoned)
       );
       scheduler[registerCron ? 'start' : 'init'](async (options?: ScheduleRunOptions) => {
         // The closure keeps the exact validated snapshot for an in-flight run.

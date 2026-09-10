@@ -26,18 +26,28 @@ function resolveDbPath(source: DbPathSource): string {
   return absolute;
 }
 
-export function createTopicPipeline(client: IPixivClient, databasePath: DbPathSource, requestDelayMs = 500): TopicPipeline {
+export function createTopicPipeline(
+  client: IPixivClient,
+  databasePath: DbPathSource,
+  requestDelayMs = 500,
+  signal?: AbortSignal
+): TopicPipeline {
   const resolved = resolveDbPath(databasePath);
   const cache = new TopicCache(resolvePath(dirname(resolved), 'topic-cache'));
-  const resolver = new TopicResolver(client as never, cache, requestDelayMs);
-  return new TopicPipeline(client as never, resolver, requestDelayMs);
+  const resolver = new TopicResolver(client as never, cache, requestDelayMs, signal);
+  return new TopicPipeline(client as never, resolver, requestDelayMs, signal);
 }
 
 /** Lazily builds one shared pipeline per download run (cache + resolver). */
-export function createTopicPipelineFactory(client: IPixivClient, databasePath: DbPathSource, requestDelayMs = 500): TopicPipelineFactory {
+export function createTopicPipelineFactory(
+  client: IPixivClient,
+  databasePath: DbPathSource,
+  requestDelayMs = 500,
+  signal?: AbortSignal
+): TopicPipelineFactory {
   let instance: TopicPipeline | undefined;
   return () => {
-    if (!instance) instance = createTopicPipeline(client, databasePath, requestDelayMs);
+    if (!instance) instance = createTopicPipeline(client, databasePath, requestDelayMs, signal);
     return instance;
   };
 }

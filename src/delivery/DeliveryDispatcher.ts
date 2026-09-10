@@ -14,6 +14,14 @@ export class DeliveryDispatcher {
     return Boolean(this.config?.targets?.[name]);
   }
 
+  async isReady(name: string): Promise<boolean> {
+    const target = this.config?.targets?.[name];
+    // Readiness is an optional preflight. Missing targets still flow through
+    // deliver/notify so the durable outbox records the normal retry error.
+    if (!target) return true;
+    return new HttpMultipartDelivery(target, this.proxyUrl).isReady();
+  }
+
   async deliver(name: string, request: DeliveryRequest): Promise<DeliveryResult> {
     const target = this.config?.targets?.[name];
     if (!target) {

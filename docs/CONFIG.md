@@ -207,10 +207,12 @@ delivery outbox 持久化、携带稳定幂等标识、指数退避重试。`not
       "my-api": {
         "type": "httpMultipart",
         "url": "https://example.test/submissions",
+        "readinessUrl": "https://example.test/ready",
         "notificationUrl": "https://example.test/notifications",
         "method": "POST",
         "headers": { "Authorization": "Bearer ${MY_API_TOKEN}" },
         "fileField": "files",
+        "previewFileField": "previews",
         "fields": { "title": "{{title}}", "source_id": "{{pixivId}}" },
         "arrayFormat": "comma",
         "success": { "statuses": [201], "jsonPath": "ok", "equals": true },
@@ -236,6 +238,11 @@ delivery outbox 持久化、携带稳定幂等标识、指数退避重试。`not
 标签，以逗号连接。需要同时投稿来源、计划主题和作品标签时可配置
 `"tags": ["Pixiv", "{{tag}}", "{{workTags}}"]`。headers
 和 URL 支持 `${ENV_NAME}`。`arrayFormat` 可设 `comma`、`repeat` 或 `json`。
+
+`readinessUrl` 是可选消费屏障：非 2xx 时 worker 放回 outbox row，不增加 attempt；
+不要用只表示进程存活的 `/live`。cache 模式插画会从 Pixiv 下载较小的 `large`/`medium`
+preview，并按 `previewFileField`（默认 `previews`）与 `fileField` 原图一一对应发送；原图
+仍是权威 artifact，接收端可以忽略 preview。
 
 #### Telegraph（telegra.ph）相册上传
 
@@ -283,12 +290,13 @@ telepress-server --host 0.0.0.0 --port 8000
 `success` 判定 `ok == true`。注意 telepress 相册要求图片文件，小说正文请走
 TelePost 等其他渠道。
 
-交付前会把任务写入数据库同目录的 `delivery-outbox/`。作品投递失败不会删除下载文件；
-无候选通知也先写入该 outbox，不需要依赖当前进程的内存状态。
-下次 `download` 或 scheduler 执行时先检查待投递项。`outboxRetryBaseMs` 默认
+交付前会把任务写入 SQLite `outbox` 表。作品投递失败不会删除下载文件；无候选通知也先
+写入该 outbox，不需要依赖当前进程的内存状态。独立 worker 在进程启动后持续消费；
+`outboxRetryBaseMs` 默认
 `300000`（5 分钟），`outboxRetryMaxMs` 默认 `21600000`（6 小时），失败后指数退避，
-避免远端故障时反复消耗带宽。成功后才删除作品文件、元数据 sidecar 和 outbox
-清单。`delivery.deleteAfterDelivery: false` 可用于调试时保留文件。
+避免远端故障时反复消耗带宽。成功后才删除作品文件和元数据 sidecar。
+dead row 用 `pixivflow outbox retry <id>` 或 `retry --dead` 正式重放，幂等键保持不变；
+`run-once` 不是 outbox 恢复命令。`delivery.deleteAfterDelivery: false` 可用于调试时保留文件。
 
 ## storage 存储与目录组织
 

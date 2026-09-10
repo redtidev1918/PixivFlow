@@ -25,6 +25,7 @@ export interface OutboxWorkerOptions {
 /** Delivery side-effect payload (frozen at enqueue time). */
 export interface DeliveryPayload {
   files: string[];
+  previewFiles?: string[];
   /** Sidecars + cached media removed after confirmed delivery (cache mode). */
   cleanupFiles?: string[];
   deleteAfterDelivery?: boolean;
@@ -106,13 +107,20 @@ export class OutboxWorker {
     for (let round = 0; round < maxRounds; round++) {
       const rows = this.database.outbox.claimDue(this.owner, this.leaseMs, this.batchSize);
       if (rows.length === 0) break;
+      let deferred = false;
       for (const row of rows) {
+        if (!(await this.dispatcher.isReady(row.deliveryTarget))) {
+          this.database.outbox.release(row.id);
+          deferred = true;
+          continue;
+        }
         processed++;
         const result = await this.process(row);
         if (result === 'done') done++;
         else if (result === 'dead') dead++;
         else retried++;
       }
+      if (deferred) break;
     }
     return { processed, done, retried, dead };
   }
@@ -124,6 +132,10 @@ export class OutboxWorker {
       const rows = this.database.outbox.claimDue(this.owner, this.leaseMs, this.batchSize);
       for (const row of rows) {
         if (this.stopped) {
+          this.database.outbox.release(row.id);
+          continue;
+        }
+        if (!(await this.dispatcher.isReady(row.deliveryTarget))) {
           this.database.outbox.release(row.id);
           continue;
         }
@@ -148,6 +160,7 @@ export class OutboxWorker {
         const payload = JSON.parse(row.payloadJson) as DeliveryPayload;
         const result = await this.dispatcher.deliver(row.deliveryTarget, {
           files: payload.files,
+          previewFiles: payload.previewFiles,
           fields: payload.fields as DeliveryRequest['fields'],
           context: payload.context as unknown as DeliveryRequest['context'],
         });
@@ -210,7 +223,11 @@ export class OutboxWorker {
 
   private async cleanup(payload: DeliveryPayload): Promise<void> {
     if (payload.deleteAfterDelivery === false) return;
-    const files = [...(payload.files ?? []), ...(payload.cleanupFiles ?? [])];
+    const files = [
+      ...(payload.files ?? []),
+      ...(payload.previewFiles ?? []),
+      ...(payload.cleanupFiles ?? []),
+    ];
     await Promise.all(
       [...new Set(files)].map((file) =>
         unlink(file).catch((error: NodeJS.ErrnoException) => {

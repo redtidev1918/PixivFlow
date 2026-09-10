@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased]
+
+### Features
+
+- Cache-mode illustration delivery can send aligned Pixiv previews alongside immutable originals.
+- Delivery targets can define a readiness endpoint; outbox consumption waits without consuming attempts.
+- Added `pixivflow outbox` list, inspect, dead-letter retry, and pending-intent cancel operations.
+
 ## [2.13.0](https://github.com/redtidev1918/PixivFlow/compare/v2.12.3...v2.13.0) (2026-09-09)
 
 

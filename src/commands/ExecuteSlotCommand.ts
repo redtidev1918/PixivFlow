@@ -24,7 +24,12 @@ import { CommandContext, CommandArgs, CommandResult } from './types';
 import { resolveSchedules } from '../scheduler/schedules';
 import { DEFAULT_SCHEDULE_TIMEOUT_MS } from '../scheduler/Scheduler';
 import type { TargetOutcome } from '../scheduler/TargetOutcome';
-import { createSchedulerRuntime, runWithTimeout } from './scheduler-runtime';
+import {
+  EXECUTION_MODES,
+  ExecutionMode,
+  createSchedulerRuntime,
+  runWithTimeout,
+} from './scheduler-runtime';
 import {
   EXIT_ERROR,
   outcomeToTargetResult,
@@ -34,8 +39,6 @@ import {
   type BatchTargetResult,
 } from '../batch/executionResult';
 
-const MODE_VALUES = ['live', 'shadow', 'dry-run'] as const;
-type ExecutionMode = (typeof MODE_VALUES)[number];
 
 function stringOption(args: CommandArgs, ...names: string[]): string | undefined {
   for (const name of names) {
@@ -62,8 +65,8 @@ export class ExecuteSlotCommand extends BaseCommand {
     const slotId = stringOption(args, 'slot-id', 'slotId');
     if (!slotId) errors.push('--slot-id is required (canonical occurrence identity)');
     const mode = stringOption(args, 'mode') ?? 'live';
-    if (!MODE_VALUES.includes(mode as ExecutionMode)) {
-      errors.push(`--mode must be one of ${MODE_VALUES.join(', ')}`);
+    if (!EXECUTION_MODES.includes(mode as ExecutionMode)) {
+      errors.push(`--mode must be one of ${EXECUTION_MODES.join(', ')}`);
     }
     const attempt = stringOption(args, 'attempt');
     if (attempt && (!Number.isInteger(Number(attempt)) || Number(attempt) < 1)) {
@@ -142,6 +145,7 @@ export class ExecuteSlotCommand extends BaseCommand {
           // this run must not open or resume a local scheduled Slot.
           adhoc: true,
           triggerSource: 'http',
+          deliveryMode: mode,
           onTargetOutcome: (targetId: string, outcome: TargetOutcome) => {
             outcomes.push(outcomeToTargetResult(targetId, outcome));
           },

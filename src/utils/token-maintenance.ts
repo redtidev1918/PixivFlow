@@ -12,7 +12,7 @@
  */
 
 import { logger } from '../logger';
-import { PixivAuth } from '../auth/PixivAuth';
+import { PixivAuth, isAuthReadOnly } from '../auth/PixivAuth';
 import { Database } from '../storage/Database';
 import { PixivCredentialConfig, NetworkConfig, StandaloneConfig } from '../config';
 import { refreshToken } from '../terminal-login/token-refresh';
@@ -161,6 +161,14 @@ export class TokenMaintenanceService {
     try {
       if (!this.credentials.refreshToken) {
         return false;
+      }
+
+      // Read-only auth must not touch the token endpoint at all: this probe runs
+      // on every boot and discards the rotated token it gets back, so it can
+      // invalidate a credential another process is using while gaining nothing.
+      if (isAuthReadOnly()) {
+        logger.info('Read-only auth: skipping the boot-time refresh-token probe');
+        return true;
       }
 
       // Try to refresh the token to verify it's valid

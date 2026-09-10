@@ -179,7 +179,6 @@ describe('IllustrationTargetHandler', () => {
         mockRankingService,
         mockIllustrationDownloader,
         mockPipeline,
-        undefined,
         () => ({ selectWorks } as any)
       );
       mockPipeline.run.mockResolvedValue({
@@ -218,10 +217,9 @@ describe('IllustrationTargetHandler', () => {
       mockPipeline.run
         .mockResolvedValueOnce({ downloaded: 0, skipped: 0, alreadyDownloaded: 0, filteredOut: 0 })
         .mockResolvedValueOnce({ downloaded: 1, skipped: 0, alreadyDownloaded: 0, filteredOut: 0 });
-      const outbox = { notifyNoMatch: jest.fn() } as any;
       const topicHandler = new IllustrationTargetHandler(
         mockClient, mockDatabase, mockRankingService, mockIllustrationDownloader,
-        mockPipeline, outbox, () => ({ selectWorks } as any)
+        mockPipeline, () => ({ selectWorks } as any)
       );
 
       await topicHandler.handle({
@@ -232,7 +230,6 @@ describe('IllustrationTargetHandler', () => {
       expect(selectWorks).toHaveBeenCalledTimes(2);
       expect(selectWorks.mock.calls[0][2]).toBe('2023-06-14');
       expect(selectWorks.mock.calls[1][2]).toBe('2023-06-13');
-      expect(outbox.notifyNoMatch).not.toHaveBeenCalled();
     });
 
     it('reports no_candidate after exhausting illustration lookback', async () => {
@@ -246,10 +243,9 @@ describe('IllustrationTargetHandler', () => {
       mockPipeline.run.mockResolvedValue({
         downloaded: 0, skipped: 0, alreadyDownloaded: 0, filteredOut: 0,
       });
-      const outbox = { notifyNoMatch: jest.fn().mockResolvedValue(undefined) } as any;
       const topicHandler = new IllustrationTargetHandler(
         mockClient, mockDatabase, mockRankingService, mockIllustrationDownloader,
-        mockPipeline, outbox, () => ({ selectWorks } as any)
+        mockPipeline, () => ({ selectWorks } as any)
       );
 
       await expect(topicHandler.handle({

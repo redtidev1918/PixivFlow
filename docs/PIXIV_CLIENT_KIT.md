@@ -127,6 +127,18 @@ one Pixiv HTTP stack remains.
 
 Dependency change: added `undici` (kit); removed unused `https-proxy-agent`.
 
+### The published artifact stays self-contained
+
+`pixivflow` is consumed straight from npm by the Fly/Docker deployments, so the
+kit is **bundled** into the published tarball rather than resolved from the
+registry: the root `package.json` lists it in `bundleDependencies`, and npm
+ships the workspace package at `node_modules/@redtidev/pixiv-client` inside the
+tarball (its runtime deps — axios, socks-proxy-agent, undici — are already
+direct dependencies of `pixivflow`). Publishing the kit separately is only
+needed once an external consumer wants it directly; do NOT turn the dependency
+into a plain registry range before that, or every `npm install pixivflow` fails
+with a 404.
+
 ## When to split out into its own repository
 
 Not yet. The honest gating conditions are:

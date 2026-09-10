@@ -42,7 +42,7 @@ describe('SlotCoordinator', () => {
       const slot = r1.context!;
 
       // Occurrence materialized with targets [a, b].
-      coord.begin(slot, schedule, [target('a'), target('b')]);
+      coord.prepare(slot, schedule, [target('a'), target('b')]);
       expect(db.slots.getSlotTargetIds(slot.slotId).sort()).toEqual(['a', 'b']);
 
       // Config reload adds c; a resume of the SAME occurrence must not pick up c.
@@ -55,7 +55,7 @@ describe('SlotCoordinator', () => {
     await withDb(async (db) => {
       const coord = new SlotCoordinator(db);
       const slot = coord.resolveOccurrence(schedule, config, 'http', AT).context!;
-      coord.begin(slot, schedule, [target('a'), target('b'), target('c')]);
+      coord.prepare(slot, schedule, [target('a'), target('b'), target('c')]);
 
       coord.lockWork(slot.slotId, 'a', '100', 'illustration');
       coord.markCell(slot.slotId, 'a', 'submitted');
@@ -70,12 +70,12 @@ describe('SlotCoordinator', () => {
     await withDb(async (db) => {
       const coord = new SlotCoordinator(db);
       const slot = coord.resolveOccurrence(schedule, config, 'http', AT).context!;
-      coord.begin(slot, schedule, [target('a')]);
+      coord.prepare(slot, schedule, [target('a')]);
       coord.lockWork(slot.slotId, 'a', '100', 'illustration');
 
       // Simulate process restart: rebuild coordinator, re-open same slot.
       const coord2 = new SlotCoordinator(db);
-      const again = coord2.begin(slot, schedule, [target('a')]);
+      const again = coord2.prepare(slot, schedule, [target('a')]);
       expect(again.alreadyCompleted).toBe(false); // resumed, not a new terminal slot
       const cell = db.slots.getCell(slot.slotId, 'a')!;
       expect(cell.workId).toBe('100');
@@ -87,7 +87,7 @@ describe('SlotCoordinator', () => {
     await withDb(async (db) => {
       const coord = new SlotCoordinator(db);
       const slot = coord.resolveOccurrence(schedule, config, 'http', AT).context!;
-      coord.begin(slot, schedule, [target('a'), target('b')]);
+      coord.prepare(slot, schedule, [target('a'), target('b')]);
       coord.lockWork(slot.slotId, 'a', '100', 'illustration');
       coord.markCell(slot.slotId, 'a', 'submitted');
       coord.markCell(slot.slotId, 'b', 'no_candidate', 'none');
@@ -104,7 +104,7 @@ describe('SlotCoordinator failure injection', () => {
     await withDb(async (db) => {
       const coord = new SlotCoordinator(db);
       const slot = coord.resolveOccurrence(schedule, config, 'http', AT).context!;
-      coord.begin(slot, schedule, [target('a')]);
+      coord.prepare(slot, schedule, [target('a')]);
 
       expect(coord.claimRunLease(slot.slotId, 'trigger-1', 60_000)).toBe(true);
       // A duplicate HTTP trigger arriving while trigger-1 is live must NOT
@@ -122,7 +122,7 @@ describe('SlotCoordinator failure injection', () => {
     await withDb(async (db) => {
       const coord = new SlotCoordinator(db);
       const slot = coord.resolveOccurrence(schedule, config, 'http', AT).context!;
-      coord.begin(slot, schedule, [target('a')]);
+      coord.prepare(slot, schedule, [target('a')]);
 
       coord.lockWork(slot.slotId, 'a', '100', 'illustration');
       coord.applyOutcome(slot.slotId, 'a', { kind: 'submitted', workId: '100', workType: 'illustration' });
@@ -145,7 +145,7 @@ describe('SlotCoordinator failure injection', () => {
     await withDb(async (db) => {
       const coord = new SlotCoordinator(db);
       const slot = coord.resolveOccurrence(schedule, config, 'http', AT).context!;
-      coord.begin(slot, schedule, [target('a')]);
+      coord.prepare(slot, schedule, [target('a')]);
 
       coord.lockWork(slot.slotId, 'a', '100', 'illustration');
       coord.applyOutcome(slot.slotId, 'a', { kind: 'failed', retryable: true, error: 'connection reset' });
@@ -168,7 +168,7 @@ describe('SlotCoordinator failure injection', () => {
     await withDb(async (db) => {
       const coord = new SlotCoordinator(db);
       const slot = coord.resolveOccurrence(schedule, config, 'http', AT).context!;
-      coord.begin(slot, schedule, [target('a')]);
+      coord.prepare(slot, schedule, [target('a')]);
 
       coord.applyOutcome(slot.slotId, 'a', {
         kind: 'delivery_pending', workId: '100', workType: 'illustration', deliveryId: 'd-1',

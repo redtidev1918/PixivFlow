@@ -5,7 +5,11 @@
 
 ### Features
 
-* durable observability/audit (delivery_events, correlation id, readiness reason, runs CLI, build SHA) ([#30](https://github.com/redtidev1918/PixivFlow/issues/30)) ([46b23a0](https://github.com/redtidev1918/PixivFlow/commit/46b23a0edd6d54fc433fa7ca57edd09e92999d8a))
+- Every delivery state transition is appended to a durable `delivery_events` log, so what happened to an occurrence survives log rotation and restarts. The same correlation id ties a scheduler run, a download, an outbox row, its delivery and any operator action together.
+- Readiness deferrals are now recorded distinctly from failures and never consume a delivery attempt; the readiness probe reports a structured reason (connection refused, timeout, HTTP status) instead of a bare boolean.
+- Added `pixivflow runs list` and `pixivflow runs show <executionId>` execution summaries, and `outbox inspect` prints the full event trail with deferred rows separated from attempt-consuming ones.
+- Delivery errors are classified into typed classes, and secrets (URL credentials, headers, Bearer/token/cookie values) are redacted in logs and audit records.
+- Build identity is baked into the package at build time: `pixivflow --version` reports the exact version and commit.
 
 ## [2.14.0](https://github.com/redtidev1918/PixivFlow/compare/v2.13.0...v2.14.0) (2026-09-10)
 

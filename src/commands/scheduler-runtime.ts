@@ -41,6 +41,12 @@ export type RunJobOptions = ScheduleRunOptions & {
    * machine-readable per-target result to a control plane.
    */
   onTargetOutcome?: (targetId: string, outcome: TargetOutcome) => void;
+  /**
+   * Durable duplicate history for this run (works this bot already handled). The
+   * batch runner fills it from the control plane, because a disposable runner's
+   * own database cannot know.
+   */
+  excludedWorkIds?: { illustration?: string[]; novel?: string[] };
 };
 
 export interface SchedulerRuntime {
@@ -377,6 +383,7 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
       })),
     };
     const downloadManager = new DownloadManager(scopedConfig, pixivClient, database, fileService);
+    if (options.excludedWorkIds) downloadManager.setProcessedWorkIds(options.excludedWorkIds);
     activeDownloadManager = downloadManager;
     await downloadManager.initialise();
 

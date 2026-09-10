@@ -60,6 +60,19 @@ export class DownloadManager implements IDownloadManager {
   private readonly deliveryService!: DeliveryService;
   /** Per-target TYPED outcome hook (the Slot ledger maps it to cell transitions). */
   private onTargetOutcome: ((target: TargetConfig, outcome: TargetOutcome) => void) | null = null;
+  /**
+   * Works this bot already handled, according to durable history outside this
+   * process (empty for a normal local run, populated by a batch runner).
+   */
+  private processedWorkIds: { illustration?: Set<string>; novel?: Set<string> } = {};
+
+  /** Supply durable duplicate history before the run starts. */
+  public setProcessedWorkIds(ids: { illustration?: string[]; novel?: string[] }): void {
+    this.processedWorkIds = {
+      ...(ids.illustration ? { illustration: new Set(ids.illustration) } : {}),
+      ...(ids.novel ? { novel: new Set(ids.novel) } : {}),
+    };
+  }
 
   /** Register a callback fired after each target with its explicit business outcome. */
   public setTargetOutcomeHook(fn: (target: TargetConfig, outcome: TargetOutcome) => void): void {
@@ -126,6 +139,14 @@ export class DownloadManager implements IDownloadManager {
     this.planner = new DownloadPlanner(database, {
       deliveredIds: (target, type, ids) =>
         this.deliveryService.deliveredIds(target, type, ids),
+      // Durable duplicate history handed in by the caller (the batch runner asks
+      // the control plane for it). Independent of any local delivery target, so it
+      // also works for a shadow run that delivers nowhere.
+      processedIds: (type, ids) => {
+        const known = this.processedWorkIds[type];
+        if (!known || known.size === 0) return new Set<string>();
+        return new Set(ids.filter((id) => known.has(id)));
+      },
     });
     this.executor = new DownloadExecutor();
 

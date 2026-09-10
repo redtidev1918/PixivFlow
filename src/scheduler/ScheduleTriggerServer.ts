@@ -7,24 +7,48 @@ import { SlotContext } from './SlotCoordinator';
 import { TriggerSource } from './OccurrenceResolver';
 
 /**
- * Authenticated HTTP schedule trigger.
+ * Authenticated HTTP schedule trigger — a DISPATCH endpoint, not a run endpoint.
  *
  * A dumb external clock (Cloudflare cron worker, cron-job.org, GitHub Actions)
- * POSTs a schedule id; this server wakes with the machine, verifies a bearer
- * token, resolves the canonical occurrence from the schedule's OWN cron +
- * timezone (never a client-supplied date), and runs that schedule synchronously
- * so the open HTTP request keeps the machine active for the whole run — the
- * request itself is the activity lease (no background fire-and-forget that lets
- * a scale-to-zero host stop mid-run). All business state lives in the Slot
- * ledger; the handler only authenticates, validates, resolves and delegates. It
- * never queries Pixiv, loops targets, or touches the Slot DB itself.
+ * POSTs a schedule id; this server verifies a bearer token, resolves the
+ * canonical occurrence from the schedule's OWN cron + timezone (never a
+ * client-supplied date), durably records the slot and returns immediately with a
+ * business disposition. Execution happens in the in-process scheduler behind a
+ * short renewable lease, so the response no longer has to stay open for the
+ * whole 10-40 minute run.
+ *
+ * That distinction matters: holding the request open assumed the connection was
+ * an activity lease, but a 10-40 min run cannot survive the router/proxy/client
+ * timeouts that assumption ignored, and a run that outlived them was frozen or
+ * reported as failed while work was still owed. Durable state plus a background
+ * worker means a dropped connection is now recoverable instead of fatal.
+ *
+ * All business state lives in the Slot ledger; the handler only authenticates,
+ * validates, resolves and delegates. It never queries Pixiv, loops targets, or
+ * touches the Slot DB itself.
  *
  * Mounting is independent of `schedulerRuntime.mode`: external mode mounts it as
  * the primary clock; always-on/internal mode may also mount it for manual ops.
  */
+/**
+ * What the trigger adapter actually did with the request. This is the contract
+ * an external clock must judge, because HTTP status alone cannot distinguish
+ * "the run was admitted and is executing" from "the occurrence is finished".
+ */
+export type TriggerDisposition =
+  /** Accepted now; the slot is durably recorded and executes in the background. */
+  | 'accepted'
+  /** Another worker owns the slot; this trigger converged onto it. */
+  | 'already_running'
+  /** The occurrence reached a terminal state (success/partial) earlier. */
+  | 'already_completed'
+  /** Not admitted (unknown/disabled schedule, budget exhausted, bad state). */
+  | 'rejected';
+
 export interface TriggerRunResult {
   scheduleId: string;
   slotId: string;
+  disposition: TriggerDisposition;
   status: string;
   alreadyCompleted?: boolean;
   cells?: Array<{ targetId: string; status: string; workId: string | null; error?: string | null }>;
@@ -97,12 +121,40 @@ export class ScheduleTriggerServer {
         }
 
         const result = await this.handlers.run(scheduleId, resolved.context);
-        // alreadyCompleted => 200 with a clear note; real run => 200 completed.
-        res.status(result.alreadyCompleted ? 200 : 200).json({
-          status: result.status === 'failed' ? 'failed' : 'ok',
-          schedule: result,
-          note: result.alreadyCompleted ? 'already_completed' : 'completed',
-        });
+        // Business disposition, not HTTP luck: an accepted or already-running
+        // occurrence is NOT a completed one. Returning 200/"completed" for a run
+        // that is still executing makes an external clock stop retrying and
+        // silently lose the slot, so 'running' is reported as 202 here.
+        switch (result.disposition) {
+          case 'already_completed':
+            res.status(200).json({
+              status: 'completed',
+              schedule: result,
+              note: 'already_completed',
+            });
+            return;
+          case 'accepted':
+            res.status(202).json({
+              status: 'accepted',
+              schedule: result,
+              note: 'queued',
+            });
+            return;
+          case 'already_running':
+            res.status(202).json({
+              status: 'running',
+              schedule: result,
+              note: 'already_running',
+            });
+            return;
+          default:
+            res.status(503).json({
+              status: 'rejected',
+              schedule: result,
+              note: 'rejected',
+            });
+            return;
+        }
       } catch (error) {
         logger.error('Schedule trigger failed', { error: error instanceof Error ? error.message : String(error) });
         // The slot ledger resumes on the next trigger; a 500 tells the clock to

@@ -13,11 +13,8 @@ import { DownloadExecutor } from './exec/DownloadExecutor';
 import { DefaultErrorRecovery, ErrorRecoveryStrategy } from './recovery/ErrorRecovery';
 import { DownloadPipeline } from './pipeline/DownloadPipeline';
 import { OperationCancelledError } from '../utils/errors';
-import { DeliveryDispatcher } from '../delivery/DeliveryDispatcher';
-import { DeliveryOutbox } from '../delivery/DeliveryOutbox';
 import { DeliveryService } from '../delivery/DeliveryService';
 import { TargetOutcome } from '../scheduler/TargetOutcome';
-import { dirname, join } from 'node:path';
 import { IllustrationTargetHandler } from './handlers/IllustrationTargetHandler';
 import { NovelTargetHandler } from './handlers/NovelTargetHandler';
 import { createTopicPipelineFactory } from '../topic/createTopicPipeline';
@@ -60,21 +57,13 @@ export class DownloadManager implements IDownloadManager {
   // Cooperative cancellation state (see cancel())
   private cancelled = false;
   private cancelReason = '';
-  private readonly deliveryOutbox: DeliveryOutbox;
   private readonly deliveryService!: DeliveryService;
   /** Per-target TYPED outcome hook (the Slot ledger maps it to cell transitions). */
   private onTargetOutcome: ((target: TargetConfig, outcome: TargetOutcome) => void) | null = null;
-  /** Fired when a Pixiv work is selected and locked for a target. */
-  private onWorkLocked: ((artifact: { pixivId: string; type: string }, target: TargetConfig) => void) | null = null;
 
   /** Register a callback fired after each target with its explicit business outcome. */
   public setTargetOutcomeHook(fn: (target: TargetConfig, outcome: TargetOutcome) => void): void {
     this.onTargetOutcome = fn;
-  }
-
-  /** Register a callback fired when a Pixiv work is selected and locked for a target. */
-  public setWorkLockedHook(fn: (artifact: { pixivId: string; type: string }, target: TargetConfig) => void): void {
-    this.onWorkLocked = fn;
   }
 
   /** Expose delivery service for handlers (preflight + intent creation). */
@@ -160,22 +149,6 @@ export class DownloadManager implements IDownloadManager {
       isCancelled: () => this.cancelled,
     });
 
-    const databasePath = config.storage?.databasePath ?? './data/pixiv-downloader.db';
-    const deliveryDispatcher = new DeliveryDispatcher(
-      config.delivery,
-      this.buildProxyUrl(config.network)
-    );
-    this.deliveryOutbox = new DeliveryOutbox(
-      join(dirname(databasePath), 'delivery-outbox'),
-      deliveryDispatcher,
-      config.delivery?.deleteAfterDelivery !== false,
-      {
-        retryBaseDelayMs: config.delivery?.outboxRetryBaseMs,
-        retryMaxDelayMs: config.delivery?.outboxRetryMaxMs,
-        onDeliver: (artifact, target) => this.onWorkLocked?.(artifact, target),
-      }
-    );
-
     // Delivery ledger + SQLite outbox. Requires the concrete Database (with the
     // deliveries/outbox repositories). Unit tests pass plain mock databases; in
     // that case delivery dedupe/enqueue is simply inactive.
@@ -198,7 +171,6 @@ export class DownloadManager implements IDownloadManager {
       this.rankingService,
       this.illustrationDownloader,
       this.pipeline,
-      this.deliveryOutbox,
       topicFactory,
       this.deliveryService
     );
@@ -209,7 +181,6 @@ export class DownloadManager implements IDownloadManager {
       this.rankingService,
       this.pipeline,
       this.novelDownloader,
-      this.deliveryOutbox,
       topicFactory,
       this.deliveryService
     );
@@ -296,19 +267,4 @@ export class DownloadManager implements IDownloadManager {
     this.progressReporter.update(current, total, message);
   }
 
-  private buildProxyUrl(network: StandaloneConfig['network']): string | undefined {
-    const proxy = network?.proxy;
-    if (!proxy?.enabled) {
-      return undefined;
-    }
-    const protocol = proxy.protocol ?? 'http';
-    if (protocol !== 'http' && protocol !== 'https') {
-      logger.warn(`HTTP multipart delivery does not support ${protocol} proxy through undici; delivering directly`);
-      return undefined;
-    }
-    const url = new URL(`${protocol}://${proxy.host}:${proxy.port}`);
-    if (proxy.username) url.username = proxy.username;
-    if (proxy.password) url.password = proxy.password;
-    return url.toString();
-  }
 }

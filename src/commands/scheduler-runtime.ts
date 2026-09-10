@@ -132,9 +132,12 @@ async function notifyDeliveryTargets(
   key: string
 ): Promise<void> {
   const delivery = config.delivery;
-  const notifyable = [...new Set(targetNames)].filter(
-    (name) => delivery?.targets?.[name]?.notificationUrl?.trim()
-  );
+  const notifyable = [...new Set(targetNames)].filter((name) => {
+    const target = delivery?.targets?.[name];
+    // Only the HTTP provider has a notification endpoint; a Telegram review target
+    // communicates through the review chat itself.
+    return target?.type === 'httpMultipart' && Boolean(target.notificationUrl?.trim());
+  });
   if (notifyable.length === 0) return;
 
   // Notifications are durable SQLite outbox rows (kind=notification), pumped by

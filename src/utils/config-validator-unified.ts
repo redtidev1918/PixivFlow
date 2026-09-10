@@ -204,7 +204,10 @@ export class ConfigValidator {
         }
         if (target.noMatchPolicy?.notify === true) {
           const deliveryTarget = target.delivery?.target?.trim();
-          if (!deliveryTarget || !config.delivery?.targets?.[deliveryTarget]?.notificationUrl?.trim()) {
+          const notifyTarget = deliveryTarget ? config.delivery?.targets?.[deliveryTarget] : undefined;
+          const hasNotificationUrl =
+            notifyTarget?.type === 'httpMultipart' && Boolean(notifyTarget.notificationUrl?.trim());
+          if (!hasNotificationUrl) {
             errors.push({
               code: 'CONFIG_VALIDATION_TARGET_NO_MATCH_NOTIFICATION_MISSING',
               field: `${targetPrefix}.noMatchPolicy.notify`,

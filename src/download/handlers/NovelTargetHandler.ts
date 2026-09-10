@@ -9,7 +9,6 @@ import { NetworkError } from '../../utils/errors';
 import { getTodayDate, getYesterdayDate } from '../../utils/pixiv-date-utils';
 import { calculatePopularityScore } from '../../utils/pixiv-utils';
 import { PixivNovel } from '../../pixiv/PixivClient';
-import { DeliveryOutbox } from '../../delivery/DeliveryOutbox';
 import { DeliveryService } from '../../delivery/DeliveryService';
 import { TargetOutcome } from '../../scheduler/TargetOutcome';
 import type { TopicPipelineFactory } from '../../topic/createTopicPipeline';
@@ -24,7 +23,6 @@ export class NovelTargetHandler {
     private readonly rankingService: RankingService,
     private readonly pipeline: DownloadPipeline,
     private readonly novelDownloader: NovelDownloader,
-    private readonly deliveryOutbox?: DeliveryOutbox,
     private readonly topicPipelineFactory?: TopicPipelineFactory,
     private readonly deliveryService?: DeliveryService
   ) {}

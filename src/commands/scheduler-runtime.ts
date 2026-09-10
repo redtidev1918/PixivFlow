@@ -7,8 +7,6 @@
  * same token maintenance, same target selection, same dedupe and delivery.
  */
 
-import { dirname, join } from 'node:path';
-
 import { getConfigPath, loadConfig, ScheduleConfig, StandaloneConfig, TargetConfig } from '../config';
 import { Database, isolateCorruptDatabase } from '../storage/Database';
 import { PixivAuth } from '../pixiv/AuthClient';
@@ -16,7 +14,6 @@ import { PixivClient } from '../pixiv/PixivClient';
 import { FileService } from '../download/FileService';
 import { DownloadManager } from '../download/DownloadManager';
 import { DeliveryDispatcher } from '../delivery/DeliveryDispatcher';
-import { DeliveryOutbox } from '../delivery/DeliveryOutbox';
 import { createTokenMaintenanceService } from '../utils/token-maintenance';
 import { selectScheduleTargets } from '../scheduler/schedules';
 import { SlotContext, SlotCoordinator } from '../scheduler/SlotCoordinator';
@@ -370,12 +367,6 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
 
     if (slotCtx) {
       const slot = slotCtx; // stable for callbacks
-      // Record the locked work as soon as a candidate is chosen. First
-      // selection wins; retries/replays keep the SAME work id.
-      downloadManager.setWorkLockedHook((artifact, target) => {
-        if (!target.id) return;
-        coordinator.lockWork(slot.slotId, target.id, artifact.pixivId, artifact.type);
-      });
       // TYPED outcome -> explicit FSM transition. No message regex, no
       // "no throw => submitted". Only a confirmed ACK yields 'submitted'.
       downloadManager.setTargetOutcomeHook((target, outcome: TargetOutcome) => {

@@ -786,21 +786,19 @@ describe('NovelTargetHandler', () => {
       });
       mockPipeline.run.mockReset();
       results.forEach((result) => mockPipeline.run.mockResolvedValueOnce(result));
-      const outbox = { notifyNoMatch: jest.fn().mockResolvedValue(undefined) } as any;
       const topicHandler = new NovelTargetHandler(
         mockClient,
         mockDatabase,
         mockRankingService,
         mockPipeline,
         mockNovelDownloader,
-        outbox,
         (() => ({ selectWorks })) as any
       );
-      return { topicHandler, selectWorks, outbox };
+      return { topicHandler, selectWorks };
     }
 
     it('checks preceding days serially and stops after a matching novel is downloaded', async () => {
-      const { topicHandler, selectWorks, outbox } = buildTopicHandler([
+      const { topicHandler, selectWorks } = buildTopicHandler([
         { downloaded: 0, skipped: 1, alreadyDownloaded: 0, filteredOut: 0 },
         { downloaded: 1, skipped: 0, alreadyDownloaded: 0, filteredOut: 0 },
       ]);
@@ -813,12 +811,11 @@ describe('NovelTargetHandler', () => {
       expect(selectWorks).toHaveBeenCalledTimes(2);
       expect(selectWorks.mock.calls[0][0].date).toBe('2023-06-14');
       expect(selectWorks.mock.calls[1][0].date).toBe('2023-06-13');
-      expect(outbox.notifyNoMatch).not.toHaveBeenCalled();
       expect(mockDatabase.logExecution).toHaveBeenCalledTimes(1);
     });
 
     it('sends one notification and writes one execution row after exhausting the lookback', async () => {
-      const { topicHandler, outbox } = buildTopicHandler([
+      const { topicHandler } = buildTopicHandler([
         { downloaded: 0, skipped: 1, alreadyDownloaded: 0, filteredOut: 0 },
         { downloaded: 0, skipped: 1, alreadyDownloaded: 0, filteredOut: 0 },
       ]);
@@ -829,7 +826,6 @@ describe('NovelTargetHandler', () => {
         storageMode: 'cache', delivery: { target: 'telepost' },
       });
       // Per-handler notifications are removed (centralized NotificationPolicy).
-      expect(outbox.notifyNoMatch).not.toHaveBeenCalled();
       expect(outcome).toMatchObject({ kind: 'no_candidate' });
       expect(mockDatabase.logExecution).toHaveBeenCalledWith(
         'ボテ腹', 'novel', 'success', expect.stringContaining('across 2 day(s)')
@@ -895,14 +891,12 @@ describe('NovelTargetHandler', () => {
 
   describe('hard-failure notification', () => {
     it('notifies the review group via the delivery outbox when a download hard-fails', async () => {
-      const mockOutbox = { notifyNoMatch: jest.fn().mockResolvedValue(undefined) } as any;
       const h = new NovelTargetHandler(
         mockClient,
         mockDatabase,
         mockRankingService,
         mockPipeline,
-        mockNovelDownloader,
-        mockOutbox
+        mockNovelDownloader
       );
       const target: TargetConfig = {
         type: 'novel',
@@ -916,18 +910,15 @@ describe('NovelTargetHandler', () => {
       mockPipeline.run.mockRejectedValue(new Error('ENAMETOOLONG: name too long'));
 
       await expect(h.handle(target)).resolves.toMatchObject({ kind: 'failed', retryable: false });
-      expect(mockOutbox.notifyNoMatch).not.toHaveBeenCalled();
     });
 
     it('does not notify when the target has no delivery destination', async () => {
-      const mockOutbox = { notifyNoMatch: jest.fn().mockResolvedValue(undefined) } as any;
       const h = new NovelTargetHandler(
         mockClient,
         mockDatabase,
         mockRankingService,
         mockPipeline,
-        mockNovelDownloader,
-        mockOutbox
+        mockNovelDownloader
       );
       const target: TargetConfig = {
         type: 'novel',
@@ -941,7 +932,6 @@ describe('NovelTargetHandler', () => {
       mockPipeline.run.mockRejectedValue(new Error('ENAMETOOLONG: name too long'));
 
       await expect(h.handle(target)).resolves.toMatchObject({ kind: 'failed', retryable: false });
-      expect(mockOutbox.notifyNoMatch).not.toHaveBeenCalled();
     });
   });
 });

@@ -159,7 +159,7 @@ describe('the pre-flight check is what makes retries safe', () => {
 });
 
 describe('a successful delivery posts once and records only ids', () => {
-  it('posts the photo with the review keyboard and records the review', async () => {
+  it('posts the media, the text and the control card, and records all three', async () => {
     const { fetchImpl, calls } = fakeFetch({
       telegram: () => jsonResponse({ ok: true, result: { message_id: 77 } }),
     });
@@ -168,8 +168,8 @@ describe('a successful delivery posts once and records only ids', () => {
     expect(result.ack).toMatchObject({ kind: 'accepted', remoteId: expect.stringMatching(/^rv_/) });
 
     const telegram = telegramCalls(calls);
-    expect(telegram).toHaveLength(1);
-    expect(telegram[0]!.url).toContain('/sendPhoto');
+    // Media, then the work's text, then the card with the buttons.
+    expect(telegram.map((call) => call.url.split('/').pop())).toEqual(['sendPhoto', 'sendMessage', 'sendMessage']);
 
     const reports = reportBodies(calls);
     expect(reports).toHaveLength(1);
@@ -178,8 +178,10 @@ describe('a successful delivery posts once and records only ids', () => {
       chat_id: REVIEW_CHAT,
       publish_chat_id: CHANNEL,
       status: 'pending',
-      message_id: 77,
-      message_ids: [77],
+      // The ids are reported per kind, so publishing can reproduce the layout.
+      media_message_ids: [77],
+      caption_message_id: 77,
+      control_message_id: 77,
       work_id: '29088506',
       target_id: 'bot1-illust-botefuku',
       slot_id: 'bot1-daily@2026-09-11T1800',
@@ -189,20 +191,28 @@ describe('a successful delivery posts once and records only ids', () => {
 
   it('sends an album as one media group and records every message', async () => {
     const { fetchImpl, calls } = fakeFetch({
-      telegram: () =>
-        jsonResponse({
-          ok: true,
-          result: [
-            { message_id: 1, media_group_id: 'mg-9' },
-            { message_id: 2, media_group_id: 'mg-9' },
-          ],
-        }),
+      telegram: (call) =>
+        call.url.endsWith('/sendMediaGroup')
+          ? jsonResponse({
+              ok: true,
+              result: [
+                { message_id: 1, media_group_id: 'mg-9' },
+                { message_id: 2, media_group_id: 'mg-9' },
+              ],
+            })
+          : jsonResponse({ ok: true, result: { message_id: 500 } }),
     });
     const result = await new TelegramReviewDelivery(config(), fetchImpl).deliver(request({ files: [...files] }));
 
     expect(result.ack).toMatchObject({ kind: 'accepted' });
     expect(telegramCalls(calls)[0]!.url).toContain('/sendMediaGroup');
-    expect(reportBodies(calls)[0]).toMatchObject({ message_ids: [1, 2], media_group_id: 'mg-9' });
+    expect(reportBodies(calls)[0]).toMatchObject({
+      // Media, text and the control card are reported as three separate things.
+      media_message_ids: [1, 2],
+      media_group_id: 'mg-9',
+    });
+    expect(typeof reportBodies(calls)[0]!.caption_message_id).toBe('number');
+    expect(typeof reportBodies(calls)[0]!.control_message_id).toBe('number');
   });
 });
 
@@ -247,5 +257,91 @@ describe('failures are never turned into duplicates', () => {
     const error = String((result.ack as { error?: string }).error);
     expect(error).not.toContain('test-bot-token');
     expect(error).not.toContain('control-secret');
+  });
+});
+
+/**
+ * The reviewer must read every file first and the text after it:
+ *
+ *   [file1 | file2 | file3]   <- media, consecutive, no text inside
+ *   正文                       <- one message, after ALL media
+ *   审核控制卡                  <- the buttons, last
+ *
+ * The old shape put the caption on the first album item and the keyboard on the media
+ * message, which made the text logically part of one file and left the review with no
+ * control card of its own. Telegram's caption rules are what force the split: a
+ * caption belongs to a message.
+ */
+describe('review layout', () => {
+  // The media are read from disk before being attached, so the fixtures are real
+  // files. Three of them, because the point of the layout is what happens BETWEEN
+  // files and the text.
+  let layoutDir = '';
+  let manyFiles: string[] = [];
+  beforeAll(() => {
+    layoutDir = mkdtempSync(join(tmpdir(), 'review-layout-'));
+    manyFiles = Array.from({ length: 23 }, (_, i) => {
+      const file = join(layoutDir, `media-${i}.png`);
+      writeFileSync(file, Buffer.from('not-a-real-image'));
+      return file;
+    });
+  });
+  afterAll(() => {
+    rmSync(layoutDir, { recursive: true, force: true });
+  });
+
+  /** Every Telegram call, in order, with the multipart form or JSON body decoded. */
+  async function run(files: string[]): Promise<Array<{ method: string; form?: FormData; body?: Record<string, unknown> }>> {
+    const { fetchImpl, calls } = fakeFetch({
+      telegram: (call) => {
+        const method = call.url.split('/').pop()!;
+        return jsonResponse({ ok: true, result: method === 'sendMediaGroup' ? [{ message_id: 1 }] : { message_id: 2 } });
+      },
+    });
+    const delivery = new TelegramReviewDelivery(config(), fetchImpl);
+    await delivery.deliver({ ...request(), files });
+    return telegramCalls(calls).map((call) => {
+      const method = call.url.split('/').pop()!;
+      if (call.body instanceof FormData) return { method, form: call.body };
+      return { method, body: JSON.parse(String(call.body)) as Record<string, unknown> };
+    });
+  }
+
+  it('sends the media group, then the caption, then the control card', async () => {
+    const calls = await run([files[0]!, files[1]!]);
+
+    expect(calls.map((call) => call.method)).toEqual(['sendMediaGroup', 'sendMessage', 'sendMessage']);
+    // The album carries neither text nor buttons: a caption would belong to one file.
+    expect(calls[0]!.form!.get('caption')).toBeNull();
+    expect(calls[0]!.form!.get('reply_markup')).toBeNull();
+    // The text is its own message, after all the media, with no buttons.
+    expect(typeof calls[1]!.body!.text).toBe('string');
+    expect(calls[1]!.body!.reply_markup).toBeUndefined();
+    // Only the control card has the keyboard.
+    const keyboard = (calls[2]!.body!.reply_markup as { inline_keyboard: unknown[][] }).inline_keyboard;
+    expect(keyboard[0]).toHaveLength(2);
+  });
+
+  it('keeps the same order for a single file', async () => {
+    const calls = await run([files[0]!]);
+    // One file is sent singly, but the text is STILL its own message: the layout must
+    // not change shape with the file count.
+    expect(calls.map((call) => call.method)).toEqual(['sendPhoto', 'sendMessage', 'sendMessage']);
+    expect(calls[0]!.form!.get('caption')).toBeNull();
+  });
+
+  it('splits more than ten files into consecutive groups with one caption after all of them', async () => {
+    const calls = await run(manyFiles.slice(0, 23));
+    expect(calls.map((call) => call.method)).toEqual([
+      'sendMediaGroup',
+      'sendMediaGroup',
+      'sendMediaGroup',
+      'sendMessage',
+      'sendMessage',
+    ]);
+    // Exactly one text message, and it comes after every media message.
+    const textIndexes = calls.filter((call) => call.method === 'sendMessage' && call.body?.reply_markup === undefined);
+    expect(textIndexes).toHaveLength(1);
+    expect(calls.indexOf(textIndexes[0]!)).toBeGreaterThan(2);
   });
 });

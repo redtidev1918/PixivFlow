@@ -99,25 +99,33 @@ export class PixivFlowPixivClient implements IPixivClient {
   // -- IPixivClient surface ---------------------------------------------------
 
   searchIllustrations(target: TargetConfig): Promise<PixivIllust[]> {
+    return this.searchIllustrationsInternal(target);
+  }
+
+  private searchIllustrationsInternal(target: TargetConfig, signal?: AbortSignal): Promise<PixivIllust[]> {
     const requestDelay = this.config.download?.requestDelay ?? 500;
-    return this.searchRunner.searchIllustrations(target, requestDelay);
+    return this.searchRunner.searchIllustrations(target, requestDelay, signal);
   }
 
   searchNovels(target: TargetConfig): Promise<PixivNovel[]> {
-    const requestDelay = this.config.download?.requestDelay ?? 500;
-    return this.searchRunner.searchNovels(target, requestDelay);
+    return this.searchNovelsInternal(target);
   }
 
-  getTagAutocomplete(seed: string): Promise<PixivTag[]> {
-    return this.kit.tags.autocomplete(seed);
+  private searchNovelsInternal(target: TargetConfig, signal?: AbortSignal): Promise<PixivNovel[]> {
+    const requestDelay = this.config.download?.requestDelay ?? 500;
+    return this.searchRunner.searchNovels(target, requestDelay, signal);
+  }
+
+  getTagAutocomplete(seed: string, options: { signal?: AbortSignal } = {}): Promise<PixivTag[]> {
+    return this.kit.tags.autocomplete(seed, options.signal);
   }
 
   searchIllustrationsForTags(
     seed: string,
     limit: number,
-    options: { startDate?: string; endDate?: string; includeR18?: boolean } = {}
+    options: { startDate?: string; endDate?: string; includeR18?: boolean; signal?: AbortSignal } = {}
   ): Promise<PixivIllust[]> {
-    return this.searchIllustrations({
+    return this.searchIllustrationsInternal({
       type: 'illustration',
       tag: seed,
       searchTarget: 'partial_match_for_tags',
@@ -126,15 +134,15 @@ export class PixivFlowPixivClient implements IPixivClient {
       startDate: options.startDate,
       endDate: options.endDate,
       r18: options.includeR18,
-    });
+    }, options.signal);
   }
 
   searchNovelsForTags(
     seed: string,
     limit: number,
-    options: { startDate?: string; endDate?: string; includeR18?: boolean } = {}
+    options: { startDate?: string; endDate?: string; includeR18?: boolean; signal?: AbortSignal } = {}
   ): Promise<PixivNovel[]> {
-    return this.searchNovels({
+    return this.searchNovelsInternal({
       type: 'novel',
       tag: seed,
       searchTarget: 'partial_match_for_tags',
@@ -143,7 +151,7 @@ export class PixivFlowPixivClient implements IPixivClient {
       startDate: options.startDate,
       endDate: options.endDate,
       r18: options.includeR18,
-    });
+    }, options.signal);
   }
 
   getIllustration(id: number): Promise<PixivIllust> {

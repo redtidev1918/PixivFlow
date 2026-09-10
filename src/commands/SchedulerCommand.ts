@@ -56,6 +56,8 @@ export class SchedulerCommand extends BaseCommand {
         execute: runtime.runJob,
         database: runtime.database,
         onFailure: runtime.notifyScheduleFailure,
+        onAbandoned: (_config, _schedule, abandoned) =>
+          runtime.abandonActiveRun(abandoned.errorMessage ?? 'abandoned after timeout'),
         telemetry: {
           beginRun: () => runtime.database.getOverviewStats().totalDownloads,
           endRun: () => runtime.database.getOverviewStats().totalDownloads,

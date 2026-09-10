@@ -458,6 +458,9 @@ export class IllustrationTargetHandler {
       {
         aiMetadataCheck: target.aiMetadataCheck === true,
         maxPageCount: target.maxPageCount,
+        includeDeliveryPreviews: Boolean(
+          target.storageMode === 'cache' && target.delivery?.target?.trim()
+        ),
       }
     );
     if (!artifact) return;

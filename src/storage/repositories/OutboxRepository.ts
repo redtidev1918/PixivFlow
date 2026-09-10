@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { BaseRepository } from './BaseRepository';
 
 export type OutboxKind = 'delivery' | 'notification';
-export type OutboxStatus = 'pending' | 'processing' | 'retry_wait' | 'done' | 'dead';
+export type OutboxStatus = 'pending' | 'processing' | 'retry_wait' | 'done' | 'dead' | 'cancelled';
 
 export interface OutboxRow {
   id: string;
@@ -88,6 +88,18 @@ export class OutboxRepository extends BaseRepository {
       .prepare(`SELECT * FROM outbox WHERE kind = ? AND idempotency_key = ?`)
       .get(kind, key) as any;
     return row ? this.toRow(row) : null;
+  }
+
+  list(status?: OutboxStatus, limit = 100): OutboxRow[] {
+    const bounded = Math.max(1, Math.min(Math.trunc(limit), 500));
+    const rows = status
+      ? this.db.prepare(
+          `SELECT * FROM outbox WHERE status=? ORDER BY created_at DESC LIMIT ?`
+        ).all(status, bounded)
+      : this.db.prepare(
+          `SELECT * FROM outbox ORDER BY created_at DESC LIMIT ?`
+        ).all(bounded);
+    return (rows as any[]).map((row) => this.toRow(row));
   }
 
   /**
@@ -191,6 +203,15 @@ export class OutboxRepository extends BaseRepository {
                  completed_at=NULL, updated_at=@dueAt WHERE id=@id`
       )
       .run({ id, dueAt });
+  }
+
+  cancel(id: string, now: number = Date.now()): boolean {
+    const result = this.db.prepare(
+      `UPDATE outbox SET status='cancelled', lease_owner=NULL, lease_until=NULL,
+              last_error='cancelled by operator', completed_at=@now, updated_at=@now
+       WHERE id=@id AND status IN ('pending','retry_wait','dead')`
+    ).run({ id, now });
+    return result.changes === 1;
   }
 
   counts(now: number = Date.now()): {

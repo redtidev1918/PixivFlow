@@ -154,7 +154,7 @@ async function bootstrap() {
   let config: StandaloneConfig;
   try {
     const isLoginCommand = ['login', 'l', 'login-interactive', 'li', 'login-headless'].includes(commandName || '');
-    const tokenOptionalCommands = new Set(['config', 'dirs', 'logs', 'setup', 'status', 'health', 'maintain', 'normalize', 'migrate-config', 'backup', 'monitor', 'webui', 'w']);
+    const tokenOptionalCommands = new Set(['config', 'dirs', 'logs', 'setup', 'status', 'health', 'maintain', 'normalize', 'migrate-config', 'backup', 'monitor', 'outbox', 'webui', 'w']);
     const isTokenOptional = commandName ? tokenOptionalCommands.has(commandName) : true;
     
     config = loadConfig(configPath, isLoginCommand || isTokenOptional || !commandName);

@@ -276,6 +276,18 @@ export class ConfigValidator {
           });
         }
       }
+      if (delivery.readinessUrl && !/\$\{[A-Za-z_][A-Za-z0-9_]*\}/.test(delivery.readinessUrl)) {
+        try {
+          const url = new URL(delivery.readinessUrl);
+          if (!['http:', 'https:'].includes(url.protocol)) throw new Error('unsupported protocol');
+        } catch {
+          errors.push({
+            code: 'CONFIG_VALIDATION_DELIVERY_READINESS_URL_INVALID',
+            field: `${prefix}.readinessUrl`,
+            message: `Delivery target '${name}': readinessUrl must be valid HTTP or HTTPS`,
+          });
+        }
+      }
       if (delivery.maxAttempts !== undefined && (!Number.isInteger(delivery.maxAttempts) || delivery.maxAttempts < 1)) {
         errors.push({
           code: 'CONFIG_VALIDATION_DELIVERY_ATTEMPTS_INVALID',

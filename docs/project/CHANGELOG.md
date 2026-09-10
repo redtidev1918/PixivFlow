@@ -7,6 +7,12 @@
 
 ## [Unreleased]
 
+### 新增
+
+- 缓存模式插画可把与原图一一对应的 Pixiv preview 交给通用 multipart 接收端。
+- delivery target 可配置 readiness endpoint；依赖未 ready 时 outbox 不消耗 attempt。
+- 新增 `pixivflow outbox` 的 list、inspect、dead-letter retry 和 pending cancel 运维入口。
+
 ## [2.10.31] - 2026-09-06
 
 ### 修复

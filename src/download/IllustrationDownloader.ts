@@ -38,7 +38,11 @@ export class IllustrationDownloader {
   async downloadIllustration(
     illust: PixivIllust,
     tag: string,
-    options: { aiMetadataCheck?: boolean; maxPageCount?: number } = {}
+    options: {
+      aiMetadataCheck?: boolean;
+      maxPageCount?: number;
+      includeDeliveryPreviews?: boolean;
+    } = {}
   ): Promise<DownloadedArtifact | null> {
     // Check if files already exist in file system but not in database
     const existingFiles = await this.findExistingIllustrationFiles(illust.id);
@@ -125,6 +129,21 @@ export class IllustrationDownloader {
         );
         const filePath = await this.fileService.saveImage(buffer, fileName, metadata);
 
+        let previewPath: string | undefined;
+        const previewUrl = page.image_urls.large ?? page.image_urls.medium;
+        if (options.includeDeliveryPreviews && previewUrl && previewUrl !== originalUrl) {
+          try {
+            const preview = await withTimeout(
+              this.client.downloadImage(previewUrl), 120000,
+              `Timeout: Failed to download preview for illustration ${detail.id} page ${index + 1}`
+            );
+            previewPath = `${filePath}.preview.jpg`;
+            await fs.writeFile(previewPath, Buffer.from(preview));
+          } catch (error) {
+            logger.warn(`Preview unavailable for illustration ${detail.id} page ${index + 1}: ${getErrorMessage(error)}`);
+          }
+        }
+
         // Release the page buffer promptly: ArrayBuffers are external memory,
         // NOT capped by --max-old-space-size. Without explicit GC they linger
         // and accumulate while downloading multi-page works, ballooning node
@@ -166,7 +185,7 @@ export class IllustrationDownloader {
           logger.warn(`Failed to save metadata for illustration ${detail.id} page ${index + 1}: ${error instanceof Error ? error.message : String(error)}`);
         }
 
-        return { filePath, index: index + 1, metadataPath };
+        return { filePath, index: index + 1, metadataPath, previewPath };
       },
       concurrency
     );
@@ -175,6 +194,7 @@ export class IllustrationDownloader {
     let successCount = 0;
     const files: string[] = [];
     const cleanupFiles: string[] = [];
+    const previewFiles: string[] = [];
     for (const result of downloadResults) {
       if (result.success) {
         this.database.insertDownload({
@@ -197,6 +217,10 @@ export class IllustrationDownloader {
         files.push(result.result.filePath);
         if (result.result.metadataPath) {
           cleanupFiles.push(result.result.metadataPath);
+        }
+        if (result.result.previewPath) {
+          previewFiles.push(result.result.previewPath);
+          cleanupFiles.push(result.result.previewPath);
         }
       } else {
         logger.warn(`Failed to download page ${result.error.message}`, { 
@@ -249,6 +273,7 @@ export class IllustrationDownloader {
       title: detail.title,
       tags: tags.map((item) => item.name).filter(Boolean),
       files,
+      previewFiles: previewFiles.length === files.length ? previewFiles : undefined,
       cleanupFiles,
       spoiler: (detail.x_restrict ?? 0) > 0,
       xRestrict: detail.x_restrict,

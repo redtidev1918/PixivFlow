@@ -12,6 +12,7 @@ import { RandomDownloadCommand } from './RandomDownloadCommand';
 import { SchedulerCommand } from './SchedulerCommand';
 import { SchedulerRunOnceCommand } from './SchedulerRunOnceCommand';
 import { ExecuteSlotCommand } from './ExecuteSlotCommand';
+import { AccountCommand } from './AccountCommand';
 import { MigrateConfigCommand } from './MigrateConfigCommand';
 import { NormalizeCommand } from './NormalizeCommand';
 import { WebUICommand } from './WebUICommand';
@@ -45,6 +46,7 @@ export function registerAllCommands(registry: CommandRegistry): void {
   registry.register(new SchedulerCommand());
   registry.register(new SchedulerRunOnceCommand());
   registry.register(new ExecuteSlotCommand());
+  registry.register(new AccountCommand());
   registry.register(new MigrateConfigCommand());
   registry.register(new NormalizeCommand());
   registry.register(new WebUICommand());

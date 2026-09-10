@@ -32,7 +32,45 @@ import { logger } from '../logger';
 import { BUILD } from '../version';
 
 /** Options for a single schedule run; see ScheduleRunOptions for semantics. */
-export type RunJobOptions = ScheduleRunOptions;
+export type RunJobOptions = ScheduleRunOptions & {
+  /**
+   * Downstream publishing mode for this run. Only `live` publishes: `shadow` and
+   * `dry-run` run the whole pipeline (selection, dedupe, download) with no
+   * delivery target attached, so no code path can publish even if the config
+   * names one. Config alone is not the guarantee — a future config edit would be.
+   */
+  deliveryMode?: ExecutionMode;
+  /**
+   * Receives the typed business outcome of every target.
+   *
+   * The Slot ledger uses this internally; exposing it as an option lets the batch
+   * runner (`execute-slot`) run WITHOUT a Slot and still report a
+   * machine-readable per-target result to a control plane.
+   */
+  onTargetOutcome?: (targetId: string, outcome: TargetOutcome) => void;
+  /**
+   * Durable duplicate history for this run (works this bot already handled). The
+   * batch runner fills it from the control plane, because a disposable runner's
+   * own database cannot know.
+   */
+  excludedWorkIds?: { illustration?: string[]; novel?: string[] };
+};
+
+/** Publishing modes accepted by the batch runner. */
+export const EXECUTION_MODES = ['live', 'shadow', 'dry-run'] as const;
+export type ExecutionMode = (typeof EXECUTION_MODES)[number];
+
+/**
+ * Attaches delivery targets only when publishing is live. Exported so the rule
+ * has one home and one test, rather than living inside the run closure.
+ */
+export function withDeliveryMode<T extends { delivery?: unknown }>(
+  targets: T[],
+  mode: ExecutionMode | undefined
+): T[] {
+  if ((mode ?? 'live') === 'live') return targets;
+  return targets.map((target) => (target.delivery ? { ...target, delivery: undefined } : target));
+}
 
 export interface SchedulerRuntime {
   config: StandaloneConfig;
@@ -123,9 +161,12 @@ async function notifyDeliveryTargets(
   key: string
 ): Promise<void> {
   const delivery = config.delivery;
-  const notifyable = [...new Set(targetNames)].filter(
-    (name) => delivery?.targets?.[name]?.notificationUrl?.trim()
-  );
+  const notifyable = [...new Set(targetNames)].filter((name) => {
+    const target = delivery?.targets?.[name];
+    // Only the HTTP provider has a notification endpoint; a Telegram review target
+    // communicates through the review chat itself.
+    return target?.type === 'httpMultipart' && Boolean(target.notificationUrl?.trim());
+  });
   if (notifyable.length === 0) return;
 
   // Notifications are durable SQLite outbox rows (kind=notification), pumped by
@@ -357,33 +398,49 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
 
     const scopedConfig: StandaloneConfig = {
       ...runtimeConfig,
-      targets: runTargets.map((t) => ({
-        ...t,
-        delivery: t.delivery
-          ? { ...t.delivery, slotContext: slotCtx ?? undefined, executionContext }
-          : t.delivery,
-      })),
+      targets: withDeliveryMode(
+        runTargets.map((t) => ({
+          ...t,
+          delivery: t.delivery
+            ? { ...t.delivery, slotContext: slotCtx ?? undefined, executionContext }
+            : t.delivery,
+        })),
+        options.deliveryMode
+      ),
     };
+    if (options.deliveryMode && options.deliveryMode !== 'live') {
+      logger.warn('Publishing is disabled for this run; no delivery target is attached', {
+        mode: options.deliveryMode,
+        targets: runTargets.map((t) => t.id),
+      });
+    }
     const downloadManager = new DownloadManager(scopedConfig, pixivClient, database, fileService);
+    if (options.excludedWorkIds) downloadManager.setProcessedWorkIds(options.excludedWorkIds);
     activeDownloadManager = downloadManager;
     await downloadManager.initialise();
 
-    if (slotCtx) {
-      const slot = slotCtx; // stable for callbacks
-      // TYPED outcome -> explicit FSM transition. No message regex, no
-      // "no throw => submitted". Only a confirmed ACK yields 'submitted'.
-      downloadManager.setTargetOutcomeHook((target, outcome: TargetOutcome) => {
-        if (!target.id) return;
-        coordinator.applyOutcome(slot.slotId, target.id, outcome);
-        notificationPolicy.noteOutcome(slot.slotId, slot, schedule, target, outcome);
-      });
+    const scheduleSlot = slotCtx; // stable for callbacks; null for ad-hoc runs
+    // TYPED outcome -> explicit FSM transition. No message regex, no
+    // "no throw => submitted". Only a confirmed ACK yields 'submitted'.
+    //
+    // Registered for EVERY run, not just scheduled ones: the batch runner
+    // (execute-slot) runs without a Slot and still has to report a
+    // machine-readable per-target result to its caller.
+    downloadManager.setTargetOutcomeHook((target, outcome: TargetOutcome) => {
+      if (!target.id) return;
+      options.onTargetOutcome?.(target.id, outcome);
+      if (!scheduleSlot) return;
+      coordinator.applyOutcome(scheduleSlot.slotId, target.id, outcome);
+      notificationPolicy.noteOutcome(scheduleSlot.slotId, scheduleSlot, schedule, target, outcome);
+    });
+    if (scheduleSlot) {
       downloadManager.slotContext = {
-        slotId: slot.slotId,
-        scheduleId: slot.scheduleId,
-        occurrenceAtIso: new Date(slot.occurrenceAt).toISOString(),
-        triggerSource: slot.triggerSource,
-        slotName: slot.slotName,
-        slotDate: slot.slotDate,
+        slotId: scheduleSlot.slotId,
+        scheduleId: scheduleSlot.scheduleId,
+        occurrenceAtIso: new Date(scheduleSlot.occurrenceAt).toISOString(),
+        triggerSource: scheduleSlot.triggerSource,
+        slotName: scheduleSlot.slotName,
+        slotDate: scheduleSlot.slotDate,
       };
     }
 

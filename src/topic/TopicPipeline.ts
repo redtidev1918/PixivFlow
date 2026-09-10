@@ -3,6 +3,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { logger } from '../logger';
 import { calculatePopularityScore } from '../utils/pixiv-utils';
 import { isAIIllustration } from '../utils/ai-detection';
+import { rethrowIfCancelled, throwIfAborted } from '../utils/errors';
 import type { TargetConfig } from '../config';
 import type { TopicResolver } from './TopicResolver';
 import type {
@@ -45,7 +46,14 @@ export class TopicPipeline {
   constructor(
     private readonly client: TopicClient,
     private readonly resolver: TopicResolver,
-    private readonly requestDelayMs = 500
+    private readonly requestDelayMs = 500,
+    /**
+     * Run-scoped cancellation. Candidate acquisition is the longest stretch of
+     * network work in a run, so it must observe the same abort as the download
+     * pipeline; otherwise a cancelled run keeps searching tags and can never
+     * settle, which is what let a timed-out run hold its slot lease forever.
+     */
+    private readonly signal?: AbortSignal
   ) {}
 
   async selectWorks<T extends WorkLike>(
@@ -72,6 +80,9 @@ export class TopicPipeline {
 
     for (let i = 0; i < tagNames.length; i++) {
       if (byId.size >= maxCandidates) break;
+      // Cancellation is checked between tags, so a cancelled run stops issuing
+      // new searches even when the aborted request itself had already returned.
+      throwIfAborted(this.signal, 'topic collection cancelled');
       const tag = tagNames[i];
       const works = await this.searchDay<T>(contentType, tag, day, maxPerTag, includeR18);
       rawCount += works.length;
@@ -134,13 +145,16 @@ export class TopicPipeline {
     includeR18: boolean
   ): Promise<T[]> {
     try {
-      const opts = { startDate: day, endDate: day, includeR18 };
+      const opts = { startDate: day, endDate: day, includeR18, signal: this.signal };
       const works = contentType === 'illustration'
         ? await this.client.searchIllustrationsForTags(tag, limit, opts)
         : await this.client.searchNovelsForTags(tag, limit, opts);
       // Date is already enforced server-side + pager stop; keep a cheap guard.
       return works.filter((w) => this.onDay(w.create_date, day)) as unknown as T[];
     } catch (error) {
+      // A cancellation must not be degraded into "no results for this tag": that
+      // would silently continue the cancelled run across the remaining tags.
+      rethrowIfCancelled(error, this.signal);
       logger.warn('[TopicCollector] search failed tag=' + tag + ' type=' + contentType + ': ' + (error instanceof Error ? error.message : String(error)));
       return [];
     }

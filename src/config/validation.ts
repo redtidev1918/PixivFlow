@@ -175,7 +175,10 @@ export function validateConfig(config: Partial<StandaloneConfig>, location: stri
       }
       if (target.noMatchPolicy?.notify === true) {
         const deliveryTarget = target.delivery?.target?.trim();
-        if (!deliveryTarget || !config.delivery?.targets?.[deliveryTarget]?.notificationUrl?.trim()) {
+        const notifyTarget = deliveryTarget ? config.delivery?.targets?.[deliveryTarget] : undefined;
+        const hasNotificationUrl =
+          notifyTarget?.type === 'httpMultipart' && Boolean(notifyTarget.notificationUrl?.trim());
+        if (!hasNotificationUrl) {
           errors.push(`targets[${index}].noMatchPolicy.notify: Delivery target must configure notificationUrl`);
         }
       }

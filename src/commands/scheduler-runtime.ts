@@ -32,7 +32,16 @@ import { logger } from '../logger';
 import { BUILD } from '../version';
 
 /** Options for a single schedule run; see ScheduleRunOptions for semantics. */
-export type RunJobOptions = ScheduleRunOptions;
+export type RunJobOptions = ScheduleRunOptions & {
+  /**
+   * Receives the typed business outcome of every target.
+   *
+   * The Slot ledger uses this internally; exposing it as an option lets the batch
+   * runner (`execute-slot`) run WITHOUT a Slot and still report a
+   * machine-readable per-target result to a control plane.
+   */
+  onTargetOutcome?: (targetId: string, outcome: TargetOutcome) => void;
+};
 
 export interface SchedulerRuntime {
   config: StandaloneConfig;
@@ -368,22 +377,28 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
     activeDownloadManager = downloadManager;
     await downloadManager.initialise();
 
-    if (slotCtx) {
-      const slot = slotCtx; // stable for callbacks
-      // TYPED outcome -> explicit FSM transition. No message regex, no
-      // "no throw => submitted". Only a confirmed ACK yields 'submitted'.
-      downloadManager.setTargetOutcomeHook((target, outcome: TargetOutcome) => {
-        if (!target.id) return;
-        coordinator.applyOutcome(slot.slotId, target.id, outcome);
-        notificationPolicy.noteOutcome(slot.slotId, slot, schedule, target, outcome);
-      });
+    const scheduleSlot = slotCtx; // stable for callbacks; null for ad-hoc runs
+    // TYPED outcome -> explicit FSM transition. No message regex, no
+    // "no throw => submitted". Only a confirmed ACK yields 'submitted'.
+    //
+    // Registered for EVERY run, not just scheduled ones: the batch runner
+    // (execute-slot) runs without a Slot and still has to report a
+    // machine-readable per-target result to its caller.
+    downloadManager.setTargetOutcomeHook((target, outcome: TargetOutcome) => {
+      if (!target.id) return;
+      options.onTargetOutcome?.(target.id, outcome);
+      if (!scheduleSlot) return;
+      coordinator.applyOutcome(scheduleSlot.slotId, target.id, outcome);
+      notificationPolicy.noteOutcome(scheduleSlot.slotId, scheduleSlot, schedule, target, outcome);
+    });
+    if (scheduleSlot) {
       downloadManager.slotContext = {
-        slotId: slot.slotId,
-        scheduleId: slot.scheduleId,
-        occurrenceAtIso: new Date(slot.occurrenceAt).toISOString(),
-        triggerSource: slot.triggerSource,
-        slotName: slot.slotName,
-        slotDate: slot.slotDate,
+        slotId: scheduleSlot.slotId,
+        scheduleId: scheduleSlot.scheduleId,
+        occurrenceAtIso: new Date(scheduleSlot.occurrenceAt).toISOString(),
+        triggerSource: scheduleSlot.triggerSource,
+        slotName: scheduleSlot.slotName,
+        slotDate: scheduleSlot.slotDate,
       };
     }
 

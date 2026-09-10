@@ -500,6 +500,10 @@ export interface HttpMultipartDeliveryConfig {
   headers?: Record<string, string>;
   /** multipart 文件字段名，默认 files */
   fileField?: string;
+  /** 可选预览文件字段名，默认 previews；与 files 一一对应 */
+  previewFileField?: string;
+  /** Optional dependency readiness endpoint. Non-200 defers outbox attempts. */
+  readinessUrl?: string;
   /** 普通表单字段，支持 title/pixivId/type/tag/topic/workTags 模板变量 */
   fields?: Record<string, DeliveryFieldValue>;
   /** 数组字段编码方式，默认 comma */
@@ -616,7 +620,6 @@ export interface StandaloneConfig {
     timeout?: number;
   };
 }
-
 
 
 

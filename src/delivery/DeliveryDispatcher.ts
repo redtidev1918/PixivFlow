@@ -1,6 +1,6 @@
 import { DeliveryConfig } from '../config';
 import { ConfigError } from '../utils/errors';
-import { HttpMultipartDelivery } from './HttpMultipartDelivery';
+import { HttpMultipartDelivery, ReadinessProbeResult } from './HttpMultipartDelivery';
 import { DeliveryNotificationRequest, DeliveryRequest, DeliveryResult } from './types';
 
 /** Resolves named delivery targets without coupling the outbox to a provider. */
@@ -12,6 +12,19 @@ export class DeliveryDispatcher {
 
   hasTarget(name: string): boolean {
     return Boolean(this.config?.targets?.[name]);
+  }
+
+  async isReady(name: string): Promise<boolean> {
+    return (await this.readinessProbe(name)).ready;
+  }
+
+  /** Structured readiness (includes reason/status for the audit event). */
+  async readinessProbe(name: string): Promise<ReadinessProbeResult> {
+    const target = this.config?.targets?.[name];
+    // Readiness is an optional preflight. Missing targets still flow through
+    // deliver/notify so the durable outbox records the normal retry error.
+    if (!target) return { ready: true };
+    return new HttpMultipartDelivery(target, this.proxyUrl).readinessProbe();
   }
 
   async deliver(name: string, request: DeliveryRequest): Promise<DeliveryResult> {

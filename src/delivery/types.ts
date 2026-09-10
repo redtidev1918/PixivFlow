@@ -11,6 +11,8 @@ export interface DownloadedArtifact {
   tags?: string[];
   /** Files sent to the configured delivery target. */
   files: string[];
+  /** Optional per-file lightweight preview sources, aligned with ``files``. */
+  previewFiles?: string[];
   /** Local sidecars deleted with cache files after successful delivery. */
   cleanupFiles?: string[];
   /** R-18 work (x_restrict > 0): delivery templates may open Telegram spoiler. */
@@ -76,6 +78,8 @@ export interface DeliveryContext {
 
 export interface DeliveryRequest {
   files: string[];
+  /** Optional per-file preview sources, aligned with ``files``. */
+  previewFiles?: string[];
   fields?: Record<string, DeliveryFieldValue>;
   context: DeliveryContext;
 }

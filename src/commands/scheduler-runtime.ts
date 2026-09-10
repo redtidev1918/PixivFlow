@@ -29,6 +29,7 @@ import { ScheduleRunOptions, TriggerSource } from '../scheduler/OccurrenceResolv
 import { JobFailure } from '../scheduler/Scheduler';
 import { processConfigPlaceholders } from '../config/placeholders';
 import { logger } from '../logger';
+import { BUILD } from '../version';
 
 /** Options for a single schedule run; see ScheduleRunOptions for semantics. */
 export type RunJobOptions = ScheduleRunOptions;
@@ -186,6 +187,7 @@ function buildProxyUrl(network: StandaloneConfig['network']): string | undefined
 }
 
 export async function createSchedulerRuntime(configPathArg?: string): Promise<SchedulerRuntime> {
+  logger.info('PixivFlow runtime starting', { component: 'pixivflow', version: BUILD.version, commit: BUILD.commit });
   // Keep TODAY/YESTERDAY placeholders intact. They are resolved afresh for
   // every plan execution, not frozen at daemon startup.
   const configPath = getConfigPath(configPathArg);

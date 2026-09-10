@@ -1,6 +1,6 @@
 {
   "name": "pixivflow",
-  "version": "2.13.0",
+  "version": "2.15.0",
   "description": "🎨 智能的 Pixiv 自动化下载工具 - 支持批量下载插画和小说、定时任务、Docker部署 | Intelligent Pixiv Automation Downloader with batch download, scheduler, and Docker support",
   "repository": {
     "type": "git",
@@ -22,7 +22,7 @@
   "scripts": {
     "prepublishOnly": "npm run build",
     "build:kit": "npm run build -w @redtidev/pixiv-client",
-    "build": "npm run build:kit && tsc && node scripts/create-webui-package-json.js",
+    "build": "npm run build:kit && node scripts/write-version.js && tsc && node scripts/create-webui-package-json.js",
     "build:watch": "tsc --watch",
     "start": "npm run build && node dist/index.js",
     "login": "./scripts/login.sh",

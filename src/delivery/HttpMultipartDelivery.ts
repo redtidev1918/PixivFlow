@@ -6,6 +6,14 @@ import { DeliveryFieldValue, HttpMultipartDeliveryConfig } from '../config';
 import { logger } from '../logger';
 import { DeliveryNotificationRequest, DeliveryProvider, DeliveryRequest, DeliveryResult } from './types';
 import { parseDeliveryAck } from './DeliveryAck';
+import { redactError, redactHeaders, redactUrl } from '../utils/redact';
+
+export interface ReadinessProbeResult {
+  ready: boolean;
+  /** Short machine-readable reason when not ready. */
+  reason?: 'connection_refused' | 'timeout' | string;
+  status?: number;
+}
 
 /** Render an ISO timestamp to YYYY-MM-DD (create_date is JST). */
 function formatPublishedDate(iso?: string): string {
@@ -28,17 +36,8 @@ function formatCount(value?: number): string {
 }
 
 /** Hide URL userinfo and query secrets from operational logs. */
-function redactUrl(value: string): string {
-  try {
-    const url = new URL(value);
-    const authority = (url.username || url.password ? 'redacted@' : '') + url.host;
-
-    const suffix = url.searchParams.size > 0 ? '?…' : '';
-    return `${url.protocol}//${authority}${url.pathname}${suffix}`;
-  } catch {
-    return value;
-  }
-}
+// redactUrl lives in utils/redact.ts; re-exported for existing imports.
+export { redactUrl } from '../utils/redact';
 
 /** Generic streaming HTTP multipart delivery provider. */
 export class HttpMultipartDelivery implements DeliveryProvider {
@@ -52,6 +51,40 @@ export class HttpMultipartDelivery implements DeliveryProvider {
       // eslint-disable-next-line @typescript-eslint/no-var-requires
       const { ProxyAgent } = require('undici');
       this.dispatcher = new ProxyAgent(proxyUrl);
+    }
+  }
+
+  async isReady(): Promise<boolean> {
+    return (await this.readinessProbe()).ready;
+  }
+
+  /**
+   * Readiness with a structured reason. Short (3s) timeout so cold-start probes
+   * never hang the outbox pump. Missing readinessUrl means "always ready".
+   */
+  async readinessProbe(): Promise<ReadinessProbeResult> {
+    const url = this.config.readinessUrl?.trim();
+    if (!url) return { ready: true };
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 3_000);
+    timer.unref?.();
+    const options: Record<string, unknown> = { method: 'GET', signal: controller.signal };
+    if (this.dispatcher) options.dispatcher = this.dispatcher;
+    try {
+      const response = await fetch(this.interpolateEnvironment(url), options as Parameters<typeof fetch>[1]);
+      if (response.ok) return { ready: true, status: response.status };
+      return { ready: false, reason: `http_${response.status}`, status: response.status };
+    } catch (error) {
+      const aborted = (error as { name?: string })?.name === 'AbortError';
+      const message = redactError(error);
+      logger.warn('Delivery readiness probe failed', {
+        url: redactUrl(url),
+        reason: aborted ? 'timeout' : 'connection_refused',
+        error: message,
+      });
+      return { ready: false, reason: aborted ? 'timeout' : 'connection_refused' };
+    } finally {
+      clearTimeout(timer);
     }
   }
 
@@ -97,7 +130,9 @@ export class HttpMultipartDelivery implements DeliveryProvider {
       { ...(this.config.fields ?? {}), ...(request.fields ?? {}) },
       request
     );
-    const multipart = await this.createMultipartBody(request.files, fields);
+    const multipart = await this.createMultipartBody(
+      request.files, fields, request.previewFiles
+    );
     const headers: Record<string, string> = {
       ...this.resolveHeaders(this.config.headers ?? {}),
       'Content-Type': `multipart/form-data; boundary=${multipart.boundary}`,
@@ -130,7 +165,7 @@ export class HttpMultipartDelivery implements DeliveryProvider {
     // Classification happens in parseDeliveryAck (DeliveryResult.ack). We keep
     // the raw status/body and only log for correlation.
     logger.info('HTTP multipart delivery response', {
-      url: this.config.url,
+      url: redactUrl(this.config.url),
       status: response.status,
       files: request.files.length,
       deliveryStatus: data?.status,
@@ -271,8 +306,12 @@ export class HttpMultipartDelivery implements DeliveryProvider {
 
   private async createMultipartBody(
     files: string[],
-    fields: Record<string, string[]>
+    fields: Record<string, string[]>,
+    previewFiles: string[] = []
   ): Promise<{ boundary: string; body: Readable; contentLength: number }> {
+    if (previewFiles.length > 0 && previewFiles.length !== files.length) {
+      throw new Error('previewFiles must be empty or align one-to-one with files');
+    }
     const boundary = `pixivflow-${randomUUID()}`;
     const fileField = this.escapeDispositionValue(this.config.fileField ?? 'files');
     const fileParts: Array<{ header: Buffer; path: string; size: number }> = [];
@@ -283,6 +322,20 @@ export class HttpMultipartDelivery implements DeliveryProvider {
       const header = Buffer.from(
         `--${boundary}\r\n` +
           `Content-Disposition: form-data; name="${fileField}"; filename="${filename}"\r\n` +
+          'Content-Type: application/octet-stream\r\n\r\n'
+      );
+      const stat = await fs.promises.stat(file);
+      fileParts.push({ header, path: file, size: stat.size });
+      contentLength += header.length + stat.size + 2;
+    }
+    const previewField = this.escapeDispositionValue(
+      this.config.previewFileField ?? 'previews'
+    );
+    for (const file of previewFiles) {
+      const filename = this.escapeDispositionValue(path.basename(file));
+      const header = Buffer.from(
+        `--${boundary}\r\n` +
+          `Content-Disposition: form-data; name="${previewField}"; filename="${filename}"\r\n` +
           'Content-Type: application/octet-stream\r\n\r\n'
       );
       const stat = await fs.promises.stat(file);

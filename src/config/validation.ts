@@ -226,6 +226,14 @@ export function validateConfig(config: Partial<StandaloneConfig>, location: stri
         errors.push(`${prefix}.notificationUrl: Must be a valid HTTP or HTTPS URL`);
       }
     }
+    if (delivery.readinessUrl && !/\$\{[A-Za-z_][A-Za-z0-9_]*\}/.test(delivery.readinessUrl)) {
+      try {
+        const url = new URL(delivery.readinessUrl);
+        if (!['http:', 'https:'].includes(url.protocol)) throw new Error('unsupported protocol');
+      } catch {
+        errors.push(`${prefix}.readinessUrl: Must be a valid HTTP or HTTPS URL`);
+      }
+    }
     if (delivery.method && !['POST', 'PUT'].includes(delivery.method)) {
       errors.push(`${prefix}.method: Must be "POST" or "PUT"`);
     }

@@ -28,6 +28,8 @@ import { DirsCommand } from './DirsCommand';
 import { VersionCommand } from './VersionCommand';
 import { TagsCommand } from './TagsCommand';
 import { TopicCommand } from './TopicCommand';
+import { OutboxCommand } from './OutboxCommand';
+import { RunsCommand } from './RunsCommand';
 
 /**
  * Create and register all commands
@@ -58,6 +60,8 @@ export function registerAllCommands(registry: CommandRegistry): void {
   registry.register(new VersionCommand());
   registry.register(new TagsCommand());
   registry.register(new TopicCommand());
+  registry.register(new OutboxCommand());
+  registry.register(new RunsCommand());
 }
 
 /**
@@ -89,4 +93,6 @@ export {
   VersionCommand,
   TagsCommand,
   TopicCommand,
+  OutboxCommand,
+  RunsCommand,
 };

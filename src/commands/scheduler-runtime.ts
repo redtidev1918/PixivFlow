@@ -34,6 +34,13 @@ import { BUILD } from '../version';
 /** Options for a single schedule run; see ScheduleRunOptions for semantics. */
 export type RunJobOptions = ScheduleRunOptions & {
   /**
+   * Downstream publishing mode for this run. Only `live` publishes: `shadow` and
+   * `dry-run` run the whole pipeline (selection, dedupe, download) with no
+   * delivery target attached, so no code path can publish even if the config
+   * names one. Config alone is not the guarantee — a future config edit would be.
+   */
+  deliveryMode?: ExecutionMode;
+  /**
    * Receives the typed business outcome of every target.
    *
    * The Slot ledger uses this internally; exposing it as an option lets the batch
@@ -48,6 +55,22 @@ export type RunJobOptions = ScheduleRunOptions & {
    */
   excludedWorkIds?: { illustration?: string[]; novel?: string[] };
 };
+
+/** Publishing modes accepted by the batch runner. */
+export const EXECUTION_MODES = ['live', 'shadow', 'dry-run'] as const;
+export type ExecutionMode = (typeof EXECUTION_MODES)[number];
+
+/**
+ * Attaches delivery targets only when publishing is live. Exported so the rule
+ * has one home and one test, rather than living inside the run closure.
+ */
+export function withDeliveryMode<T extends { delivery?: unknown }>(
+  targets: T[],
+  mode: ExecutionMode | undefined
+): T[] {
+  if ((mode ?? 'live') === 'live') return targets;
+  return targets.map((target) => (target.delivery ? { ...target, delivery: undefined } : target));
+}
 
 export interface SchedulerRuntime {
   config: StandaloneConfig;
@@ -375,13 +398,22 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
 
     const scopedConfig: StandaloneConfig = {
       ...runtimeConfig,
-      targets: runTargets.map((t) => ({
-        ...t,
-        delivery: t.delivery
-          ? { ...t.delivery, slotContext: slotCtx ?? undefined, executionContext }
-          : t.delivery,
-      })),
+      targets: withDeliveryMode(
+        runTargets.map((t) => ({
+          ...t,
+          delivery: t.delivery
+            ? { ...t.delivery, slotContext: slotCtx ?? undefined, executionContext }
+            : t.delivery,
+        })),
+        options.deliveryMode
+      ),
     };
+    if (options.deliveryMode && options.deliveryMode !== 'live') {
+      logger.warn('Publishing is disabled for this run; no delivery target is attached', {
+        mode: options.deliveryMode,
+        targets: runTargets.map((t) => t.id),
+      });
+    }
     const downloadManager = new DownloadManager(scopedConfig, pixivClient, database, fileService);
     if (options.excludedWorkIds) downloadManager.setProcessedWorkIds(options.excludedWorkIds);
     activeDownloadManager = downloadManager;

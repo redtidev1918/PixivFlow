@@ -55,8 +55,12 @@ interface PostedMessage {
 interface PostedReview {
   /** Ordered media message ids: one album, or several consecutive groups. */
   mediaMessageIds: number[];
-  /** One message carrying the work's text, sent after ALL media. */
-  captionMessageId: number;
+  /**
+   * Always null in the new model: the text is a caption ON the last media item, so a
+   * caption travels with its album through a copy. Kept in the shape only so the
+   * control plane can keep accepting the legacy field.
+   */
+  captionMessageId: null;
   /** The card with the approve/reject buttons. Never published. */
   controlMessageId: number;
   fileIds: string[];
@@ -205,7 +209,8 @@ export class TelegramReviewDelivery implements DeliveryProvider {
       // are different things, and publishing has to tell them apart to reproduce the
       // same layout in the channel.
       body.media_message_ids = input.review.mediaMessageIds;
-      body.caption_message_id = input.review.captionMessageId;
+      // The text is a caption on the last media item, not a message: there is nothing
+      // separate to report.
       body.control_message_id = input.review.controlMessageId;
       body.file_ids = input.review.fileIds;
       if (input.review.mediaGroupIds[0]) body.media_group_id = input.review.mediaGroupIds[0];
@@ -236,26 +241,31 @@ export class TelegramReviewDelivery implements DeliveryProvider {
   }
 
   /**
-   * Send one review in the order a reviewer should read it.
+   * Send one review: a grouped album whose LAST item carries the text, then the card.
    *
-   *   [file1 | file2 | file3]   <- media, consecutive, no text inside it
-   *   正文 / caption             <- one message, after ALL media
-   *   审核控制卡                  <- the buttons, last
+   *   [file1 | file2 | file3 + 正文]     <- one grouped album, caption on the last item
+   *   [✅ 发布] [❌ 拒绝]                 <- the only separate message
    *
-   * The old shape put the caption on the first album item and the keyboard on the
-   * media message, which made the text logically part of one file and left the review
-   * with no control card of its own. Files of the same kind stay together as an album;
-   * a different kind starts a new consecutive block; more than ten split into
-   * consecutive groups with the text still waiting for all of them.
+   * `InputMediaDocument` (and photo/video) each carry their own `caption`, so the text
+   * belongs to the album rather than being a second bubble below it. What
+   * `sendMediaGroup` cannot take is a single `reply_markup` for the whole group, which
+   * is the only reason the control card is its own message.
+   *
+   * The caption goes on the LAST item, not the first: it reads as "the text for
+   * everything above it" instead of belonging to file one.
    */
   private async post(request: DeliveryRequest, reviewId: string): Promise<PostOutcome> {
     if (request.files.length === 0) return { ok: false, ambiguous: false, error: 'no files to deliver' };
 
+    const blocks = this.mediaBlocks(request);
     const mediaMessageIds: number[] = [];
     const fileIds: string[] = [];
     const mediaGroupIds: string[] = [];
-    for (const block of this.mediaBlocks(request)) {
-      const sent = await this.sendMediaBlock(block);
+    const caption = this.caption(request);
+
+    for (const [index, block] of blocks.entries()) {
+      const isLastBlock = index === blocks.length - 1;
+      const sent = await this.sendMediaBlock(block, isLastBlock ? caption : undefined);
       if (!sent.ok) return sent;
       for (const message of sent.messages) {
         mediaMessageIds.push(message.messageId);
@@ -263,9 +273,6 @@ export class TelegramReviewDelivery implements DeliveryProvider {
       }
       if (sent.mediaGroupId) mediaGroupIds.push(sent.mediaGroupId);
     }
-
-    const captionSent = await this.sendText(this.config.chatId, this.caption(request).slice(0, 4096));
-    if (!captionSent.ok) return captionSent;
 
     const controlSent = await this.sendText(
       this.config.chatId,
@@ -285,7 +292,7 @@ export class TelegramReviewDelivery implements DeliveryProvider {
       ok: true,
       review: {
         mediaMessageIds,
-        captionMessageId: captionSent.messageId,
+        captionMessageId: null,
         controlMessageId: controlSent.messageId,
         fileIds,
         mediaGroupIds,
@@ -314,7 +321,8 @@ export class TelegramReviewDelivery implements DeliveryProvider {
 
   /** One media block. Never carries a caption or a keyboard. */
   private async sendMediaBlock(
-    block: { kind: 'photo' | 'document'; files: string[] }
+    block: { kind: 'photo' | 'document'; files: string[] },
+    caption?: string
   ): Promise<
     { ok: true; messages: PostedMessage[]; mediaGroupId?: string } | { ok: false; ambiguous: boolean; error: string }
   > {
@@ -327,17 +335,26 @@ export class TelegramReviewDelivery implements DeliveryProvider {
 
     let method: string;
     if (block.files.length > 1) {
-      const media: Array<{ type: string; media: string }> = [];
+      const media: Array<{ type: string; media: string; caption?: string }> = [];
       for (const [index, file] of block.files.entries()) {
         const buffer = await fs.readFile(file);
         form.append(`file${index}`, new Blob([new Uint8Array(buffer)]), `media${index}`);
-        media.push({ type: block.kind, media: `attach://file${index}` });
+        const item: { type: string; media: string; caption?: string } = {
+          type: block.kind,
+          media: `attach://file${index}`,
+        };
+        // Only the last item of the last group carries the text, so it reads as the
+        // caption for the whole album and the text appears once, at the end.
+        if (caption && index === block.files.length - 1) item.caption = caption.slice(0, 1024);
+        media.push(item);
       }
       form.append('media', JSON.stringify(media));
       method = 'sendMediaGroup';
     } else {
       const buffer = await fs.readFile(block.files[0]!);
       form.append(block.kind, new Blob([new Uint8Array(buffer)]), 'media');
+      // A single file is a one-item group, so the text rides on it the same way.
+      if (caption) form.append('caption', caption.slice(0, 1024));
       method = block.kind === 'photo' ? 'sendPhoto' : 'sendDocument';
     }
 

@@ -168,8 +168,8 @@ describe('a successful delivery posts once and records only ids', () => {
     expect(result.ack).toMatchObject({ kind: 'accepted', remoteId: expect.stringMatching(/^rv_/) });
 
     const telegram = telegramCalls(calls);
-    // Media, then the work's text, then the card with the buttons.
-    expect(telegram.map((call) => call.url.split('/').pop())).toEqual(['sendPhoto', 'sendMessage', 'sendMessage']);
+    // The file (carrying its caption) and the card. The text is NOT a message.
+    expect(telegram.map((call) => call.url.split('/').pop())).toEqual(['sendPhoto', 'sendMessage']);
 
     const reports = reportBodies(calls);
     expect(reports).toHaveLength(1);
@@ -178,9 +178,8 @@ describe('a successful delivery posts once and records only ids', () => {
       chat_id: REVIEW_CHAT,
       publish_chat_id: CHANNEL,
       status: 'pending',
-      // The ids are reported per kind, so publishing can reproduce the layout.
+      // The text is a caption on the media, so there is no caption message to report.
       media_message_ids: [77],
-      caption_message_id: 77,
       control_message_id: 77,
       work_id: '29088506',
       target_id: 'bot1-illust-botefuku',
@@ -207,11 +206,12 @@ describe('a successful delivery posts once and records only ids', () => {
     expect(result.ack).toMatchObject({ kind: 'accepted' });
     expect(telegramCalls(calls)[0]!.url).toContain('/sendMediaGroup');
     expect(reportBodies(calls)[0]).toMatchObject({
-      // Media, text and the control card are reported as three separate things.
+      // Media and the control card. The text rides on the media, so it is not reported
+      // as a message of its own.
       media_message_ids: [1, 2],
       media_group_id: 'mg-9',
     });
-    expect(typeof reportBodies(calls)[0]!.caption_message_id).toBe('number');
+    expect(reportBodies(calls)[0]!.caption_message_id).toBeUndefined();
     expect(typeof reportBodies(calls)[0]!.control_message_id).toBe('number');
   });
 });
@@ -273,9 +273,7 @@ describe('failures are never turned into duplicates', () => {
  * caption belongs to a message.
  */
 describe('review layout', () => {
-  // The media are read from disk before being attached, so the fixtures are real
-  // files. Three of them, because the point of the layout is what happens BETWEEN
-  // files and the text.
+  // The media are read from disk before being attached, so the fixtures are real files.
   let layoutDir = '';
   let manyFiles: string[] = [];
   beforeAll(() => {
@@ -290,8 +288,10 @@ describe('review layout', () => {
     rmSync(layoutDir, { recursive: true, force: true });
   });
 
-  /** Every Telegram call, in order, with the multipart form or JSON body decoded. */
-  async function run(files: string[]): Promise<Array<{ method: string; form?: FormData; body?: Record<string, unknown> }>> {
+  async function run(
+    files: string[],
+    type = 'illustration'
+  ): Promise<Array<{ method: string; form?: FormData; body?: Record<string, unknown> }>> {
     const { fetchImpl, calls } = fakeFetch({
       telegram: (call) => {
         const method = call.url.split('/').pop()!;
@@ -299,7 +299,7 @@ describe('review layout', () => {
       },
     });
     const delivery = new TelegramReviewDelivery(config(), fetchImpl);
-    await delivery.deliver({ ...request(), files });
+    await delivery.deliver({ ...request({ context: { ...request().context, type } as never }), files });
     return telegramCalls(calls).map((call) => {
       const method = call.url.split('/').pop()!;
       if (call.body instanceof FormData) return { method, form: call.body };
@@ -307,41 +307,55 @@ describe('review layout', () => {
     });
   }
 
-  it('sends the media group, then the caption, then the control card', async () => {
+  it('puts the text on the LAST item of the album, not on a separate message', async () => {
     const calls = await run([files[0]!, files[1]!]);
 
-    expect(calls.map((call) => call.method)).toEqual(['sendMediaGroup', 'sendMessage', 'sendMessage']);
-    // The album carries neither text nor buttons: a caption would belong to one file.
-    expect(calls[0]!.form!.get('caption')).toBeNull();
+    // One album, then the control card. No second text bubble.
+    expect(calls.map((call) => call.method)).toEqual(['sendMediaGroup', 'sendMessage']);
+
+    const media = JSON.parse(String(calls[0]!.form!.get('media'))) as Array<{ caption?: string }>;
+    expect(media).toHaveLength(2);
+    // The text belongs to the whole group, so it appears once, on the final item.
+    expect(media[0]!.caption).toBeUndefined();
+    expect(typeof media[1]!.caption).toBe('string');
+
+    // The album itself carries no group-level reply_markup; only the card has buttons.
     expect(calls[0]!.form!.get('reply_markup')).toBeNull();
-    // The text is its own message, after all the media, with no buttons.
-    expect(typeof calls[1]!.body!.text).toBe('string');
-    expect(calls[1]!.body!.reply_markup).toBeUndefined();
-    // Only the control card has the keyboard.
-    const keyboard = (calls[2]!.body!.reply_markup as { inline_keyboard: unknown[][] }).inline_keyboard;
+    const keyboard = (calls[1]!.body!.reply_markup as { inline_keyboard: unknown[][] }).inline_keyboard;
     expect(keyboard[0]).toHaveLength(2);
   });
 
-  it('keeps the same order for a single file', async () => {
+  it('keeps the same shape for a single file', async () => {
     const calls = await run([files[0]!]);
-    // One file is sent singly, but the text is STILL its own message: the layout must
-    // not change shape with the file count.
-    expect(calls.map((call) => call.method)).toEqual(['sendPhoto', 'sendMessage', 'sendMessage']);
-    expect(calls[0]!.form!.get('caption')).toBeNull();
+    // One document with its caption, then the card. Still no separate text message.
+    expect(calls.map((call) => call.method)).toEqual(['sendPhoto', 'sendMessage']);
+    expect(calls[0]!.form!.get('caption')).toBeTruthy();
   });
 
-  it('splits more than ten files into consecutive groups with one caption after all of them', async () => {
-    const calls = await run(manyFiles.slice(0, 23));
+  it('sends documents when the work is a novel, with the caption on the last one', async () => {
+    const calls = await run([files[0]!, files[1]!], 'novel');
+    const media = JSON.parse(String(calls[0]!.form!.get('media'))) as Array<{ type: string; caption?: string }>;
+    expect(media.map((item) => item.type)).toEqual(['document', 'document']);
+    expect(media[0]!.caption).toBeUndefined();
+    expect(media[1]!.caption).toBeTruthy();
+  });
+
+  it('carries the text only in the final group when more than ten files split the album', async () => {
+    const calls = await run(manyFiles);
+
+    // 23 files -> 10 + 10 + 3 consecutive groups, then the card.
     expect(calls.map((call) => call.method)).toEqual([
       'sendMediaGroup',
       'sendMediaGroup',
       'sendMediaGroup',
       'sendMessage',
-      'sendMessage',
     ]);
-    // Exactly one text message, and it comes after every media message.
-    const textIndexes = calls.filter((call) => call.method === 'sendMessage' && call.body?.reply_markup === undefined);
-    expect(textIndexes).toHaveLength(1);
-    expect(calls.indexOf(textIndexes[0]!)).toBeGreaterThan(2);
+
+    const captions = calls.slice(0, 3).map((call) => {
+      const media = JSON.parse(String(call.form!.get('media'))) as Array<{ caption?: string }>;
+      return media.filter((item) => typeof item.caption === 'string').length;
+    });
+    // Exactly one caption in the whole album, in the final group.
+    expect(captions).toEqual([0, 0, 1]);
   });
 });

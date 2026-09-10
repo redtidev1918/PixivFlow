@@ -57,6 +57,13 @@ export class DownloadManager implements IDownloadManager {
   // Cooperative cancellation state (see cancel())
   private cancelled = false;
   private cancelReason = '';
+  /**
+   * Hard cancellation signal for the current run. The flag above only stops the
+   * pipeline between items; this aborts the in-flight HTTP request too, so a
+   * cancelled run cannot sit blocked inside a Pixiv call until the scheduler
+   * times out — and, once timed out, cannot keep holding its slot lease.
+   */
+  private readonly abortController = new AbortController();
   private readonly deliveryService!: DeliveryService;
   /** Per-target TYPED outcome hook (the Slot ledger maps it to cell transitions). */
   private onTargetOutcome: ((target: TargetConfig, outcome: TargetOutcome) => void) | null = null;
@@ -92,6 +99,17 @@ export class DownloadManager implements IDownloadManager {
       this.cancelReason = reason;
       logger.warn(`Download cancellation requested: ${reason}`);
     }
+    // Always abort, even on a repeated cancel: the signal is what unwedges an
+    // in-flight request, and an early cancel (e.g. process shutdown) must not
+    // leave a later, already-aborted run with a live signal.
+    if (!this.abortController.signal.aborted) {
+      this.abortController.abort(reason);
+    }
+  }
+
+  /** Run-scoped abort signal (already aborted once cancel() was called). */
+  public get signal(): AbortSignal {
+    return this.abortController.signal;
   }
 
   public isCancelled(): boolean {
@@ -162,7 +180,8 @@ export class DownloadManager implements IDownloadManager {
       typeof (database as unknown as { getDatabasePath?: () => string }).getDatabasePath === 'function'
         ? (database as unknown as { getDatabasePath(): string })
         : config.storage?.databasePath,
-      config.download?.requestDelay ?? 500
+      config.download?.requestDelay ?? 500,
+      this.abortController.signal
     );
 
     this.illustrationHandler = new IllustrationTargetHandler(

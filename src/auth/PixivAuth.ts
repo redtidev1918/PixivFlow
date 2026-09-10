@@ -22,6 +22,22 @@ interface RefreshTokenResponse {
 const TOKEN_CACHE_KEY = 'pixiv_access_token';
 const REFRESH_TOKEN_CACHE_KEY = 'pixiv_refresh_token';
 
+/**
+ * Read-only auth: never exchange a refresh token, never persist one.
+ *
+ * Two processes can share one refresh token, but Pixiv's rotation behaviour on
+ * `grant_type=refresh_token` is a server detail a client cannot prove. If it
+ * rotates, a second process that refreshes can invalidate the first one's token —
+ * and a long-running daemon never re-reads the token from disk, so it cannot
+ * recover without a restart. In this mode the only accepted credential is an
+ * access token already present in the local cache; anything else fails loudly
+ * instead of silently rotating a credential someone else is using.
+ */
+export function isAuthReadOnly(): boolean {
+  const value = process.env.PIXIV_AUTH_READONLY?.trim().toLowerCase();
+  return value === '1' || value === 'true' || value === 'yes';
+}
+
 export class PixivAuth {
   private configPath?: string;
 
@@ -40,6 +56,13 @@ export class PixivAuth {
       return cached.accessToken;
     }
 
+    if (isAuthReadOnly()) {
+      throw new AuthenticationError(
+        'Read-only auth (PIXIV_AUTH_READONLY) refuses to refresh: no usable access token is cached. ' +
+          'Seed the access-token cache with a token that is still valid, or run with its own credential.'
+      );
+    }
+
     const refreshed = await this.refreshAccessToken();
     return refreshed.accessToken;
   }
@@ -54,6 +77,15 @@ export class PixivAuth {
   }
 
   private async refreshAccessToken(): Promise<AccessTokenStore> {
+    // Single guard for every refresh caller: the persistence block below writes a
+    // rotated token to the database, a file and the config, in this process only.
+    if (isAuthReadOnly()) {
+      throw new AuthenticationError(
+        'Read-only auth (PIXIV_AUTH_READONLY) must never call the token endpoint: ' +
+          'refreshing may rotate a refresh token another process is using.'
+      );
+    }
+
     const url = 'https://oauth.secure.pixiv.net/auth/token';
 
     let lastError: unknown;

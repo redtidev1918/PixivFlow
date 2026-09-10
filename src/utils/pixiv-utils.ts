@@ -1,5 +1,5 @@
 import { logger } from '../logger';
-import { PixivIllust, PixivNovel } from '../pixiv/PixivClient';
+import { PixivIllust, PixivNovel } from '@redtidev/pixiv-client';
 
 /**
  * Calculate popularity score for an illustration or novel

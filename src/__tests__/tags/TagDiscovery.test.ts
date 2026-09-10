@@ -11,7 +11,7 @@ import { TagDiscoveryService } from '../../tags/TagDiscoveryService';
 import { TagDiscoveryStore } from '../../tags/TagDiscoveryStore';
 import { TagPlanApplier } from '../../tags/TagPlanApplier';
 import type { TagDiscoveryClient, TagDiscoveryManifest } from '../../tags/types';
-import type { PixivTag } from '../../pixiv/types';
+import type { PixivTag } from '@redtidev/pixiv-client';
 
 const tag = (name: string, translated_name?: string): PixivTag =>
   translated_name ? { name, translated_name } : { name };

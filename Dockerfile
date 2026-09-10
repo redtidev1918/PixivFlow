@@ -25,7 +25,10 @@ RUN apk add --no-cache \
     && rm -rf /var/cache/apk/*
 
 # 复制 package 文件（利用 Docker 缓存层）
+# packages/ 是 npm workspaces（@redtidev/pixiv-client）：npm ci 需要工作区
+# 目录存在才能解析本地 workspace 依赖，因此必须在 install 之前复制。
 COPY package*.json ./
+COPY packages ./packages
 
 # 安装所有依赖（包括开发依赖，用于构建）
 RUN npm ci --only=production=false && \
@@ -94,8 +97,10 @@ RUN apk add --no-cache \
     && rm -rf /var/cache/apk/* \
     && rm -rf /root/.cache
 
-# 复制 package 文件
+# 复制 package 文件（工作区 manifest 必须存在，npm 才能解析
+# @redtidev/pixiv-client 这个本地 workspace 依赖并建立软链接）
 COPY package*.json ./
+COPY packages/pixiv-client/package.json ./packages/pixiv-client/package.json
 
 # 只安装生产依赖
 RUN npm ci --only=production && \
@@ -104,6 +109,9 @@ RUN npm ci --only=production && \
 
 # 从构建阶段复制编译后的文件
 COPY --from=builder /app/dist ./dist
+
+# 从构建阶段复制 Kit 编译产物（工作区依赖指向 packages/pixiv-client）
+COPY --from=builder /app/packages/pixiv-client/dist ./packages/pixiv-client/dist
 
 # 从构建阶段复制前端构建文件（如果存在）
 # 注意：如果前端目录不存在，这个命令会失败，但不会影响构建

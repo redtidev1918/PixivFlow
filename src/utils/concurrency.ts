@@ -1,5 +1,5 @@
 import { logger } from '../logger';
-import { NetworkError } from './errors';
+import { NetworkError, PixivRateLimitError } from './errors';
 
 /**
  * Configuration for parallel processing
@@ -121,7 +121,9 @@ export async function processInParallel<T, R>(
       };
       
       // Check if this is a rate limit error
-      const isRateLimit = error instanceof NetworkError && error.isRateLimit === true;
+      const isRateLimit =
+        (error instanceof NetworkError && error.isRateLimit === true) ||
+        error instanceof PixivRateLimitError;
       
       if (isRateLimit && dynamicConcurrency) {
         rateLimitCount++;

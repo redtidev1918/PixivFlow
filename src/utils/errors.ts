@@ -3,6 +3,52 @@
  * Provides consistent error types and handling patterns across the application
  */
 
+import {
+  PixivError,
+  PixivHttpError,
+  PixivNetworkError,
+  PixivNotFoundError,
+  PixivRateLimitError,
+  PixivTimeoutError,
+} from '@redtidev/pixiv-client';
+
+/** True for network/HTTP errors thrown by the independent pixiv-client kit. */
+export function isPixivKitError(error: unknown): error is PixivError {
+  return error instanceof PixivError;
+}
+
+/**
+ * Bridge a kit error into PixivFlow's legacy NetworkError shape so existing
+ * instanceof NetworkError / .isRateLimit / .waitTime / .url / .cause checks
+ * keep working while callers migrate to typed kit errors.
+ */
+export function toNetworkError(error: PixivError): NetworkError {
+  const mapped = new NetworkError(
+    error.message,
+    error.endpoint,
+    error.cause instanceof Error ? error.cause : undefined,
+    error instanceof PixivRateLimitError
+      ? { isRateLimit: true, waitTime: error.retryAfterMs }
+      : error.retryAfterMs !== undefined
+        ? { waitTime: error.retryAfterMs }
+        : undefined
+  );
+  // Preserve the status (404/403/500/...) for legacy code.
+  if (error.status !== undefined) {
+    Object.assign(mapped, { statusCode: error.status });
+  }
+  return mapped;
+}
+
+export {
+  PixivError,
+  PixivHttpError,
+  PixivNetworkError,
+  PixivNotFoundError,
+  PixivRateLimitError,
+  PixivTimeoutError,
+};
+
 export class PixivFlowError extends Error {
   constructor(
     message: string,
@@ -122,12 +168,36 @@ export class HelpRequest extends Error {
  * Check if an error is a 404 (not found) error
  */
 export function is404Error(error: unknown): boolean {
+  if (error instanceof PixivNotFoundError) return true;
   if (error instanceof Error) {
-    return error.message.includes('404') || 
+    return error.message.includes('404') ||
            error.message.includes('not found') ||
            (error instanceof NetworkError && error.statusCode === 404);
   }
   return String(error).includes('404');
+}
+
+/**
+ * True for TYPED network/rate-limit failures (legacy NetworkError or errors
+ * thrown by the pixiv-client kit). String-pattern matching on arbitrary
+ * Errors is intentionally NOT included: plain Errors with words like
+ * "timeout" were historically treated as skipable, and callers keep that
+ * classification via their own regexes.
+ */
+export function isRetryableNetworkError(error: unknown): boolean {
+  return (
+    error instanceof NetworkError ||
+    error instanceof PixivNetworkError ||
+    error instanceof PixivRateLimitError ||
+    error instanceof PixivTimeoutError
+  );
+}
+
+/** Rate-limit wait hint (ms) from a kit or legacy error, if any. */
+export function rateLimitWaitMs(error: unknown): number | undefined {
+  if (error instanceof PixivRateLimitError) return error.retryAfterMs;
+  if (error instanceof NetworkError) return error.waitTime;
+  return undefined;
 }
 
 /**

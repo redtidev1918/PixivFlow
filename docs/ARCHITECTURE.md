@@ -14,7 +14,7 @@ graph TD
     C --> D1[DownloadManager<br/>src/download/]
     C --> D2[Scheduler<br/>src/scheduler/]
     C --> D3["WebUICommand → startWebUI"]
-    D1 --> P[PixivClient / PixivAuth<br/>src/pixiv/]
+    D1 --> P[PixivFlowPixivClient 适配器<br/>src/pixiv-client/ → @redtidev/pixiv-client<br/>PixivAuth: src/auth/]
     D2 --> D1
     W --> D1
     D1 --> S[(SQLite<br/>src/storage/)]
@@ -32,7 +32,8 @@ graph TD
 | 命令层 | `src/commands/` | 20 个命令类 + 注册表,每个命令只做编排 |
 | 业务层 | `src/download/`、`src/scheduler/` | 下载管线、并发控制、定时调度 |
 | 数据访问层 | `src/storage/`、`src/download/FileService.ts` | SQLite 仓储、文件落盘与整理 |
-| 外部集成层 | `src/pixiv/`、`src/terminal-login/` 等适配器 | OAuth 令牌、Pixiv API、浏览器登录 |
+| 外部集成层 | `src/pixiv-client/`(适配器)、`packages/pixiv-client`(独立 Kit)、`src/auth/`、`src/terminal-login/` | OAuth 令牌、Pixiv API、浏览器登录 |
+| Pixiv Client Kit | `packages/pixiv-client`(`@redtidev/pixiv-client`) | 独立可复用的 Pixiv 协议/HTTP/429 套件;见 [PIXIV_CLIENT_KIT.md](PIXIV_CLIENT_KIT.md) |
 | 服务层 | `src/webui/` | REST API、Socket.IO 日志流、静态托管 |
 | 横切层 | `src/config/`、`src/logger.ts`、`src/di/`、`src/utils/` | 配置加载链、日志、轻量 DI 容器、工具 |
 
@@ -48,7 +49,7 @@ graph TD
 | `src/download/` | `DownloadManager`、`plan/`、`pipeline/`、`exec/`、`handlers/`、`recovery/`、`report/`、两个 Downloader、`FileService`、`FileNormalizationService` | 下载编排:计划 → 执行 → 落盘 → 记录 → 恢复 |
 | `src/scheduler/` | `Scheduler` | node-cron 封装,带并发互斥、次数/失败上限、超时记录 |
 | `src/storage/` | `Database`、`DatabaseMigration`、`repositories/` | better-sqlite3 访问,按领域拆分仓储(facade 模式) |
-| `src/pixiv/` | `AuthClient`(即 `PixivAuth`)、`PixivClient`、`client/` 服务 | OAuth 刷新、检索/详情/媒体下载服务 |
+| `src/pixiv-client/` | `PixivFlowPixivClient`(实现 `IPixivClient`)、`TargetSearchRunner`、`PixivAuthTokenProvider` | 产品侧适配器:TargetConfig 映射、标签/日期分页语义、SQLite 429 状态;协议层全部委托给 Kit |
 | `src/terminal-login/`、`src/puppeteer-login-adapter/`、`src/python-login-adapter/`、`src/pixiv-token-getter-adapter.ts` | 登录适配器 | 三级降级链:pixiv-token-getter → Puppeteer(PKCE) → Python gppt |
 | `src/webui/` | `server/`、`routes/`、`routes/handlers/`、`websocket/`、`services/` | Express 服务器、REST 路由与处理器、Socket.IO 日志流、下载任务管理 |
 | `src/interfaces/` | `IDatabase`、`IDownloadManager`、`IFileService`、`IPixivAuth`、`IPixivClient` | 模块间契约,便于测试替换 |

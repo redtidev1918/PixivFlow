@@ -3,7 +3,7 @@
  */
 
 import { calculatePopularityScore, parsePixivDate } from '../../utils/pixiv-utils';
-import { PixivIllust, PixivNovel } from '../../pixiv/PixivClient';
+import { PixivIllust, PixivNovel } from '@redtidev/pixiv-client';
 
 describe('pixiv-utils', () => {
   describe('calculatePopularityScore', () => {

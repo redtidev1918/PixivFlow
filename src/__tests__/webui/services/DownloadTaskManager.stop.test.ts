@@ -34,8 +34,10 @@ jest.mock('../../../download/DownloadManager', () => ({
   })),
 }));
 
-jest.mock('../../../pixiv/AuthClient', () => ({ PixivAuth: class {} }));
-jest.mock('../../../pixiv/PixivClient', () => ({ PixivClient: class {} }));
+jest.mock('../../../auth/PixivAuth', () => ({ PixivAuth: class {} }));
+jest.mock('../../../pixiv-client/createPixivFlowClient', () => ({
+  createPixivFlowClient: jest.fn(() => ({})),
+}));
 jest.mock('../../../download/FileService', () => ({ FileService: class {} }));
 
 jest.mock('../../../storage/Database', () => ({

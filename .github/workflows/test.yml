@@ -38,10 +38,13 @@ jobs:
         run: npm ci
 
       - name: Typecheck
-        run: npx tsc --noEmit
+        # typecheck/test:app build the @redtidev/pixiv-client workspace first:
+        # the package resolves types and main from its dist/, so a bare
+        # `tsc --noEmit` on a fresh checkout cannot see it.
+        run: npm run typecheck
 
       - name: Run tests
-        run: npx jest --ci --runInBand
+        run: npm run test:app
 
       - name: Verify ugoira GIF conversion
         run: |

@@ -16,7 +16,7 @@
  * one is present, and the control plane owns cross-runner duplicate state.
  */
 
-import { writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 
 import { BaseCommand } from './Command';
 import { CommandCategory } from './metadata';
@@ -85,6 +85,7 @@ export class ExecuteSlotCommand extends BaseCommand {
     const occurrenceAtRaw = stringOption(args, 'occurrence-at', 'occurrenceAt');
     const occurrenceAt = occurrenceAtRaw ? Number(occurrenceAtRaw) : undefined;
     const resultFile = stringOption(args, 'result-file', 'resultFile');
+    const excludeFile = stringOption(args, 'exclude-work-ids', 'excludeWorkIds');
     const timeoutMs = Number(stringOption(args, 'timeout-ms', 'timeoutMs') ?? DEFAULT_SCHEDULE_TIMEOUT_MS);
     const targetFilter = (stringOption(args, 'targets') ?? '')
       .split(',')
@@ -130,6 +131,11 @@ export class ExecuteSlotCommand extends BaseCommand {
         targets: expectedTargetIds,
       });
 
+      // Durable duplicate history: works this bot already handled, fetched by the
+      // caller (the batch runner asks the control plane). Without it a disposable
+      // runner re-selects work that was delivered weeks ago.
+      const excludedWorkIds = excludeFile ? readExcludedWorkIds(excludeFile, context) : undefined;
+
       await runWithTimeout(
         runtime.runJob(runtime.config, schedule, {
           // Ad-hoc by design: the control plane owns the occurrence ledger now, so
@@ -139,6 +145,7 @@ export class ExecuteSlotCommand extends BaseCommand {
           onTargetOutcome: (targetId: string, outcome: TargetOutcome) => {
             outcomes.push(outcomeToTargetResult(targetId, outcome));
           },
+          ...(excludedWorkIds ? { excludedWorkIds } : {}),
         }),
         timeoutMs,
         () => runtime!.cancelActive(`batch timeout after ${timeoutMs}ms`),
@@ -216,6 +223,10 @@ Optional:
   --mode live|shadow|dry-run  Downstream publishing mode (default live)
   --result-file <path>     Write the result JSON here
   --timeout-ms <n>         Hard bound for the run (default: schedule timeout)
+  --exclude-work-ids <f>   JSON file of works this bot already handled:
+                           {"illustration":["id",...],"novel":[...]} (or the control
+                           plane's {"works":{...}} response). Durable duplicate
+                           history a disposable runner cannot know by itself.
 
 Machine interface: pass --result-file and read that file. Stdout also carries the
 process logger's lines, so it is NOT a strict JSON channel.
@@ -230,5 +241,42 @@ Exit codes (the exit code IS the execution status):
 Examples:
   pixivflow execute-slot --schedule-id bot1-daily --slot-id bot1-daily@2026-09-11T1800 \\
     --mode shadow --result-file /tmp/slot-result.json`;
+  }
+}
+
+/**
+ * Read durable duplicate history. Accepts either the bare map or the control
+ * plane's envelope, and tolerates a missing/garbled file by logging loudly rather
+ * than silently running without history — that would re-post old work.
+ */
+function readExcludedWorkIds(
+  path: string,
+  context: CommandContext
+): { illustration?: string[]; novel?: string[] } | undefined {
+  try {
+    const parsed = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>;
+    const source = (parsed.works && typeof parsed.works === 'object' ? parsed.works : parsed) as Record<
+      string,
+      unknown
+    >;
+    const toIds = (value: unknown): string[] | undefined =>
+      Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : undefined;
+    const illustration = toIds(source.illustration);
+    const novel = toIds(source.novel);
+    if (!illustration && !novel) {
+      context.logger.warn('Duplicate-history file had no usable ids', { path });
+      return undefined;
+    }
+    context.logger.info('Loaded durable duplicate history', {
+      illustration: illustration?.length ?? 0,
+      novel: novel?.length ?? 0,
+    });
+    return { ...(illustration ? { illustration } : {}), ...(novel ? { novel } : {}) };
+  } catch (error) {
+    context.logger.warn('Could not read the duplicate-history file; continuing without it', {
+      path,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return undefined;
   }
 }

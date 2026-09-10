@@ -4,7 +4,7 @@
 
 import { RankingService } from '../../download/RankingService';
 import type { IPixivClient } from '../../interfaces/IPixivClient';
-import type { PixivIllust, PixivNovel } from '../../pixiv/types';
+import type { PixivIllust, PixivNovel } from '@redtidev/pixiv-client';
 
 const createIllust = (overrides: Partial<PixivIllust> = {}): PixivIllust =>
   ({

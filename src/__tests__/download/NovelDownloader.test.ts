@@ -3,7 +3,7 @@ import { TargetConfig } from '../../config';
 import { IPixivClient } from '../../interfaces/IPixivClient';
 import { IDatabase } from '../../interfaces/IDatabase';
 import { IFileService } from '../../interfaces/IFileService';
-import { PixivNovel } from '../../pixiv/PixivClient';
+import { PixivNovel } from '@redtidev/pixiv-client';
 
 jest.mock('../../utils/directory-info', () => ({
   displayDownloadPath: jest.fn(),

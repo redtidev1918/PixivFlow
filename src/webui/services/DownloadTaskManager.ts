@@ -1,6 +1,6 @@
 import { DownloadManager } from '../../download/DownloadManager';
-import { PixivClient } from '../../pixiv/PixivClient';
-import { PixivAuth } from '../../pixiv/AuthClient';
+import { createPixivFlowClient } from '../../pixiv-client/createPixivFlowClient';
+import { PixivAuth } from '../../auth/PixivAuth';
 import { Database } from '../../storage/Database';
 import { FileService } from '../../download/FileService';
 import { StandaloneConfig, loadConfig, getConfigPath } from '../../config';
@@ -142,7 +142,7 @@ export class DownloadTaskManager {
     // Use the first config path for auth (or default if none specified)
     const authConfigPath = configPaths && configPaths.length > 0 ? configPaths[0] : getConfigPath();
     const auth = new PixivAuth(config.pixiv, config.network!, database, authConfigPath);
-    const pixivClient = new PixivClient(auth, config);
+    const pixivClient = createPixivFlowClient(auth, config, database);
     const fileService = new FileService(config.storage!);
     const downloadManager = new DownloadManager(config, pixivClient, database, fileService);
 

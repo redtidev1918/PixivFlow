@@ -2,8 +2,9 @@ import { BaseCommand } from './Command';
 import { CommandCategory } from './metadata';
 import type { CommandArgs, CommandContext, CommandResult } from './types';
 import { Database } from '../storage/Database';
-import { PixivAuth } from '../pixiv/AuthClient';
-import { PixivClient } from '../pixiv/PixivClient';
+import { PixivAuth } from '../auth/PixivAuth';
+import { createPixivFlowClient } from '../pixiv-client/createPixivFlowClient';
+import type { IPixivClient } from '../interfaces/IPixivClient';
 import { createTopicPipelineFactory } from '../topic/createTopicPipeline';
 import { TopicResolver } from '../topic/TopicResolver';
 import { TopicCache } from '../topic/TopicCache';
@@ -37,12 +38,12 @@ export class TopicCommand extends BaseCommand {
     }
   }
 
-  private async withClient<T>(context: CommandContext, fn: (deps: { client: PixivClient; database: Database }) => Promise<T>): Promise<T> {
+  private async withClient<T>(context: CommandContext, fn: (deps: { client: IPixivClient; database: Database }) => Promise<T>): Promise<T> {
     const database = new Database(context.config.storage!.databasePath!);
     try {
       database.migrate();
       const auth = new PixivAuth(context.config.pixiv, context.config.network!, database, context.configPath);
-      const client = new PixivClient(auth, context.config);
+      const client = createPixivFlowClient(auth, context.config, database);
       return await fn({ client, database });
     } finally {
       database.close();

@@ -2,8 +2,8 @@ import { loadConfig, getConfigPath } from './config';
 import { DownloadManager } from './download/DownloadManager';
 import { FileService } from './download/FileService';
 import { logger } from './logger';
-import { PixivAuth } from './pixiv/AuthClient';
-import { PixivClient } from './pixiv/PixivClient';
+import { PixivAuth } from './auth/PixivAuth';
+import { createPixivFlowClient } from './pixiv-client/createPixivFlowClient';
 import { Database } from './storage/Database';
 
 // 热门标签列表，用于随机选择
@@ -40,7 +40,7 @@ async function randomDownload() {
     database.migrate();
 
     const auth = new PixivAuth(config.pixiv, config.network!, database, configPath);
-    const pixivClient = new PixivClient(auth, config);
+    const pixivClient = createPixivFlowClient(auth, config, database);
     const fileService = new FileService(config.storage!);
     const downloadManager = new DownloadManager(tempConfig, pixivClient, database, fileService);
 

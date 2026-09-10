@@ -22,6 +22,9 @@ WORKDIR /src
 ARG GIT_SHA=dev
 ENV GITHUB_SHA=${GIT_SHA}
 COPY package*.json ./
+# packages/ carries the @redtidev/pixiv-client npm workspace: npm ci needs the
+# workspace directory present to resolve the local dependency.
+COPY packages ./packages
 RUN npm ci
 COPY tsconfig.json ./
 COPY src ./src
@@ -34,6 +37,8 @@ FROM node:24-bookworm-slim
 WORKDIR /app
 ARG VCS_REF=unknown
 COPY package*.json ./
+# 工作区 manifest 必须存在，npm 才能解析 @redtidev/pixiv-client 并建立软链接。
+COPY packages/pixiv-client/package.json ./packages/pixiv-client/package.json
 # 编译工具只用于安装 better-sqlite3；运行镜像不保留它们。
 RUN apt-get update \
     && apt-get install -y --no-install-recommends python3 ffmpeg make g++ ca-certificates \
@@ -42,6 +47,8 @@ RUN apt-get update \
     && npm cache clean --force \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /src/dist ./dist
+# Kit 编译产物（生产镜像不重新构建，直接复制构建阶段结果）。
+COPY --from=builder /src/packages/pixiv-client/dist ./packages/pixiv-client/dist
 
 ENV NODE_ENV=production \
     PIXIVFLOW_REVISION=${VCS_REF} \

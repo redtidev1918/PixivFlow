@@ -4,7 +4,7 @@ import { IPixivClient } from '../interfaces/IPixivClient';
 import { IDatabase } from '../interfaces/IDatabase';
 import { FileMetadata, PixivMetadata } from './FileService';
 import { IFileService } from '../interfaces/IFileService';
-import { PixivNovel } from '../pixiv/PixivClient';
+import { PixivNovel } from '@redtidev/pixiv-client';
 import { detectLanguage } from '../utils/language-detection';
 import { DownloadedArtifact } from '../delivery/types';
 import type { Database } from '../storage/Database';

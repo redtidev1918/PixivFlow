@@ -2,7 +2,7 @@ import { StandaloneConfig, TargetConfig } from '../../config';
 import { logger } from '../../logger';
 import { getTargetLabel } from '../../utils/target-label';
 import { getErrorMessage, is404Error } from '../../utils/errors';
-import { PixivIllust, PixivNovel } from '../../pixiv/PixivClient';
+import { PixivIllust, PixivNovel } from '@redtidev/pixiv-client';
 import { DownloadPlanner } from '../plan/DownloadPlanner';
 import { DownloadExecutor } from '../exec/DownloadExecutor';
 import { ProgressReporter } from '../report/ProgressReporter';

@@ -1,5 +1,5 @@
 import type { TargetConfig } from '../../config';
-import type { PixivIllust, PixivNovel } from '../../pixiv/types';
+import type { PixivIllust, PixivNovel } from '@redtidev/pixiv-client';
 import { parseDateRange, isDateInRange } from '../../utils/date-utils';
 import { isAIIllustration } from '../../utils/ai-detection';
 import { logger } from '../../logger';

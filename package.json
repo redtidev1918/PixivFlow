@@ -12,13 +12,18 @@
   },
   "author": "redtidev1918",
   "license": "MIT",
+  "workspaces": [
+    "packages/*"
+  ],
   "main": "dist/index.js",
   "bin": {
     "pixivflow": "dist/index.js"
   },
   "scripts": {
     "prepublishOnly": "npm run build",
-    "build": "node scripts/write-version.js && tsc && node scripts/create-webui-package-json.js",
+    "build:kit": "npm run build -w @redtidev/pixiv-client",
+    "typecheck": "npm run build:kit && tsc --noEmit",
+    "build": "npm run build:kit && node scripts/write-version.js && tsc && node scripts/create-webui-package-json.js",
     "build:watch": "tsc --watch",
     "start": "npm run build && node dist/index.js",
     "login": "./scripts/login.sh",
@@ -26,7 +31,9 @@
     "refresh": "npm run build && node dist/index.js refresh",
     "download": "npm run build && node dist/index.js download",
     "scheduler": "npm run build && node dist/index.js scheduler",
-    "test": "jest --runInBand",
+    "test": "npm run test:kit && npm run test:app",
+    "test:app": "npm run build:kit && jest --runInBand",
+    "test:kit": "npm run test -w @redtidev/pixiv-client",
     "test:scheduled": "jest --runTestsByPath src/__tests__/integration/download-flow.test.ts",
     "test:concurrency": "jest --runTestsByPath src/__tests__/utils/concurrency.test.ts",
     "test:performance": "jest --runInBand src/__tests__/performance",
@@ -109,13 +116,13 @@
     "ws": "^8.21.0"
   },
   "dependencies": {
+    "@redtidev/pixiv-client": "0.1.0",
     "axios": "^1.20.0",
     "better-sqlite3": "^12.11.1",
     "cors": "^2.8.6",
     "cron-parser": "^4.9.0",
     "express": "^4.22.2",
     "franc-min": "^6.2.0",
-    "https-proxy-agent": "^7.0.6",
     "node-cron": "^4.6.0",
     "pixiv-token-getter": "^2.2.1",
     "socket.io": "^4.8.3",

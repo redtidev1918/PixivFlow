@@ -12,7 +12,7 @@
  */
 
 import { logger } from '../logger';
-import { PixivAuth } from '../pixiv/AuthClient';
+import { PixivAuth } from '../auth/PixivAuth';
 import { Database } from '../storage/Database';
 import { PixivCredentialConfig, NetworkConfig, StandaloneConfig } from '../config';
 import { refreshToken } from '../terminal-login/token-refresh';

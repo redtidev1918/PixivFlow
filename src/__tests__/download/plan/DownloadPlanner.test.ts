@@ -1,6 +1,6 @@
 import type { TargetConfig } from '../../../config';
 import type { IDatabase } from '../../../interfaces/IDatabase';
-import type { PixivIllust } from '../../../pixiv/types';
+import type { PixivIllust } from '@redtidev/pixiv-client';
 import { DownloadPlanner } from '../../../download/plan/DownloadPlanner';
 
 jest.mock('../../../logger', () => ({

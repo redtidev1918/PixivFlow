@@ -4,10 +4,10 @@
  */
 
 import { DownloadManager } from '../../download/DownloadManager';
-import { PixivClient, PixivIllust, PixivNovel } from '../../pixiv/PixivClient';
+import type { PixivIllust, PixivNovel } from '@redtidev/pixiv-client';
+import type { IPixivClient } from '../../interfaces/IPixivClient';
 import { Database } from '../../storage/Database';
 import { FileService } from '../../download/FileService';
-import { PixivAuth } from '../../pixiv/AuthClient';
 import { StandaloneConfig, TargetConfig } from '../../config';
 import { promises as fs } from 'node:fs';
 import { join } from 'node:path';
@@ -24,9 +24,7 @@ jest.spyOn(global, 'setTimeout').mockImplementation((callback: Function, delay?:
   return {} as NodeJS.Timeout;
 });
 
-// Mock PixivAuth
-jest.mock('../../pixiv/AuthClient');
-jest.mock('../../pixiv/PixivClient');
+// Pixiv access is injected as a hand-built IPixivClient mock below.
 // Mock franc-min to avoid ESM import issues
 jest.mock('franc-min', () => ({
   franc: (text: string): string => {
@@ -54,7 +52,7 @@ describe('DownloadManager Integration', () => {
   let testDir: string;
   let dbPath: string;
   let config: StandaloneConfig;
-  let mockClient: jest.Mocked<PixivClient>;
+  let mockClient: jest.Mocked<IPixivClient>;
   let database: Database;
   let fileService: FileService;
   let downloadManager: DownloadManager;

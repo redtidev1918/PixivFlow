@@ -288,6 +288,13 @@ export interface NetworkConfig {
    */
   retryDelay?: number;
   /**
+   * Minimum gap (ms) reserved between Pixiv API requests by the shared
+   * @redtidev/pixiv-client rate-limit gate. Opt-IN override of the kit's
+   * conservative default (1000ms + jitter). Set to 0 to disable pacing only.
+   * Does NOT affect the 429 cooldown / circuit breaker.
+   */
+  requestPacingMs?: number;
+  /**
    * Proxy configuration
    */
   proxy?: {

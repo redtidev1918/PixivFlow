@@ -1,5 +1,5 @@
 import { logger } from '../../logger';
-import { is404Error, isSkipableError, NetworkError } from '../../utils/errors';
+import { is404Error, isSkipableError, NetworkError, isRetryableNetworkError, rateLimitWaitMs } from '../../utils/errors';
 
 export type RecoveryDecision =
   | { action: 'retry'; delayMs?: number; maxAttempts?: number; reason?: string }
@@ -44,12 +44,18 @@ export class DefaultErrorRecovery implements ErrorRecoveryStrategy {
     }
 
     // For network errors, respect server-provided wait time or exponential backoff
-    if (error instanceof NetworkError) {
+    if (isRetryableNetworkError(error)) {
       if (attempt >= this.maxAttempts) {
         return { action: 'skip', reason: 'network retries exhausted' };
       }
+      const hinted = rateLimitWaitMs(error);
+      const legacyWait = error instanceof NetworkError ? error.waitTime : undefined;
       const delayFromServer =
-        typeof error.waitTime === 'number' && error.waitTime > 0 ? error.waitTime : undefined;
+        typeof hinted === 'number' && hinted > 0
+          ? hinted
+          : typeof legacyWait === 'number' && legacyWait > 0
+            ? legacyWait
+            : undefined;
       const backoff = Math.min(this.baseDelayMs * Math.pow(2, attempt - 1), this.maxDelayMs);
       const delayMs = delayFromServer ?? backoff;
       logger.warn(

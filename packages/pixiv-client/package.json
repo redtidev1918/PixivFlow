@@ -1,0 +1,55 @@
+{
+  "name": "@redtidev/pixiv-client",
+  "version": "0.1.0",
+  "description": "Independent, reusable Pixiv App-API client kit: typed transport, rate limiting, circuit breaker, pagination and media fetch. Knows Pixiv, knows nothing about the host application.",
+  "license": "MIT",
+  "author": "redtidev1918",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/redtidev1918/PixivFlow.git",
+    "directory": "packages/pixiv-client"
+  },
+  "keywords": [
+    "pixiv",
+    "pixiv-api",
+    "pixiv-client",
+    "api-client",
+    "rate-limiting",
+    "circuit-breaker",
+    "typescript"
+  ],
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "jest --runInBand",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "axios": "^1.20.0",
+    "socks-proxy-agent": "^8.0.5",
+    "undici": "^6.28.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.0",
+    "@types/node": "^22.20.1",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.4.12",
+    "typescript": "^5.6.2"
+  }
+}

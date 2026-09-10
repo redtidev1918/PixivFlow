@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.16.1](https://github.com/redtidev1918/PixivFlow/compare/v2.16.0...v2.16.1) (2026-09-10)
+
+
+### Bug Fixes
+
+* **packaging:** bundle @redtidev/pixiv-client into the published tarball ([#35](https://github.com/redtidev1918/PixivFlow/issues/35)) ([1ee369b](https://github.com/redtidev1918/PixivFlow/commit/1ee369be1db79e742ae5b9ec39d3f9d8c7941456))
+
 ## [2.16.0](https://github.com/redtidev1918/PixivFlow/compare/v2.15.0...v2.16.0) (2026-09-10)
 
 

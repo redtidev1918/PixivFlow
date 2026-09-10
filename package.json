@@ -18,7 +18,7 @@
   },
   "scripts": {
     "prepublishOnly": "npm run build",
-    "build": "tsc && node scripts/create-webui-package-json.js",
+    "build": "node scripts/write-version.js && tsc && node scripts/create-webui-package-json.js",
     "build:watch": "tsc --watch",
     "start": "npm run build && node dist/index.js",
     "login": "./scripts/login.sh",

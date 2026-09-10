@@ -1,10 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import { unlink } from 'node:fs/promises';
 import { Database } from '../storage/Database';
-import { OutboxRow, OutboxStatus } from '../storage/repositories/OutboxRepository';
+import { OutboxRow, OutboxStatus, RecordEventInput } from '../storage/repositories/OutboxRepository';
 import { DeliveryDispatcher } from './DeliveryDispatcher';
 import { DeliveryRequest } from './types';
 import { DeliveryAck } from './DeliveryAck';
+import { classifyError } from './errorClass';
+import { redactError } from '../utils/redact';
 import { logger } from '../logger';
 
 export interface OutboxWorkerOptions {
@@ -62,6 +64,8 @@ export class OutboxWorker {
   private readonly batchSize: number;
   private readonly retryBaseMs: number;
   private readonly retryMaxMs: number;
+  /** outboxId -> last deferred-event ts; bounds readiness defer flooding. */
+  private readonly lastDeferred = new Map<string, number>();
 
   constructor(
     private readonly database: Database,
@@ -109,8 +113,10 @@ export class OutboxWorker {
       if (rows.length === 0) break;
       let deferred = false;
       for (const row of rows) {
-        if (!(await this.dispatcher.isReady(row.deliveryTarget))) {
+        const readiness = await this.checkReadiness(row);
+        if (!readiness.ready) {
           this.database.outbox.release(row.id);
+          this.recordDeferred(row, readiness);
           deferred = true;
           continue;
         }
@@ -135,21 +141,105 @@ export class OutboxWorker {
           this.database.outbox.release(row.id);
           continue;
         }
-        if (!(await this.dispatcher.isReady(row.deliveryTarget))) {
+        const readiness = await this.checkReadiness(row);
+        if (!readiness.ready) {
           this.database.outbox.release(row.id);
+          this.recordDeferred(row, readiness);
           continue;
         }
         await this.process(row);
       }
     } catch (error) {
-      logger.warn('Outbox pump failed', { error: error instanceof Error ? error.message : String(error) });
+      logger.warn('Outbox pump failed', { error: redactError(error) });
     } finally {
       this.running = false;
     }
   }
 
-  private async process(row: OutboxRow): Promise<OutboxStatus> {
+  /** Probe via structured readinessProbe when available; boolean fallback stays compatible. */
+  private async checkReadiness(row: OutboxRow): Promise<{ ready: boolean; reason?: string; status?: number }> {
+    const dispatcher = this.dispatcher as unknown as {
+      readinessProbe?: (name: string) => Promise<{ ready: boolean; reason?: string; status?: number }>;
+    };
+    if (typeof dispatcher.readinessProbe === 'function') {
+      return dispatcher.readinessProbe(row.deliveryTarget);
+    }
+    return { ready: await this.dispatcher.isReady(row.deliveryTarget) };
+  }
+
+  /** Record at most one deferral per outbox row per 60s (cold-start poll guard). */
+  private recordDeferred(row: OutboxRow, probe: { reason?: string; status?: number }): void {
+    const now = Date.now();
+    const last = this.lastDeferred.get(row.id) ?? 0;
+    if (now - last < 60_000) return;
+    this.lastDeferred.set(row.id, now);
+    this.recordEvent(row, {
+      event: 'outbox.deferred',
+      errorClass: 'dependency_not_ready',
+      retryable: true,
+      countsAsAttempt: 0,
+      detail: { reason: probe.reason ?? 'not_ready', status: probe.status ?? null },
+    });
+  }
+
+  /** Pull correlation fields out of payload.context without trusting its shape. */
+  private contextCorrelation(row: OutboxRow): Pick<
+    RecordEventInput, 'executionId' | 'slotId' | 'pixivId'
+  > {
     try {
+      const payload = JSON.parse(row.payloadJson) as DeliveryPayload;
+      const c = (payload.context ?? {}) as Record<string, unknown>;
+      const str = (v: unknown): string | null => (typeof v === 'string' && v ? v : null);
+      return {
+        executionId: str(c.executionId) ?? str(c.slotId),
+        slotId: str(c.slotId),
+        pixivId: str(c.pixivId),
+      };
+    } catch {
+      return {};
+    }
+  }
+
+  /**
+   * Record media.fallback only when the provider ack explicitly attests one
+   * (TelePost envelope may carry media_fallback/document_fallback flags).
+   */
+  private recordMediaFallback(row: OutboxRow, ack: DeliveryAck): void {
+    const raw = 'raw' in ack ? ack.raw : undefined;
+    const data = raw && typeof raw === 'object'
+      ? (raw as { data?: Record<string, unknown> }).data
+      : undefined;
+    const rec = data && typeof data === 'object' ? data : undefined;
+    if (!rec) return;
+    const reason = rec.media_fallback_reason ?? rec.document_fallback_reason;
+    const fellBack = rec.media_fallback === true || rec.document_fallback === true ||
+      (typeof rec.fallback === 'string' && /document/i.test(rec.fallback));
+    if (!fellBack) return;
+    this.recordEvent(row, {
+      event: 'media.fallback',
+      countsAsAttempt: 0,
+      detail: { reason: typeof reason === 'string' ? reason : 'document' },
+    });
+  }
+
+  private recordEvent(row: OutboxRow, input: Omit<RecordEventInput, 'deliveryId' | 'outboxId' | 'deliveryTarget' | 'executionId' | 'slotId' | 'pixivId'>): void {
+    try {
+      this.database.outbox.recordEvent({
+        ...this.contextCorrelation(row),
+        deliveryId: row.deliveryId,
+        outboxId: row.id,
+        deliveryTarget: row.deliveryTarget,
+        ...input,
+      });
+    } catch (error) {
+      logger.debug('Failed to record delivery event', { event: input.event, error: redactError(error) });
+    }
+  }
+
+  private async process(row: OutboxRow): Promise<OutboxStatus> {
+    this.recordEvent(row, { event: 'outbox.claimed', countsAsAttempt: 0 });
+    try {
+      let reused: DeliveryAck | undefined;
       if (row.kind === 'notification') {
         const payload = JSON.parse(row.payloadJson) as NotificationPayload;
         await this.dispatcher.notify(row.deliveryTarget, {
@@ -168,23 +258,51 @@ export class OutboxWorker {
           kind: result.status && result.status >= 200 && result.status < 300 ? 'accepted' : 'retryable_failure',
           error: `no ack (HTTP ${result.status})`,
         };
+        if (ack.kind === 'idempotent_replay' || ack.kind === 'duplicate_existing') reused = ack;
+        this.recordMediaFallback(row, ack);
         await this.handleDeliveryAck(row, ack, payload);
       }
       this.database.outbox.markDone(row.id);
+      this.recordEvent(row, { event: 'outbox.delivered', countsAsAttempt: 0 });
+      if (reused) {
+        const remoteId = 'remoteId' in reused ? reused.remoteId : undefined;
+        this.recordEvent(row, {
+          event: 'delivery.duplicate',
+          errorClass: 'duplicate',
+          retryable: false,
+          countsAsAttempt: 0,
+          detail: { reason: reused.kind, remoteId },
+        });
+      }
       return 'done';
     } catch (error) {
-      // Transport-level error (fetch threw): retryable.
-      const message = error instanceof Error ? error.message : String(error);
+      // Transport-level error (fetch threw) or ack-classified failure: retryable.
+      const message = redactError(error).slice(0, 1000);
+      const { errorClass } = classifyError(error);
       const delay = backoffDelayMs(row.attempts + 1, this.retryBaseMs, this.retryMaxMs);
       const status = this.database.outbox.markRetry(row.id, Date.now() + delay, message);
       if (status === 'dead') {
         logger.error('Outbox item dead after max attempts', { outboxId: row.id, kind: row.kind, error: message });
+        this.recordEvent(row, {
+          event: 'outbox.dead',
+          errorClass,
+          retryable: false,
+          countsAsAttempt: 1,
+          detail: { attempt: row.attempts + 1 },
+        });
         this.onDead?.(row, message);
         if (row.deliveryId) {
           this.database.deliveries.recordAck(row.deliveryId, { status: 'failed', error: message });
         }
       } else {
         logger.warn('Outbox item will retry', { outboxId: row.id, kind: row.kind, attempt: row.attempts + 1, delayMs: delay });
+        this.recordEvent(row, {
+          event: 'outbox.retry_scheduled',
+          errorClass,
+          retryable: true,
+          countsAsAttempt: 1,
+          detail: { attempt: row.attempts + 1, nextInMs: delay },
+        });
       }
       return status;
     }

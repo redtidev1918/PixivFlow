@@ -6,6 +6,14 @@ import { DeliveryFieldValue, HttpMultipartDeliveryConfig } from '../config';
 import { logger } from '../logger';
 import { DeliveryNotificationRequest, DeliveryProvider, DeliveryRequest, DeliveryResult } from './types';
 import { parseDeliveryAck } from './DeliveryAck';
+import { redactError, redactHeaders, redactUrl } from '../utils/redact';
+
+export interface ReadinessProbeResult {
+  ready: boolean;
+  /** Short machine-readable reason when not ready. */
+  reason?: 'connection_refused' | 'timeout' | string;
+  status?: number;
+}
 
 /** Render an ISO timestamp to YYYY-MM-DD (create_date is JST). */
 function formatPublishedDate(iso?: string): string {
@@ -28,17 +36,8 @@ function formatCount(value?: number): string {
 }
 
 /** Hide URL userinfo and query secrets from operational logs. */
-function redactUrl(value: string): string {
-  try {
-    const url = new URL(value);
-    const authority = (url.username || url.password ? 'redacted@' : '') + url.host;
-
-    const suffix = url.searchParams.size > 0 ? '?…' : '';
-    return `${url.protocol}//${authority}${url.pathname}${suffix}`;
-  } catch {
-    return value;
-  }
-}
+// redactUrl lives in utils/redact.ts; re-exported for existing imports.
+export { redactUrl } from '../utils/redact';
 
 /** Generic streaming HTTP multipart delivery provider. */
 export class HttpMultipartDelivery implements DeliveryProvider {
@@ -56,18 +55,36 @@ export class HttpMultipartDelivery implements DeliveryProvider {
   }
 
   async isReady(): Promise<boolean> {
+    return (await this.readinessProbe()).ready;
+  }
+
+  /**
+   * Readiness with a structured reason. Short (3s) timeout so cold-start probes
+   * never hang the outbox pump. Missing readinessUrl means "always ready".
+   */
+  async readinessProbe(): Promise<ReadinessProbeResult> {
     const url = this.config.readinessUrl?.trim();
-    if (!url) return true;
-    const options: Record<string, unknown> = { method: 'GET' };
+    if (!url) return { ready: true };
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 3_000);
+    timer.unref?.();
+    const options: Record<string, unknown> = { method: 'GET', signal: controller.signal };
     if (this.dispatcher) options.dispatcher = this.dispatcher;
     try {
-      const response = await fetch(
-        this.interpolateEnvironment(url),
-        options as Parameters<typeof fetch>[1]
-      );
-      return response.ok;
-    } catch {
-      return false;
+      const response = await fetch(this.interpolateEnvironment(url), options as Parameters<typeof fetch>[1]);
+      if (response.ok) return { ready: true, status: response.status };
+      return { ready: false, reason: `http_${response.status}`, status: response.status };
+    } catch (error) {
+      const aborted = (error as { name?: string })?.name === 'AbortError';
+      const message = redactError(error);
+      logger.warn('Delivery readiness probe failed', {
+        url: redactUrl(url),
+        reason: aborted ? 'timeout' : 'connection_refused',
+        error: message,
+      });
+      return { ready: false, reason: aborted ? 'timeout' : 'connection_refused' };
+    } finally {
+      clearTimeout(timer);
     }
   }
 
@@ -148,7 +165,7 @@ export class HttpMultipartDelivery implements DeliveryProvider {
     // Classification happens in parseDeliveryAck (DeliveryResult.ack). We keep
     // the raw status/body and only log for correlation.
     logger.info('HTTP multipart delivery response', {
-      url: this.config.url,
+      url: redactUrl(this.config.url),
       status: response.status,
       files: request.files.length,
       deliveryStatus: data?.status,

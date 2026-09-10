@@ -11,6 +11,10 @@ FROM node:24-alpine AS builder
 # 设置工作目录
 WORKDIR /app
 
+# 发布提交 SHA，由 scripts/write-version.js 在构建时烘焙（package.json 提供版本号）。
+ARG GIT_SHA=dev
+ENV GITHUB_SHA=${GIT_SHA}
+
 # 安装构建依赖（Python、编译工具等；git 用于在前端目录缺失时自动拉取 WebUI 源码）
 RUN apk add --no-cache \
     python3 \
@@ -33,6 +37,7 @@ COPY tsconfig.json ./
 # 复制源代码
 COPY src ./src
 COPY scripts/create-webui-package-json.js ./scripts/create-webui-package-json.js
+COPY scripts/write-version.js ./scripts/write-version.js
 
 # 构建后端项目
 RUN npm run build

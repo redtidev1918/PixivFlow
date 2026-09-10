@@ -5,8 +5,12 @@
 import { BaseCommand } from './Command';
 import { CommandCategory } from './metadata';
 import { CommandArgs, CommandContext, CommandResult } from './types';
-import * as fs from 'fs/promises';
-import * as path from 'path';
+import { BUILD } from '../version';
+
+/** Human-readable version with the baked-in commit SHA. */
+export function versionString(): string {
+  return `${BUILD.version} (commit ${BUILD.commit})`;
+}
 
 /**
  * Version command implementation
@@ -23,20 +27,11 @@ export class VersionCommand extends BaseCommand {
 
   async execute(context: CommandContext, args: CommandArgs): Promise<CommandResult> {
     try {
-      // Go up from dist/commands/ to the project root
-      const packageJsonPath = path.resolve(__dirname, '../../package.json');
-      const packageJsonContent = await fs.readFile(packageJsonPath, 'utf-8');
-      const { version } = JSON.parse(packageJsonContent);
-      
-      console.log(`PixivFlow v${version}`);
-      
-      return {
-        success: true,
-        message: `Version: ${version}`,
-        data: { version }
-      };
+      const line = `PixivFlow v${versionString()}`;
+      console.log(line);
+      return { success: true, message: `Version: ${versionString()}`, data: BUILD };
     } catch (error) {
-      context.logger.error('Failed to read version from package.json', { error });
+      context.logger.error('Failed to read version information', { error });
       console.error('Error: Could not read version information.');
       return {
         success: false,

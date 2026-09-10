@@ -278,6 +278,7 @@ export class SlotCoordinator {
     }
     const status = this.database.slots.deriveSlotStatus(slot.slotId);
     this.database.slots.markSlotStatus(slot.slotId, status);
+    this.persistExecutionSummary(slot.slotId, status);
 
     const cells = this.database.slots.getCells(slot.slotId).map((c) => ({
       targetId: c.targetId,
@@ -297,8 +298,30 @@ export class SlotCoordinator {
     return { scheduleId: schedule.id, slotId: slot.slotId, status, alreadyCompleted: false, cells };
   }
 
-  completedSummary(slotId: string, schedule: ScheduleConfig): SlotRunSummary {
-    const cells = this.database.slots.getCells(slotId).map((c) => ({
+  /**
+   * Persist a one-row incident/execution summary into delivery_events
+   * (event='execution.summary') at the terminal rollup only. Event-row storage
+   * reuses the audit table + `runs show` read path instead of inventing a
+   * summary table or overloading execution_log's illustration/novel typing.
+   */
+  private persistExecutionSummary(slotId: string, status: string): void {
+    if (status !== 'success' && status !== 'partial' && status !== 'failed') return;
+    try {
+      if (this.database.outbox.hasExecutionSummary(slotId)) return;
+      const summary = this.database.outbox.executionSummary(slotId);
+      this.database.outbox.recordEvent({
+        executionId: slotId,
+        slotId,
+        event: 'execution.summary',
+        countsAsAttempt: 0,
+        detail: { summary },
+      });
+    } catch (error) {
+      logger.debug('Failed to persist execution summary', { slot: slotId, error: (error as Error).message });
+    }
+  }
+
+  completedSummary(slotId: string, schedule: ScheduleConfig): SlotRunSummary {    const cells = this.database.slots.getCells(slotId).map((c) => ({
       targetId: c.targetId,
       status: c.status,
       workId: c.workId,

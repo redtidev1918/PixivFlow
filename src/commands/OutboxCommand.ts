@@ -8,6 +8,29 @@ const STATUSES = new Set<OutboxStatus>([
   'pending', 'processing', 'retry_wait', 'done', 'dead', 'cancelled',
 ]);
 
+/** Operator-initiated audit event (never counts as an attempt). */
+function recordCliEvent(db: Database, row: OutboxRow, event: string): void {
+  let executionId: string | undefined;
+  let slotId: string | undefined;
+  let pixivId: string | undefined;
+  try {
+    const c = (JSON.parse(row.payloadJson) as { context?: Record<string, unknown> }).context ?? {};
+    const str = (v: unknown) => (typeof v === 'string' ? v : undefined);
+    executionId = str(c.executionId) ?? str(c.slotId);
+    slotId = str(c.slotId);
+    pixivId = str(c.pixivId);
+  } catch { /* payload without context (e.g. notification) */ }
+  db.outbox.recordEvent({
+    event,
+    actor: 'cli',
+    countsAsAttempt: 0,
+    deliveryId: row.deliveryId,
+    outboxId: row.id,
+    deliveryTarget: row.deliveryTarget,
+    executionId, slotId, pixivId,
+  });
+}
+
 export class OutboxCommand extends BaseCommand {
   readonly name = 'outbox';
   readonly description = 'List, inspect, retry or cancel durable delivery intents';
@@ -50,7 +73,27 @@ export class OutboxCommand extends BaseCommand {
       if (action === 'inspect') {
         if (!id) return this.failure('Usage: pixivflow outbox inspect <id>');
         const row = db.outbox.get(id);
-        return row ? this.success('outbox row', row) : this.failure(`outbox row not found: ${id}`);
+        if (!row) return this.failure(`outbox row not found: ${id}`);
+        const events = db.outbox.listEvents({ outboxId: id, limit: 20 });
+        const deferred = events.filter((e) => e.event === 'outbox.deferred');
+        const failures = events.filter((e) => e.countsAsAttempt === 1);
+        for (const e of deferred) {
+          context.logger.info('not ready (deferred, no attempt consumed)', {
+            ts: e.ts, errorClass: e.errorClass, detail: e.detail,
+          });
+        }
+        for (const e of failures) {
+          context.logger.info('attempt-consuming event', {
+            event: e.event, ts: e.ts, errorClass: e.errorClass, retryable: e.retryable, detail: e.detail,
+          });
+        }
+        return this.success('outbox row', {
+          row,
+          events: events.map((e) => ({
+            ts: e.ts, event: e.event, errorClass: e.errorClass,
+            countsAsAttempt: e.countsAsAttempt, retryable: e.retryable, actor: e.actor, detail: e.detail,
+          })),
+        });
       }
       if (action === 'retry') {
         const rows = args.options.dead ? db.outbox.list('dead', 500) : [];
@@ -63,7 +106,10 @@ export class OutboxCommand extends BaseCommand {
           }
           rows.push(row);
         }
-        for (const row of rows) db.outbox.requeue(row.id);
+        for (const row of rows) {
+          db.outbox.requeue(row.id);
+          recordCliEvent(db, row, 'outbox.replay_requested');
+        }
         return this.success(`requeued ${rows.length} outbox row(s)`, { ids: rows.map((row) => row.id) });
       }
       if (action === 'cancel') {
@@ -77,6 +123,7 @@ export class OutboxCommand extends BaseCommand {
             status: 'failed', remoteStatus: 'cancelled', error: 'cancelled by operator',
           });
         }
+        recordCliEvent(db, row, 'outbox.cancelled');
         return this.success('outbox row cancelled', { id });
       }
       return this.failure(this.getUsage());

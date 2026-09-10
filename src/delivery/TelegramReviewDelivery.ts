@@ -44,8 +44,27 @@ interface PostedMessage {
   fileId?: string;
 }
 
+/**
+ * The three message kinds a review is made of, kept apart on purpose.
+ *
+ * Telegram's caption rules are what force the split: a caption belongs to a message,
+ * so attaching the text to the first file of an album makes the text logically part of
+ * that one file. The reviewer should read every file first and the text after it, and
+ * the published post must keep the same shape.
+ */
+interface PostedReview {
+  /** Ordered media message ids: one album, or several consecutive groups. */
+  mediaMessageIds: number[];
+  /** One message carrying the work's text, sent after ALL media. */
+  captionMessageId: number;
+  /** The card with the approve/reject buttons. Never published. */
+  controlMessageId: number;
+  fileIds: string[];
+  mediaGroupIds: string[];
+}
+
 type PostOutcome =
-  | { ok: true; messages: PostedMessage[]; mediaGroupId?: string }
+  | { ok: true; review: PostedReview }
   | { ok: false; ambiguous: boolean; error: string };
 
 export class TelegramReviewDelivery implements DeliveryProvider {
@@ -86,7 +105,7 @@ export class TelegramReviewDelivery implements DeliveryProvider {
       };
     }
 
-    // 2. Post the media with the review keyboard.
+    // 2. Post media, then the text, then the control card.
     const posted = await this.post(request, reviewId);
     if (!posted.ok) {
       if (posted.ambiguous) {
@@ -107,8 +126,7 @@ export class TelegramReviewDelivery implements DeliveryProvider {
     // 3. Record the review (idempotent by review id).
     const reported = await this.reportReview(reviewId, request, {
       status: 'pending',
-      messages: posted.messages,
-      ...(posted.mediaGroupId ? { mediaGroupId: posted.mediaGroupId } : {}),
+      review: posted.review,
     });
     if (!reported) {
       // The media IS in the review chat but the control plane does not know it.
@@ -130,7 +148,7 @@ export class TelegramReviewDelivery implements DeliveryProvider {
         kind: 'accepted',
         remoteId: reviewId,
         remoteStatus: 'in_review',
-        raw: { messages: posted.messages.length },
+        raw: { media: posted.review.mediaMessageIds.length },
       },
     };
   }
@@ -167,7 +185,7 @@ export class TelegramReviewDelivery implements DeliveryProvider {
     reviewId: string,
     request: DeliveryRequest,
     input:
-      | { status: 'pending'; messages: PostedMessage[]; mediaGroupId?: string }
+      | { status: 'pending'; review: PostedReview }
       | { status: 'uncertain'; error: string }
   ): Promise<boolean> {
     const body: Record<string, unknown> = {
@@ -183,10 +201,14 @@ export class TelegramReviewDelivery implements DeliveryProvider {
       status: input.status,
     };
     if (input.status === 'pending') {
-      body.message_id = input.messages[0]?.messageId ?? null;
-      body.message_ids = input.messages.map((message) => message.messageId);
-      body.file_ids = input.messages.map((message) => message.fileId).filter(Boolean);
-      if (input.mediaGroupId) body.media_group_id = input.mediaGroupId;
+      // Three named fields, not one ambiguous array: media, text and the control card
+      // are different things, and publishing has to tell them apart to reproduce the
+      // same layout in the channel.
+      body.media_message_ids = input.review.mediaMessageIds;
+      body.caption_message_id = input.review.captionMessageId;
+      body.control_message_id = input.review.controlMessageId;
+      body.file_ids = input.review.fileIds;
+      if (input.review.mediaGroupIds[0]) body.media_group_id = input.review.mediaGroupIds[0];
     } else {
       body.error = input.error;
     }
@@ -213,59 +235,143 @@ export class TelegramReviewDelivery implements DeliveryProvider {
     return renderDeliveryTemplate(this.config.caption, buildTemplateVariables(request));
   }
 
+  /**
+   * Send one review in the order a reviewer should read it.
+   *
+   *   [file1 | file2 | file3]   <- media, consecutive, no text inside it
+   *   正文 / caption             <- one message, after ALL media
+   *   审核控制卡                  <- the buttons, last
+   *
+   * The old shape put the caption on the first album item and the keyboard on the
+   * media message, which made the text logically part of one file and left the review
+   * with no control card of its own. Files of the same kind stay together as an album;
+   * a different kind starts a new consecutive block; more than ten split into
+   * consecutive groups with the text still waiting for all of them.
+   */
   private async post(request: DeliveryRequest, reviewId: string): Promise<PostOutcome> {
-    const keyboard = {
-      inline_keyboard: [
-        [
-          { text: '✅ 发布', callback_data: `review:${reviewId}:approve` },
-          { text: '❌ 拒绝', callback_data: `review:${reviewId}:reject` },
-        ],
-      ],
-    };
-    const album = (this.config.album ?? true) && request.files.length > 1;
+    if (request.files.length === 0) return { ok: false, ambiguous: false, error: 'no files to deliver' };
 
+    const mediaMessageIds: number[] = [];
+    const fileIds: string[] = [];
+    const mediaGroupIds: string[] = [];
+    for (const block of this.mediaBlocks(request)) {
+      const sent = await this.sendMediaBlock(block);
+      if (!sent.ok) return sent;
+      for (const message of sent.messages) {
+        mediaMessageIds.push(message.messageId);
+        if (message.fileId) fileIds.push(message.fileId);
+      }
+      if (sent.mediaGroupId) mediaGroupIds.push(sent.mediaGroupId);
+    }
+
+    const captionSent = await this.sendText(this.config.chatId, this.caption(request).slice(0, 4096));
+    if (!captionSent.ok) return captionSent;
+
+    const controlSent = await this.sendText(
+      this.config.chatId,
+      `🧾 审核 ${reviewId}\n按钮只作用于这一条审核，决定后本条会更新。`,
+      {
+        inline_keyboard: [
+          [
+            { text: '✅ 发布', callback_data: `review:${reviewId}:approve` },
+            { text: '❌ 拒绝', callback_data: `review:${reviewId}:reject` },
+          ],
+        ],
+      }
+    );
+    if (!controlSent.ok) return controlSent;
+
+    return {
+      ok: true,
+      review: {
+        mediaMessageIds,
+        captionMessageId: captionSent.messageId,
+        controlMessageId: controlSent.messageId,
+        fileIds,
+        mediaGroupIds,
+      },
+    };
+  }
+
+  /**
+   * Same-kind files grouped into consecutive blocks of at most ten.
+   *
+   * A one-file block and a ten-file block are both blocks; only the API call differs,
+   * and the order the reviewer sees is identical either way.
+   */
+  private mediaBlocks(request: DeliveryRequest): Array<{ kind: 'photo' | 'document'; files: string[] }> {
+    // A novel is documents, an illustration is photos. Derived from the request, not
+    // from the file name: a misnamed file must not change the layout.
+    const kind: 'photo' | 'document' = request.context.type === 'novel' ? 'document' : 'photo';
+    const blocks: Array<{ kind: 'photo' | 'document'; files: string[] }> = [];
+    for (const file of request.files) {
+      const last = blocks[blocks.length - 1];
+      if (last && last.kind === kind && last.files.length < 10) last.files.push(file);
+      else blocks.push({ kind, files: [file] });
+    }
+    return blocks;
+  }
+
+  /** One media block. Never carries a caption or a keyboard. */
+  private async sendMediaBlock(
+    block: { kind: 'photo' | 'document'; files: string[] }
+  ): Promise<
+    { ok: true; messages: PostedMessage[]; mediaGroupId?: string } | { ok: false; ambiguous: boolean; error: string }
+  > {
+    const fs = await import('node:fs/promises');
     const form = new FormData();
     form.append('chat_id', this.config.chatId);
     if (this.config.publishThreadId !== undefined) {
       form.append('message_thread_id', String(this.config.publishThreadId));
     }
-    form.append('reply_markup', JSON.stringify(keyboard));
 
-    if (album) {
-      const media = [];
-      for (const [index, file] of request.files.entries()) {
-        const buffer = await import('node:fs/promises').then((fs) => fs.readFile(file));
+    let method: string;
+    if (block.files.length > 1) {
+      const media: Array<{ type: string; media: string }> = [];
+      for (const [index, file] of block.files.entries()) {
+        const buffer = await fs.readFile(file);
         form.append(`file${index}`, new Blob([new Uint8Array(buffer)]), `media${index}`);
-        media.push({ type: 'photo', media: `attach://file${index}` });
+        media.push({ type: block.kind, media: `attach://file${index}` });
       }
       form.append('media', JSON.stringify(media));
+      method = 'sendMediaGroup';
     } else {
-      const file = request.files[0];
-      if (!file) return { ok: false, ambiguous: false, error: 'no files to deliver' };
-      const buffer = await import('node:fs/promises').then((fs) => fs.readFile(file));
-      form.append(
-        request.context.type === 'novel' ? 'document' : 'photo',
-        new Blob([new Uint8Array(buffer)]),
-        'media'
-      );
-      form.append('caption', this.caption(request).slice(0, 1024));
+      const buffer = await fs.readFile(block.files[0]!);
+      form.append(block.kind, new Blob([new Uint8Array(buffer)]), 'media');
+      method = block.kind === 'photo' ? 'sendPhoto' : 'sendDocument';
     }
 
-    const method = album ? 'sendMediaGroup' : request.context.type === 'novel' ? 'sendDocument' : 'sendPhoto';
+    const envelope = await this.callMultipart(method, form);
+    if (!envelope.ok) return envelope;
+    const messages = extractMessages(envelope.result);
+    if (messages.length === 0) {
+      return { ok: false, ambiguous: true, error: 'Telegram accepted the send but returned no message id' };
+    }
+    const first = (Array.isArray(envelope.result) ? envelope.result[0] : envelope.result) as
+      | { media_group_id?: string }
+      | undefined;
+    return { ok: true, messages, ...(first?.media_group_id ? { mediaGroupId: first.media_group_id } : {}) };
+  }
+
+  /** One text message, optionally with a keyboard. */
+  private async sendText(
+    chatId: string,
+    text: string,
+    replyMarkup?: unknown
+  ): Promise<{ ok: true; messageId: number } | { ok: false; ambiguous: boolean; error: string }> {
+    const body: Record<string, unknown> = { chat_id: chatId, text };
+    if (replyMarkup !== undefined) body.reply_markup = replyMarkup;
+
     let response: Response;
     try {
-      response = await this.fetchImpl(`${this.botApiBase()}/bot${this.config.botToken}/${method}`, {
+      response = await this.fetchImpl(`${this.botApiBase()}/bot${this.config.botToken}/sendMessage`, {
         method: 'POST',
-        body: form,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
       });
     } catch (error) {
-      return {
-        ok: false,
-        ambiguous: true,
-        error: error instanceof Error ? error.message : String(error),
-      };
+      return { ok: false, ambiguous: true, error: error instanceof Error ? error.message : String(error) };
     }
-
     let envelope: TelegramEnvelope = {};
     try {
       envelope = (await response.json()) as TelegramEnvelope;
@@ -273,28 +379,52 @@ export class TelegramReviewDelivery implements DeliveryProvider {
       envelope = {};
     }
     if (!response.ok || envelope.ok === false) {
-      return {
-        ok: false,
-        ambiguous: false,
-        error: envelope.description ?? `Telegram HTTP ${response.status}`,
-      };
+      return { ok: false, ambiguous: false, error: envelope.description ?? `Telegram HTTP ${response.status}` };
     }
-
-    const messages = extractMessages(envelope.result);
-    if (messages.length === 0) {
-      // A 200 without message ids means we cannot point the review at anything.
+    const messageId = (envelope.result as { message_id?: number } | undefined)?.message_id;
+    if (typeof messageId !== 'number') {
       return { ok: false, ambiguous: true, error: 'Telegram accepted the send but returned no message id' };
     }
-    const mediaGroupId = Array.isArray(envelope.result)
-      ? (envelope.result[0] as { media_group_id?: string } | undefined)?.media_group_id
-      : (envelope.result as { media_group_id?: string } | undefined)?.media_group_id;
-    return { ok: true, messages, ...(mediaGroupId ? { mediaGroupId } : {}) };
+    return { ok: true, messageId };
+  }
+
+  /** One multipart call, with the same ambiguity contract as the rest of this file. */
+  private async callMultipart(
+    method: string,
+    form: FormData
+  ): Promise<{ ok: true; result: unknown } | { ok: false; ambiguous: boolean; error: string }> {
+    let response: Response;
+    try {
+      response = await this.fetchImpl(`${this.botApiBase()}/bot${this.config.botToken}/${method}`, {
+        method: 'POST',
+        body: form,
+      });
+    } catch (error) {
+      // A lost response means Telegram may have accepted it: never resend blindly.
+      return { ok: false, ambiguous: true, error: error instanceof Error ? error.message : String(error) };
+    }
+    let envelope: TelegramEnvelope = {};
+    try {
+      envelope = (await response.json()) as TelegramEnvelope;
+    } catch {
+      envelope = {};
+    }
+    if (!response.ok || envelope.ok === false) {
+      return { ok: false, ambiguous: false, error: envelope.description ?? `Telegram HTTP ${response.status}` };
+    }
+    return { ok: true, result: envelope.result };
   }
 
   private botApiBase(): string {
     return process.env.TELEGRAM_API_BASE ?? 'https://api.telegram.org';
   }
 }
+
+/** Compile-time reminder that the ack union stays closed over these kinds. */
+export type TelegramReviewAck = Extract<
+  DeliveryAck,
+  { kind: 'accepted' | 'idempotent_replay' | 'retryable_failure' | 'permanent_failure' }
+>;
 
 function extractMessages(result: unknown): PostedMessage[] {
   const items = Array.isArray(result) ? result : result ? [result] : [];
@@ -309,9 +439,3 @@ function extractMessages(result: unknown): PostedMessage[] {
   }
   return messages;
 }
-
-/** Compile-time reminder that the ack union stays closed over these kinds. */
-export type TelegramReviewAck = Extract<
-  DeliveryAck,
-  { kind: 'accepted' | 'idempotent_replay' | 'retryable_failure' | 'permanent_failure' }
->;

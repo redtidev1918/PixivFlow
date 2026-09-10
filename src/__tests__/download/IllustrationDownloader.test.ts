@@ -8,6 +8,56 @@ import { convertUgoira } from '../../download/UgoiraConverter';
 jest.mock('../../download/UgoiraConverter');
 
 describe('IllustrationDownloader', () => {
+  it('downloads an aligned lower-resolution delivery preview without replacing the original', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'pixivflow-preview-'));
+    const originalPath = join(directory, '123_work_1.png');
+    const client = {
+      getIllustDetailWithTags: jest.fn().mockResolvedValue({
+        illust: {
+          id: 123, title: 'work', page_count: 1,
+          user: { id: '1', name: 'author' },
+          image_urls: { large: 'https://example.test/large.jpg' },
+          meta_single_page: { original_image_url: 'https://example.test/original.png' },
+        },
+        tags: [],
+      }),
+      downloadImage: jest.fn()
+        .mockResolvedValueOnce(Buffer.from('original'))
+        .mockResolvedValueOnce(Buffer.from('preview')),
+    };
+    const downloader = new IllustrationDownloader(
+      client as any,
+      { hasDownloaded: jest.fn().mockReturnValue(false), insertDownload: jest.fn() } as any,
+      {
+        sanitizeFileName: jest.fn((name) => name),
+        saveImage: jest.fn(async (data) => {
+          await writeFile(originalPath, Buffer.from(data));
+          return originalPath;
+        }),
+        saveMetadata: jest.fn().mockResolvedValue(undefined),
+      } as any,
+      1,
+      directory
+    );
+    try {
+      const result = await downloader.downloadIllustration(
+        { id: 123 } as any, 'tag', { includeDeliveryPreviews: true }
+      );
+      expect(client.downloadImage.mock.calls.map(([url]) => url)).toEqual([
+        'https://example.test/original.png',
+        'https://example.test/large.jpg',
+      ]);
+      expect(result?.files).toEqual([originalPath]);
+      expect(result?.previewFiles).toEqual([`${originalPath}.preview.jpg`]);
+      await expect(Promise.all([
+        import('node:fs/promises').then((mod) => mod.readFile(originalPath, 'utf8')),
+        import('node:fs/promises').then((mod) => mod.readFile(`${originalPath}.preview.jpg`, 'utf8')),
+      ])).resolves.toEqual(['original', 'preview']);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
   it('converts retained ugoira frames before recording or delivering them', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'pixivflow-ugoira-'));
     const zip = join(directory, '123_work_ugoira.zip');

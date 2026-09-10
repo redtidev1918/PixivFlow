@@ -122,6 +122,7 @@ pixivflow scheduler             # 按 cron 配置长期挂机自动收集
       "tg-example": {
         "type": "httpMultipart",
         "url": "https://your-domain.example/api/bot1/v1/submissions",
+        "readinessUrl": "https://your-domain.example/ready",
         "notificationUrl": "https://your-domain.example/api/bot1/v1/notifications",
         "headers": { "Authorization": "Bearer ${TG_SUBMIT_TOKEN}" },
         "fileField": "files",
@@ -149,7 +150,9 @@ pixivflow scheduler             # 按 cron 配置长期挂机自动收集
 }
 ```
 
-`headers` 和 `url` 里可用 `${环境变量名}` 引用环境变量（Token 别写死进配置）。
+`headers`、`url` 和 `readinessUrl` 里可用 `${环境变量名}` 引用环境变量（Token 别写死进配置）。
+插画 cache 投递会在 multipart 的 `previews` 字段携带 Pixiv 的低分辨率预览（与 `files`
+一一对应），原图仍是权威素材；通用接收端可以忽略该可选字段。
 
 投递是**事务发件箱（SQLite outbox）**式的，at-least-once 执行、effectively-once
 可见效果：每个外部副作用（一次内容投递、一条通知）在 `outbox` 表落一行，带幂等键和
@@ -160,6 +163,20 @@ pixivflow scheduler             # 按 cron 配置长期挂机自动收集
 频道里仍然只有一条消息。旧版文件型 `delivery-outbox/*.json` 清单在启动时自动一次性
 迁移进 SQLite，迁移幂等。「今天没有可投稿内容」这类通知与内容投递走同一张表、独立泵送，
 审核端暂时挂掉不会互相阻塞。
+
+配置 `readinessUrl` 后，worker 每次认领都先检查依赖 `/ready`。非 2xx 只把 row 放回 pending，
+不增加 attempt；这与 `/live` 的“进程还活着”语义严格分开。dead letter 通过正式 CLI 恢复：
+
+```bash
+pixivflow outbox list --status dead
+pixivflow outbox inspect <id>
+pixivflow outbox retry <id>   # 只接受 dead row，保留 idempotency key
+pixivflow outbox retry --dead
+pixivflow outbox cancel <id>  # 只取消尚未执行的 row
+```
+
+`run-once` 会重新执行下载计划，不等价于 outbox replay；不要手改 SQLite 的
+`next_attempt_at`。
 
 运维通知可直接把 `notificationUrl` 指向 [Apprise API](docs/APPRISE.md)，由 Apprise 统一发送
 Email、Telegram、Discord、ntfy 等渠道；PixivFlow 不实现这些通知协议。
@@ -182,6 +199,7 @@ Email、Telegram、Discord、ntfy 等渠道；PixivFlow 不实现这些通知协
 | `pixivflow health` | 健康检查：配置、目录可写性、连通性 |
 | `pixivflow doctor` | 可靠性体检：卡住的 slot/outbox 租约、pending 投递、dead 行；`--repair` 收敛 |
 | `pixivflow reconcile` | 把下游已确认的历史重复登记进投递账本（默认 dry-run，`--repair` 落库） |
+| `pixivflow outbox` | 列出、检查、重放 dead letter 或取消尚未执行的 durable intent |
 | `pixivflow tags discover <词>` | 发现相关 Tag（Pixiv 联想 + 作品标签共现），只列候选不改配置 |
 | `pixivflow tags apply <清单> --target <id> --select <tag1,tag2>` | 人工确认后把所选 Tag 原子写入配置并触发热重载 |
 | `pixivflow topic resolve <主题>` | 查看自动推导出的相关 Tag 空间（`--type illustration\|novel`、`--refresh`） |

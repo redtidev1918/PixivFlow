@@ -8,6 +8,7 @@ import { join } from 'node:path';
 import { Database } from '../../storage/Database';
 import { DoctorCommand } from '../../commands/DoctorCommand';
 import { ReconcileCommand } from '../../commands/ReconcileCommand';
+import { OutboxCommand } from '../../commands/OutboxCommand';
 import { logger } from '../../logger';
 
 function ctx(dbPath: string) {
@@ -128,5 +129,48 @@ describe('reconcile command', () => {
     expect(badType.success).toBe(false);
     const missing = await command.execute(ctx(dbPath), { options: { target: 'bot1' }, positional: [] });
     expect(missing.success).toBe(false);
+  });
+});
+
+describe('outbox command', () => {
+  let dir: string;
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'pf-outbox-cli-'));
+  });
+  afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+  it('lists, inspects, retries dead rows and cancels pending rows', async () => {
+    const dbPath = join(dir, 't.db');
+    const db = new Database(dbPath);
+    db.migrate();
+    const dead = db.outbox.enqueue({
+      kind: 'notification', deliveryTarget: 't', idempotencyKey: 'dead',
+      payload: { text: 'x' }, maxAttempts: 1,
+    });
+    db.outbox.markRetry(dead.id, Date.now(), 'boom');
+    const pending = db.outbox.enqueue({
+      kind: 'notification', deliveryTarget: 't', idempotencyKey: 'pending',
+      payload: { text: 'y' },
+    });
+    db.close();
+
+    const command = new OutboxCommand();
+    expect((await command.execute(ctx(dbPath), {
+      options: { status: 'dead' }, positional: ['list'],
+    })).data).toEqual([expect.objectContaining({ id: dead.id, status: 'dead' })]);
+    expect((await command.execute(ctx(dbPath), {
+      options: {}, positional: ['inspect', dead.id],
+    })).success).toBe(true);
+    expect((await command.execute(ctx(dbPath), {
+      options: { dead: true }, positional: ['retry'],
+    })).success).toBe(true);
+    expect((await command.execute(ctx(dbPath), {
+      options: {}, positional: ['cancel', pending.id],
+    })).success).toBe(true);
+
+    const check = new Database(dbPath);
+    expect(check.outbox.get(dead.id)).toMatchObject({ status: 'retry_wait', attempts: 0 });
+    expect(check.outbox.get(pending.id)).toMatchObject({ status: 'cancelled' });
+    check.close();
   });
 });

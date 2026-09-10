@@ -102,6 +102,7 @@ merely translates an HTTP multipart submission API into configuration:
       "sharing-api": {
         "type": "httpMultipart",
         "url": "https://example.test/submissions",
+        "readinessUrl": "https://example.test/ready",
         "notificationUrl": "https://example.test/notifications",
         "headers": { "Authorization": "Bearer ${SHARING_TOKEN}" },
         "fileField": "files",
@@ -125,11 +126,18 @@ merely translates an HTTP multipart submission API into configuration:
 }
 ```
 
-Headers and URLs accept arbitrary `${ENV_NAME}` interpolation. Failed delivery
-keeps both files and the durable outbox manifest beside the SQLite database;
-the next run retries them before processing new targets. Final no-match
+Headers and URLs accept arbitrary `${ENV_NAME}` interpolation. Cache-mode
+illustration delivery also sends an optional, one-to-one Pixiv preview in the
+`previews` multipart field while retaining the original as the authoritative
+artifact. Failed delivery keeps both files in the SQLite outbox; the worker
+retries the same intent after restart. Final no-match
 notifications use the same durable outbox, so a restart or a temporary review
 endpoint outage does not silently lose the alert.
+
+When `readinessUrl` is configured, a non-2xx readiness response defers the row
+without incrementing its attempt count. Use `pixivflow outbox list`,
+`inspect <id>`, `retry <id>` / `retry --dead`, and `cancel <id>` for recovery;
+`run-once` is not an outbox replay command.
 
 Interactive configuration wizard: `pixivflow setup`.
 

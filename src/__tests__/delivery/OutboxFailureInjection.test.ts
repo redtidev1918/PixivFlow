@@ -32,10 +32,14 @@ class FakeDispatcher {
   deliverCalls = 0;
   notifyCalls = 0;
   deliveredKeys: string[] = [];
+  ready = true;
   constructor(
     private deliverScript: Array<() => Promise<{ ack: DeliveryAck }>> = [],
     private notifyScript: Array<() => Promise<void>> = [],
   ) {}
+  async isReady(): Promise<boolean> {
+    return this.ready;
+  }
   async deliver(_name: string, request: { context: Record<string, unknown> }): Promise<{ ack: DeliveryAck }> {
     this.deliverCalls++;
     const step = this.deliverScript.shift();
@@ -117,6 +121,29 @@ describe('OutboxWorker failure injection', () => {
       }
       const res = await worker.drainOnce();
       expect(res.done).toBe(1);
+      expect(dispatcher.deliverCalls).toBe(1);
+    });
+  });
+
+  it('does not consume an attempt while the dependency is live but not ready', async () => {
+    await withDb(async (db) => {
+      const dispatcher = new FakeDispatcher([
+        async () => ({ ack: { kind: 'accepted', remoteId: 'm-ready' } as DeliveryAck }),
+      ]);
+      dispatcher.ready = false;
+      const worker = new OutboxWorker(db, dispatcher as any);
+      const row = db.outbox.enqueue({
+        kind: 'delivery', deliveryTarget: 'bot1', idempotencyKey: 'k-ready',
+        payload: { files: [], context: { idempotencyKey: 'k-ready' } },
+      });
+
+      expect(await worker.drainOnce()).toEqual({ processed: 0, done: 0, retried: 0, dead: 0 });
+      expect(db.outbox.get(row.id)).toMatchObject({ status: 'pending', attempts: 0 });
+      expect(dispatcher.deliverCalls).toBe(0);
+
+      dispatcher.ready = true;
+      expect(await worker.drainOnce()).toMatchObject({ processed: 1, done: 1 });
+      expect(db.outbox.get(row.id)).toMatchObject({ status: 'done', attempts: 0 });
       expect(dispatcher.deliverCalls).toBe(1);
     });
   });

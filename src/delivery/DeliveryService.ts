@@ -125,6 +125,7 @@ export class DeliveryService {
             deliveryId: row.id,
             payload: {
               files: artifact.files,
+              previewFiles: artifact.previewFiles ?? [],
               cleanupFiles: artifact.cleanupFiles ?? [],
               fields: context.fields ?? null,
               context: { ...this.contextFrom(artifact, target), idempotencyKey, ...(context.extraContext ?? {}) },
@@ -145,6 +146,7 @@ export class DeliveryService {
         deliveryId: row.id,
         payload: {
           files: artifact.files,
+          previewFiles: artifact.previewFiles ?? [],
           cleanupFiles: artifact.cleanupFiles ?? [],
           fields: context.fields ?? null,
           context: { ...this.contextFrom(artifact, target), idempotencyKey, ...(context.extraContext ?? {}) },

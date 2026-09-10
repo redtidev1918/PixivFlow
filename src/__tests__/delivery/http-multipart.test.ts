@@ -94,6 +94,52 @@ describe('HttpMultipartDelivery', () => {
     expect(multipart).toContain('name="anonymous"\r\n\r\nfalse');
   });
 
+  it('sends aligned previews in their own multipart field', async () => {
+    const original = join(directory, 'original.png');
+    const preview = join(directory, 'preview.jpg');
+    await Promise.all([fs.writeFile(original, 'original'), fs.writeFile(preview, 'preview')]);
+    const fetchMock = jest.fn().mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), {
+        status: 201,
+        headers: { 'content-type': 'application/json' },
+      })
+    );
+    global.fetch = fetchMock as typeof fetch;
+    const provider = new HttpMultipartDelivery({
+      type: 'httpMultipart', url: 'https://example.test/submissions',
+      fileField: 'files', previewFileField: 'previews',
+    });
+
+    await provider.deliver({
+      files: [original], previewFiles: [preview],
+      context: { title: 'T', pixivId: '1', type: 'illustration' },
+    });
+
+    const options = fetchMock.mock.calls[0][1] as RequestInit;
+    const chunks: Buffer[] = [];
+    for await (const chunk of options.body as unknown as AsyncIterable<Buffer>) chunks.push(Buffer.from(chunk));
+    const multipart = Buffer.concat(chunks).toString('utf8');
+    expect(multipart).toContain('name="files"; filename="original.png"');
+    expect(multipart).toContain('name="previews"; filename="preview.jpg"');
+  });
+
+  it('checks readiness independently of liveness', async () => {
+    const fetchMock = jest.fn()
+      .mockResolvedValueOnce(new Response('live', { status: 200 }))
+      .mockResolvedValueOnce(new Response('starting', { status: 503 }))
+      .mockResolvedValueOnce(new Response('ready', { status: 200 }));
+    global.fetch = fetchMock as typeof fetch;
+    const provider = new HttpMultipartDelivery({
+      type: 'httpMultipart', url: 'https://example.test/submissions',
+      readinessUrl: 'https://example.test/ready',
+    });
+
+    expect((await fetch('https://example.test/live')).status).toBe(200);
+    expect(await provider.isReady()).toBe(false);
+    expect(await provider.isReady()).toBe(true);
+    expect(fetchMock.mock.calls[1][0]).toBe('https://example.test/ready');
+  });
+
   it('sends authenticated JSON no-match notifications', async () => {
     const fetchMock = jest.fn().mockResolvedValue(
       new Response(JSON.stringify({ ok: true, data: { status: 'notified' } }), { status: 201 })

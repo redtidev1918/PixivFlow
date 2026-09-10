@@ -55,6 +55,22 @@ export class HttpMultipartDelivery implements DeliveryProvider {
     }
   }
 
+  async isReady(): Promise<boolean> {
+    const url = this.config.readinessUrl?.trim();
+    if (!url) return true;
+    const options: Record<string, unknown> = { method: 'GET' };
+    if (this.dispatcher) options.dispatcher = this.dispatcher;
+    try {
+      const response = await fetch(
+        this.interpolateEnvironment(url),
+        options as Parameters<typeof fetch>[1]
+      );
+      return response.ok;
+    } catch {
+      return false;
+    }
+  }
+
   /**
    * One delivery attempt. Retry/backoff/dead-letter belong to the outbox worker,
    * not here, so this performs exactly ONE HTTP call and normalizes the result
@@ -97,7 +113,9 @@ export class HttpMultipartDelivery implements DeliveryProvider {
       { ...(this.config.fields ?? {}), ...(request.fields ?? {}) },
       request
     );
-    const multipart = await this.createMultipartBody(request.files, fields);
+    const multipart = await this.createMultipartBody(
+      request.files, fields, request.previewFiles
+    );
     const headers: Record<string, string> = {
       ...this.resolveHeaders(this.config.headers ?? {}),
       'Content-Type': `multipart/form-data; boundary=${multipart.boundary}`,
@@ -271,8 +289,12 @@ export class HttpMultipartDelivery implements DeliveryProvider {
 
   private async createMultipartBody(
     files: string[],
-    fields: Record<string, string[]>
+    fields: Record<string, string[]>,
+    previewFiles: string[] = []
   ): Promise<{ boundary: string; body: Readable; contentLength: number }> {
+    if (previewFiles.length > 0 && previewFiles.length !== files.length) {
+      throw new Error('previewFiles must be empty or align one-to-one with files');
+    }
     const boundary = `pixivflow-${randomUUID()}`;
     const fileField = this.escapeDispositionValue(this.config.fileField ?? 'files');
     const fileParts: Array<{ header: Buffer; path: string; size: number }> = [];
@@ -283,6 +305,20 @@ export class HttpMultipartDelivery implements DeliveryProvider {
       const header = Buffer.from(
         `--${boundary}\r\n` +
           `Content-Disposition: form-data; name="${fileField}"; filename="${filename}"\r\n` +
+          'Content-Type: application/octet-stream\r\n\r\n'
+      );
+      const stat = await fs.promises.stat(file);
+      fileParts.push({ header, path: file, size: stat.size });
+      contentLength += header.length + stat.size + 2;
+    }
+    const previewField = this.escapeDispositionValue(
+      this.config.previewFileField ?? 'previews'
+    );
+    for (const file of previewFiles) {
+      const filename = this.escapeDispositionValue(path.basename(file));
+      const header = Buffer.from(
+        `--${boundary}\r\n` +
+          `Content-Disposition: form-data; name="${previewField}"; filename="${filename}"\r\n` +
           'Content-Type: application/octet-stream\r\n\r\n'
       );
       const stat = await fs.promises.stat(file);

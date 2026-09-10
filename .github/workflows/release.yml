@@ -19,6 +19,11 @@ permissions:
   pull-requests: write
   packages: write
   id-token: write
+  # releasegraph's reusable workflow (v1, "provider reconciliation") labels the
+  # release PR while reconciling provider state. A called workflow can never
+  # request more than its caller, and a mismatch fails the whole run at startup
+  # with no jobs, so this must stay in sync with that workflow.
+  issues: write
 
 jobs:
   release:

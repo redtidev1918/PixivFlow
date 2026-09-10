@@ -70,7 +70,10 @@ export class NotificationPolicy {
   ): void {
     const targets = this.config.delivery?.targets ?? {};
     const notifiable = new Set(
-      Object.keys(targets).filter((n) => targets[n]?.notificationUrl?.trim())
+      Object.keys(targets).filter((n) => {
+        const target = targets[n];
+        return target?.type === 'httpMultipart' && Boolean(target.notificationUrl?.trim());
+      })
     );
     if (notifiable.size === 0 || rows.length === 0) return;
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.16.0](https://github.com/redtidev1918/PixivFlow/compare/v2.15.0...v2.16.0) (2026-09-10)
+
+
+### Features
+
+* **pixiv-client:** extract independent @redtidev/pixiv-client and migrate PixivFlow onto it ([3a67601](https://github.com/redtidev1918/PixivFlow/commit/3a676018a7109df36a55c8ce0dc9a4a9f71a29d3))
+
 ## [2.15.0](https://github.com/redtidev1918/PixivFlow/compare/v2.14.0...v2.15.0) (2026-09-10)
 
 

@@ -214,6 +214,7 @@ executeCommand():command.validate?(args) → command.execute(context, args)
 | `schedule_slot_items` | `slot_id`+`target_id` UNIQUE、`work_id`、`status`、`work_type`、`attempt_count`、`last_error` | occurrence 内每个 target 的执行/作品锁/FSM 状态 |
 | `deliveries` | `idempotency_key` UNIQUE、`delivery_target`+`work_type`+`pixiv_id`、`status`、`remote_id`、`reuse_reason` | 投递账本：确认送达事实，选择期/对账双重去重 |
 | `outbox` | `kind`、`idempotency_key` UNIQUE、`status`、`attempts`、`next_attempt_at`、`lease_owner/until` | 事务发件箱：内容投递与通知的崩溃安全重试 |
+| `delivery_events` | `ts`、`outbox_id`、`execution_id`、`event`、`error_class`、`retryable`、`counts_as_attempt`、`actor`、`detail` | 追加式投递事件流：状态变化、就绪延迟、重试原因、执行摘要与人工操作 |
 
 常用索引覆盖 `downloads(pixiv_id, type)`、`downloads(tag)`、`downloads(downloaded_at)`、`execution_log(tag, type)`、`scheduler_executions(execution_number/status)`、`task_history(task_id/status/start_time)` 等。
 
@@ -224,6 +225,35 @@ executeCommand():command.validate?(args) → command.execute(context, args)
 - **计划期跳过**:`getDownloadedIds` 批量返回已下载 ID,`DownloadPlanner` 直接从队列剔除。
 - **文件-记录对账**:下载前检查文件系统(`IllustrationDownloader`),文件存在而记录缺失时回填数据库;反向的路径漂移由 `FileNormalizationService` 处理——重命名/移动文件后调用 `updateFilePath` 同步记录(可通过 `pixivflow normalize` 或 WebUI 触发,结果含 `movedFiles`/`renamedFiles`/`updatedDatabase` 等字段)。
 - **未完成任务**:`execution_log` 中 `status IN ('failed','partial')` 的行即"未完成任务"(`getIncompleteTasks`);WebUI 的 `/api/download/incomplete` 系列端点据此列出/删除,`POST /api/download/resume` 按 `tag + type` 找回配置中的对应 target 重新执行。
+
+## 投递可观测与审计
+
+`OutboxWorker` 的每次状态迁移都会往 `delivery_events` 追加一行(append-only,`OutboxRepository.recordEvent`):
+
+| 事件 | 说明 |
+| --- | --- |
+| `outbox.claimed` / `outbox.delivered` / `outbox.dead` | 领取、送达、进入死信 |
+| `outbox.deferred` | 目标未就绪:记录 `error_class=dependency_not_ready`、`counts_as_attempt=0`,**不消耗投递次数**(同一行 60 秒内只记一次) |
+| `outbox.retry_scheduled` | 真正失败并按退避重试,带 `error_class`、`retryable`、`counts_as_attempt=1` |
+| `delivery.duplicate` | 命中幂等重放/历史重复,不产生第二次投递 |
+| `execution.summary` | 一次调度的终局汇总(成功/部分/失败),由 `SlotCoordinator` 在收尾时写入 |
+| `outbox.replay_requested` / `outbox.cancelled` | 运营操作,`actor=cli` |
+
+每行都带 `execution_id`(来自 payload context),可把调度执行、下载、outbox 行、投递和人工操作串成一条时间线。
+
+配套命令:
+
+```bash
+pixivflow runs list [--limit 20]       # 最近调度执行
+pixivflow runs show <executionId>      # 单次执行的汇总
+pixivflow outbox inspect <id>          # 完整事件轨迹(延迟项与消耗次数的重试分开显示)
+pixivflow outbox retry <id> | retry --dead | cancel <id>
+pixivflow --version                    # 版本 + 构建提交号
+```
+
+- 就绪探测(`HttpMultipartDelivery.readinessProbe`)返回结构化原因(`connection_refused` / `timeout` / `http_<status>`),冷启动等待上游 `/ready` 时不会误算失败。
+- 错误统一分类(`src/delivery/errorClass.ts`),日志与事件里的 URL 凭据、请求头、Bearer/token/cookie 一律脱敏(`src/utils/redact.ts`)。
+- `delivery_events` 目前为无上限追加;裁剪点已在 `recordEvent` 处标注,等保留期策略确定后挂 `DELETE FROM delivery_events WHERE ts < ?`。
 
 ## WebUI 服务器
 

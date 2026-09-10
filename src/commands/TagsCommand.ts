@@ -4,8 +4,8 @@ import { BaseCommand } from './Command';
 import { CommandCategory } from './metadata';
 import type { CommandArgs, CommandContext, CommandResult } from './types';
 import { Database } from '../storage/Database';
-import { PixivAuth } from '../pixiv/AuthClient';
-import { PixivClient } from '../pixiv/PixivClient';
+import { PixivAuth } from '../auth/PixivAuth';
+import { createPixivFlowClient } from '../pixiv-client/createPixivFlowClient';
 import { TagDiscoveryService } from '../tags/TagDiscoveryService';
 import { TagDiscoveryStore, TagDiscoveryCacheKey } from '../tags/TagDiscoveryStore';
 import { TagPlanApplier } from '../tags/TagPlanApplier';
@@ -68,7 +68,7 @@ export class TagsCommand extends BaseCommand {
         database,
         context.configPath
       );
-      const client = new PixivClient(auth, context.config);
+      const client = createPixivFlowClient(auth, context.config, database);
       const service = new TagDiscoveryService(client);
       const manifest = await service.discover(seed, {
         contentTypes,

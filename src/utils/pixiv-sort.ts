@@ -4,7 +4,7 @@
 
 import { logger } from '../logger';
 import { parsePixivDate, calculatePopularityScore } from './pixiv-utils';
-import type { PixivIllust, PixivNovel } from '../pixiv/types';
+import type { PixivIllust, PixivNovel } from '@redtidev/pixiv-client';
 
 export type SortMode = 'date_desc' | 'date_asc' | 'popular_desc';
 

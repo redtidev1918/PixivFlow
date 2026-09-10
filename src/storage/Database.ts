@@ -14,6 +14,7 @@ import { SlotRepository } from './repositories/SlotRepository';
 import { DeliveryRepository } from './repositories/DeliveryRepository';
 import { OutboxRepository } from './repositories/OutboxRepository';
 import { MetadataRepository } from './repositories/MetadataRepository';
+import { SQLiteRateLimitStateStore } from './repositories/RateLimitStateRepository';
 
 export interface AccessTokenStore {
   accessToken: string;
@@ -59,6 +60,7 @@ export class Database implements IDatabase {
   private deliveryRepo: DeliveryRepository;
   private outboxRepo: OutboxRepository;
   private metadataRepo: MetadataRepository;
+  private rateLimitStateStore!: SQLiteRateLimitStateStore;
 
   constructor(private readonly databasePath: string) {
     try {
@@ -86,6 +88,7 @@ export class Database implements IDatabase {
       this.deliveryRepo = new DeliveryRepository(this.db);
       this.outboxRepo = new OutboxRepository(this.db);
       this.metadataRepo = new MetadataRepository(this.db);
+      this.rateLimitStateStore = new SQLiteRateLimitStateStore(this.db);
     } catch (error) {
       throw new DatabaseError(
         `Failed to initialize database at ${this.databasePath}`,
@@ -124,6 +127,11 @@ export class Database implements IDatabase {
   /** Lightweight Pixiv metadata cache (novel language / rating). */
   public get metadata(): MetadataRepository {
     return this.metadataRepo;
+  }
+
+  /** Persistent 429 gate state adapter for @redtidev/pixiv-client. */
+  public get rateLimitState(): SQLiteRateLimitStateStore {
+    return this.rateLimitStateStore;
   }
 
   /** Raw transactional boundary for atomic multi-table intents. */

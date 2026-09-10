@@ -6,9 +6,9 @@ import { RankingService } from '../RankingService';
 import { IllustrationDownloader } from '../IllustrationDownloader';
 import { DownloadPipeline } from '../pipeline/DownloadPipeline';
 import { getTodayDate, getYesterdayDate } from '../../utils/pixiv-date-utils';
-import { NetworkError } from '../../utils/errors';
+import { NetworkError, isRetryableNetworkError, isPixivKitError } from '../../utils/errors';
 import { calculatePopularityScore } from '../../utils/pixiv-utils';
-import { PixivIllust } from '../../pixiv/PixivClient';
+import { PixivIllust } from '@redtidev/pixiv-client';
 import { DeliveryService } from '../../delivery/DeliveryService';
 import { TargetOutcome } from '../../scheduler/TargetOutcome';
 import type { TopicPipelineFactory } from '../../topic/createTopicPipeline';
@@ -90,7 +90,9 @@ export class IllustrationTargetHandler {
       return { kind: 'no_candidate', reason: message };
     }
     // Network/transient => retryable so the SAME work resumes on next trigger.
-    const retryable = error instanceof NetworkError || /timeout|econn|enotfound|etimed|429|5dd/i.test(message);
+    const retryable =
+        isRetryableNetworkError(error) ||
+        (error instanceof Error && /timeout|econn|enotfound|etimed|429|5\d\d/i.test(error.message));
     return { kind: 'failed', retryable, error: message };
   }
 
@@ -431,13 +433,19 @@ export class IllustrationTargetHandler {
   private logError(error: unknown, message: string): void {
     let errorMessage = error instanceof Error ? error.message : String(error);
 
-    if (error instanceof NetworkError && error.cause) {
-      const causeMsg = error.cause instanceof Error ? error.cause.message : String(error.cause);
+    const cause = error instanceof NetworkError
+      ? error.cause
+      : isPixivKitError(error)
+        ? (error.cause instanceof Error ? error.cause : undefined)
+        : undefined;
+    if (cause) {
+      const causeMsg = cause instanceof Error ? cause.message : String(cause);
       errorMessage = `${errorMessage} (原因: ${causeMsg})`;
     }
 
-    if (error instanceof NetworkError && error.url) {
-      errorMessage = `${errorMessage} [URL: ${error.url}]`;
+    const endpoint = error instanceof NetworkError ? error.url : isPixivKitError(error) ? error.endpoint : undefined;
+    if (endpoint) {
+      errorMessage = `${errorMessage} [URL: ${endpoint}]`;
     }
 
     logger.error(message, {

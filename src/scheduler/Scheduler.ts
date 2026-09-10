@@ -254,9 +254,13 @@ export class Scheduler {
     }
 
     try {
-      await this.executeWithTracking(job, (count) => {
-        itemsDownloaded = count;
-      });
+      await this.executeWithTracking(
+        job,
+        (count) => {
+          itemsDownloaded = count;
+        },
+        triggerOptions
+      );
 
       if (timeoutOccurred) {
         status = 'timeout';

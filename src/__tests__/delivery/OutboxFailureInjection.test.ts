@@ -136,14 +136,14 @@ describe('OutboxWorker failure injection', () => {
         deliveryId: delivery.id, payload: { files: [], context: { idempotencyKey: 'k-crash' } },
       });
       // Simulate a process killed between claim and markDone.
-      db.outbox.claimDue('dead-worker-pid', 1, 10);
+      db.outbox.claimDue('dead-worker-pid', 100, 10);
       expect(db.outbox.get(row.id)!.status).toBe('processing');
 
       // Nothing due while the lease is live.
       expect(await worker.drainOnce()).toMatchObject({ processed: 0 });
 
       // After lease expiry the restarted worker claims the SAME row.
-      await new Promise((r) => setTimeout(r, 5));
+      await new Promise((r) => setTimeout(r, 120));
       const res = await worker.drainOnce();
       expect(res.done).toBe(1);
       expect(dispatcher.deliverCalls).toBe(1);

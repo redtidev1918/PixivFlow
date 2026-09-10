@@ -1,4 +1,4 @@
-import type { PixivIllust, PixivNovel, PixivNovelTextResponse, PixivUser } from '@redtidev/pixiv-client';
+import type { PixivIllust, PixivNovel, PixivNovelTextResponse } from '@redtidev/pixiv-client';
 import { TargetConfig } from '../config';
 
 /**
@@ -6,11 +6,6 @@ import { TargetConfig } from '../config';
  * Provides abstraction for Pixiv API interactions
  */
 export interface IPixivClient {
-  /**
-   * Get user information
-   */
-  getUser(): Promise<PixivUser>;
-
   /**
    * Search illustrations using target config
    */

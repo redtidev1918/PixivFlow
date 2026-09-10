@@ -192,8 +192,8 @@ describe('TagsApi / UsersApi', () => {
     expect(tags.map((t) => t.name)).toEqual(['a', 'b']);
   });
 
-  it('users.me unwraps user_profile', async () => {
-    const { client } = jsonClient(() => ({ user_profile: { user: { id: '42', name: 'me' } } }));
-    expect((await client.users.me()).id).toBe('42');
+  it('users.user unwraps per-user detail', async () => {
+    const { client } = jsonClient(() => ({ user: { id: '42', name: 'someone' } }));
+    expect((await client.users.user(42)).id).toBe('42');
   });
 });

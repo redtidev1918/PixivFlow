@@ -87,7 +87,7 @@ export class NovelsApi {
     return out.slice(0, limit);
   }
 
-  async rankingPage(mode: NovelRankingMode, cursor: string | null, options: RankingOptions = {}): Promise<OnePageResult<PixivNovel>> {
+  async rankingPage(mode: NovelRankingMode, options: RankingOptions = {}, cursor: string | null = null): Promise<OnePageResult<PixivNovel>> {
     let url: string;
     if (cursor) {
       url = cursor;
@@ -108,7 +108,7 @@ export class NovelsApi {
     const out: PixivNovel[] = [];
     let cursor: string | null = null;
     do {
-      const page = await this.rankingPage(mode, cursor, options);
+      const page = await this.rankingPage(mode, options, cursor);
       out.push(...page.items);
       cursor = page.next;
       if (!page.items.length) break;

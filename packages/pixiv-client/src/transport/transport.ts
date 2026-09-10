@@ -100,8 +100,9 @@ export class Transport {
       cfg.sleep ??
       ((ms: number, signal?: AbortSignal) =>
         new Promise<void>((resolve, reject) => {
+          // Referenced on purpose: an unref'd retry/backoff timer would let a
+          // short-lived CLI/script process exit instead of completing the retry.
           const t = setTimeout(resolve, ms);
-          if (typeof t.unref === 'function') t.unref();
           signal?.addEventListener(
             'abort',
             () => {

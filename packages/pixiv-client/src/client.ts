@@ -36,7 +36,14 @@ export class PixivClient {
   constructor(options: PixivClientOptions) {
     this.logger = options.logger ?? silentLogger;
     const emit = options.onEvent;
-    this.gate = new RateLimitGate(options.rateLimit ?? {}, this.logger, emit);
+    // A host-injected sleep (tests, custom schedulers) must drive BOTH the
+    // gate's pacing waits and the transport's retry waits; otherwise a host
+    // that injects one still gets real timers from the other.
+    this.gate = new RateLimitGate(
+      { sleep: options.sleep, ...(options.rateLimit ?? {}) },
+      this.logger,
+      emit
+    );
 
     const proxy = options.proxy ? normalizeProxy(options.proxy) : undefined;
 

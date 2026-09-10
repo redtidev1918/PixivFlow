@@ -7,7 +7,6 @@ import {
   type PixivNovel,
   type PixivNovelTextResponse,
   type PixivTag,
-  type PixivUser,
   type RateLimitStateStore,
 } from '@redtidev/pixiv-client';
 
@@ -98,10 +97,6 @@ export class PixivFlowPixivClient implements IPixivClient {
   }
 
   // -- IPixivClient surface ---------------------------------------------------
-
-  getUser(): Promise<PixivUser> {
-    return this.kit.users.me();
-  }
 
   searchIllustrations(target: TargetConfig): Promise<PixivIllust[]> {
     const requestDelay = this.config.download?.requestDelay ?? 500;

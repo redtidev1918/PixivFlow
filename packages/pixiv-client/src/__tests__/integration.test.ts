@@ -243,4 +243,26 @@ describe('pagination + abort', () => {
     controller.abort();
     await expect(p).rejects.toBeInstanceOf(PixivAbortError);
   });
+
+  it('a top-level injected sleep also drives the gate pacing wait', async () => {
+    // Regression: the gate and the transport sleep in different layers; a host
+    // that injects one sleeper must not get real timers from the other (an
+    // unref'd default timer silently dropped requests in short-lived CLIs).
+    const sleepCalls: number[] = [];
+    let now = 0;
+    const client = new PixivClient({
+      auth: new StaticTokenProvider('t'),
+      fetchImpl: (async () => response(200, { illust: { id: 1 } })) as FetchLike,
+      sleep: (ms: number) => {
+        sleepCalls.push(ms);
+        now += ms;
+        return Promise.resolve();
+      },
+      rateLimit: { minIntervalMs: 1000, jitterRatio: 0, random: () => 0, now: () => now },
+    });
+    await client.illustrations.get(1);
+    await client.illustrations.get(2);
+    // The second request had to wait out the pacing interval at the gate.
+    expect(sleepCalls).toContain(1000);
+  });
 });

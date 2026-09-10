@@ -62,7 +62,7 @@ export class IllustrationsApi {
     return out.slice(0, limit);
   }
 
-  async rankingPage(mode: IllustRankingMode, cursor: string | null, options: RankingOptions = {}): Promise<OnePageResult<PixivIllust>> {
+  async rankingPage(mode: IllustRankingMode, options: RankingOptions = {}, cursor: string | null = null): Promise<OnePageResult<PixivIllust>> {
     let url: string;
     if (cursor) {
       url = cursor;
@@ -83,7 +83,7 @@ export class IllustrationsApi {
     const out: PixivIllust[] = [];
     let cursor: string | null = null;
     do {
-      const page = await this.rankingPage(mode, cursor, options);
+      const page = await this.rankingPage(mode, options, cursor);
       out.push(...page.items);
       cursor = page.next;
       if (!page.items.length) break;

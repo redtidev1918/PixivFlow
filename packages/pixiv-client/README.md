@@ -77,7 +77,7 @@ text v2→v1/ajax chain) is allowed; anti-rate-limit rotation is not.
   `searchPage`, `search`, `rankingPage`, `ranking`, `userWorksPage`,
   `listByUser`, `listSeries`, `text`
 - `pixiv.tags.autocomplete(word)`
-- `pixiv.users.me()`
+- `pixiv.users.user(userId)` (Pixiv removed `/v1/user/profile`, so there is no "current user" endpoint)
 - `pixiv.media.fetch(url)` → `ArrayBuffer`
 - `pixiv.getRateLimitStatus()` — `{ circuitState, cooldownRemainingMs, penaltyLevel, last429At, nextAllowedInMs }`
 

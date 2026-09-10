@@ -56,8 +56,13 @@ export class MemoryRateLimitStateStore implements RateLimitStateStore {
   }
 }
 
+/**
+ * Pacing/cooldown waits MUST keep the event loop referenced: an unref'd timer
+ * lets a CLI/script process exit silently mid-wait instead of sending the
+ * request (observed as requests that "never happen" with exit code 0).
+ */
 const defaultSleep = (ms: number, signal?: AbortSignal) =>
-  delay(ms, undefined, signal ? { ref: false, signal } : { ref: false });
+  delay(ms, undefined, signal ? { signal } : undefined);
 
 /**
  * The single shared gate for ALL Pixiv traffic of one client.

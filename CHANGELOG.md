@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.15.0](https://github.com/redtidev1918/PixivFlow/compare/v2.14.0...v2.15.0) (2026-09-10)
+
+
+### Features
+
+* durable observability/audit (delivery_events, correlation id, readiness reason, runs CLI, build SHA) ([#30](https://github.com/redtidev1918/PixivFlow/issues/30)) ([46b23a0](https://github.com/redtidev1918/PixivFlow/commit/46b23a0edd6d54fc433fa7ca57edd09e92999d8a))
+
 ## [2.14.0](https://github.com/redtidev1918/PixivFlow/compare/v2.13.0...v2.14.0) (2026-09-10)
 
 ### Features

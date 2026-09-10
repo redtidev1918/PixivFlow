@@ -20,6 +20,7 @@ export type {
   SchedulerRuntimeConfig,
   HttpMultipartSuccessConfig,
   HttpMultipartDeliveryConfig,
+  TelegramReviewDeliveryConfig,
   DeliveryTargetConfig,
   DeliveryConfig,
   StandaloneConfig,

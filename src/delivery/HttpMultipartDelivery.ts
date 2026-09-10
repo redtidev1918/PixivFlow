@@ -211,77 +211,11 @@ export class HttpMultipartDelivery implements DeliveryProvider {
     fields: Record<string, DeliveryFieldValue>,
     request: DeliveryRequest
   ): Record<string, string[]> {
-    const xRestrict = request.context.xRestrict;
-    const xRestrictLabel = (() => {
-      if (xRestrict === undefined) return 'unknown';
-      if (xRestrict === 0) return 'all-ages';
-      if (xRestrict === 1) return 'R-18';
-      if (xRestrict === 2) return 'R-18G';
-      return `unknown(${xRestrict})`;
-    })();
-    const xRestrictTag = (() => {
-      if (xRestrict === undefined) return '';
-      if (xRestrict === 0) return 'AllAges';
-      if (xRestrict === 1) return 'R18';
-      if (xRestrict === 2) return 'R18G';
-      return `XRestrict${xRestrict}`;
-    })();
-    const variables: Record<string, string> = {
-      title: request.context.title,
-      pixivId: request.context.pixivId,
-      type: request.context.type,
-      targetId: request.context.targetId ?? '',
-      tag: request.context.tag ?? '',
-      topic: request.context.topic ?? '',
-      workTags: request.context.workTags?.join(',') ?? '',
-      // Canonical Pixiv permalink; generated here so templates stay type-agnostic.
-      link:
-        request.context.type === 'novel'
-          ? `https://www.pixiv.net/novel/show.php?id=${request.context.pixivId}`
-          : `https://www.pixiv.net/artworks/${request.context.pixivId}`,
-      // Non-empty topic-or-tag label for tags fields (topic targets have no tag).
-      topicTag: request.context.topic || request.context.tag || '',
-      // R-18 works are auto-spoilerized; templates can use {{spoiler}} instead
-      // of hard-coding true.
-      spoiler: request.context.spoiler === true ? 'true' : 'false',
-      // Keep Pixiv's exact rating independent from the channel's mask policy.
-      xRestrict: xRestrict === undefined ? '' : String(xRestrict),
-      xRestrictLabel,
-      xRestrictTag,
-      // Ranking day (JST YYYY-MM-DD) — which day's hot works this is.
-      rankingDate: request.context.rankingDate ?? '',
-      // Pixiv publish date, YYYY-MM-DD (create_date is JST ISO).
-      publishedDate: formatPublishedDate(request.context.publishedAt),
-      // Detected language for novels ("Chinese (Mandarin) (cmn)"); empty for
-      // illustrations or when detection was inconclusive.
-      language: request.context.language ?? '',
-      // Popularity signals. Compact localized form (e.g. 12.3k) when large,
-      // empty string when the API response carried no count.
-      bookmarkCount: formatCount(request.context.bookmarkCount),
-      viewCount: formatCount(request.context.viewCount),
-      // Schedule slot provenance (e.g. 2026-09-08 / morning / 2026-09-08:morning)
-      // so the review card can show "今日早班 · bot1 · 小说" instead of a bare post.
-      scheduleId: request.context.scheduleId ?? '',
-      executionId: request.context.executionId ?? '',
-      occurrenceAt: request.context.occurrenceAt ?? '',
-      triggerSource: request.context.triggerSource ?? '',
-      slotId: request.context.slotId ?? '',
-      slotName: request.context.slotName ?? '',
-      slotDate: request.context.slotDate ?? '',
-      // The occurrence-scoped intent key. MUST be sent so an ACK-loss retry
-      // (same key) converges remotely as idempotent_replay instead of being
-      // mistaken for a historical duplicate or, worse, double-posting.
-      idempotencyKey: (request.context.idempotencyKey as string) ?? '',
-    };
+    const variables = buildTemplateVariables(request);
     return Object.fromEntries(
       Object.entries(fields).map(([name, value]) => {
         const values = Array.isArray(value) ? value : [value];
-        const rendered = values.map((item) =>
-          String(item).replace(
-            /\{\{(title|pixivId|type|targetId|tag|topic|workTags|link|topicTag|spoiler|xRestrict|xRestrictLabel|xRestrictTag|rankingDate|publishedDate|language|bookmarkCount|viewCount|scheduleId|executionId|occurrenceAt|triggerSource|slotId|slotName|slotDate|idempotencyKey)\}\}/g,
-            (_, key: string) => variables[key]
-          )
-        );
+        const rendered = values.map((item) => renderDeliveryTemplate(String(item), variables));
         switch (this.config.arrayFormat ?? 'comma') {
           case 'repeat':
             return [name, rendered];
@@ -380,4 +314,85 @@ export class HttpMultipartDelivery implements DeliveryProvider {
     const value = typeof body === 'string' ? body : JSON.stringify(body);
     return value.slice(0, 500);
   }
+}
+
+/**
+ * Template variables shared by every delivery provider.
+ *
+ * Exported so a provider that is not HTTP multipart — the Telegram review sender —
+ * renders the SAME vocabulary instead of owning a second, drifting copy of it.
+ */
+export function buildTemplateVariables(request: DeliveryRequest): Record<string, string> {
+  const c = request.context;
+  const xRestrict = c.xRestrict;
+  const xRestrictLabel = (() => {
+    if (xRestrict === undefined) return 'unknown';
+    if (xRestrict === 0) return 'all-ages';
+    if (xRestrict === 1) return 'R-18';
+    if (xRestrict === 2) return 'R-18G';
+    return `unknown(${xRestrict})`;
+  })();
+  const xRestrictTag = (() => {
+    if (xRestrict === undefined) return '';
+    if (xRestrict === 0) return 'AllAges';
+    if (xRestrict === 1) return 'R18';
+    if (xRestrict === 2) return 'R18G';
+    return `XRestrict${xRestrict}`;
+  })();
+
+  return {
+    title: c.title,
+    pixivId: c.pixivId,
+    type: c.type,
+    targetId: c.targetId ?? '',
+    tag: c.tag ?? '',
+    topic: c.topic ?? '',
+    workTags: c.workTags?.join(',') ?? '',
+    // Canonical Pixiv permalink; generated here so templates stay type-agnostic.
+    link:
+      c.type === 'novel'
+        ? `https://www.pixiv.net/novel/show.php?id=${c.pixivId}`
+        : `https://www.pixiv.net/artworks/${c.pixivId}`,
+    // Non-empty topic-or-tag label for tags fields (topic targets have no tag).
+    topicTag: c.topic || c.tag || '',
+    // R-18 works are auto-spoilerized; templates can use {{spoiler}} instead of
+    // hard-coding true.
+    spoiler: c.spoiler === true ? 'true' : 'false',
+    // Keep Pixiv's exact rating independent from the channel's mask policy.
+    xRestrict: xRestrict === undefined ? '' : String(xRestrict),
+    xRestrictLabel,
+    xRestrictTag,
+    // Ranking day (JST YYYY-MM-DD) — which day's hot works this is.
+    rankingDate: c.rankingDate ?? '',
+    // Pixiv publish date, YYYY-MM-DD (create_date is JST ISO).
+    publishedDate: formatPublishedDate(c.publishedAt),
+    // Detected language for novels ("Chinese (Mandarin) (cmn)"); empty for
+    // illustrations or when detection was inconclusive.
+    language: c.language ?? '',
+    // Popularity signals. Compact localized form (e.g. 12.3k) when large, empty
+    // string when the API response carried no count.
+    bookmarkCount: formatCount(c.bookmarkCount),
+    viewCount: formatCount(c.viewCount),
+    // Schedule slot provenance (e.g. 2026-09-08 / morning / 2026-09-08:morning) so
+    // a review card can show "今日早班 · bot1 · 小说" instead of a bare post.
+    scheduleId: c.scheduleId ?? '',
+    executionId: c.executionId ?? '',
+    occurrenceAt: c.occurrenceAt ?? '',
+    triggerSource: c.triggerSource ?? '',
+    slotId: c.slotId ?? '',
+    slotName: c.slotName ?? '',
+    slotDate: c.slotDate ?? '',
+    // The occurrence-scoped intent key. MUST be sent so an ACK-loss retry (same
+    // key) converges remotely as idempotent_replay instead of being mistaken for
+    // a historical duplicate or, worse, double-posting.
+    idempotencyKey: (c.idempotencyKey as string) ?? '',
+  };
+}
+
+/**
+ * `{{name}}` substitution. Unknown placeholders are left literal rather than
+ * silently emptied, so a typo in a template is visible in the delivered message.
+ */
+export function renderDeliveryTemplate(template: string, variables: Record<string, string>): string {
+  return template.replace(/\{\{(\w+)\}\}/g, (match, key: string) => variables[key] ?? match);
 }

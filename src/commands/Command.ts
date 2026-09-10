@@ -93,6 +93,14 @@ export abstract class BaseCommand implements Command {
   }
 
   /**
+   * Attach an explicit process exit code (batch/CI commands: a partial run and a
+   * failed run are different outcomes for a supervisor).
+   */
+  protected withExitCode(result: CommandResult, exitCode: number): CommandResult {
+    return { ...result, exitCode };
+  }
+
+  /**
    * Check if command name or alias matches
    */
   matches(name: string): boolean {

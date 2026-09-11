@@ -3,7 +3,7 @@ import { BaseRepository } from './BaseRepository';
 
 /**
  * Host-side SQLite adapter for the kit's RateLimitStateStore port.
- * Sync better-sqlite3 calls satisfy the async interface trivially.
+ * Sync SQLite calls satisfy the async interface trivially.
  */
 export class SQLiteRateLimitStateStore extends BaseRepository implements RateLimitStateStore {
   load(scope: string): RateLimitState | null {

@@ -1,18 +1,18 @@
 # Android（Termux）安装指南
 
 > **English:** This guide explains how to run PixivFlow on Android with Termux:
-> obtaining the correct Termux distribution, installing the package toolchain needed
-> by the native better-sqlite3 module, installing the CLI globally, injecting your
-> Pixiv refresh token without a desktop browser, editing configuration for phone
-> storage limits, keeping the scheduler alive in the background with tmux or nohup,
-> and a troubleshooting table for build, permission, and process-killing issues.
+> obtaining the correct Termux distribution, installing the CLI globally (pure
+> JavaScript, no compiler toolchain), injecting your Pixiv refresh token without a
+> desktop browser, editing configuration for phone storage limits, keeping the
+> scheduler alive in the background with tmux or nohup, and a troubleshooting table
+> for install, permission, and process-killing issues.
 
 本文档面向想在 Android 手机上长期挂机收集的用户：没有桌面浏览器、有更严格的文件权限与后台存活限制。
 Termux 场景只覆盖 CLI 用法；WebUI 与 Docker 部署不在本文范围（后者见 [DOCKER.md](./DOCKER.md)，仅限服务器）。
 
 ## 适用场景
 
-在没有常开电脑的情况下，用手机挂机跑定时下载。局限性同样明确：better-sqlite3 需要本地编译，登录的浏览器自动化链路受限，系统会积极回收后台进程。
+在没有常开电脑的情况下，用手机挂机跑定时下载。局限性同样明确：登录的浏览器自动化链路受限，系统会积极回收后台进程。
 若有一台能装 Docker 的机器，优先选 Docker 部署，可省去本章全部环境适配。
 
 ## 前置要求
@@ -26,25 +26,23 @@ Termux 场景只覆盖 CLI 用法；WebUI 与 Docker 部署不在本文范围（
 
 不要使用 Google Play 版本。该版本已停止维护，且与上述渠道的环境不能混用。
 
-### 安装工具链
+### 安装运行时
 
 ```bash
 # 更新包索引与基础组件
 pkg update && pkg upgrade
 
-# Node.js 运行时与 npm
+# Node.js 运行时与 npm（唯一的硬性依赖）
 pkg install -y nodejs npm
 
-# 编译工具链：better-sqlite3 是原生模块，必须本地编译
-pkg install -y python3 make clang
-
 # 版本核验
-node -v               # 需要 v22.12+；建议使用 Termux 当前提供的受支持版本
+node -v               # 需要 v22.13+（内建 node:sqlite 的下限）
 npm -v                # 9 以上
-python3 --version
-make --version | head -1
-clang --version | head -1
 ```
+
+不需要 `make` / `clang` / `python3` 之类的编译工具链：依赖全部是纯 JavaScript，存储走 Node 内建的 `node:sqlite`，安装过程不编译任何原生模块。
+
+可选：如果打算用第三顺位的 Python gppt 登录，再额外装 `pkg install -y python3`（见下文「登录」）。
 
 如需把下载结果写到手机公共存储（相册可见的位置），先做一次存储授权：
 
@@ -61,13 +59,13 @@ npm install -g pixivflow
 pixivflow --help      # 打印帮助即安装成功
 ```
 
-npm 找不到匹配的预编译二进制时会现场编译 better-sqlite3，耗时数分钟、CPU 占满属正常现象。
-编译报错（典型为 gyp 提示 `android_ndk_path` 未定义）时按顺序处理：
+安装过程只下载并解包 JavaScript，不触发任何编译，也不会自动下载浏览器；正常应在数十秒内结束。
+失败原因基本只剩网络：换镜像源后重试。
 
 ```bash
-pkg reinstall -y python3 make clang    # 确认三件套齐全
+npm config set registry https://registry.npmmirror.com
 npm cache clean --force
-npm install -g pixivflow --build-from-source
+npm install -g pixivflow
 ```
 
 仍失败时退回源码方案：
@@ -231,7 +229,7 @@ pixivflow logs        # 查看运行日志
 | 问题 | 现象 | 处理 |
 | --- | --- | --- |
 | 全局安装 EACCES 报错 | `npm install -g` 权限不足 | 本地安装替代：`mkdir -p ~/pf && cd ~/pf && npm install pixivflow`，再设别名 `alias pixivflow="npx pixivflow"` 并重开 shell；之后所有命令照常以 `pixivflow` 开头 |
-| gyp 报 android_ndk_path | better-sqlite3 编译阶段失败 | 补齐 `pkg install python3 make clang`，清理 npm 缓存后带 `--build-from-source` 重试；仍失败改走上文源码路线 |
+| 安装卡在下载阶段 | `npm install -g` 长时间无输出或超时 | 换镜像源 `npm config set registry https://registry.npmmirror.com`，清理缓存后重试；仍失败改走上文源码路线 |
 | command not found: pixivflow | PATH 缺少 npm 全局 bin 目录 | 先试 `npx pixivflow --help`；或长期用别名方案 |
 | 外部存储写入失败 | EACCES / 文件系统只读 | 执行 `termux-setup-storage` 并重新授权；个别卷不支持高级特性，重要数据放回私有目录 |
 | 数据库初始化失败 | Failed to initialize database | 确认目标目录存在且可写；查看剩余空间 `df -h ~` |

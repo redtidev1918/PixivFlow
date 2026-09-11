@@ -50,11 +50,13 @@
       name: '🐱 PixivFlow',
       nameLink: '#/',
       repo: 'redtidev1918/PixivFlow',
-      loadSidebar: true,
+            loadSidebar: true,
+      // 语言是站点维度：docsify 原生按页面所在目录取 _sidebar.md——
+      // 根页面读 /_sidebar.md，/en/ 页面读 /en/_sidebar.md，无需 alias。
+      // 注意：不要配置 '/.*/_sidebar.md' 之类的通配 alias，它会把 /en/_sidebar.md
+      // 改写回根侧边栏，破坏分语言导航；页内标题也不注入 sidebar（无 subMaxLevel）。
+
       // 子目录页面（如 zh-CN/）也统一用根侧边栏；链接用根绝对路径（/FOO.md）
-      alias: { '/.*/_sidebar.md': '/_sidebar.md' },
-      subMaxLevel: 2,
-      maxLevel: 3,
       auto2top: true,
       search: {
         placeholder: '搜索文档…',

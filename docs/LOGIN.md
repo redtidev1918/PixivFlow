@@ -62,7 +62,7 @@ pixivflow login-headless -u user@example.com -p 密码
 echo "密码" | pixivflow login-headless -u user@example.com --password-stdin
 ```
 
-Puppeteer 无头浏览器自动完成授权(服务器需可安装 Chromium)。密码会经过服务器进程,能避免就避免——优先用 Token 搬运。
+浏览器登录驱动的是宿主机上已有的 Chrome/Chromium(自动探测常见安装位置与 `PATH`,也可用 `PUPPETEER_EXECUTABLE_PATH` 显式指定)。PixivFlow 自身不再下载 Chromium,服务器上没有浏览器时请先安装(Docker 镜像已内置)。密码会经过服务器进程,能避免就避免——优先用 Token 搬运。
 
 ## 凭据存在哪里
 

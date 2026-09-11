@@ -12,10 +12,9 @@
  */
 
 import { logger } from '../logger';
-import { PixivAuth } from '../auth/PixivAuth';
+import { PixivAuth, isAuthReadOnly } from '../auth/PixivAuth';
 import { Database } from '../storage/Database';
 import { PixivCredentialConfig, NetworkConfig, StandaloneConfig } from '../config';
-import { refreshToken } from '../terminal-login/token-refresh';
 
 export interface TokenMaintenanceConfig {
   /**
@@ -127,12 +126,10 @@ export class TokenMaintenanceService {
     try {
       logger.debug('Performing token maintenance check...');
 
-      // Check if refresh token is valid
-      const isValid = await this.checkRefreshTokenValidity();
-      
-      if (!isValid) {
-        logger.warn('Refresh token is invalid, but cannot auto-renew without credentials');
-        logger.warn('Please run login command to get a new refresh token');
+      // Read-only auth must never reach the token endpoint; getAccessToken() below
+      // would refuse anyway, and logging it here keeps the reason visible.
+      if (isAuthReadOnly()) {
+        logger.info('Read-only auth: token endpoint is off-limits for this run');
         return;
       }
 
@@ -151,26 +148,6 @@ export class TokenMaintenanceService {
       logger.error('Token maintenance failed', {
         error: error instanceof Error ? error.message : String(error),
       });
-    }
-  }
-
-  /**
-   * Check if the current refresh token is valid
-   */
-  private async checkRefreshTokenValidity(): Promise<boolean> {
-    try {
-      if (!this.credentials.refreshToken) {
-        return false;
-      }
-
-      // Try to refresh the token to verify it's valid
-      await refreshToken(this.credentials.refreshToken);
-      return true;
-    } catch (error) {
-      logger.debug('Refresh token validation failed', {
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return false;
     }
   }
 

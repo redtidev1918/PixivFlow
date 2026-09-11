@@ -1,4 +1,3 @@
-import DatabaseDriver from 'better-sqlite3';
 import { existsSync, mkdirSync, renameSync } from 'node:fs';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import { DatabaseError } from '../utils/errors';
@@ -15,6 +14,8 @@ import { DeliveryRepository } from './repositories/DeliveryRepository';
 import { OutboxRepository } from './repositories/OutboxRepository';
 import { MetadataRepository } from './repositories/MetadataRepository';
 import { SQLiteRateLimitStateStore } from './repositories/RateLimitStateRepository';
+import { NodeSqliteDriver } from './drivers/NodeSqliteDriver';
+import type { SqliteDriver } from './drivers/SqliteDriver';
 
 export interface AccessTokenStore {
   accessToken: string;
@@ -48,7 +49,7 @@ export interface SchedulerExecutionRecord {
 }
 
 export class Database implements IDatabase {
-  private db: DatabaseDriver.Database;
+  private db: SqliteDriver;
   private migration: DatabaseMigration;
   private tokenRepo: TokenRepository;
   private downloadRepo: DownloadRepository;
@@ -65,7 +66,7 @@ export class Database implements IDatabase {
   constructor(private readonly databasePath: string) {
     try {
       mkdirSync(dirname(this.databasePath), { recursive: true });
-      this.db = new DatabaseDriver(this.databasePath);
+      this.db = new NodeSqliteDriver(this.databasePath);
       // Enable WAL mode for better concurrency
       this.db.pragma('journal_mode = WAL');
       // Optimize for read-heavy workloads
@@ -104,7 +105,7 @@ export class Database implements IDatabase {
   /** Absolute path of the SQLite file (used to locate sibling cache dirs). */
   public getDatabasePath(): string {
     // The constructor accepts a possibly-relative path (resolved against CWD
-    // by better-sqlite3). Normalize to absolute so sibling dirs (topic-cache,
+    // by the SQLite binding). Normalize to absolute so sibling dirs (topic-cache,
     // delivery-outbox) always land beside the real database regardless of CWD.
     return isAbsolute(this.databasePath) ? this.databasePath : resolve(process.cwd(), this.databasePath);
   }
@@ -142,6 +143,11 @@ export class Database implements IDatabase {
   /** Expose a prepared-statement helper if needed by services (pragmas etc). */
   public pragma(sql: string): unknown {
     return this.db.pragma(sql);
+  }
+
+  /** Run one or more statements for their side effect, discarding any result rows. */
+  public exec(sql: string): void {
+    this.db.exec(sql);
   }
 
   // Token management - delegated to TokenRepository

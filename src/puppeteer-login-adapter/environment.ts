@@ -25,9 +25,9 @@ export async function checkPuppeteerAvailable(): Promise<boolean> {
       // The actual availability will be tested when we try to launch
     }
     
-    // Try to import puppeteer
+    // Try to import puppeteer-core
     // Use dynamic import to handle cases where module might not be available
-    const puppeteer = await import('puppeteer');
+    const puppeteer = await import('puppeteer-core');
     
     // Verify that puppeteer has the expected exports
     if (!puppeteer || typeof puppeteer.launch !== 'function') {

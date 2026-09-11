@@ -73,7 +73,9 @@ async function executeCommand(registry: CommandRegistry, commandName: string, co
     const result = await command.execute(context, args);
     if (!result.success) {
       logger.error('Command execution failed', { command: commandName, error: result.error });
-      process.exit(1);
+      // A batch command distinguishes "nothing succeeded" from "the process could
+      // not run at all"; honour the explicit code when it provides one.
+      process.exit(result.exitCode ?? 1);
     }
 
     // Decide exit behavior based on command metadata (long running)
@@ -81,7 +83,7 @@ async function executeCommand(registry: CommandRegistry, commandName: string, co
       ? (command as any).getMetadata().longRunning === true
       : false;
     if (!isLongRunning) {
-      process.exit(0);
+      process.exit(result.exitCode ?? 0);
     }
   } catch (error) {
     logger.error('Unexpected error during command execution', {
@@ -154,7 +156,7 @@ async function bootstrap() {
   let config: StandaloneConfig;
   try {
     const isLoginCommand = ['login', 'l', 'login-interactive', 'li', 'login-headless'].includes(commandName || '');
-    const tokenOptionalCommands = new Set(['config', 'dirs', 'logs', 'setup', 'status', 'health', 'maintain', 'normalize', 'migrate-config', 'backup', 'monitor', 'outbox', 'runs', 'webui', 'w']);
+    const tokenOptionalCommands = new Set(['config', 'dirs', 'logs', 'setup', 'status', 'health', 'maintain', 'normalize', 'migrate-config', 'backup', 'monitor', 'outbox', 'runs', 'webui', 'w', 'diagnose']);
     const isTokenOptional = commandName ? tokenOptionalCommands.has(commandName) : true;
     
     config = loadConfig(configPath, isLoginCommand || isTokenOptional || !commandName);

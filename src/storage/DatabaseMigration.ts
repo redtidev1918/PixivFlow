@@ -1,4 +1,4 @@
-import DatabaseDriver from 'better-sqlite3';
+import type { SqliteDriver } from './drivers/SqliteDriver';
 import { DatabaseError } from '../utils/errors';
 import { logger } from '../logger';
 
@@ -6,7 +6,7 @@ import { logger } from '../logger';
  * Handles database migrations
  */
 export class DatabaseMigration {
-  constructor(private readonly db: DatabaseDriver.Database) {}
+  constructor(private readonly db: SqliteDriver) {}
 
   /**
    * Run all database migrations

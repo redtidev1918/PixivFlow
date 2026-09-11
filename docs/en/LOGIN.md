@@ -62,9 +62,11 @@ pixivflow login-headless -u user@example.com -p <password>
 echo "<password>" | pixivflow login-headless -u user@example.com --password-stdin
 ```
 
-A headless Puppeteer browser completes the authorisation (the server must be able to
-install Chromium). The password passes through the server process, so avoid this when
-you can — prefer moving a token instead.
+Browser login drives the Chrome/Chromium already present on the host (common install
+locations and `PATH` are probed, or set `PUPPETEER_EXECUTABLE_PATH` explicitly).
+PixivFlow no longer downloads Chromium itself, so install a browser on the server first —
+the Docker image already ships one. The password passes through the server process, so
+avoid this when you can — prefer moving a token instead.
 
 ## Where credentials are stored
 

@@ -26,6 +26,12 @@ pixivflow --help
 PixivFlow + TelePost 联合部署套件（含可选代理）：
 [redtidev1918/pixivflow-telepost-deploy](https://github.com/redtidev1918/pixivflow-telepost-deploy)
 —— 一套配置，支持国内/海外、有/无公网 IP、VPS/Fly.io 任意场景。
+
+> **部署平台 ≠ 网络出口资格**：PixivFlow 访问的 OAuth / App API / 媒体 CDN 是多个独立数据面，
+> 不同平台（GitHub hosted runner / Cloudflare Worker / Fly / VPS / self-hosted runner）的
+> 限流行为可能显著不同。部署前建议先做一次最小 egress 探测，见
+> [DOCKER.md](docs/DOCKER.md#部署平台与网络出口egress-qualification)。
+
 从源码构建：
 
 ```bash

@@ -335,6 +335,36 @@ tar -xzf pixivflow-backup-YYYYMMDD.tar.gz                        # 还原 data/c
 docker compose up -d
 ```
 
+## 部署平台与网络出口（egress qualification）
+
+「能跑 Node.js」不等于「适合作为 Pixiv 数据执行面」。PixivFlow 访问的是多个独立的 Pixiv
+数据面，各有各的限流策略：
+
+| 数据面 | 端点 |
+| --- | --- |
+| OAuth | `oauth.secure.pixiv.net` |
+| App API | `app-api.pixiv.net` |
+| 媒体 CDN | `i.pximg.net`（请求带 `Referer: https://app-api.pixiv.net/`） |
+
+OAuth 成功不代表生产搜索 / 下载负载也能成功。不同数据中心出口（GitHub hosted runner、
+Cloudflare Worker、Fly.io、VPS、self-hosted runner）对 Pixiv 的限流行为可能显著不同。
+2026-09-11 的真实生产测试里，GitHub hosted runner 能完成 OAuth 与 topic 解析，却在真实
+topic / search 负载下反复进入持续 429 / penalty escalation，最终死在 30 分钟 watchdog；
+而 Fly 历史上同量工作几分钟即完成。这说明**同一业务在不同出口上的 rate-limit 行为显著
+不同**，既不是「GitHub 比 Fly 慢」一句话能概括，更不是「Pixiv 封锁了 GitHub」。
+
+在把某个平台用于 Pixiv 生产前，先做一次最小 egress 探测（禁止大范围业务批处理）：
+
+- **OAuth**：`oauth.secure.pixiv.net`，记录 DNS / TLS / HTTP 状态 / 延迟。
+- **App API**：一个固定小请求（不要 12 tags / 100 samples / 多分页），记录状态码 / TTFB / 429 / `Retry-After` / 延迟。
+- **媒体**：对一张已知可访问的媒体 URL 发 `Range: bytes=0-65535` 且带 `Referer: https://app-api.pixiv.net/`，记录 200/206/403/429 / TTFB / 64 KiB 时长 / 超时。
+- **受控突发**：少量连续请求，只判断「该出口是否异常容易进入 429」，不得把账号打进 penalty。
+
+TODO：提供统一的 `pixivflow diagnose egress` 命令（或 `scripts/detect-pixiv-egress.*`），
+用于 GitHub / Cloudflare / Fly / VPS / self-hosted runner 的同请求 A/B —— 参考 DeviantDrop
+的 `scripts/detect-da.mjs`（它已为 DeviantArt 验证了同一类原则：Telegram / 控制逻辑与第三
+方数据面出口是两件事）。
+
 ## 故障排查
 
 | 现象 | 可能原因 | 处理 |

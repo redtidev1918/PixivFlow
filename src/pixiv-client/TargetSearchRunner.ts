@@ -11,6 +11,7 @@ import { logger } from '../logger';
 import { parseDateRange } from '../utils/date-utils';
 import { isDateInRange } from '../utils/date-utils';
 import { sortPixivItems } from '../utils/pixiv-sort';
+import { throwIfAborted } from '../utils/errors';
 import type { TargetConfig } from '../config';
 import { mapTargetToIllustQuery, mapTargetToNovelQuery } from './query-mapper';
 
@@ -23,28 +24,35 @@ import { mapTargetToIllustQuery, mapTargetToNovelQuery } from './query-mapper';
 export class TargetSearchRunner {
   constructor(private readonly kit: KitPixivClient) {}
 
-  async searchIllustrations(target: TargetConfig, requestDelayMs: number): Promise<PixivIllust[]> {
+  async searchIllustrations(
+    target: TargetConfig,
+    requestDelayMs: number,
+    signal?: AbortSignal
+  ): Promise<PixivIllust[]> {
     if (target.tagRelation === 'or') {
       return this.mergeTagUnion(target, requestDelayMs, (t, tag, d) =>
-        this.searchSingleIllust(t, tag, d)
-      );
+        this.searchSingleIllust(t, tag, d, signal), signal);
     }
-    return this.searchSingleIllust(target, target.tag!, requestDelayMs);
+    return this.searchSingleIllust(target, target.tag!, requestDelayMs, signal);
   }
 
-  async searchNovels(target: TargetConfig, requestDelayMs: number): Promise<PixivNovel[]> {
+  async searchNovels(
+    target: TargetConfig,
+    requestDelayMs: number,
+    signal?: AbortSignal
+  ): Promise<PixivNovel[]> {
     if (target.tagRelation === 'or') {
       return this.mergeTagUnion(target, requestDelayMs, (t, tag, d) =>
-        this.searchSingleNovel(t, tag, d)
-      );
+        this.searchSingleNovel(t, tag, d, signal), signal);
     }
-    return this.searchSingleNovel(target, target.tag!, requestDelayMs);
+    return this.searchSingleNovel(target, target.tag!, requestDelayMs, signal);
   }
 
   private async mergeTagUnion<T extends PixivIllust | PixivNovel>(
     target: TargetConfig,
     requestDelayMs: number,
-    runOne: (target: TargetConfig, tag: string, delayMs: number) => Promise<T[]>
+    runOne: (target: TargetConfig, tag: string, delayMs: number) => Promise<T[]>,
+    signal?: AbortSignal
   ): Promise<T[]> {
     const tags = target.tag!.split(/\s+/).map((t) => t.trim()).filter(Boolean);
     if (tags.length <= 1) return runOne(target, target.tag!, requestDelayMs);
@@ -52,6 +60,7 @@ export class TargetSearchRunner {
     const seen = new Set<string>();
     const merged: T[] = [];
     for (let i = 0; i < tags.length; i++) {
+      throwIfAborted(signal, 'search cancelled');
       const part = await runOne(target, tags[i], requestDelayMs);
       for (const item of part) {
         const key = String(item.id);
@@ -61,7 +70,7 @@ export class TargetSearchRunner {
         }
       }
       if (target.limit && merged.length >= target.limit) break;
-      if (i < tags.length - 1 && requestDelayMs > 0) await delay(requestDelayMs);
+      if (i < tags.length - 1 && requestDelayMs > 0) await delay(requestDelayMs, undefined, { signal });
     }
     const sorted = sortPixivItems(merged, target.sort);
     return target.limit ? sorted.slice(0, target.limit) : sorted;
@@ -70,28 +79,32 @@ export class TargetSearchRunner {
   private async searchSingleIllust(
     target: TargetConfig,
     tag: string,
-    requestDelayMs: number
+    requestDelayMs: number,
+    signal?: AbortSignal
   ): Promise<PixivIllust[]> {
     return this.searchWithPagination<PixivIllust, IllustSearchOptions>(
       target,
       tag,
       requestDelayMs,
       (options) => this.kit.illustrations.searchPage(options),
-      (t, g) => mapTargetToIllustQuery({ ...t, tag: g })
+      (t, g) => mapTargetToIllustQuery({ ...t, tag: g }),
+      signal
     );
   }
 
   private async searchSingleNovel(
     target: TargetConfig,
     tag: string,
-    requestDelayMs: number
+    requestDelayMs: number,
+    signal?: AbortSignal
   ): Promise<PixivNovel[]> {
     return this.searchWithPagination<PixivNovel, NovelSearchOptions>(
       target,
       tag,
       requestDelayMs,
       (options) => this.kit.novels.searchPage(options),
-      (t, g) => mapTargetToNovelQuery({ ...t, tag: g })
+      (t, g) => mapTargetToNovelQuery({ ...t, tag: g }),
+      signal
     );
   }
 
@@ -108,7 +121,8 @@ export class TargetSearchRunner {
     tag: string,
     requestDelayMs: number,
     fetchPage: (options: O) => Promise<{ items: T[]; next: string | null }>,
-    buildBase: (t: TargetConfig, tag: string) => O
+    buildBase: (t: TargetConfig, tag: string) => O,
+    signal?: AbortSignal
   ): Promise<T[]> {
     const fetchOne = fetchPage as (options: IllustSearchOptions | NovelSearchOptions) => Promise<{ items: T[]; next: string | null }>;
     logger.debug('Searching Pixiv', {
@@ -142,6 +156,7 @@ export class TargetSearchRunner {
     let shouldStop = false;
 
     while ((!fetchLimit || results.length < fetchLimit) && !shouldStop) {
+      throwIfAborted(signal, 'search cancelled');
       pageCount++;
       // Dates are intentionally filtered CLIENT-side below (legacy behavior;
       // PixivFlow needs the early-stop walk on create_date).
@@ -151,6 +166,10 @@ export class TargetSearchRunner {
         searchTarget: base.searchTarget,
         includeR18: base.includeR18,
         cursor,
+        // Threaded into the kit transport, which combines it with its per-request
+        // timeout and honours it in retry back-off. Without this the pager could
+        // stay blocked in a single hung request for the rest of the run.
+        signal,
       });
       cursor = page.next;
 
@@ -170,7 +189,7 @@ export class TargetSearchRunner {
         logger.debug(
           `Tag "${tag}" page ${pageCount}: total collected ${results.length}, waiting ${requestDelayMs}ms...`
         );
-        await delay(requestDelayMs);
+        await delay(requestDelayMs, undefined, { signal });
       }
       if (!cursor) break;
     }

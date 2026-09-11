@@ -74,16 +74,19 @@ export interface TopicCandidate {
 
 /** Minimal surface the resolver/collector need from the Pixiv client. */
 export interface TopicClient {
-  getTagAutocomplete(seed: string): Promise<Array<{ name: string; translated_name?: string }>>;
+  getTagAutocomplete(
+    seed: string,
+    options?: { signal?: AbortSignal }
+  ): Promise<Array<{ name: string; translated_name?: string }>>;
   searchIllustrationsForTags(
     seed: string,
     limit: number,
-    options?: { startDate?: string; endDate?: string; includeR18?: boolean }
+    options?: { startDate?: string; endDate?: string; includeR18?: boolean; signal?: AbortSignal }
   ): Promise<Array<WorkLike>>;
   searchNovelsForTags(
     seed: string,
     limit: number,
-    options?: { startDate?: string; endDate?: string; includeR18?: boolean }
+    options?: { startDate?: string; endDate?: string; includeR18?: boolean; signal?: AbortSignal }
   ): Promise<Array<WorkLike>>;
 }
 

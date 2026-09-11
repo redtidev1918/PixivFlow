@@ -3,7 +3,8 @@
  * Opens a browser window for user to manually log in
  */
 
-import puppeteer, { Browser } from 'puppeteer';
+import type { Browser } from 'puppeteer-core';
+import { launchSystemBrowser } from './browser-launch';
 import { LoginInfo } from '../terminal-login';
 import { ProxyConfig, buildProxyUrl } from './proxy';
 import { generateCodeVerifier, generateCodeChallenge } from './pkce';
@@ -62,7 +63,7 @@ export async function loginWithPuppeteerInteractive(proxy?: ProxyConfig): Promis
     
     // Try to launch browser
     try {
-      browser = await puppeteer.launch(launchOptions);
+      browser = await launchSystemBrowser(launchOptions);
     } catch (launchError: any) {
       const errorMsg = launchError?.message || String(launchError);
       

@@ -38,5 +38,32 @@
     "failed_draft": 2
   },
   "checksums": true,
-  "sbom": true
+  "sbom": true,
+  "repository": {
+    "git": {
+      "productionOperations": {
+        "base": "default",
+        "branches": [
+          "chore/cutover-*",
+          "ops/*",
+          "release/*",
+          "hotfix/*"
+        ],
+        "requireLatestBase": true,
+        "operations": {
+          "cutover": {
+            "branches": [
+              "chore/cutover-*"
+            ],
+            "allowedPaths": [
+              "Dockerfile",
+              "Dockerfile.scheduler",
+              "docker-compose.yml",
+              "docker-compose.apprise.example.yml"
+            ]
+          }
+        }
+      }
+    }
+  }
 }

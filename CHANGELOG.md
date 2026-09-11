@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.18.1](https://github.com/redtidev1918/PixivFlow/compare/v2.18.0...v2.18.1) (2026-09-11)
+
+
+### Bug Fixes
+
+* **scheduler:** durable trigger dispatch, lease recovery and honest status semantics ([#57](https://github.com/redtidev1918/PixivFlow/issues/57)) ([975c691](https://github.com/redtidev1918/PixivFlow/commit/975c691c3da071363b5f50990aea921994ed5790))
+
 ## [2.18.0](https://github.com/redtidev1918/PixivFlow/compare/v2.17.0...v2.18.0) (2026-09-11)
 
 

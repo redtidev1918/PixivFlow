@@ -62,6 +62,14 @@ function step(name, fn) {
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'pixivflow-pkg-smoke-'));
 process.stdout.write(`workspace: ${tmp}\n`);
 
+// ------------------------------------------------ 0. build (CI-clean tree)
+// `npm pack` does NOT run prepublishOnly, so a fresh checkout packs a tarball
+// without dist/. Build explicitly so the artifact always reflects HEAD.
+step('npm run build', () => {
+  run('npm', ['run', 'build'], { cwd: repoRoot });
+  return 'dist/ built';
+});
+
 // ---------------------------------------------------------------- 1. pack
 let packResult;
 step('npm pack', () => {

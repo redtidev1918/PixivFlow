@@ -440,7 +440,7 @@ export function validateConfig(config: Partial<StandaloneConfig>, location: stri
 
   if (config.schedulerRuntime) {
     const rt = config.schedulerRuntime;
-    const { reloadDebounceMs, queueLimit, mode, trigger } = rt;
+    const { reloadDebounceMs, queueLimit, mode, trigger, idleGraceMs, maxLifetimeMs } = rt;
     if (mode !== undefined && mode !== 'internal' && mode !== 'external') {
       errors.push('schedulerRuntime.mode: Must be "internal" or "external"');
     }
@@ -452,6 +452,15 @@ export function validateConfig(config: Partial<StandaloneConfig>, location: stri
     }
     if (queueLimit !== undefined && (!Number.isInteger(queueLimit) || queueLimit < 0 || queueLimit > 100)) {
       errors.push('schedulerRuntime.queueLimit: Must be an integer between 0 and 100');
+    }
+    if (rt.exitWhenIdle !== undefined && typeof rt.exitWhenIdle !== 'boolean') {
+      errors.push('schedulerRuntime.exitWhenIdle: Must be a boolean');
+    }
+    if (idleGraceMs !== undefined && (!Number.isInteger(idleGraceMs) || idleGraceMs < 0)) {
+      errors.push('schedulerRuntime.idleGraceMs: Must be a non-negative integer (milliseconds)');
+    }
+    if (maxLifetimeMs !== undefined && (!Number.isInteger(maxLifetimeMs) || maxLifetimeMs <= 0)) {
+      errors.push('schedulerRuntime.maxLifetimeMs: Must be a positive integer (milliseconds)');
     }
     if (trigger) {
       if (trigger.port !== undefined && (!Number.isInteger(trigger.port) || trigger.port < 1 || trigger.port > 65535)) {

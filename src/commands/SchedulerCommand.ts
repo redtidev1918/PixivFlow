@@ -9,7 +9,7 @@ import { getConfigPath, loadConfig, StandaloneConfig } from '../config';
 import { MultiScheduleManager } from '../scheduler/MultiScheduleManager';
 import { ScheduleTriggerServer, TriggerRunResult } from '../scheduler/ScheduleTriggerServer';
 import { SlotCoordinator } from '../scheduler/SlotCoordinator';
-import { TriggerSource } from '../scheduler/OccurrenceResolver';
+import { selectScheduleTargets } from '../scheduler/schedules';
 import { createSchedulerRuntime } from './scheduler-runtime';
 
 /**
@@ -56,6 +56,8 @@ export class SchedulerCommand extends BaseCommand {
         execute: runtime.runJob,
         database: runtime.database,
         onFailure: runtime.notifyScheduleFailure,
+        onAbandoned: (_config, _schedule, abandoned) =>
+          runtime.abandonActiveRun(abandoned.errorMessage ?? 'abandoned after timeout'),
         telemetry: {
           beginRun: () => runtime.database.getOverviewStats().totalDownloads,
           endRun: () => runtime.database.getOverviewStats().totalDownloads,
@@ -82,12 +84,14 @@ export class SchedulerCommand extends BaseCommand {
         const findPlan = (cfg: StandaloneConfig, scheduleId: string) =>
           cfg.schedules?.find((s) => s.id === scheduleId && s.enabled !== false);
 
-        // In-process singleflight: coalesce concurrent triggers of the same
-        // occurrence on THIS process. Optimization only — the DB unique
-        // constraints + ledger are the real correctness guarantee across
-        // restarts/processes.
-        const inFlight = new Map<string, Promise<TriggerRunResult>>();
-
+        // Durable dispatch. The trigger endpoint records the occurrence FIRST,
+        // then hands it to the shared scheduler and answers immediately. It must
+        // never await the download itself: a 10-40 minute run outlives the
+        // router/proxy/clock timeouts, and a request that dies mid-run used to
+        // take the occurrence with it. Idempotency comes from the slot ledger and
+        // the cross-process lease, so concurrent clocks (Cloudflare + watchdog +
+        // manual) converge on one worker instead of needing an in-process
+        // singleflight map.
         triggerServer = new ScheduleTriggerServer(
           ScheduleTriggerServer.resolveToken(rt.trigger?.token),
           {
@@ -100,38 +104,65 @@ export class SchedulerCommand extends BaseCommand {
               if (!resolved.context) return { error: resolved.error ?? 'could not resolve occurrence', status: resolved.status ?? 400 };
               return { context: resolved.context };
             },
-            run: (scheduleId, context) => {
-              const key = context.slotId;
-              const existing = inFlight.get(key);
-              if (existing) return existing;
+            run: async (scheduleId, context): Promise<TriggerRunResult> => {
               const cfg = resolveConfig();
               const plan = findPlan(cfg, scheduleId);
-              const promise = (async (): Promise<TriggerRunResult> => {
-                try {
-                  if (!plan) return { scheduleId, slotId: context.slotId, status: 'failed', alreadyCompleted: false };
-                  // Synchronous: awaited so the HTTP response does not return
-                  // (and release the activity lease) until the run finishes.
-                  await runtime.runJob(cfg, plan, { triggerSource: 'http' as TriggerSource, slot: context });
-                  const rec = runtime.database.slots.getSlot(context.slotId);
-                  const cells = runtime.database.slots.getCells(context.slotId).map((c) => ({
-                    targetId: c.targetId,
-                    status: c.status,
-                    workId: c.workId,
-                    error: c.lastError,
-                  }));
-                  return {
-                    scheduleId,
-                    slotId: context.slotId,
-                    status: rec?.status ?? 'failed',
-                    alreadyCompleted: rec?.status === 'success' || rec?.status === 'partial',
-                    cells,
-                  };
-                } finally {
-                  inFlight.delete(key);
-                }
-              })();
-              inFlight.set(key, promise);
-              return promise;
+              if (!plan) {
+                return { scheduleId, slotId: context.slotId, disposition: 'rejected', status: 'failed' };
+              }
+              const targets = selectScheduleTargets(cfg.targets, plan);
+              if (targets.length === 0) {
+                return { scheduleId, slotId: context.slotId, disposition: 'rejected', status: 'pending' };
+              }
+
+              // Step 1: make the occurrence durable BEFORE answering. A crash
+              // between here and the claim leaves a `pending`, lease-less row that
+              // the recovery loop re-dispatches, so an accepted trigger can never
+              // be silently dropped.
+              const prepared = coordinator.prepare(context, plan, targets);
+              if (prepared.alreadyCompleted) {
+                return {
+                  ...coordinator.completedSummary(context.slotId, plan),
+                  disposition: 'already_completed',
+                };
+              }
+
+              // Step 2: admit to the scheduler. Fire-and-forget by contract — the
+              // boolean only reports whether this process took the work.
+              const admitted = manager.triggerSchedule(scheduleId, {
+                triggerSource: 'http',
+                slot: context,
+              });
+              const rec = runtime.database.slots.getSlot(context.slotId);
+
+              if (admitted) {
+                return {
+                  scheduleId,
+                  slotId: context.slotId,
+                  disposition: 'accepted',
+                  status: rec?.status ?? 'pending',
+                };
+              }
+
+              // Not admitted locally. A live lease means another worker already
+              // owns the occurrence; anything else is a refusal this process could
+              // not take (busy/stopped/limit), which the clock may retry and the
+              // recovery loop will also pick up.
+              const lease = runtime.database.slots.getSlotLease(context.slotId);
+              if (lease.owner && lease.until && lease.until > Date.now()) {
+                return {
+                  scheduleId,
+                  slotId: context.slotId,
+                  disposition: 'already_running',
+                  status: 'running',
+                };
+              }
+              return {
+                scheduleId,
+                slotId: context.slotId,
+                disposition: 'rejected',
+                status: rec?.status ?? 'pending',
+              };
             },
             drainOutbox: () => runtime.drainOutbox(),
             status: (scheduleId) => {

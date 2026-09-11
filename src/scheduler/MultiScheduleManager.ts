@@ -7,6 +7,7 @@ import { logger } from '../logger';
 import { ScheduleConfig, StandaloneConfig } from '../config';
 import {
   DEFAULT_SCHEDULE_TIMEOUT_MS,
+  JobAbandoned,
   JobAdmissionController,
   JobFailure,
   JobLease,
@@ -14,7 +15,7 @@ import {
   Scheduler,
 } from './Scheduler';
 import { describeSchedule, resolveSchedules } from './schedules';
-import { ResolvedOccurrence, ScheduleRunOptions, resolveOccurrence } from './OccurrenceResolver';
+import { ResolvedOccurrence, ScheduleRunOptions, TriggerSource, resolveOccurrence } from './OccurrenceResolver';
 import { SlotContext } from './SlotCoordinator';
 
 export interface MultiScheduleManagerOptions {
@@ -28,6 +29,17 @@ export interface MultiScheduleManagerOptions {
     schedule: ScheduleConfig,
     failure: JobFailure
   ) => Promise<void> | void;
+  /**
+   * A run outlived its timeout AND the drain window, so it will never be
+   * awaited again. The host must finish the bookkeeping the run cannot: stop
+   * renewing its lease and take its Slot terminal, otherwise the recovery sweep
+   * re-dispatches the same occurrence next to a still-running job.
+   */
+  onAbandoned?: (
+    config: StandaloneConfig,
+    schedule: ScheduleConfig,
+    abandoned: JobAbandoned
+  ) => Promise<void> | void;
   onReload?: (result: ConfigReloadResult) => void;
 }
 
@@ -36,6 +48,20 @@ export interface ConfigReloadResult {
   generation: number;
   schedules: string[];
   error?: string;
+}
+
+/**
+ * How often the manager looks for unfinished occurrences that no live worker
+ * owns. Combined with the slot lease TTL (SlotCoordinator), the worst case for a
+ * slot stranded by a crash/redeploy is roughly TTL + one sweep.
+ */
+export const RECOVERY_INTERVAL_MS = 60 * 1000;
+
+/** Narrow a stored trigger_source back to the union it was written from. */
+function asTriggerSource(value: string | null): TriggerSource {
+  return value === 'cron' || value === 'http' || value === 'manual' || value === 'catchup'
+    ? value
+    : 'catchup';
 }
 
 class SerialJobAdmission implements JobAdmissionController {
@@ -100,6 +126,7 @@ export class MultiScheduleManager {
   private activeConfig!: StandaloneConfig;
   private generation = 0;
   private reloadTimer: NodeJS.Timeout | null = null;
+  private recoveryTimer: NodeJS.Timeout | null = null;
   private watching = false;
   private readonly admission = new SerialJobAdmission(8);
 
@@ -112,8 +139,109 @@ export class MultiScheduleManager {
       throw new Error(result.error || 'Failed to start scheduler');
     }
     this.updateWatcher(config);
+    // Recovery first: it acts on occurrences the ledger already knows about.
+    // Catch-up is inference ("cron suggests a fire was missed") and runs after.
+    this.recoverInterruptedSlots();
+    this.startRecoveryLoop();
     this.catchUpMissedRuns(config);
     return result;
+  }
+
+  private startRecoveryLoop(): void {
+    if (!this.options.database) return;
+    if (this.isExternalMode()) {
+      logger.info('External scheduler mode: internal cron disabled, awaiting authenticated schedule triggers', {
+        recoveryIntervalMs: RECOVERY_INTERVAL_MS,
+      });
+    }
+    this.recoveryTimer = setInterval(() => {
+      try {
+        this.recoverInterruptedSlots();
+      } catch (error) {
+        logger.warn('Slot recovery sweep failed; will retry on the next tick', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }, RECOVERY_INTERVAL_MS);
+    this.recoveryTimer.unref?.();
+  }
+
+  /**
+   * Re-dispatch occurrences that the durable ledger says are unfinished but that
+   * no live worker owns.
+   *
+   * This is NOT catch-up: catch-up guesses from cron that a fire was missed, and
+   * is therefore disabled in `external` mode where a stopped machine is normal.
+   * Recovery instead acts on a slot row that provably exists and has not reached
+   * a terminal state — a worker that crashed, was redeployed, or died between
+   * "occurrence recorded" and "lease claimed". It must run in EVERY mode, or an
+   * autosleep/external deployment silently strands those slots forever.
+   *
+   * Recovery only DISPATCHES. Clearing the lease here would race a healthy owner
+   * that heartbeats between the read and the write; the atomic CAS in
+   * `claimSlotLease` elects the single winner, so duplicate clocks, restarts and
+   * overlapping sweeps all converge on one worker.
+   */
+  private recoverInterruptedSlots(): void {
+    const database = this.options.database;
+    if (!database) return;
+
+    const config = this.activeConfig;
+    const plans = new Map(
+      resolveSchedules(config)
+        .filter((plan) => plan.enabled)
+        .map((plan) => [plan.id, plan] as const)
+    );
+
+    const recovered = database.slots.recoverableSlots();
+    if (recovered.length === 0) return;
+
+    let reclaimed = 0;
+    let skipped = 0;
+    for (const slot of recovered) {
+      const plan = plans.get(slot.scheduleId);
+      // A slot whose schedule no longer exists (renamed/disabled) has no plan to
+      // run. Report it rather than silently ignoring it, so a config mistake is
+      // visible instead of looking like a missing run.
+      if (!plan || slot.occurrenceAt === null || slot.occurrenceAt === undefined) {
+        skipped++;
+        logger.warn('Cannot recover slot: no enabled schedule (or occurrence) for it', {
+          slot: slot.id,
+          schedule: slot.scheduleId,
+          status: slot.status,
+        });
+        continue;
+      }
+
+      // Rebuild the context from the STORED occurrence. Re-resolving "now" would
+      // map a stale slot onto a different occurrence (e.g. yesterday's 18:00
+      // resuming as today's), which is exactly the silent corruption the ledger
+      // exists to prevent.
+      const context: SlotContext = {
+        slotId: slot.id,
+        scheduleId: slot.scheduleId,
+        occurrenceAt: slot.occurrenceAt,
+        occurrenceDate: slot.occurrenceDate,
+        occurrenceLabel: slot.occurrenceLabel,
+        timezone: slot.timezone,
+        triggerSource: asTriggerSource(slot.triggerSource),
+        slotName: slot.slotName || slot.occurrenceLabel,
+        slotDate: slot.slotDate || slot.occurrenceDate,
+      };
+
+      const admitted = this.triggerSchedule(slot.scheduleId, {
+        triggerSource: context.triggerSource,
+        slot: context,
+      });
+      if (admitted) reclaimed++;
+      else skipped++;
+    }
+
+    logger.info('Recovered interrupted slots', {
+      stale_slots_found: recovered.length,
+      reclaimed,
+      skipped,
+    });
   }
 
   /**
@@ -213,7 +341,8 @@ export class MultiScheduleManager {
         this.options.telemetry,
         plan.id,
         this.admission,
-        (failure) => this.options.onFailure?.(config, plan, failure)
+        (failure) => this.options.onFailure?.(config, plan, failure),
+        (abandoned) => this.options.onAbandoned?.(config, plan, abandoned)
       );
       scheduler[registerCron ? 'start' : 'init'](async (options?: ScheduleRunOptions) => {
         // The closure keeps the exact validated snapshot for an in-flight run.
@@ -264,6 +393,8 @@ export class MultiScheduleManager {
   public stop(): void {
     if (this.reloadTimer) clearTimeout(this.reloadTimer);
     this.reloadTimer = null;
+    if (this.recoveryTimer) clearInterval(this.recoveryTimer);
+    this.recoveryTimer = null;
     if (this.watching) unwatchFile(this.options.configPath);
     this.watching = false;
     for (const scheduler of this.schedulers.values()) scheduler.stop();

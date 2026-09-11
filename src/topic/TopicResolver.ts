@@ -1,6 +1,7 @@
 import { setTimeout as delay } from 'node:timers/promises';
 
 import { logger } from '../logger';
+import { rethrowIfCancelled, throwIfAborted } from '../utils/errors';
 import { TopicCache } from './TopicCache';
 import { TopicTagScorer } from './TopicTagScorer';
 import type {
@@ -41,7 +42,9 @@ export class TopicResolver {
   constructor(
     private readonly client: TopicClient,
     private readonly cache: TopicCache,
-    private readonly requestDelayMs = 500
+    private readonly requestDelayMs = 500,
+    /** Run-scoped cancellation, forwarded to every discovery request. */
+    private readonly signal?: AbortSignal
   ) {}
 
   /** Resolve tags for a topic+type, using cache when fresh. Never throws for
@@ -146,19 +149,40 @@ export class TopicResolver {
     sampleWorks: number,
     includeR18: boolean
   ): Promise<[Array<{ name: string; translated_name?: string }>, WorkLike[], WorkLike[]]> {
-    const suggested = await this.client.getTagAutocomplete(seed).catch(() => [] as Array<{ name: string; translated_name?: string }>);
+    throwIfAborted(this.signal, 'topic resolution cancelled');
+    // Discovery degrades to "no suggestions" / "no background" on ordinary
+    // failures, but a cancellation must abort the run rather than quietly
+    // continue against a stopped pipeline.
+    const suggested = await this.client
+      .getTagAutocomplete(seed, { signal: this.signal })
+      .catch((error: unknown) => {
+        rethrowIfCancelled(error, this.signal);
+        return [] as Array<{ name: string; translated_name?: string }>;
+      });
     if (this.requestDelayMs > 0) await delay(this.requestDelayMs);
 
+    throwIfAborted(this.signal, 'topic resolution cancelled');
     const topicWorks = contentType === 'illustration'
-      ? await this.client.searchIllustrationsForTags(seed, sampleWorks, { includeR18 })
-      : await this.client.searchNovelsForTags(seed, sampleWorks, { includeR18 });
+      ? await this.client.searchIllustrationsForTags(seed, sampleWorks, { includeR18, signal: this.signal })
+      : await this.client.searchNovelsForTags(seed, sampleWorks, { includeR18, signal: this.signal });
 
     // A small, cheap background sample (a common platform tag) estimates how
     // generic a co-occurring tag is. Bounded to keep requests/memory low.
     if (this.requestDelayMs > 0) await delay(this.requestDelayMs);
+    throwIfAborted(this.signal, 'topic resolution cancelled');
     const backgroundWorks = contentType === 'illustration'
-      ? await this.client.searchIllustrationsForTags('イラスト', 40, { includeR18 }).catch(() => [] as WorkLike[])
-      : await this.client.searchNovelsForTags('小説', 40, { includeR18 }).catch(() => [] as WorkLike[]);
+      ? await this.client
+          .searchIllustrationsForTags('イラスト', 40, { includeR18, signal: this.signal })
+          .catch((error: unknown) => {
+            rethrowIfCancelled(error, this.signal);
+            return [] as WorkLike[];
+          })
+      : await this.client
+          .searchNovelsForTags('小説', 40, { includeR18, signal: this.signal })
+          .catch((error: unknown) => {
+            rethrowIfCancelled(error, this.signal);
+            return [] as WorkLike[];
+          });
 
     return [suggested, topicWorks, backgroundWorks];
   }

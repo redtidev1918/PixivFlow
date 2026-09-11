@@ -13,6 +13,20 @@ import { ScheduleRunOptions } from './OccurrenceResolver';
 export const DEFAULT_SCHEDULE_TIMEOUT_MS = 30 * 60 * 1000;
 
 /**
+ * How long a run may keep draining after its timeout fired before the scheduler
+ * gives up on it.
+ *
+ * Cancellation is cooperative, so a request that never returns (or a retry loop
+ * that ignores the abort) can outlive the timeout indefinitely. Awaiting that
+ * forever is what kept a timed-out run holding its Slot lease: the scheduler
+ * stayed `running`, the runtime kept heart-beating, and the occurrence could
+ * never be recovered. After this window the run is declared abandoned — the
+ * scheduler slot is freed and the runtime takes the Slot terminal — so a wedged
+ * job degrades into one recorded failure instead of a permanent hang.
+ */
+export const ABORT_DRAIN_MS = 30 * 1000;
+
+/**
  * Optional integration hooks allowing the host command to provide real
  * accounting data and cooperative cancellation to the scheduler.
  */
@@ -38,6 +52,19 @@ export interface JobFailure {
   stopped: boolean;
 }
 
+/**
+ * Reported when a run was still executing after its timeout AND the drain window
+ * expired, so it can never be awaited to completion. The host must treat the run
+ * as finished: stop renewing any lease it owns and take its Slot terminal, or a
+ * recovery sweep will re-dispatch the same occurrence while this run is alive.
+ */
+export interface JobAbandoned {
+  scheduleId: string;
+  executionNumber: number;
+  errorMessage: string | null;
+  drainWindowMs: number;
+}
+
 /** Admission is acquired before timeout/accounting starts. */
 export interface JobAdmissionController {
   acquire(scheduleId: string): Promise<JobLease | null>;
@@ -51,6 +78,7 @@ export class Scheduler {
   private executionCount: number = 0;
   private consecutiveFailures: number = 0;
   private timeoutHandle: NodeJS.Timeout | null = null;
+  private drainHandle: NodeJS.Timeout | null = null;
   private stopped: boolean = false;
   private pending: boolean = false;
 
@@ -60,7 +88,8 @@ export class Scheduler {
     private readonly telemetry?: JobTelemetry,
     private readonly scheduleId: string = 'default',
     private readonly admission?: JobAdmissionController,
-    private readonly onFailure?: (failure: JobFailure) => Promise<void> | void
+    private readonly onFailure?: (failure: JobFailure) => Promise<void> | void,
+    private readonly onAbandoned?: (abandoned: JobAbandoned) => Promise<void> | void
   ) {}
 
   public start(job: (options?: ScheduleRunOptions) => Promise<void>) {
@@ -235,6 +264,12 @@ export class Scheduler {
     });
 
     // Set up timeout if configured
+    let abandoned = false;
+    let resolveDrainExpired: (() => void) | null = null;
+    const drainExpired = new Promise<void>((resolve) => {
+      resolveDrainExpired = resolve;
+    });
+
     if (this.config.timeout) {
       this.timeoutHandle = setTimeout(() => {
         if (this.running) {
@@ -247,16 +282,39 @@ export class Scheduler {
           } catch (cancelError) {
             logger.warn('Failed to request job cancellation', { error: cancelError });
           }
-          // Keep running=true until the aborted job actually settles so the
-          // concurrent-run guard stays correct during the drain window.
+          // Bounded drain. requestCancel is cooperative, so this run is only
+          // guaranteed to be *asked* to stop; a request that ignores the abort
+          // would otherwise hold `running` (and, through the host, the Slot
+          // lease) for good. After the drain window the run is abandoned.
+          this.drainHandle = setTimeout(() => {
+            abandoned = true;
+            errorMessage =
+              `Execution timeout after ${this.config.timeout}ms; the job was still running after the ` +
+              `${ABORT_DRAIN_MS}ms drain window and has been abandoned`;
+            logger.error('Job did not settle within the drain window; abandoning it', {
+              scheduleId: this.scheduleId,
+              drainWindowMs: ABORT_DRAIN_MS,
+            });
+            resolveDrainExpired?.();
+          }, ABORT_DRAIN_MS);
+          this.drainHandle.unref?.();
+          // Keep running=true until the aborted job settles (or the drain
+          // expires) so the concurrent-run guard stays correct.
         }
       }, this.config.timeout);
+      this.timeoutHandle.unref?.();
     }
 
-    try {
-      await this.executeWithTracking(job, (count) => {
+    const jobPromise = this.executeWithTracking(
+      job,
+      (count) => {
         itemsDownloaded = count;
-      });
+      },
+      triggerOptions
+    );
+
+    try {
+      await (this.config.timeout ? Promise.race([jobPromise, drainExpired]) : jobPromise);
 
       if (timeoutOccurred) {
         status = 'timeout';
@@ -294,6 +352,38 @@ export class Scheduler {
       if (this.timeoutHandle) {
         clearTimeout(this.timeoutHandle);
         this.timeoutHandle = null;
+      }
+      if (this.drainHandle) {
+        clearTimeout(this.drainHandle);
+        this.drainHandle = null;
+      }
+
+      if (abandoned) {
+        // The job is still running somewhere. Its abort signal has been fired, so
+        // it unwinds at the next checkpoint, but we stop waiting for it: capture
+        // its eventual rejection (nothing else can) and let the host finish the
+        // bookkeeping it owns — stop the lease heartbeat and take the Slot
+        // terminal — so a recovery sweep cannot re-dispatch the same occurrence
+        // while this run is still alive.
+        void jobPromise.catch((error) => {
+          logger.warn('Abandoned job settled after the drain window', {
+            scheduleId: this.scheduleId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        });
+        try {
+          await this.onAbandoned?.({
+            scheduleId: this.scheduleId,
+            executionNumber,
+            errorMessage,
+            drainWindowMs: ABORT_DRAIN_MS,
+          });
+        } catch (error) {
+          logger.warn('Failed to report an abandoned job', {
+            scheduleId: this.scheduleId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
       }
 
       const endTime = new Date();
@@ -370,6 +460,10 @@ export class Scheduler {
     if (this.timeoutHandle) {
       clearTimeout(this.timeoutHandle);
       this.timeoutHandle = null;
+    }
+    if (this.drainHandle) {
+      clearTimeout(this.drainHandle);
+      this.drainHandle = null;
     }
     logger.info('Scheduler stopped', {
       totalExecutions: this.executionCount,

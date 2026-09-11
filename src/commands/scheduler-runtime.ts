@@ -17,7 +17,12 @@ import { DownloadManager } from '../download/DownloadManager';
 import { DeliveryDispatcher } from '../delivery/DeliveryDispatcher';
 import { createTokenMaintenanceService } from '../utils/token-maintenance';
 import { selectScheduleTargets } from '../scheduler/schedules';
-import { SlotContext, SlotCoordinator } from '../scheduler/SlotCoordinator';
+import {
+  SLOT_HEARTBEAT_MS,
+  SLOT_LEASE_TTL_MS,
+  SlotContext,
+  SlotCoordinator,
+} from '../scheduler/SlotCoordinator';
 import { TargetOutcome } from '../scheduler/TargetOutcome';
 import { DeliveryService } from '../delivery/DeliveryService';
 import { OutboxWorker } from '../delivery/OutboxWorker';
@@ -82,6 +87,12 @@ export interface SchedulerRuntime {
   runJob(snapshot: StandaloneConfig, schedule: ScheduleConfig, options?: RunJobOptions): Promise<void>;
   /** Cancel the in-flight download plan, if any. */
   cancelActive(reason: string): void;
+  /**
+   * The active run never settled after its timeout and drain window. Stop
+   * renewing its lease and take its Slot terminal so recovery cannot re-dispatch
+   * the same occurrence alongside the still-running job.
+   */
+  abandonActiveRun(reason: string): void;
   /** Notify the affected review group after a failed scheduled run. */
   notifyScheduleFailure(
     snapshot: StandaloneConfig,
@@ -260,6 +271,12 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
   }
 
   let activeDownloadManager: DownloadManager | null = null;
+  /**
+   * Lease bookkeeping of the run that currently owns a Slot, exposed to
+   * cancelActive()/abandonActiveRun() (defined below, outside runJob's closure).
+   * Set while a lease is held and cleared as soon as it is released.
+   */
+  let activeLeaseHooks: { stopHeartbeat(): void; abandon(reason: string): void } | null = null;
 
   // Independently-pumped durable outbox (content + notifications). Started in
   // the long-running scheduler daemon; run-once drains explicitly before exit.
@@ -318,6 +335,12 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
     // resolve a canonical occurrence and converge on one durable Slot.
     let slotCtx: SlotContext | null = null;
     let varReleaseLease: (() => void) | null = null;
+    /**
+     * Set when the run was abandoned past its drain window. A wedged job can
+     * still return much later; it must not roll the slot up again (which would
+     * overwrite the terminal `failed` record the abandon path wrote).
+     */
+    let slotAbandoned = false;
     if (!adhoc) {
       if (providedSlot) {
         slotCtx = providedSlot;
@@ -337,19 +360,20 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
 
       const activeSlot = slotCtx!;
       const runOwner = `run-${process.pid}-${randomUUID().slice(0, 8)}`;
-      const leaseMs = Math.max(60_000, (schedule.timeout ?? 30 * 60_000) + 60_000);
-      const begin = coordinator.begin(slotCtx, schedule, targets);
-      if (begin.alreadyCompleted && !onlyTarget) {
+      const prepared = coordinator.prepare(slotCtx, schedule, targets);
+      if (prepared.alreadyCompleted && !onlyTarget) {
         logger.info('Slot already terminal; nothing to do', {
           slot: activeSlot.slotId,
-          status: begin.slotRec.status,
+          status: prepared.slotRec.status,
         });
         return;
       }
       // Cross-process lease: a concurrent Cloudflare + watchdog + manual
       // trigger on a SECOND process sees an active lease and converges instead
-      // of running the same targets in parallel.
-      const claimed = coordinator.claimRunLease(activeSlot.slotId, runOwner, leaseMs);
+      // of running the same targets in parallel. The lease TTL bounds how long a
+      // DEAD worker blocks its slot; it is intentionally independent of
+      // schedule.timeout (which bounds how long a live run may take).
+      const claimed = coordinator.claimRunLease(activeSlot.slotId, runOwner, SLOT_LEASE_TTL_MS);
       if (!claimed) {
         const lease = database.slots.getSlotLease(activeSlot.slotId);
         logger.info('Slot run already leased by another worker; converging', {
@@ -361,11 +385,51 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
         await outboxWorker.drainOnce(1);
         return;
       }
-      const heartbeat = setInterval(() => coordinator.heartbeatLease(activeSlot.slotId, runOwner, leaseMs), Math.floor(leaseMs / 3));
+      // Only the process that actually owns the lease may report the slot as
+      // running; the accepting adapter records it as pending instead.
+      coordinator.markRunning(activeSlot.slotId);
+      let cancelled = false;
+      const heartbeat = setInterval(() => {
+        // A cancelled/timed-out run must stop renewing its lease. An infinitely
+        // renewed lease is precisely what made a wedged run unrecoverable: the
+        // heartbeat outlived the scheduler timeout, so no other worker could ever
+        // claim the slot and the occurrence stayed stuck in `running` forever.
+        if (cancelled) {
+          clearInterval(heartbeat);
+          return;
+        }
+        coordinator.heartbeatLease(activeSlot.slotId, runOwner, SLOT_LEASE_TTL_MS);
+      }, SLOT_HEARTBEAT_MS);
       heartbeat.unref?.();
       varReleaseLease = () => {
         clearInterval(heartbeat);
+        activeLeaseHooks = null;
         coordinator.releaseRunLease(activeSlot.slotId, runOwner);
+      };
+      activeLeaseHooks = {
+        stopHeartbeat: () => {
+          cancelled = true;
+          clearInterval(heartbeat);
+        },
+        /**
+         * The run will never settle: stop heart-beating AND leave the ledger
+         * terminal, so the recovery sweep (which only acts on `pending`/`running`
+         * slots with no live lease) cannot re-dispatch this occurrence next to a
+         * still-running job. Merely dropping the lease would be wrong here —
+         * unlike a crash, this worker is alive.
+         */
+        abandon: (reason: string) => {
+          cancelled = true;
+          slotAbandoned = true;
+          clearInterval(heartbeat);
+          database.slots.markSlotStatus(
+            activeSlot.slotId,
+            'failed',
+            `abandoned after scheduler timeout; no delivery (${reason})`
+          );
+          coordinator.releaseRunLease(activeSlot.slotId, runOwner);
+          activeLeaseHooks = null;
+        },
       };
     }
 
@@ -378,6 +442,10 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
     if (slotCtx && runTargets.length === 0) {
       logger.info('All slot cells already complete', { slot: slotCtx.slotId });
       coordinator.finish(slotCtx, schedule, targets);
+      // Release LAST: the slot must stay owned until its aggregate state has
+      // been rolled up, otherwise a concurrent trigger could claim and re-run it
+      // against a half-finished ledger.
+      varReleaseLease?.();
       return;
     }
     // Ad-hoc refetch with a filter that matched no target (or all filtered out):
@@ -469,6 +537,10 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
       await downloadManager.runAllTargets();
     } catch (error) {
       if (!slotCtx || !(error instanceof Error) || !/^All \d+ target\(s\) failed\./.test(error.message)) {
+        // Abnormal abort: no roll-up is possible, so hand the slot back now
+        // instead of holding it until the lease TTL expires. Recovery sees a
+        // non-terminal slot with no live lease and resumes the SAME occurrence.
+        releaseLease?.();
         throw error;
       }
       // Scheduled Slots treat terminal target failures (failed/no_candidate) as
@@ -477,11 +549,10 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
       allTargetsFailed = error;
     } finally {
       if (activeDownloadManager === downloadManager) activeDownloadManager = null;
-      releaseLease?.();
     }
     const duration = Math.round((Date.now() - startTime) / 1000);
 
-    if (slotCtx) {
+    if (slotCtx && !slotAbandoned) {
       const summary = coordinator.finish(slotCtx, schedule, targets);
       notificationPolicy.sendSlotSummary(
         slotCtx,
@@ -512,6 +583,18 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
 
   const cancelActive = (reason: string): void => {
     activeDownloadManager?.cancel(reason);
+    // Scheduler timeout / process shutdown also stop the lease heartbeat. The run
+    // is on its way out (or about to be killed with the process), so it must not
+    // keep the slot locked while it unwinds. A shutdown deliberately leaves the
+    // slot NON-terminal: recovery resumes the same occurrence after restart.
+    activeLeaseHooks?.stopHeartbeat();
+  };
+
+  const abandonActiveRun = (reason: string): void => {
+    // Cancellation did not take effect inside the drain window — a request that
+    // ignores the abort. This run will never settle, so finish the lease
+    // bookkeeping it cannot do itself.
+    activeLeaseHooks?.abandon(reason);
   };
 
   const close = (): void => {
@@ -531,6 +614,7 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
     tokenMaintenance,
     runJob,
     cancelActive,
+    abandonActiveRun,
     startOutboxWorker: () => outboxWorker.start(),
     drainOutbox: () => outboxWorker.drainOnce(),
     notifyScheduleFailure: (snapshot, schedule, failure) =>

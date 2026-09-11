@@ -48,6 +48,31 @@ describe('Schedule Slot ledger', () => {
     });
   });
 
+  it('countActiveSlots counts non-terminal slots, including ones with a live lease', async () => {
+    await withDb(async (db) => {
+      db.slots.getOrCreateSlot('schedule-a@2026-09-08T1000', meta('schedule-a', ['t1']));
+      db.slots.getOrCreateSlot('schedule-a@2026-09-08T1800', meta('schedule-a', ['t1']));
+      db.slots.getOrCreateSlot('schedule-b@2026-09-08T1000', meta('schedule-b', ['t1']));
+      expect(db.slots.countActiveSlots()).toBe(3);
+
+      // A slot being executed RIGHT NOW holds a live lease. Recovery must ignore
+      // it (someone else owns it), but the external-worker idle probe must still
+      // count it as outstanding work — otherwise a daemon would exit mid-run.
+      const running = 'schedule-a@2026-09-08T1800';
+      db.slots.markSlotStatus(running, 'running');
+      db.slots.claimSlotLease(running, 'worker-1', Date.now() + 60_000);
+      expect(db.slots.recoverableSlots().map((slot) => slot.id)).not.toContain(running);
+      expect(db.slots.countActiveSlots()).toBe(3);
+
+      db.slots.markSlotStatus('schedule-a@2026-09-08T1000', 'success');
+      db.slots.markSlotStatus(running, 'success');
+      expect(db.slots.countActiveSlots()).toBe(1);
+
+      db.slots.markSlotStatus('schedule-b@2026-09-08T1000', 'failed');
+      expect(db.slots.countActiveSlots()).toBe(0);
+    });
+  });
+
   it('snapshots target membership at creation and ignores later config reload', async () => {
     await withDb(async (db) => {
       const id = 'schedule-a@2026-09-08T1000';

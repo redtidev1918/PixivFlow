@@ -144,6 +144,36 @@ export function isOperationCancelled(error: unknown): error is OperationCancelle
 }
 
 /**
+ * Raise the app's cancellation error when `signal` has been aborted.
+ *
+ * Standard `signal.throwIfAborted()` rejects with a DOMException, which the
+ * scheduler does not recognise as a cooperative cancel (it would be recorded as
+ * a hard failure and lose the timeout accounting). Every loop that can outlive a
+ * scheduler timeout checks this instead, so a cancellation is observable on the
+ * same error channel as the rest of the download pipeline.
+ */
+export function throwIfAborted(signal?: AbortSignal, message = 'operation cancelled'): void {
+  if (signal?.aborted) {
+    throw new OperationCancelledError(message);
+  }
+}
+
+/**
+ * Re-raise an error that is a cancellation instead of swallowing it.
+ *
+ * Loops around network calls legitimately degrade on failure (`catch → []`), but
+ * swallowing a cancellation there would let a cancelled run keep working through
+ * the remaining tags. Returns normally only for genuine failures.
+ */
+export function rethrowIfCancelled(error: unknown, signal?: AbortSignal): void {
+  if (isOperationCancelled(error) || signal?.aborted || (error as { name?: string })?.name === 'AbortError') {
+    throw isOperationCancelled(error)
+      ? error
+      : new OperationCancelledError(error instanceof Error ? error.message : 'operation cancelled');
+  }
+}
+
+/**
  * A special error-like class to signal a version request.
  * This is used for early exit without a full error stack.
  */

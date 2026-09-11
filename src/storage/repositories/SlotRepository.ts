@@ -309,14 +309,37 @@ export class SlotRepository extends BaseRepository {
 
   /** Slots whose lease expired while still non-terminal (crashed workers). */
   public slotsWithStaleLease(now: number = Date.now()): string[] {
+    return this.recoverableSlots(now)
+      .filter((slot) => slot.leaseUntil !== null)
+      .map((slot) => slot.id);
+  }
+
+  /**
+   * Non-terminal slots no live worker currently owns, and which therefore should
+   * be re-dispatched.
+   *
+   * Two distinct situations qualify, and both must be recovered:
+   *  - `lease_until <= now`: a worker claimed the slot and then died (crash, OOM,
+   *    machine stop, redeploy). Its heartbeat stopped, so the lease expired.
+   *  - `lease_until IS NULL`: a durable slot was recorded (accepted) but no worker
+   *    ever claimed it — e.g. the process died between "occurrence recorded" and
+   *    "lease claimed". Nothing else will ever pick that up.
+   *
+   * Callers must NOT clear the lease from here. Recovery re-DISPATCHES the slot
+   * and the atomic CAS in `claimSlotLease` still elects the single winner, so a
+   * merely slow (but healthy) owner that heartbeats mid-scan cannot be robbed by
+   * a read-then-clear race.
+   */
+  public recoverableSlots(now: number = Date.now()): SlotRecord[] {
     const rows = this.db
       .prepare(
-        `SELECT id FROM schedule_slots
-         WHERE lease_until IS NOT NULL AND lease_until < @now
-           AND status IN ('pending','running')`
+        `SELECT * FROM schedule_slots
+         WHERE status IN ('pending','running')
+           AND (lease_until IS NULL OR lease_until <= @now)
+         ORDER BY COALESCE(occurrence_at, 0) ASC`
       )
-      .all({ now }) as Array<{ id: string }>;
-    return rows.map((r) => r.id);
+      .all({ now }) as any[];
+    return rows.map((r) => this.toSlot(r));
   }
 
   /** Record an error without changing terminality (retryable failure keeps the cell resumable). */

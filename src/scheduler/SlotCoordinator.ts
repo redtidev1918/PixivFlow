@@ -17,6 +17,20 @@ import {
 import { TargetOutcome } from './TargetOutcome';
 
 /**
+ * Execution-lease TTL and heartbeat cadence.
+ *
+ * These describe how fast a DEAD worker is noticed — they are deliberately
+ * unrelated to `schedule.timeout` (which caps how long a run may take). Tying
+ * the two together made a crashed worker hold its slot for up to 31 minutes
+ * before any other trigger could resume it. A live worker renews its lease every
+ * SLOT_HEARTBEAT_MS, so the worst-case recovery delay after a crash/restart is
+ * about SLOT_LEASE_TTL_MS. The TTL stays comfortably above the heartbeat so an
+ * occasional stalled event loop cannot make a healthy run look dead.
+ */
+export const SLOT_LEASE_TTL_MS = 3 * 60 * 1000;
+export const SLOT_HEARTBEAT_MS = 30 * 1000;
+
+/**
  * Durable execution context attached to a run. A scheduled occurrence always
  * has a slotId; an ad-hoc/manual run has none (it never touches the slot ledger).
  */
@@ -118,10 +132,16 @@ export class SlotCoordinator {
   }
 
   /**
-   * Open (or resume) an occurrence and snapshot its target membership on first
-   * creation. A later config reload cannot add/remove cells for this occurrence.
+   * Durably open (or resume) an occurrence and snapshot its target membership
+   * on first creation. A later config reload cannot add/remove cells for this
+   * occurrence.
+   *
+   * This deliberately does NOT mark the slot `running`: the HTTP trigger calls
+   * it before dispatch so that a crash between "accepted" and "claimed" still
+   * leaves a durable `pending` row for reconciliation to pick up (see
+   * `markRunning` and MultiScheduleManager's recovery loop).
    */
-  begin(slot: SlotContext, schedule: ScheduleConfig, targets: TargetConfig[]): { slotRec: SlotRecord; alreadyCompleted: boolean } {
+  prepare(slot: SlotContext, schedule: ScheduleConfig, targets: TargetConfig[]): { slotRec: SlotRecord; alreadyCompleted: boolean } {
     const targetIds = targets.map((t) => t.id).filter((id): id is string => Boolean(id));
     const { slot: slotRec, created } = this.database.slots.getOrCreateSlot(slot.slotId, {
       scheduleId: slot.scheduleId,
@@ -146,8 +166,16 @@ export class SlotCoordinator {
     if (slotRec.status === 'success' || slotRec.status === 'partial') {
       return { slotRec, alreadyCompleted: true };
     }
-    this.database.slots.markSlotStatus(slot.slotId, 'running');
     return { slotRec, alreadyCompleted: false };
+  }
+
+  /**
+   * Mark the occurrence as actually executing. Called by the worker that has
+   * already won the cross-process lease (never by the accepting adapter), so a
+   * slot is never reported `running` by a process that is not running it.
+   */
+  markRunning(slotId: string): void {
+    this.database.slots.markSlotStatus(slotId, 'running');
   }
 
   /**

@@ -3,18 +3,12 @@
     "Explicit, reviewed exceptions to the zero-install-script packaging policy.",
     "Every entry must state why it exists and which phase removes it.",
     "Do not add entries to work around new transitive install scripts -",
-    "fix the dependency boundary instead (scripts/package-smoke.mjs enforces this)."
+    "fix the dependency boundary instead (scripts/package-smoke.mjs enforces this).",
+    "",
+    "This list is intentionally EMPTY. better-sqlite3 was the last entry; storage now runs",
+    "on Node's built-in node:sqlite, so nothing in the installed tree needs to compile or",
+    "run a lifecycle script. Anything that reappears here is a regression in the dependency",
+    "boundary, not a gap in configuration."
   ],
-  "allowed": [
-    {
-      "name": "better-sqlite3",
-      "scripts": [
-        "install"
-      ],
-      "reason": "Core storage driver compiled by node-gyp at install time.",
-      "removal": "Phase D: migrate storage to node:sqlite (Node >=22.13), then delete this entry and the dependency.",
-      "added": "2026-09-11",
-      "reviewedBy": "redtidev1918"
-    }
-  ]
+  "allowed": []
 }

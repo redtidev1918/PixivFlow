@@ -24,3 +24,5 @@
 - English
   - [Documentation](/en/)
   - [📥 Download](/en/download.md)
+  - [Quick start](/en/QUICKSTART.md)
+  - [Login guide](/en/LOGIN.md)

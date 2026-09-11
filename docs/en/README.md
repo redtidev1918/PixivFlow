@@ -12,8 +12,8 @@
 | :-- | :-- |
 | [📥 Download](download.md) | Prebuilt packages, npm and Docker |
 | [README (English)](https://github.com/redtidev1918/PixivFlow/blob/master/README.en.md) | Project overview, install and common commands |
-| [Quick Start (中文)](/QUICKSTART.md) | Install, sign in, first download |
-| [Login (中文)](/LOGIN.md) | Sign-in methods and credential storage |
+| [Quick Start](QUICKSTART.md) | Install, sign in, first download |
+| [Login](LOGIN.md) | Sign-in methods and credential storage |
 | [Configuration (中文)](/CONFIG.md) | Every configuration field |
 | [Usage (中文)](/USAGE.md) | Download modes, URL forms and the scheduler |
 | [Docker (中文)](/DOCKER.md) | Container deployment |

@@ -1,41 +1,27 @@
 # 贡献指南
 
-感谢你对 PixivFlow 项目的关注！我们欢迎所有形式的贡献。
+欢迎提交 Issue 和 Pull Request。
 
----
+## 报告问题
 
-## 🤝 如何贡献
+在 [GitHub Issues](https://github.com/redtidev1918/PixivFlow/issues) 中搜索后新建 Issue，说明问题
+或建议。如果是 Bug，请附上复现步骤、`pixivflow health` 输出和版本号；配置文件与输出里可能
+含认证信息，贴出来之前先删掉 token。
 
-### 报告问题
+## 提交代码
 
-如果你发现了 Bug 或有功能建议，请：
+1. Fork 项目
+2. 创建特性分支（`git checkout -b feature/AmazingFeature`）
+3. 提交改动（`git commit -m 'Add some AmazingFeature'`）
+4. 推送分支（`git push origin feature/AmazingFeature`）
+5. 开启 Pull Request
 
-1. 查看 [GitHub Issues](https://github.com/redtidev1918/PixivFlow/issues) 确认问题未被报告
-2. 创建新的 Issue，详细描述问题或建议
-3. 提供复现步骤（如果是 Bug）
+## 代码规范
 
-### 提交代码
+- 使用 TypeScript，遵循项目现有代码风格，补充必要的类型注解
+- 提交前运行 `npm run build`，并用 ESLint 检查
 
-1. **Fork 项目**
-2. **创建特性分支** (`git checkout -b feature/AmazingFeature`)
-3. **提交更改** (`git commit -m 'Add some AmazingFeature'`)
-4. **推送到分支** (`git push origin feature/AmazingFeature`)
-5. **开启 Pull Request**
-
----
-
-## 📝 代码规范
-
-### TypeScript
-
-- 使用 TypeScript 编写代码
-- 遵循项目现有的代码风格
-- 添加必要的类型注解
-- 使用 ESLint 检查代码
-
-### 提交信息
-
-提交信息应该清晰描述更改内容：
+提交信息使用 Conventional Commits：
 
 ```
 feat: 添加新功能
@@ -47,54 +33,20 @@ test: 添加测试
 chore: 其他更改
 ```
 
----
+## 测试
 
-## 🧪 测试
+提交前确认 `npm run build` 与 `npm test` 通过（存在相关测试时），并手动验证改动涉及的功能。
 
-提交代码前请确保：
+## 文档
 
-1. 代码可以正常编译：`npm run build`
-2. 运行测试（如果有）：`npm test`
-3. 手动测试相关功能
+功能变更同步更新 [docs/USAGE.md](docs/USAGE.md)，配置项变更同步更新
+[docs/CONFIG.md](docs/CONFIG.md)，WebUI 接口变更同步更新 [docs/API.md](docs/API.md)。
 
----
+## 代码审查
 
-## 📚 文档
+所有 Pull Request 都会经过审查。请保持改动简洁、补充必要注释、确保测试通过，并响应审查意见。
 
-如果你修改了功能，请同时更新相关文档：
+## 获取帮助
 
-- 功能说明更新到使用指南
-- 配置选项更新到配置指南
-- API 变更更新到相关文档
-
----
-
-## 🔍 代码审查
-
-所有 Pull Request 都会经过代码审查。请：
-
-- 保持代码简洁清晰
-- 添加必要的注释
-- 确保测试通过
-- 响应审查意见
-
----
-
-## 📮 获取帮助
-
-如果你有任何问题，可以：
-
-- 查看 [GitHub Issues](https://github.com/redtidev1918/PixivFlow/issues)
-- 查看 [GitHub Discussions](https://github.com/redtidev1918/PixivFlow/discussions)
-- 创建新的 Issue 提问
-
----
-
-## 🙏 致谢
-
-感谢所有为项目做出贡献的开发者！
-
----
-
-Made with ❤️ by [redtidev1918](https://github.com/redtidev1918)
-
+[GitHub Issues](https://github.com/redtidev1918/PixivFlow/issues) 与
+[GitHub Discussions](https://github.com/redtidev1918/PixivFlow/discussions)。

@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.19.0](https://github.com/redtidev1918/PixivFlow/compare/v2.18.1...v2.19.0) (2026-09-11)
+
+
+### Features
+
+* **scheduler:** 外部时钟下的跑完即退出生命周期 ([#59](https://github.com/redtidev1918/PixivFlow/issues/59)) ([2b6b44e](https://github.com/redtidev1918/PixivFlow/commit/2b6b44e5ad5ea68938ab05e2265d94ef2fad9090))
+
 ## [2.18.1](https://github.com/redtidev1918/PixivFlow/compare/v2.18.0...v2.18.1) (2026-09-11)
 
 

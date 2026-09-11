@@ -524,7 +524,40 @@ export interface HttpMultipartDeliveryConfig {
   };
 }
 
-export type DeliveryTargetConfig = HttpMultipartDeliveryConfig;
+/**
+ * Post the work to a Telegram review group and record the review in the control
+ * plane, so a button press can publish it later by server-side copy.
+ *
+ * The media never leaves Telegram and never passes through the control plane:
+ * this provider uploads once, reports only ids, and the control plane's approve
+ * path uses `copyMessage`/`copyMessages`.
+ */
+export interface TelegramReviewDeliveryConfig {
+  type: 'telegram';
+  /** Bot that owns this review chat: `bot1` / `bot2`. Part of the review identity. */
+  botId: string;
+  /** Bot token of the bot that owns the review chat (supports ${ENV_NAME}). */
+  botToken: string;
+  /** Review chat the media is posted to. */
+  chatId: string;
+  /** Channel an approved review is copied into (server-side, by Telegram). */
+  publishChatId: string;
+  publishThreadId?: number;
+  /** Control-plane callback base, e.g. https://host/control (supports ${ENV_NAME}). */
+  controlPlaneUrl: string;
+  /** Bearer for the control plane's runner endpoints (supports ${ENV_NAME}). */
+  controlPlaneToken: string;
+  /** Caption template; same {{variables}} as httpMultipart fields. */
+  caption?: string;
+  /** Review id prefix; the id itself is derived from bot+target+work. */
+  reviewIdPrefix?: string;
+  /** Send several files as one album (default true). */
+  album?: boolean;
+  maxAttempts?: number;
+  retryDelayMs?: number;
+}
+
+export type DeliveryTargetConfig = HttpMultipartDeliveryConfig | TelegramReviewDeliveryConfig;
 
 export interface DeliveryConfig {
   /** 可供各 target 引用的命名交付目标 */

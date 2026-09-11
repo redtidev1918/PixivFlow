@@ -25,7 +25,7 @@
 
 ## 核心依赖
 
-后端(Node.js):[undici](https://github.com/nodejs/undici)(HTTP 与代理 dispatcher)、[better-sqlite3](https://github.com/WiseLibs/better-sqlite3)(存储)、[express](https://github.com/expressjs/express)(WebUI 服务)、[socket.io](https://github.com/socketio/socket.io)(实时推送)、[node-cron](https://github.com/node-cron/node-cron)(调度)、[axios](https://github.com/axios/axios)(SOCKS 路径)、[https-proxy-agent / socks-proxy-agent](https://github.com/TooTallNate/proxy-agents)(代理连接)、[franc-min](https://github.com/wooorm/franc)(语言检测)、[pixiv-token-getter](https://github.com/redtidev1918/pixiv-token-getter)(登录)。
+后端(Node.js):[undici](https://github.com/nodejs/undici)(HTTP 与代理 dispatcher)、Node 内建 [`node:sqlite`](https://nodejs.org/api/sqlite.html)(存储,无需原生编译)、[express](https://github.com/expressjs/express)(WebUI 服务)、[socket.io](https://github.com/socketio/socket.io)(实时推送)、[node-cron](https://github.com/node-cron/node-cron)(调度)、[axios](https://github.com/axios/axios)(SOCKS 路径)、[https-proxy-agent / socks-proxy-agent](https://github.com/TooTallNate/proxy-agents)(代理连接)、[franc-min](https://github.com/wooorm/franc)(语言检测)、[pixiv-token-getter](https://github.com/redtidev1918/pixiv-token-getter)(登录)。
 
 前端:[React 18](https://github.com/facebook/react)、[Ant Design 5](https://github.com/ant-design/ant-design)、[TanStack Query](https://github.com/TanStack/query)、[Zustand](https://github.com/pmndrs/zustand)、[Socket.IO Client](https://github.com/socketio/socket.io)、[i18next](https://github.com/i18next/i18next)、[Vite](https://github.com/vitejs/vite)、[Playwright](https://github.com/microsoft/playwright)、[Jest](https://github.com/jestjs/jest)。
 

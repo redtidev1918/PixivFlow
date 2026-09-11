@@ -1,19 +1,19 @@
 # PixivFlow
 
-[English](https://github.com/redtidev1918/PixivFlow/blob/master/README_EN.md) | **中文**
+**语言 / Language:** 中文 · [English](README.en.md)
 
 Pixiv 批量下载与定时收集工具。支持插画和小说的批量下载、标签搜索、
 多维度筛选和 Cron 定时任务，提供命令行与 WebUI 两种使用方式。
 基于 TypeScript 和 Node.js，可在 Windows、macOS、Linux 及 Docker 中运行。
 
 [![Version](https://img.shields.io/npm/v/pixivflow?style=flat-square)](https://www.npmjs.com/package/pixivflow)
-[![Node](https://img.shields.io/badge/Node.js-22.12%2B_LTS-green.svg?style=flat-square&logo=node.js)](https://nodejs.org/)
+[![Node](https://img.shields.io/badge/Node.js-22.13%2B_LTS-green.svg?style=flat-square&logo=node.js)](https://nodejs.org/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](LICENSE)
 [![Documentation](https://img.shields.io/badge/Docs-redtidev1918.github.io-6366f1?style=flat-square)](https://redtidev1918.github.io/PixivFlow/)
 
 ## 安装
 
-需要 Node.js 22.12 或更高版本；生产环境请使用仍受支持的 LTS。
+需要 Node.js 22.13 或更高版本；生产环境请使用仍受支持的 LTS。
 下载 Pixiv 动图（ugoira）还需要 `python3` 和 `ffmpeg`：程序按逐帧延迟合成循环 GIF，
 可直接交给 TelePost 作为动画发送。官方 Docker 镜像已包含两者，详见 [配置说明](docs/CONFIG.md#pixiv-动图ugoira)。
 
@@ -207,7 +207,7 @@ Email、Telegram、Discord、ntfy 等渠道；PixivFlow 不实现这些通知协
 
 `tags discover` 会调用 Pixiv 标签联想接口，并抽样最近插画 / 小说统计共同出现的标签，结果缓存 7 天；它**不会**改动任何下载计划。确认候选后用 `tags apply` 显式选择，应用前会整份校验配置、自动备份并原子替换，运行中的 scheduler 经配置热重载生效。
 
-其他用法见 [CLI_MIGRATION_SUMMARY.md](docs/CLI_MIGRATION_SUMMARY.md)。
+其他用法见 [USAGE.md](docs/USAGE.md)；从 v1 升级到 v2 见 [迁移指南](docs/MIGRATION.md)。
 
 ## 文档
 
@@ -215,17 +215,19 @@ Email、Telegram、Discord、ntfy 等渠道；PixivFlow 不实现这些通知协
 
 | 文档 | 说明 |
 | --- | --- |
+| [📥 下载](docs/download.md) | 各平台安装包、npm 与 Docker 获取方式 |
 | [QUICKSTART](docs/QUICKSTART.md) | 三分钟上手 |
 | [CONFIG](docs/CONFIG.md) | 全部配置项说明 |
 | [USAGE](docs/USAGE.md) | 功能详解 |
 | [LOGIN](docs/LOGIN.md) | 账号登录相关 |
 | [DOCKER](docs/DOCKER.md) | 容器化部署方案 |
 | [ARCHITECTURE](docs/ARCHITECTURE.md) | 架构与技术实现 |
+| [MIGRATION](docs/MIGRATION.md) | 从 v1 升级到 v2 |
 | [RELEASING](docs/RELEASING.md) | npm 发版流程 |
-| [CHANGELOG](docs/project/CHANGELOG.md) | 版本更新日志 |
+| [CHANGELOG](CHANGELOG.md) | 版本更新日志 |
 | [ACKNOWLEDGMENTS](docs/ACKNOWLEDGMENTS.md) | 参考与致谢:灵感来源、核心依赖与规范声明 |
 
-English version: [README_EN.md](README_EN.md).
+English version: [README.en.md](README.en.md).
 
 ## 问题反馈
 

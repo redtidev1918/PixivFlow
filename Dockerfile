@@ -15,11 +15,10 @@ WORKDIR /app
 ARG GIT_SHA=dev
 ENV GITHUB_SHA=${GIT_SHA}
 
-# 安装构建依赖（Python、编译工具等；git 用于在前端目录缺失时自动拉取 WebUI 源码）
+# 安装构建依赖（git 用于在前端目录缺失时自动拉取 WebUI 源码）
+# 不再需要 python3/make/g++：唯一需要编译的原生模块 better-sqlite3 已被 Node 内建的
+# node:sqlite 取代，`npm ci` 现在是纯 JS 安装，不需要 node-gyp 工具链。
 RUN apk add --no-cache \
-    python3 \
-    make \
-    g++ \
     git \
     ca-certificates \
     && rm -rf /var/cache/apk/*
@@ -79,16 +78,15 @@ FROM node:24-alpine
 WORKDIR /app
 
 # 安装运行时依赖
-# - Python3: 用于 gppt 登录工具
-# - make, g++: 用于编译 better-sqlite3 等原生模块
+# - Python3/py3-pip: 用于 gppt 登录工具（与应用依赖安装无关，仍需保留）
 # - Chromium 和 ChromeDriver: 用于 gppt/Selenium 登录
 # - 字体: 支持 headless 浏览器渲染
+# 不再安装 make/g++：npm 依赖中已无原生模块（better-sqlite3 已由内建 node:sqlite 取代），
+# 运行时不需要编译器。
 RUN apk add --no-cache \
     python3 \
     py3-pip \
     ffmpeg \
-    make \
-    g++ \
     chromium \
     chromium-chromedriver \
     ttf-freefont \

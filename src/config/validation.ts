@@ -6,8 +6,88 @@ import cron from 'node-cron';
 import { logger } from '../logger';
 import { ConfigError } from '../utils/errors';
 import { getBestAvailableToken, isPlaceholderToken } from '../utils/token-manager';
-import { StandaloneConfig } from './types';
+import { StandaloneConfig, TelegramReviewDeliveryConfig } from './types';
 import { loadConfig } from './loader';
+
+const ENV_PLACEHOLDER = /\$\{[A-Za-z_][A-Za-z0-9_]*\}/;
+
+/** A single unusable field, rendered by each validator in its own error shape. */
+export interface DeliveryFieldError {
+  field: string;
+  code: string;
+  message: string;
+}
+
+/**
+ * Validates a `telegram` review delivery target.
+ *
+ * Both config validators call this: a required field added here can no longer be
+ * enforced by one and silently accepted by the other.
+ */
+export function collectTelegramDeliveryErrors(
+  name: string,
+  target: TelegramReviewDeliveryConfig
+): DeliveryFieldError[] {
+  const errors: DeliveryFieldError[] = [];
+  const at = (field: string) => `delivery.targets.${name}.${field}`;
+  const required = (field: keyof TelegramReviewDeliveryConfig) => {
+    const value = target[field];
+    if (value === undefined || value === null || String(value).trim() === '') {
+      errors.push({
+        field: at(field),
+        code: 'DELIVERY_FIELD_REQUIRED',
+        message: 'Required field is missing or empty',
+      });
+      return false;
+    }
+    return true;
+  };
+
+  required('botId');
+  if (required('botToken')) {
+    const token = String(target.botToken).trim();
+    // A literal token must look like a Bot API token; a placeholder is resolved later.
+    if (!ENV_PLACEHOLDER.test(token) && !/^\d+:[A-Za-z0-9_-]{20,}$/.test(token)) {
+      errors.push({
+        field: at('botToken'),
+        code: 'DELIVERY_BOT_TOKEN_INVALID',
+        message: 'Must be a Bot API token or an ${ENV_NAME} placeholder',
+      });
+    }
+  }
+  required('chatId');
+  required('publishChatId');
+  required('controlPlaneToken');
+  if (required('controlPlaneUrl')) {
+    const url = String(target.controlPlaneUrl).trim();
+    if (!ENV_PLACEHOLDER.test(url)) {
+      let valid = false;
+      try {
+        valid = ['http:', 'https:'].includes(new URL(url).protocol);
+      } catch {
+        valid = false;
+      }
+      if (!valid) {
+        errors.push({
+          field: at('controlPlaneUrl'),
+          code: 'DELIVERY_CONTROL_PLANE_URL_INVALID',
+          message: 'Must be a valid HTTP or HTTPS URL',
+        });
+      }
+    }
+  }
+  if (
+    target.publishThreadId !== undefined &&
+    (!Number.isInteger(target.publishThreadId) || target.publishThreadId < 0)
+  ) {
+    errors.push({
+      field: at('publishThreadId'),
+      code: 'DELIVERY_PUBLISH_THREAD_INVALID',
+      message: 'Must be a non-negative integer',
+    });
+  }
+  return errors;
+}
 
 /**
  * Validation error with detailed information
@@ -175,7 +255,10 @@ export function validateConfig(config: Partial<StandaloneConfig>, location: stri
       }
       if (target.noMatchPolicy?.notify === true) {
         const deliveryTarget = target.delivery?.target?.trim();
-        if (!deliveryTarget || !config.delivery?.targets?.[deliveryTarget]?.notificationUrl?.trim()) {
+        const notifyTarget = deliveryTarget ? config.delivery?.targets?.[deliveryTarget] : undefined;
+        const hasNotificationUrl =
+          notifyTarget?.type === 'httpMultipart' && Boolean(notifyTarget.notificationUrl?.trim());
+        if (!hasNotificationUrl) {
           errors.push(`targets[${index}].noMatchPolicy.notify: Delivery target must configure notificationUrl`);
         }
       }
@@ -204,38 +287,43 @@ export function validateConfig(config: Partial<StandaloneConfig>, location: stri
 
   for (const [name, delivery] of Object.entries(config.delivery?.targets ?? {})) {
     const prefix = `delivery.targets.${name}`;
-    if (delivery.type !== 'httpMultipart') {
+    if (delivery.type === 'telegram') {
+      for (const error of collectTelegramDeliveryErrors(name, delivery)) {
+        errors.push(`${error.field}: ${error.message}`);
+      }
+    } else if (delivery.type === 'httpMultipart') {
+      if (!delivery.url?.trim()) {
+        errors.push(`${prefix}.url: Required field is missing or empty`);
+      } else if (!/\$\{[A-Za-z_][A-Za-z0-9_]*\}/.test(delivery.url)) {
+        try {
+          const url = new URL(delivery.url);
+          if (!['http:', 'https:'].includes(url.protocol)) throw new Error('unsupported protocol');
+        } catch {
+          errors.push(`${prefix}.url: Must be a valid HTTP or HTTPS URL`);
+        }
+      }
+      if (delivery.notificationUrl && !/\$\{[A-Za-z_][A-Za-z0-9_]*\}/.test(delivery.notificationUrl)) {
+        try {
+          const url = new URL(delivery.notificationUrl);
+          if (!['http:', 'https:'].includes(url.protocol)) throw new Error('unsupported protocol');
+        } catch {
+          errors.push(`${prefix}.notificationUrl: Must be a valid HTTP or HTTPS URL`);
+        }
+      }
+      if (delivery.readinessUrl && !/\$\{[A-Za-z_][A-Za-z0-9_]*\}/.test(delivery.readinessUrl)) {
+        try {
+          const url = new URL(delivery.readinessUrl);
+          if (!['http:', 'https:'].includes(url.protocol)) throw new Error('unsupported protocol');
+        } catch {
+          errors.push(`${prefix}.readinessUrl: Must be a valid HTTP or HTTPS URL`);
+        }
+      }
+      if (delivery.method && !['POST', 'PUT'].includes(delivery.method)) {
+        errors.push(`${prefix}.method: Must be "POST" or "PUT"`);
+      }
+    } else {
       errors.push(`${prefix}.type: Unsupported delivery type "${(delivery as { type?: string }).type}"`);
       continue;
-    }
-    if (!delivery.url?.trim()) {
-      errors.push(`${prefix}.url: Required field is missing or empty`);
-    } else if (!/\$\{[A-Za-z_][A-Za-z0-9_]*\}/.test(delivery.url)) {
-      try {
-        const url = new URL(delivery.url);
-        if (!['http:', 'https:'].includes(url.protocol)) throw new Error('unsupported protocol');
-      } catch {
-        errors.push(`${prefix}.url: Must be a valid HTTP or HTTPS URL`);
-      }
-    }
-    if (delivery.notificationUrl && !/\$\{[A-Za-z_][A-Za-z0-9_]*\}/.test(delivery.notificationUrl)) {
-      try {
-        const url = new URL(delivery.notificationUrl);
-        if (!['http:', 'https:'].includes(url.protocol)) throw new Error('unsupported protocol');
-      } catch {
-        errors.push(`${prefix}.notificationUrl: Must be a valid HTTP or HTTPS URL`);
-      }
-    }
-    if (delivery.readinessUrl && !/\$\{[A-Za-z_][A-Za-z0-9_]*\}/.test(delivery.readinessUrl)) {
-      try {
-        const url = new URL(delivery.readinessUrl);
-        if (!['http:', 'https:'].includes(url.protocol)) throw new Error('unsupported protocol');
-      } catch {
-        errors.push(`${prefix}.readinessUrl: Must be a valid HTTP or HTTPS URL`);
-      }
-    }
-    if (delivery.method && !['POST', 'PUT'].includes(delivery.method)) {
-      errors.push(`${prefix}.method: Must be "POST" or "PUT"`);
     }
     if (delivery.maxAttempts !== undefined && (!Number.isInteger(delivery.maxAttempts) || delivery.maxAttempts < 1)) {
       errors.push(`${prefix}.maxAttempts: Must be an integer greater than 0`);

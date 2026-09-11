@@ -160,22 +160,25 @@ check_dependencies() {
         log_warn "依赖未安装"
         return 1
     fi
-    
-    # 检查关键依赖是否存在
-    local critical_deps=("node_modules/better-sqlite3" "node_modules/node-fetch" "node_modules/cheerio")
+
+    # 不再硬编码包名。历史实现写死过 node-fetch/cheerio，后来还有 better-sqlite3，
+    # 每次重构都会让这份清单静默失效（名字还在，包早就没了，检查恒定失败）。
+    # 改为按 package.json 的 dependencies 逐项验证目录：声明即契约，检查跟着契约走，
+    # 顺带覆盖"新增了原生依赖却没装"这类回归。
     local missing=0
-    
-    for dep in "${critical_deps[@]}"; do
-        if [[ ! -e "$dep" ]]; then
-            ((missing++))
-        fi
-    done
-    
-    if [[ $missing -gt 0 ]]; then
-        log_warn "检测到 $missing 个关键依赖缺失"
+    if command_exists node; then
+        missing=$(node -e '
+            const fs = require("node:fs");
+            const deps = Object.keys(require("./package.json").dependencies || {});
+            process.stdout.write(String(deps.filter((name) => !fs.existsSync(`node_modules/${name}`)).length));
+        ' 2>/dev/null || echo 0)
+    fi
+
+    if [[ "${missing:-0}" -gt 0 ]]; then
+        log_warn "检测到 $missing 个依赖缺失"
         return 1
     fi
-    
+
     return 0
 }
 

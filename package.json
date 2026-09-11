@@ -1,6 +1,6 @@
 {
   "name": "pixivflow",
-  "version": "2.16.1",
+  "version": "2.18.0",
   "description": "🎨 智能的 Pixiv 自动化下载工具 - 支持批量下载插画和小说、定时任务、Docker部署 | Intelligent Pixiv Automation Downloader with batch download, scheduler, and Docker support",
   "repository": {
     "type": "git",
@@ -37,6 +37,7 @@
     "test:scheduled": "jest --runTestsByPath src/__tests__/integration/download-flow.test.ts",
     "test:concurrency": "jest --runTestsByPath src/__tests__/utils/concurrency.test.ts",
     "test:performance": "jest --runInBand src/__tests__/performance",
+    "smoke:package": "node scripts/package-smoke.mjs",
     "benchmark": "npm run test:performance",
     "analyze:complexity": "node scripts/analyze-complexity.js",
     "analyze:unused": "npx ts-prune",
@@ -88,7 +89,6 @@
     "tags:cleanup:dry-run": "./scripts/cleanup-github-tags.sh --dry-run"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.13",
     "@types/cors": "^2.8.19",
     "@types/express": "^4.17.21",
     "@types/jest": "^29.5.0",
@@ -100,7 +100,6 @@
     "kill-port": "^2.0.1",
     "nodemon": "^3.1.14",
     "npm-run-all": "^4.1.5",
-    "puppeteer": "^24.43.1",
     "ts-jest": "^29.4.12",
     "typescript": "^5.6.2"
   },
@@ -118,27 +117,27 @@
   "dependencies": {
     "@redtidev/pixiv-client": "0.1.0",
     "axios": "^1.20.0",
-    "better-sqlite3": "^12.11.1",
     "cors": "^2.8.6",
     "cron-parser": "^4.9.0",
     "express": "^4.22.2",
     "franc-min": "^6.2.0",
     "node-cron": "^4.6.0",
-    "pixiv-token-getter": "^2.2.1",
+    "pixiv-token-getter": "^2.6.1",
+    "puppeteer-core": "^25.9.0",
     "socket.io": "^4.8.3",
     "socks-proxy-agent": "^8.0.5",
     "undici": "^6.28.0"
   },
   "engines": {
-    "node": ">=22.12.0",
+    "node": ">=22.13.0",
     "npm": ">=9.0.0"
   },
   "files": [
     "dist/",
-    "config/standalone.config.example.json",
+    "config/examples/",
     "config/fly-two-bots.example.json",
     "README.md",
-    "README_EN.md",
+    "README.en.md",
     "LICENSE"
   ],
   "keywords": [

@@ -3,6 +3,7 @@ import { DownloadRecordInput } from '../Database';
 import { DownloadQueryRepository } from './DownloadQueryRepository';
 import { DownloadWriteRepository } from './DownloadWriteRepository';
 import { DownloadStatsRepository } from './DownloadStatsRepository';
+import type { SqliteDriver } from '../drivers/SqliteDriver';
 
 /**
  * Repository for managing download records
@@ -13,7 +14,7 @@ export class DownloadRepository extends BaseRepository {
   private readonly writeRepo: DownloadWriteRepository;
   private readonly statsRepo: DownloadStatsRepository;
 
-  constructor(db: import('better-sqlite3').Database) {
+  constructor(db: SqliteDriver) {
     super(db);
     this.queryRepo = new DownloadQueryRepository(db);
     this.writeRepo = new DownloadWriteRepository(db);

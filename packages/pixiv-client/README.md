@@ -1,6 +1,6 @@
 # @redtidev/pixiv-client
 
-[English](./README_EN.md) | **中文**
+[English](./README.en.md) | **中文**
 
 面向 TypeScript/Node.js 的独立、可复用的 **Pixiv App API 客户端 kit**。
 

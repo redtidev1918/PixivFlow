@@ -28,7 +28,7 @@ coverage/
 docs/
 *.md
 !README.md
-!README_EN.md
+!README.en.md
 !LICENSE
 
 # 脚本文件（用户不需要）

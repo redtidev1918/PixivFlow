@@ -165,7 +165,7 @@ Full tutorial site: <https://redtidev1918.github.io/PixivFlow/>
 
 | Document | Description |
 | --- | --- |
-| [📥 Download](docs/download.md) | Prebuilt packages, npm and Docker |
+| [Download](docs/download.md) | Prebuilt packages, npm and Docker |
 | [QUICKSTART](docs/QUICKSTART.md) | Get running in three minutes |
 | [CONFIG](docs/CONFIG.md) | All configuration options |
 | [USAGE](docs/USAGE.md) | Feature reference |

@@ -1,6 +1,6 @@
 - 开始使用
   - [概览](/)
-  - [📥 下载](/download.md)
+  - [下载](/download.md)
   - [快速开始](/QUICKSTART.md)
   - [账号登录](/LOGIN.md)
 - 使用手册

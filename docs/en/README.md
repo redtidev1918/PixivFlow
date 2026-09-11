@@ -10,7 +10,7 @@
 
 | Document | Description |
 | :-- | :-- |
-| [📥 Download](download.md) | Prebuilt packages, npm and Docker |
+| [Download](download.md) | Prebuilt packages, npm and Docker |
 | [README (English)](https://github.com/redtidev1918/PixivFlow/blob/master/README.en.md) | Project overview, install and common commands |
 | [Quick Start](QUICKSTART.md) | Install, sign in, first download |
 | [Login](LOGIN.md) | Sign-in methods and credential storage |

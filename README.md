@@ -215,7 +215,7 @@ Email、Telegram、Discord、ntfy 等渠道；PixivFlow 不实现这些通知协
 
 | 文档 | 说明 |
 | --- | --- |
-| [📥 下载](docs/download.md) | 各平台安装包、npm 与 Docker 获取方式 |
+| [下载](docs/download.md) | 各平台安装包、npm 与 Docker 获取方式 |
 | [QUICKSTART](docs/QUICKSTART.md) | 三分钟上手 |
 | [CONFIG](docs/CONFIG.md) | 全部配置项说明 |
 | [USAGE](docs/USAGE.md) | 功能详解 |

@@ -3,7 +3,7 @@
 **English** | [中文](../PIXIV_CLIENT_KIT.md)
 
 The Pixiv protocol/network code is an independent internal npm workspace
-package at [`packages/pixiv-client`](../packages/pixiv-client). PixivFlow is a
+package at [`packages/pixiv-client`](../../packages/pixiv-client). PixivFlow is a
 consumer of the kit; the kit knows nothing about PixivFlow.
 
 > The kit is **not** a separate GitHub repository yet — see

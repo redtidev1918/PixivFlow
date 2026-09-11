@@ -21,7 +21,7 @@
 | 部署到服务器长期挂机 | [Docker 部署](DOCKER.md) |
 | 在 Android 手机上运行 | [Termux 安装](TERMUX_INSTALL.md) |
 | 从 v1 升级到 v2 | [迁移指南](MIGRATION.md) |
-| 二次开发、改代码、查接口 | [架构说明](ARCHITECTURE.md) → [WebUI API](API.md) |
+| 二次开发、改代码、查接口 | [架构说明](ARCHITECTURE.md) → [Pixiv Client Kit](PIXIV_CLIENT_KIT.md) → [WebUI API](API.md) |
 
 ## 📚 全部文档
 
@@ -53,6 +53,7 @@
 | 文档 | 内容 |
 | --- | --- |
 | [ARCHITECTURE](ARCHITECTURE.md) | 模块地图、命令注册机制、下载管线、存储层设计 |
+| [PIXIV_CLIENT_KIT](PIXIV_CLIENT_KIT.md) | 独立可复用的 Pixiv App API 客户端 kit:依赖规则、单一 429 闸门设计、何时拆分到独立仓库(英文版见 [docs/en/PIXIV_CLIENT_KIT.md](docs/en/PIXIV_CLIENT_KIT.md)) |
 | [API](API.md) | WebUI 后端 REST 接口与 Socket.IO 实时事件 |
 | [CONTRIBUTING](https://github.com/redtidev1918/PixivFlow/blob/master/CONTRIBUTING.md) | 参与贡献的流程与规范 |
 | [RELEASING](RELEASING.md) | 版本管理与 npm 发版流程 |

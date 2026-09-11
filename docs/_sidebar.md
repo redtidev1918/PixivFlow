@@ -14,6 +14,7 @@
 - 开发者
   - [架构说明](/ARCHITECTURE.md)
   - [Pixiv Client Kit](/PIXIV_CLIENT_KIT.md)
+  - [Pixiv Client Kit (EN)](/en/PIXIV_CLIENT_KIT.md)
   - [WebUI API](/API.md)
   - [v1 → v2 迁移指南](/MIGRATION.md)
   - [发版流程](/RELEASING.md)
@@ -26,3 +27,4 @@
   - [📥 Download](/en/download.md)
   - [Quick start](/en/QUICKSTART.md)
   - [Login guide](/en/LOGIN.md)
+  - [Pixiv Client Kit](/en/PIXIV_CLIENT_KIT.md)

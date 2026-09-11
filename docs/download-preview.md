@@ -9,7 +9,7 @@ npm install -g pixivflow
 pixivflow --help
 ```
 
-需要 Node.js 22.12 或更高版本。
+需要 Node.js 22.13 或更高版本。
 
 ### Docker
 

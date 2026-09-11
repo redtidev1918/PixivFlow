@@ -48,7 +48,7 @@ graph TD
 | `src/di/` | `Container` | 极简 DI 容器(实例/工厂/单例三种注册方式);CLI 主路径目前是手工组装依赖,容器是可选基础设施 |
 | `src/download/` | `DownloadManager`、`plan/`、`pipeline/`、`exec/`、`handlers/`、`recovery/`、`report/`、两个 Downloader、`FileService`、`FileNormalizationService` | 下载编排:计划 → 执行 → 落盘 → 记录 → 恢复 |
 | `src/scheduler/` | `Scheduler` | node-cron 封装,带并发互斥、次数/失败上限、超时记录 |
-| `src/storage/` | `Database`、`DatabaseMigration`、`repositories/` | better-sqlite3 访问,按领域拆分仓储(facade 模式) |
+| `src/storage/` | `Database`、`DatabaseMigration`、`repositories/`、`drivers/` | Node 内建 `node:sqlite` 访问(经 `SqliteDriver` 接口隔离驱动实现),按领域拆分仓储(facade 模式) |
 | `src/pixiv-client/` | `PixivFlowPixivClient`(实现 `IPixivClient`)、`TargetSearchRunner`、`PixivAuthTokenProvider` | 产品侧适配器:TargetConfig 映射、标签/日期分页语义、SQLite 429 状态;协议层全部委托给 Kit |
 | `src/terminal-login/`、`src/puppeteer-login-adapter/`、`src/python-login-adapter/`、`src/pixiv-token-getter-adapter.ts` | 登录适配器 | 三级降级链:pixiv-token-getter → Puppeteer(PKCE) → Python gppt |
 | `src/webui/` | `server/`、`routes/`、`routes/handlers/`、`websocket/`、`services/` | Express 服务器、REST 路由与处理器、Socket.IO 日志流、下载任务管理 |
@@ -198,7 +198,7 @@ executeCommand():command.validate?(args) → command.execute(context, args)
 
 ## 存储层
 
-`src/storage/Database.ts` 使用 better-sqlite3(同步驱动)。初始化时自动建目录,开启 `journal_mode = WAL`、`synchronous = NORMAL`、`cache_size = -64000`(64MB)。`migrate()` 幂等:全部 `CREATE TABLE IF NOT EXISTS` + 索引,并用 `PRAGMA table_info` 判断后补 `config_history.is_active` 列。
+`src/storage/Database.ts` 通过 `src/storage/drivers/` 的 `SqliteDriver` 接口访问 Node 内建 `node:sqlite`(同步驱动,不需要编译任何原生模块;`engines.node` 下限 v22.13.0 即 `node:sqlite` 无需 `--experimental-sqlite` 的版本)。初始化时自动建目录,开启 `journal_mode = WAL`、`synchronous = NORMAL`、`cache_size = -64000`(64MB);驱动另外显式设置 `busy_timeout = 5000` 与 `foreign_keys = OFF`,保持与历史 better-sqlite3 行为一致。`migrate()` 幂等:全部 `CREATE TABLE IF NOT EXISTS` + 索引,并用 `PRAGMA table_info` 判断后补 `config_history.is_active` 列。
 
 核心表结构(`src/storage/DatabaseMigration.ts`):
 

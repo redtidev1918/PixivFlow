@@ -104,7 +104,7 @@ export class RateLimitGate {
 
   /**
    * Synchronously warm the state from a state store whose load() is sync
-   * (MemoryRateLimitStateStore, better-sqlite3, ...). Reservation in
+   * (MemoryRateLimitStateStore, node:sqlite-backed stores, ...). Reservation in
    * {@link acquire} then happens with NO preceding await, which is what makes
    * concurrent callers serialize (A 0s, B 1s, C 2s ...).
    */

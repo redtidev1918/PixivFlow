@@ -3,8 +3,9 @@
  * Runs browser in background without visible window
  */
 
-import puppeteer, { Browser } from 'puppeteer';
+import type { Browser } from 'puppeteer-core';
 import { LoginInfo } from '../terminal-login';
+import { launchSystemBrowser } from './browser-launch';
 import { ProxyConfig, buildProxyUrl } from './proxy';
 import { generateCodeVerifier, generateCodeChallenge } from './pkce';
 import { LOGIN_URL } from './constants';
@@ -73,7 +74,7 @@ export async function loginWithPuppeteerHeadless(
     
     // Try to launch browser
     try {
-      browser = await puppeteer.launch(launchOptions);
+      browser = await launchSystemBrowser(launchOptions);
     } catch (launchError: any) {
       const errorMsg = launchError?.message || String(launchError);
       

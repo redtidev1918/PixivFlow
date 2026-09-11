@@ -124,7 +124,7 @@
     "express": "^4.22.2",
     "franc-min": "^6.2.0",
     "node-cron": "^4.6.0",
-    "pixiv-token-getter": "^2.2.1",
+    "pixiv-token-getter": "^2.4.0",
     "socket.io": "^4.8.3",
     "socks-proxy-agent": "^8.0.5",
     "undici": "^6.28.0"

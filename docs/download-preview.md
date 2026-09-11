@@ -1,13 +1,3 @@
-# 📥 下载 PixivFlow
-
-**语言 / Language:** 中文 · [English](/en/download.md)
-
-本页由 GitHub Actions 在每次发版时**自动更新**，始终指向最新 Release。
-
-## 最新版本：`v2.17.0`（2026-09-11）
-
-👉 [查看 Release 说明与校验和](https://github.com/redtidev1918/PixivFlow/releases/tag/v2.17.0)
-
 PixivFlow 以 npm 包为主，同时提供发布包与官方 Docker 镜像。完整资产与历史版本见 [Releases](https://github.com/redtidev1918/PixivFlow/releases)。
 
 ## 安装方式
@@ -44,9 +34,3 @@ grep '\.tgz' SHA256SUMS | sha256sum -c -
 ## 更新日志
 
 见 [CHANGELOG](https://github.com/redtidev1918/PixivFlow/blob/master/CHANGELOG.md)。
-
-| 平台 | 文件 | 大小 | 下载 |
-|---|---|---|---|
-| 通用 | `RELEASE-METADATA.json` | 2 KB | [⬇️ 下载](https://github.com/redtidev1918/PixivFlow/releases/download/v2.17.0/RELEASE-METADATA.json) |
-| 通用 | `SHA256SUMS` | 0 KB | [⬇️ 下载](https://github.com/redtidev1918/PixivFlow/releases/download/v2.17.0/SHA256SUMS) |
-| 通用 | `pixivflow-2.17.0.tgz` | 1.8 MB | [⬇️ 下载](https://github.com/redtidev1918/PixivFlow/releases/download/v2.17.0/pixivflow-2.17.0.tgz) |

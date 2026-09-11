@@ -1,42 +1,15 @@
-# Download PixivFlow
+# 📥 Download PixivFlow
 
 **Language / 语言:** [中文](/download.md) · English
 
-PixivFlow is distributed primarily as an npm package, with release tarballs and an
-official Docker image alongside it. See [Releases](https://github.com/redtidev1918/PixivFlow/releases)
-for all assets and older versions.
+This page is **generated automatically** by GitHub Actions on every release and always points at the latest one.
 
-## Install
+## Latest version: `v2.17.0` (2026-09-11)
 
-### npm (recommended)
+👉 [Release notes and checksums](https://github.com/redtidev1918/PixivFlow/releases/tag/v2.17.0)
 
-```bash
-npm install -g pixivflow
-pixivflow --help
-```
-
-Requires Node.js 22.12 or newer.
-
-### Docker
-
-See [Docker deployment](https://github.com/redtidev1918/PixivFlow/blob/master/DOCKER.md).
-
-### Release assets
-
-| Asset | Description |
-| :-- | :-- |
-| `pixivflow-<version>.tgz` | Tarball produced by `npm pack`; install with `npm install -g ./pixivflow-<version>.tgz` |
-| `SHA256SUMS` | Checksums |
-| `RELEASE-METADATA.json` | Release metadata |
-
-Get them from the [latest release](https://github.com/redtidev1918/PixivFlow/releases/latest).
-
-## Verify the download
-
-```bash
-grep '\.tgz' SHA256SUMS | sha256sum -c -
-```
-
-## Changelog
-
-See [CHANGELOG](https://github.com/redtidev1918/PixivFlow/blob/master/CHANGELOG.md).
+| Platform | File | Size | Download |
+|---|---|---|---|
+| All platforms | `RELEASE-METADATA.json` | 2 KB | [⬇️ Download](https://github.com/redtidev1918/PixivFlow/releases/download/v2.17.0/RELEASE-METADATA.json) |
+| All platforms | `SHA256SUMS` | 0 KB | [⬇️ Download](https://github.com/redtidev1918/PixivFlow/releases/download/v2.17.0/SHA256SUMS) |
+| All platforms | `pixivflow-2.17.0.tgz` | 1.8 MB | [⬇️ Download](https://github.com/redtidev1918/PixivFlow/releases/download/v2.17.0/pixivflow-2.17.0.tgz) |

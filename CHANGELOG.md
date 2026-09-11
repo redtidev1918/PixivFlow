@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.17.0](https://github.com/redtidev1918/PixivFlow/compare/v2.16.1...v2.17.0) (2026-09-11)
+
+
+### Features
+
+* **batch:** execute-slot, a one-shot execution plane with a machine-readable result ([#43](https://github.com/redtidev1918/PixivFlow/issues/43)) ([2dc135b](https://github.com/redtidev1918/PixivFlow/commit/2dc135b419f4b54fe42fb3cbdcfe13a43b0cc058))
+
+
+### Bug Fixes
+
+* **deps:** regenerate lockfile with npm 10 so npm ci passes on Node 22 ([d70df1e](https://github.com/redtidev1918/PixivFlow/commit/d70df1eacbc57e3253b916d3a184d9e16b00a70d))
+
 ## [2.16.1](https://github.com/redtidev1918/PixivFlow/compare/v2.16.0...v2.16.1) (2026-09-10)
 
 

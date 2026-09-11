@@ -101,7 +101,7 @@
     "kill-port": "^2.0.1",
     "nodemon": "^3.1.14",
     "npm-run-all": "^4.1.5",
-    "puppeteer": "^24.43.1",
+    "puppeteer-core": "^25.9.0",
     "ts-jest": "^29.4.12",
     "typescript": "^5.6.2"
   },
@@ -125,7 +125,7 @@
     "express": "^4.22.2",
     "franc-min": "^6.2.0",
     "node-cron": "^4.6.0",
-    "pixiv-token-getter": "^2.4.0",
+    "pixiv-token-getter": "^2.6.1",
     "socket.io": "^4.8.3",
     "socks-proxy-agent": "^8.0.5",
     "undici": "^6.28.0"

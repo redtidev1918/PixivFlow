@@ -11,6 +11,7 @@ import { ScheduleTriggerServer, TriggerRunResult } from '../scheduler/ScheduleTr
 import { SlotCoordinator } from '../scheduler/SlotCoordinator';
 import { selectScheduleTargets } from '../scheduler/schedules';
 import { createSchedulerRuntime } from './scheduler-runtime';
+import { SchedulerIdleLifecycle } from './SchedulerIdleLifecycle';
 
 /**
  * Decide whether the authenticated HTTP trigger server should be mounted. It is
@@ -74,8 +75,10 @@ export class SchedulerCommand extends BaseCommand {
       // Authenticated HTTP trigger. Mounted in external mode (the external clock
       // wakes the machine here) and, opt-in, in internal mode for manual/ops
       // triggers. Business logic lives in runJob/SlotCoordinator; this handler
-      // only authenticates, resolves the occurrence and delegates synchronously
-      // so the open request is the activity lease for the whole run.
+      // only authenticates, records the occurrence durably and hands it to the
+      // shared scheduler, then answers. It deliberately does not await the run:
+      // the open request is NOT an activity lease, and a 10-40 minute download
+      // would outlive the clock/proxy/client timeout carrying it.
       let triggerServer: ScheduleTriggerServer | null = null;
       if (triggerEnabled(runtime.config)) {
         const rt = runtime.config.schedulerRuntime!;
@@ -188,16 +191,53 @@ export class SchedulerCommand extends BaseCommand {
         );
       }
 
-      const cleanup = () => {
-        context.logger.info('Shutting down PixivFlow');
+      // Run-to-completion lifecycle for the external clock. The machine was woken
+      // by a trigger and has to return to `stopped` by itself. Platform-side
+      // auto-stop cannot decide that: the trigger answers long before the run
+      // finishes, so the proxy sees an idle socket while downloads are still in
+      // flight. The worker therefore reads its OWN durable ledger (see
+      // SchedulerIdleLifecycle). Wired after the trigger server so the port is
+      // already being served when the first idle probe runs.
+      let idleLifecycle: SchedulerIdleLifecycle | null = null;
+
+      const shutdown = (reason: string, code = 0) => {
+        context.logger.info('Shutting down PixivFlow', { reason });
+        idleLifecycle?.stop();
         triggerServer?.stop();
         manager.stop();
         runtime.close();
-        process.exit(0);
+        process.exit(code);
       };
 
-      process.on('SIGINT', cleanup);
-      process.on('SIGTERM', cleanup);
+      const scheduling = runtime.config.schedulerRuntime;
+      if (scheduling?.mode === 'external' && scheduling.exitWhenIdle) {
+        idleLifecycle = new SchedulerIdleLifecycle({
+          snapshot: () => {
+            const outbox = runtime.database.outbox.counts();
+            return {
+              activeSlots: runtime.database.slots.countActiveSlots(),
+              processingOutbox: outbox.processing,
+              // `pending` covers pending + retry_wait: a delivery still backing
+              // off is active work. Backoff is bounded (rows flip to `dead` once
+              // attempts are exhausted, which does not block exit), so this
+              // cannot hold the machine open indefinitely.
+              pendingOutbox: outbox.pending,
+            };
+          },
+          idleGraceMs: scheduling.idleGraceMs,
+          maxLifetimeMs: scheduling.maxLifetimeMs,
+          onExit: (reason) =>
+            shutdown(
+              reason === 'idle'
+                ? 'external worker idle: slot ledger and outbox are both empty'
+                : 'external worker exceeded the maxLifetimeMs backstop',
+            ),
+        });
+        idleLifecycle.start();
+      }
+
+      process.on('SIGINT', () => shutdown('SIGINT'));
+      process.on('SIGTERM', () => shutdown('SIGTERM'));
       process.on('SIGHUP', () => {
         context.logger.info('Received SIGHUP; reloading scheduler configuration');
         manager.reload();

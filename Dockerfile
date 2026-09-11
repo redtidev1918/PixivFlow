@@ -147,3 +147,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
 
 # 设置默认命令为定时任务模式
 CMD ["node", "dist/index.js", "scheduler"]
+
+# Branch-contract probe (positive): comment-only change inside the declared cutover scope.

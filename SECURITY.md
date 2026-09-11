@@ -1,6 +1,6 @@
 # 安全策略
 
-[English](./SECURITY_EN.md) | **中文**
+[English](./SECURITY.en.md) | **中文**
 
 ## 支持的版本
 

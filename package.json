@@ -138,7 +138,7 @@
     "config/standalone.config.example.json",
     "config/fly-two-bots.example.json",
     "README.md",
-    "README_EN.md",
+    "README.en.md",
     "LICENSE"
   ],
   "keywords": [

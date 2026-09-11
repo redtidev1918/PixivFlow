@@ -1,5 +1,6 @@
 - 开始使用
   - [文档中心](/)
+  - [📥 下载](/download.md)
   - [快速开始](/QUICKSTART.md)
   - [账号登录](/LOGIN.md)
 - 使用手册
@@ -13,11 +14,17 @@
 - 开发者
   - [架构说明](/ARCHITECTURE.md)
   - [Pixiv Client Kit](/PIXIV_CLIENT_KIT.md)
-  - [Pixiv Client Kit (EN)](/PIXIV_CLIENT_KIT_EN.md)
+  - [Pixiv Client Kit (EN)](/en/PIXIV_CLIENT_KIT.md)
   - [WebUI API](/API.md)
-  - [迁移指南](/CLI_MIGRATION_SUMMARY.md)
+  - [v1 → v2 迁移指南](/MIGRATION.md)
   - [发版流程](/RELEASING.md)
-  - [贡献指南](/project/CONTRIBUTING.md)
-  - [更新日志](/project/CHANGELOG.md)
+  - [贡献指南](https://github.com/redtidev1918/PixivFlow/blob/master/CONTRIBUTING.md)
+  - [更新日志](https://github.com/redtidev1918/PixivFlow/blob/master/CHANGELOG.md)
 - 其他
   - [致谢](/ACKNOWLEDGMENTS.md)
+- English
+  - [Documentation](/en/)
+  - [📥 Download](/en/download.md)
+  - [Quick start](/en/QUICKSTART.md)
+  - [Login guide](/en/LOGIN.md)
+  - [Pixiv Client Kit](/en/PIXIV_CLIENT_KIT.md)

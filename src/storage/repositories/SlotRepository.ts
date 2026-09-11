@@ -342,6 +342,23 @@ export class SlotRepository extends BaseRepository {
     return rows.map((r) => this.toSlot(r));
   }
 
+  /**
+   * Non-terminal Slots (pending/running): work this ledger still owes, whether
+   * or not a live worker currently holds their lease.
+   *
+   * Deliberately NOT `recoverableSlots()`. That query excludes slots with a live
+   * lease — i.e. exactly the slots being executed right now — so using it as an
+   * "is anything still running?" probe reports idle in the middle of a run. The
+   * external-worker lifecycle needs to answer the opposite question, so it asks
+   * this one instead.
+   */
+  public countActiveSlots(): number {
+    const row = this.db
+      .prepare(`SELECT COUNT(*) n FROM schedule_slots WHERE status IN ('pending','running')`)
+      .get() as { n: number };
+    return row.n;
+  }
+
   /** Record an error without changing terminality (retryable failure keeps the cell resumable). */
   public setCellError(slotId: string, targetId: string, error: string): void {
     this.db

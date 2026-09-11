@@ -449,6 +449,39 @@ export interface SchedulerRuntimeConfig {
    */
   queueLimit?: number;
   /**
+   * External-mode run-to-completion lifecycle. When true, the daemon exits the
+   * process once its OWN durable ledger says there is nothing left to do, so a
+   * machine that was woken by an external clock returns to `stopped` by itself
+   * instead of idling on a fixed clock until the platform stops it.
+   *
+   * The platform's proxy-side auto-stop cannot make this call. The HTTP trigger
+   * answers as soon as the occurrence is durable (deliberately — a 10-40 minute
+   * run cannot survive a router/proxy/client timeout), so the proxy sees an idle
+   * socket while the real run is still going and would stop the machine
+   * mid-download. Only this process knows when its work is finished.
+   *
+   * Ignored in `internal` mode, where cron owns the process lifetime.
+   * Default: false.
+   */
+  exitWhenIdle?: boolean;
+  /**
+   * How long to stay awake after the last observed work, before exiting in
+   * `exitWhenIdle` mode. This is a merge window rather than a timeout: two
+   * schedules ten minutes apart are normally served by ONE wake-up, and a
+   * delivery retry that lands shortly after the run is drained without paying
+   * for a second cold start. Default: 600000ms (10 minutes).
+   */
+  idleGraceMs?: number;
+  /**
+   * Hard backstop on total awake time in `exitWhenIdle` mode. The native idle
+   * detector is the normal exit path and this should never fire; it exists so a
+   * worker that never reaches idle (a wedged run, a Slot recovery cannot
+   * re-dispatch) cannot bill indefinitely. On expiry the daemon logs the reason,
+   * closes its database cleanly and exits. Nothing is deleted — the next wake
+   * resumes from the same durable Slot/outbox rows. Default: 10800000ms (3h).
+   */
+  maxLifetimeMs?: number;
+  /**
    * External-mode HTTP trigger settings. Ignored in internal mode.
    */
   trigger?: SchedulerTriggerConfig;

@@ -39,11 +39,11 @@ ARG VCS_REF=unknown
 COPY package*.json ./
 # 工作区 manifest 必须存在，npm 才能解析 @redtidev/pixiv-client 并建立软链接。
 COPY packages/pixiv-client/package.json ./packages/pixiv-client/package.json
-# 编译工具只用于安装 better-sqlite3；运行镜像不保留它们。
+# 不需要 make/g++（node-gyp 工具链）：依赖树中已无需要编译的原生模块，storage 走
+# Node 内建的 node:sqlite。python3 保留给 gppt 登录工具，ffmpeg 供媒体转码。
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends python3 ffmpeg make g++ ca-certificates \
+    && apt-get install -y --no-install-recommends python3 ffmpeg ca-certificates \
     && npm ci --omit=dev \
-    && apt-get purge -y --auto-remove make g++ \
     && npm cache clean --force \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /src/dist ./dist

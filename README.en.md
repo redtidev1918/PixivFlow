@@ -1,6 +1,6 @@
 # PixivFlow
 
-**English** | [中文](https://github.com/redtidev1918/PixivFlow/blob/master/README.md)
+**Language / 语言:** [中文](README.md) · English
 
 Pixiv batch download and scheduled collection tool. Bulk-download
 illustrations and novels, search by tag, filter by bookmarks and dates,
@@ -157,7 +157,7 @@ Interactive configuration wizard: `pixivflow setup`.
 
 `tags discover` calls the Pixiv autocomplete endpoint and samples recent illustrations/novels to count co-occurring tags, caching results for 7 days; it **never** changes active plans. After reviewing candidates, run `tags apply` to explicitly select tags: it validates the whole config, writes a backup and atomically replaces the file so a running scheduler hot-reloads it.
 
-More commands in [CLI_MIGRATION_SUMMARY.md](docs/CLI_MIGRATION_SUMMARY.md).
+More commands in [USAGE.md](docs/USAGE.md); see the [migration guide](docs/MIGRATION.md) for upgrading from v1 to v2.
 
 ## Documentation
 
@@ -165,14 +165,16 @@ Full tutorial site: <https://redtidev1918.github.io/PixivFlow/>
 
 | Document | Description |
 | --- | --- |
+| [📥 Download](docs/download.md) | Prebuilt packages, npm and Docker |
 | [QUICKSTART](docs/QUICKSTART.md) | Get running in three minutes |
 | [CONFIG](docs/CONFIG.md) | All configuration options |
 | [USAGE](docs/USAGE.md) | Feature reference |
 | [LOGIN](docs/LOGIN.md) | Account sign-in details |
 | [DOCKER](docs/DOCKER.md) | Container deployment |
 | [ARCHITECTURE](docs/ARCHITECTURE.md) | Architecture notes |
+| [MIGRATION](docs/MIGRATION.md) | Upgrade from v1 to v2 |
 | [RELEASING](docs/RELEASING.md) | npm release workflow |
-| [CHANGELOG](docs/project/CHANGELOG.md) | Version history |
+| [CHANGELOG](CHANGELOG.md) | Version history |
 | [ACKNOWLEDGMENTS](docs/ACKNOWLEDGMENTS.md) | Credits and references |
 
 Chinese version: [README.md](README.md).
@@ -183,7 +185,7 @@ Bugs and feature requests go to
 [Issues](https://github.com/redtidev1918/PixivFlow/issues); please run
 `pixivflow health` first and include its output (strip tokens and other
 secrets before sharing). Security issues are handled privately — see
-[SECURITY_EN.md](SECURITY_EN.md).
+[SECURITY.en.md](SECURITY.en.md).
 
 ## Acknowledgments
 

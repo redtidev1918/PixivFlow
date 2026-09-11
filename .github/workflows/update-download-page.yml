@@ -1,0 +1,44 @@
+# docsite-managed-file: update-download-page.yml
+# docsite-managed-version: 1
+# docsite: managed file, run `python3 docsite.py update` to refresh.
+# 每次发版后刷新下载页：docs/download.md（中）与 docs/en/download.md（英）。
+#
+# 不写死分支：检出仓库默认分支，保证 Release 事件下也把提交落到主干。
+name: Update download page
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-download-page
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Regenerate download pages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/scripts/update_download_page.py "${{ github.repository }}"
+
+      - name: Commit if changed
+        run: |
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "download page already up to date"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/download.md docs/en/download.md
+          git commit -m "docs: refresh download page (${{ github.event.release.tag_name || 'manual' }})"
+          git push

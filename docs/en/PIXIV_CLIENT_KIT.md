@@ -1,6 +1,6 @@
 # Pixiv Client Kit (`@redtidev/pixiv-client`)
 
-**English** | [中文](./PIXIV_CLIENT_KIT.md)
+**English** | [中文](../PIXIV_CLIENT_KIT.md)
 
 The Pixiv protocol/network code is an independent internal npm workspace
 package at [`packages/pixiv-client`](../packages/pixiv-client). PixivFlow is a

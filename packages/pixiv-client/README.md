@@ -1,11 +1,12 @@
 # @redtidev/pixiv-client
 
-Independent, reusable **Pixiv App API client kit** for TypeScript/Node.js.
+[English](./README.en.md) | **中文**
 
-It knows Pixiv. It does **not** know your application: no config schema, no
-database, no browser login, no scheduler. It currently lives as an npm
-workspace package inside the PixivFlow monorepo and is intentionally **not
-yet published** (see "When to split out" below).
+面向 TypeScript/Node.js 的独立、可复用的 **Pixiv App API 客户端 kit**。
+
+它懂 Pixiv，但**不懂你的应用**：没有配置 schema、没有数据库、没有浏览器登录、
+没有调度器。它目前作为 npm 工作区包存在于 PixivFlow 单仓库内，且有意
+**尚未发布**（见下文「何时拆分到独立仓库」）。
 
 ```ts
 import { createPixivClient, StaticTokenProvider } from '@redtidev/pixiv-client';
@@ -17,87 +18,80 @@ const page   = await pixiv.illustrations.searchPage({ word: '風景', limit: 30 
 const bytes  = await pixiv.media.fetch(illust.meta_single_page!.original_image_url!);
 ```
 
-## Features
+## 特性
 
-- **Auth port, not login implementation** — inject anything implementing
-  `AccessTokenProvider` (optionally `RefreshableAccessTokenProvider`). Browser
-  OAuth/PKCE, puppeteer and python helpers stay in the host application.
-- **One transport** for every call: base URL, App headers, Bearer auth,
-  timeout (`AbortController`), HTTP(S) proxy (undici) and SOCKS proxy
-  (axios + socks-proxy-agent), response parsing, typed errors.
-- **Typed errors** — `PixivNotFoundError`, `PixivRateLimitError`,
-  `PixivAuthenticationError`, `PixivServerError`, `PixivNetworkError`,
-  `PixivTimeoutError`, `PixivCircuitOpenError`, ... classify with `instanceof`,
-  never with `message.includes('429')`.
-- **Single 429 gate** — one global rate limiter paces all requests and applies
-  one shared cooldown. No nested retries, no request storms.
-- **Slot-reservation pacing** — concurrent callers are serialized to
-  t, t+interval, t+2·interval ... (the old coordinator woke them in a burst).
-- **Conservative defaults**: 1000 ms minimum interval, jitter 25 %, first 429
-  cooldown 60 s, exponential 60→120→240→480 s capped at 15 min, Retry-After
-  always honored as a floor.
-- **Penalty decay** — one success never clears the penalty; it decays after a
-  configurable run (default 20) of consecutive successes.
-- **Circuit breaker** — repeated 429s OPEN the gate; requests fast-fail with
-  `PixivCircuitOpenError`; after the cooldown a single half-open probe tests
-  recovery.
-- **Persistent state port** — inject a `RateLimitStateStore` (e.g. an SQLite
-  adapter) so restarts/deploys remember an active cooldown. Default is
-  in-memory.
-- **In-flight coalescing** — 10 concurrent `get(123)` calls make 1 HTTP
-  request.
-- **Pagination without auto-crawl** — `searchPage`/`rankingPage` plus the
-  optional `paginate()` helper; always bounded by `limit`/`maxPages` and
-  `AbortSignal`-aware.
-- **Structured events** via `onEvent` (`request_start`, `request_retry`,
-  `rate_limited`, `circuit_opened`, `auth_refresh`, ...). No credentials are
-  ever logged or emitted.
+- **认证端口，而非登录实现** —— 注入任何实现了 `AccessTokenProvider`
+  （可选 `RefreshableAccessTokenProvider`）的对象。浏览器 OAuth/PKCE、
+  puppeteer 与 python 辅助逻辑留在宿主应用中。
+- **单一传输层**服务所有调用：base URL、App 头、Bearer 认证、超时
+  （`AbortController`）、HTTP(S) 代理（undici）与 SOCKS 代理
+  （axios + socks-proxy-agent）、响应解析、类型化错误。
+- **类型化错误** —— `PixivNotFoundError`、`PixivRateLimitError`、
+  `PixivAuthenticationError`、`PixivServerError`、`PixivNetworkError`、
+  `PixivTimeoutError`、`PixivCircuitOpenError` 等，用 `instanceof` 分类，
+  绝不用 `message.includes('429')`。
+- **单一 429 闸门** —— 一个全局限速器为所有请求节流，并施加同一份冷却。
+  没有嵌套重试，也没有请求风暴。
+- **槽位预约式节流** —— 并发调用方被串行化到 t、t+interval、
+  t+2·interval…（旧的协调器会把它们在同一瞬间唤醒）。
+- **保守默认值**：最小间隔 1000 ms，抖动 25 %，首次 429 冷却 60 s，
+  指数退避 60→120→240→480 s，上限 15 min，Retry-After 始终作为下限被遵守。
+- **惩罚衰减** —— 一次成功绝不会清除惩罚；需连续成功达到可配置次数
+  （默认 20）后才衰减。
+- **熔断器** —— 反复 429 会 OPEN 闸门；请求以 `PixivCircuitOpenError`
+  快速失败；冷却结束后以一次半开探测检验恢复情况。
+- **持久化状态端口** —— 注入 `RateLimitStateStore`（例如 SQLite 适配器），
+  让重启 / 部署后仍记得生效中的冷却。默认是内存实现。
+- **在途请求合并** —— 10 个并发的 `get(123)` 只会发出 1 次 HTTP 请求。
+- **分页但不自动爬取** —— `searchPage`/`rankingPage` 加上可选的
+  `paginate()` 辅助函数；始终受 `limit`/`maxPages` 约束，并支持
+  `AbortSignal`。
+- **结构化事件**（通过 `onEvent`）：`request_start`、`request_retry`、
+  `rate_limited`、`circuit_opened`、`auth_refresh` 等。凭据绝不会被记录或发出。
 
-## Retry ownership
+## 重试归属
 
-| Failure                         | Owner                                        |
+| 失败 | 归属方 |
 | ------------------------------- | -------------------------------------------- |
-| network reset / timeout / 5xx   | transport retries (default 2), linear backoff|
-| 429 while circuit CLOSED        | transport waits the shared gate cooldown     |
-| 429 after circuit OPEN threshold| fails fast; durable retry belongs to the host (scheduler/outbox) |
-| 401                             | one `refreshAccessToken()` + retry, then error|
-| 400 / 403 / 404                 | never retried                                |
+| 网络重置 / 超时 / 5xx | 传输层重试（默认 2 次），线性退避 |
+| 熔断处于 CLOSED 时的 429 | 传输层等待共享闸门冷却 |
+| 超过熔断 OPEN 阈值后的 429 | 快速失败；持久化重试属于宿主（调度器 / outbox） |
+| 401 | 一次 `refreshAccessToken()` + 重试，随后报错 |
+| 400 / 403 / 404 | 永不重试 |
 
-The kit never rotates proxies or IPs on 429 and never alternates between the
-App and Web API to dodge rate limits. Endpoint-capability fallback (the novel
-text v2→v1/ajax chain) is allowed; anti-rate-limit rotation is not.
+该 kit 绝不会在 429 时轮换代理或 IP，也绝不在 App API 与 Web API 之间
+切换以规避速率限制。端点能力回退（小说正文 v2→v1/ajax 链）是允许的；
+反速率限制的轮换不允许。
 
-## API surface
+## API 接口面
 
 - `createPixivClient(options)` / `new PixivClient(options)`
-- `pixiv.illustrations` — `get/detail`, `detailWithTags`, `searchPage`,
-  `search`, `rankingPage`, `ranking`, `userWorksPage`, `listByUser`,
+- `pixiv.illustrations` —— `get/detail`、`detailWithTags`、`searchPage`、
+  `search`、`rankingPage`、`ranking`、`userWorksPage`、`listByUser`、
   `ugoiraMetadata`
-- `pixiv.novels` — `get/detail`, `detailCompatible`, `detailWithTags`,
-  `searchPage`, `search`, `rankingPage`, `ranking`, `userWorksPage`,
-  `listByUser`, `listSeries`, `text`
+- `pixiv.novels` —— `get/detail`、`detailCompatible`、`detailWithTags`、
+  `searchPage`、`search`、`rankingPage`、`ranking`、`userWorksPage`、
+  `listByUser`、`listSeries`、`text`
 - `pixiv.tags.autocomplete(word)`
-- `pixiv.users.user(userId)` (Pixiv removed `/v1/user/profile`, so there is no "current user" endpoint)
+- `pixiv.users.user(userId)`（Pixiv 已移除 `/v1/user/profile`，因此没有「当前用户」端点）
 - `pixiv.media.fetch(url)` → `ArrayBuffer`
-- `pixiv.getRateLimitStatus()` — `{ circuitState, cooldownRemainingMs, penaltyLevel, last429At, nextAllowedInMs }`
+- `pixiv.getRateLimitStatus()` —— `{ circuitState, cooldownRemainingMs, penaltyLevel, last429At, nextAllowedInMs }`
 
-The package has zero knowledge of host types (`TargetConfig`, schedulers,
-SQLite, delivery, …). Mapping a host query into kit options is the host's
-job, e.g. `mapTargetToPixivQuery(target): IllustSearchOptions`.
+该包对宿主类型（`TargetConfig`、调度器、SQLite、投递等）一无所知。
+把宿主查询映射为 kit 选项是宿主的职责，例如
+`mapTargetToPixivQuery(target): IllustSearchOptions`。
 
-## When to split out into its own repo
+## 何时拆分到独立仓库
 
-Do **not** split yet. Split only once both hold:
+**不要**现在就拆分。只有以下两条同时成立再拆：
 
-1. A second real consumer exists (another bot, an Electron client, a
-   standalone downloader …) — PixivFlow alone does not justify cross-repo
-   version coordination.
-2. The public API has run stable for a while and the host adapter has stopped
-   churning.
+1. 出现第二个真实消费方（另一个 bot、一个 Electron 客户端、一个独立
+   下载器等）—— 仅靠 PixivFlow 不足以支撑跨仓库的版本协调。
+2. 公开 API 已稳定运行一段时间，且宿主适配器已不再频繁变动。
 
-At that point: history-split `packages/pixiv-client` → its own repo →
-publish `@redtidev/pixiv-client` and depend on the released version.
+到那时：用 history-split 把 `packages/pixiv-client` 拆到独立仓库 →
+发布 `@redtidev/pixiv-client` 并依赖已发布版本。
 
-## License
+## 许可证
 
 MIT

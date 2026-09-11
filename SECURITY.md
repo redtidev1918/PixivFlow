@@ -1,35 +1,27 @@
-# Security Policy
+# 安全策略
 
-## Supported versions
+[English](./SECURITY.en.md) | **中文**
 
-Only the latest published version and the `master` branch receive security
-fixes.
+## 支持的版本
 
-## Reporting a vulnerability
+只有最新发布版本与 `master` 分支会获得安全修复。
 
-Do not open a public issue for security reports. Use GitHub's
-[private vulnerability reporting](https://github.com/redtidev1918/PixivFlow/security/advisories/new)
-or contact the maintainer directly, including:
+## 报告漏洞
 
-- a description of the issue and its impact;
-- reproduction steps or a proof of concept;
-- affected versions.
+请勿为安全问题提交公开 Issue。请使用 GitHub 的
+[私密漏洞报告](https://github.com/redtidev1918/PixivFlow/security/advisories/new)，
+或直接联系维护者，并包含：
 
-## Scope notes
+- 问题描述及其影响；
+- 复现步骤或概念验证（PoC）；
+- 受影响的版本。
 
-PixivFlow is a local CLI/WebUI tool. It talks to Pixiv and to delivery targets
-that the deployer explicitly configures:
+## 范围说明
 
-- it stores credentials locally (config directory; never committed) and does
-  not send telemetry or upload any user data;
-- areas worth attention are credential handling (login/token flow), command
-  injection through crafted tag or URL input, path traversal via theme or
-  config fields, and the WebUI server's request handling;
-- Docker deployments should keep the container's port binding private
-  (`127.0.0.1` unless you deliberately expose it).
-- delivery credentials should be injected through `${ENV_NAME}` references;
-  do not commit Bearer tokens or private endpoint URLs to configuration files;
-- automated dependency scanning may report Puppeteer/node-cron advisories whose
-  upstream fixes require dropping Node 18 support. Runtime-facing compatible
-  transitive fixes are overridden promptly; the remaining login/scheduler
-  upgrade boundary is reviewed with each supported-Node release.
+PixivFlow 是一个本地 CLI/WebUI 工具。它会与 Pixiv 以及部署者显式配置的投递目标通信：
+
+- 凭据保存在本地（配置目录；绝不会被提交），不发送遥测，也不上传任何用户数据；
+- 需要重点关注的区域包括：凭据处理（登录 / 令牌流程）、通过构造的标签或 URL 输入触发的命令注入、通过主题或配置字段进行的路径穿越，以及 WebUI 服务器的请求处理；
+- Docker 部署应保持容器端口绑定为私有（`127.0.0.1`，除非你有意对外暴露）。
+- 投递凭据应通过 `${ENV_NAME}` 引用注入；不要将 Bearer 令牌或私有端点 URL 提交到配置文件中；
+- 自动化依赖扫描可能报出 Puppeteer / node-cron 的公告，而它们的上游修复需要放弃对 Node 18 的支持。面向运行时的兼容传递依赖修复会被及时 override；剩余的登录 / 调度器升级边界会随每个受支持的 Node 版本一同评审。

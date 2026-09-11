@@ -4,6 +4,7 @@
  */
 
 import { StandaloneConfig, TargetConfig } from '../config';
+import { collectTelegramDeliveryErrors } from '../config/validation';
 import cron from 'node-cron';
 import { isPlaceholderToken, getBestAvailableToken } from './token-manager';
 import { ConfigError } from './errors';
@@ -204,7 +205,10 @@ export class ConfigValidator {
         }
         if (target.noMatchPolicy?.notify === true) {
           const deliveryTarget = target.delivery?.target?.trim();
-          if (!deliveryTarget || !config.delivery?.targets?.[deliveryTarget]?.notificationUrl?.trim()) {
+          const notifyTarget = deliveryTarget ? config.delivery?.targets?.[deliveryTarget] : undefined;
+          const hasNotificationUrl =
+            notifyTarget?.type === 'httpMultipart' && Boolean(notifyTarget.notificationUrl?.trim());
+          if (!hasNotificationUrl) {
             errors.push({
               code: 'CONFIG_VALIDATION_TARGET_NO_MATCH_NOTIFICATION_MISSING',
               field: `${targetPrefix}.noMatchPolicy.notify`,
@@ -244,6 +248,17 @@ export class ConfigValidator {
 
     for (const [name, delivery] of Object.entries(config.delivery?.targets ?? {})) {
       const prefix = `delivery.targets.${name}`;
+      if (delivery.type === 'telegram') {
+        // Same checks the loader's validator runs: one shared source, no drift.
+        for (const error of collectTelegramDeliveryErrors(name, delivery)) {
+          errors.push({
+            code: `CONFIG_VALIDATION_${error.code}`,
+            field: error.field,
+            message: `Delivery target '${name}': ${error.message}`,
+          });
+        }
+        continue;
+      }
       if (delivery.type !== 'httpMultipart') {
         errors.push({
           code: 'CONFIG_VALIDATION_DELIVERY_TYPE_UNSUPPORTED',

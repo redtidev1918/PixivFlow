@@ -178,7 +178,6 @@ SEO_OPTIMIZATION*.md
 !docs/**/*REWRITE*.md
 *PLAN*.md
 !docs/**/*PLAN*.md
-!docs/project/*PLAN*.md
 *INDEX*.md
 !docs/**/*INDEX*.md
 

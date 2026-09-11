@@ -441,12 +441,9 @@ export class MaintainCommand extends BaseCommand {
       db.migrate();
 
       // Run VACUUM
-      const dbDriver = (db as any).db;
-      if (dbDriver) {
-        dbDriver.exec('VACUUM;');
-        dbDriver.exec('ANALYZE;');
-        dbDriver.exec('REINDEX;');
-      }
+      db.exec('VACUUM;');
+      db.exec('ANALYZE;');
+      db.exec('REINDEX;');
 
       db.close();
 
@@ -459,14 +456,12 @@ export class MaintainCommand extends BaseCommand {
       // Integrity check
       try {
         const db2 = new Database(dbPath);
-        const dbDriver2 = (db2 as any).db;
-        if (dbDriver2) {
-          const result = dbDriver2.prepare('PRAGMA integrity_check;').get() as { 'integrity_check': string };
-          if (result && result.integrity_check === 'ok') {
-            console.log('  ✓ Database integrity check passed');
-          } else {
-            console.log('  ⚠ Database integrity check failed');
-          }
+        // `pragma()` collapses a single-row/single-column result to its scalar value.
+        const result = db2.pragma('PRAGMA integrity_check;');
+        if (result === 'ok') {
+          console.log('  ✓ Database integrity check passed');
+        } else {
+          console.log('  ⚠ Database integrity check failed');
         }
         db2.close();
       } catch (e) {

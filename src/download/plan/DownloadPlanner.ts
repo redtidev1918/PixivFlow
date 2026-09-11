@@ -33,6 +33,16 @@ export interface PlannedDownload<T extends DownloadItem> {
 export interface DeliveryDedupeSource {
   /** Returns the subset of ids already CONFIRMED delivered to this target. */
   deliveredIds?(deliveryTarget: string, workType: 'illustration' | 'novel', ids: string[]): Set<string>;
+  /**
+   * Works this bot has already handled ANYWHERE — durable history owned by a
+   * control plane, supplied by the caller.
+   *
+   * This is what makes a disposable runner safe: its local database starts empty,
+   * so without external history it re-selects works that were delivered weeks ago
+   * and the run silently produces nothing new. Unlike `deliveredIds` it does not
+   * depend on a local delivery target existing.
+   */
+  processedIds?(workType: 'illustration' | 'novel', ids: string[]): Set<string>;
 }
 
 export class DownloadPlanner {
@@ -80,6 +90,25 @@ export class DownloadPlanner {
         }
       } catch (error) {
         logger.warn('Delivery dedupe preflight failed; continuing (downstream net remains)', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    // DURABLE duplicate history (independent of any local delivery target): a
+    // disposable runner must not re-select work this bot already handled.
+    const processedSource = this.deliveryDedupe?.processedIds;
+    if (processedSource && available.length > 0) {
+      try {
+        const processed = processedSource(itemType, available.map((item) => String(item.id)));
+        const before = available.length;
+        available = available.filter((item) => !processed.has(String(item.id)));
+        const skipped = before - available.length;
+        if (skipped > 0) {
+          logger.info(`Durable history skipped ${skipped} already-processed ${itemType}(s)`);
+        }
+      } catch (error) {
+        logger.warn('Durable duplicate history lookup failed; continuing', {
           error: error instanceof Error ? error.message : String(error),
         });
       }

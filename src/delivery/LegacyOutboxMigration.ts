@@ -145,7 +145,7 @@ export function migrateLegacyOutbox(
         }
       }
 
-      // Commit succeeded (better-sqlite3 is synchronous): archive the manifest.
+      // Commit succeeded (the SQLite binding is synchronous): archive the manifest.
       mkdirSync(archiveDir, { recursive: true });
       renameSync(full, join(archiveDir, file));
     } catch (error) {

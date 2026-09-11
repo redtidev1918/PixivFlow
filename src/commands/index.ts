@@ -11,11 +11,13 @@ import { DownloadCommand } from './DownloadCommand';
 import { RandomDownloadCommand } from './RandomDownloadCommand';
 import { SchedulerCommand } from './SchedulerCommand';
 import { SchedulerRunOnceCommand } from './SchedulerRunOnceCommand';
+import { ExecuteSlotCommand } from './ExecuteSlotCommand';
 import { MigrateConfigCommand } from './MigrateConfigCommand';
 import { NormalizeCommand } from './NormalizeCommand';
 import { WebUICommand } from './WebUICommand';
 import { HealthCommand } from './HealthCommand';
 import { DoctorCommand } from './DoctorCommand';
+import { DiagnoseEgressCommand } from './DiagnoseEgressCommand';
 import { ReconcileCommand } from './ReconcileCommand';
 import { StatusCommand } from './StatusCommand';
 import { LogsCommand } from './LogsCommand';
@@ -43,11 +45,13 @@ export function registerAllCommands(registry: CommandRegistry): void {
   registry.register(new RandomDownloadCommand());
   registry.register(new SchedulerCommand());
   registry.register(new SchedulerRunOnceCommand());
+  registry.register(new ExecuteSlotCommand());
   registry.register(new MigrateConfigCommand());
   registry.register(new NormalizeCommand());
   registry.register(new WebUICommand());
   registry.register(new HealthCommand());
   registry.register(new DoctorCommand());
+  registry.register(new DiagnoseEgressCommand());
   registry.register(new ReconcileCommand());
   registry.register(new StatusCommand());
   registry.register(new LogsCommand());
@@ -76,11 +80,13 @@ export {
   RandomDownloadCommand,
   SchedulerCommand,
   SchedulerRunOnceCommand,
+  ExecuteSlotCommand,
   MigrateConfigCommand,
   NormalizeCommand,
   WebUICommand,
   HealthCommand,
   DoctorCommand,
+  DiagnoseEgressCommand,
   ReconcileCommand,
   StatusCommand,
   LogsCommand,

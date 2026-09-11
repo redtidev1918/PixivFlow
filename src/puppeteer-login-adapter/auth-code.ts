@@ -2,7 +2,7 @@
  * Authorization code extraction utilities
  */
 
-import { Page } from 'puppeteer';
+import type { Page } from 'puppeteer-core';
 
 /**
  * Wait for authorization code from redirect URL

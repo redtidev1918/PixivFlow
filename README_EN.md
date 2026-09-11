@@ -183,7 +183,7 @@ Bugs and feature requests go to
 [Issues](https://github.com/redtidev1918/PixivFlow/issues); please run
 `pixivflow health` first and include its output (strip tokens and other
 secrets before sharing). Security issues are handled privately — see
-[SECURITY.md](SECURITY.md).
+[SECURITY_EN.md](SECURITY_EN.md).
 
 ## Acknowledgments
 

@@ -22,7 +22,15 @@ pixivflow --help
 ```
 
 For servers, prefer the Docker Compose setup described in
-[DOCKER.md](docs/DOCKER.md). To build from source:
+[DOCKER.md](docs/DOCKER.md).
+
+> **Hosting platform ≠ egress qualification.** PixivFlow reaches several distinct Pixiv
+> data planes (OAuth / App API / media CDN), and rate-limit behaviour can differ
+> significantly across egresses (GitHub hosted runner / Cloudflare Worker / Fly / VPS /
+> self-hosted runner). Run a minimal egress probe before going to production — see
+> `docs/DOCKER.md` "部署平台与网络出口（egress qualification）".
+
+To build from source:
 
 ```bash
 git clone https://github.com/redtidev1918/PixivFlow.git

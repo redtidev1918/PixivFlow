@@ -31,11 +31,15 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          # Deliberately the exact declared floor (engines.node >=22.13.0, the version where
+          # `node:sqlite` stops being behind --experimental-sqlite). The gate therefore proves
+          # the artifact works on the oldest supported runtime, not just on a recent one.
+          # Broader version coverage (22.x, 24.x) lives in test.yml.
+          node-version: '22.13.0'
           cache: npm
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Run package smoke (pack -> install -> boot -> storage -> script gate)
+      - name: Run release gate (pack -> install -> scripts=0 -> no native build -> no browser download -> boot -> storage -> login)
         run: node scripts/package-smoke.mjs

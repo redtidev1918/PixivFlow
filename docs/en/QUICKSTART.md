@@ -6,14 +6,14 @@ Three commands take you through the whole flow: install → sign in → download
 
 ## 1. Requirements
 
-- Node.js 22.12 or newer (use a still-supported LTS in production)
+- Node.js 22.13 or newer (use a still-supported LTS in production)
 - npm 9+
 - A network that can reach Pixiv normally
 
 Check your Node version:
 
 ```bash
-node -v   # v22.12 or newer
+node -v   # v22.13 or newer
 ```
 
 ## 2. Install

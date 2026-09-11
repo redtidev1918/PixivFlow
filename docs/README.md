@@ -1,17 +1,10 @@
 # PixivFlow 文档中心
 
-> **English:** This is the documentation hub for PixivFlow, a Pixiv batch
-> downloader with CLI and WebUI. New here? Follow [Quick Start](QUICKSTART.md)
-> → [Login](LOGIN.md). Server deployment goes through
-> [Docker](DOCKER.md); developers will find architecture notes and the full
-> WebUI HTTP API under "For Developers".
->
-> English docs live under [`/en/`](en/); the English README is
-> [README.en.md](https://github.com/redtidev1918/PixivFlow/blob/master/README.en.md).
+English: this is the documentation hub for PixivFlow, a Pixiv batch downloader with CLI and
+WebUI. English docs live under [`en/`](en/); the English README is
+[README.en.md](https://github.com/redtidev1918/PixivFlow/blob/master/README.en.md).
 
-这里汇聚 PixivFlow 的全部文档。按你的目标选择一条路线:
-
-## 🧭 按任务找文档
+## 按任务找文档
 
 | 你想做什么 | 路线 |
 | --- | --- |
@@ -23,17 +16,17 @@
 | 从 v1 升级到 v2 | [迁移指南](MIGRATION.md) |
 | 二次开发、改代码、查接口 | [架构说明](ARCHITECTURE.md) → [Pixiv Client Kit](PIXIV_CLIENT_KIT.md) → [WebUI API](API.md) |
 
-## 📚 全部文档
+## 全部文档
 
-### 开始使用
+开始使用
 
 | 文档 | 内容 |
 | --- | --- |
-| [📥 下载](download.md) | 各平台安装包、npm 与 Docker 获取方式 |
+| [下载](download.md) | 各平台安装包、npm 与 Docker 获取方式 |
 | [QUICKSTART](QUICKSTART.md) | 安装、登录、第一次下载、验证环境,十分钟走完全流程 |
 | [LOGIN](LOGIN.md) | 三种登录方式、凭据存储位置、token 过期处理 |
 
-### 使用手册
+使用手册
 
 | 文档 | 内容 |
 | --- | --- |
@@ -41,26 +34,27 @@
 | [CONFIG](CONFIG.md) | 配置文件逐项说明:targets 全字段、存储目录组织、调度器参数、代理与环境变量 |
 | [SCRIPTS](SCRIPTS.md) | `scripts/` 目录下辅助脚本的用途与用法 |
 
-### 部署运行
+部署运行
 
 | 文档 | 内容 |
 | --- | --- |
 | [DOCKER](DOCKER.md) | docker compose 双服务部署、环境变量参考、数据持久化、故障排查 |
+| [APPRISE](APPRISE.md) | 把 `notificationUrl` 指向 Apprise API，由它统一发送 Email、Telegram、Discord、ntfy |
 | [TERMUX_INSTALL](TERMUX_INSTALL.md) | Android/Termux 环境从零安装 |
 
-### 开发者
+开发者
 
 | 文档 | 内容 |
 | --- | --- |
 | [ARCHITECTURE](ARCHITECTURE.md) | 模块地图、命令注册机制、下载管线、存储层设计 |
-| [PIXIV_CLIENT_KIT](PIXIV_CLIENT_KIT.md) | 独立可复用的 Pixiv App API 客户端 kit:依赖规则、单一 429 闸门设计、何时拆分到独立仓库(英文版见 [docs/en/PIXIV_CLIENT_KIT.md](docs/en/PIXIV_CLIENT_KIT.md)) |
+| [PIXIV_CLIENT_KIT](PIXIV_CLIENT_KIT.md) | 独立可复用的 Pixiv App API 客户端 kit:依赖规则、单一 429 闸门设计、何时拆分到独立仓库(英文版见 [en/PIXIV_CLIENT_KIT.md](en/PIXIV_CLIENT_KIT.md)) |
 | [API](API.md) | WebUI 后端 REST 接口与 Socket.IO 实时事件 |
 | [CONTRIBUTING](https://github.com/redtidev1918/PixivFlow/blob/master/CONTRIBUTING.md) | 参与贡献的流程与规范 |
 | [RELEASING](RELEASING.md) | 版本管理与 npm 发版流程 |
 | [MIGRATION](MIGRATION.md) | 从 v1 升级到 v2 |
 | [CHANGELOG](https://github.com/redtidev1918/PixivFlow/blob/master/CHANGELOG.md) | 版本更新记录 |
 
-## 🖥️ WebUI 前端
+WebUI 前端
 
 | 文档 | 内容 |
 | --- | --- |
@@ -69,21 +63,11 @@
 | [组件目录](https://github.com/redtidev1918/pixivflow-webui/blob/master/docs/COMPONENT_GUIDE.md) | 全量组件职责与组合套路 |
 | [构建选项](https://github.com/redtidev1918/pixivflow-webui/blob/master/docs/BUILD_OPTIONS.md) | 静态托管 / Docker 一体化两条路线 |
 
-## 致谢
-
 灵感来源、核心依赖与规范声明见 [ACKNOWLEDGMENTS.md](ACKNOWLEDGMENTS.md)。
 
-## 🔗 其他入口
+## 其他入口
 
 - 项目主页:<https://github.com/redtidev1918/PixivFlow>
 - 教程站点(HTML):<https://redtidev1918.github.io/PixivFlow/>
 - npm 包:<https://www.npmjs.com/package/pixivflow>
 - 问题反馈:[Issues](https://github.com/redtidev1918/PixivFlow/issues)(安全漏洞请看 [SECURITY.md](https://github.com/redtidev1918/PixivFlow/blob/master/SECURITY.md))
-
----
-
-## 相关文档
-
-- [QUICKSTART](QUICKSTART.md) — 还没跑起来?从这里开始
-- [USAGE](USAGE.md) — 已能运行?了解全部能力
-- [CONFIG](CONFIG.md) — 想精确控制下载什么?读这份

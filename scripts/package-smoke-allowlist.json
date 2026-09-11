@@ -8,17 +8,11 @@
   "allowed": [
     {
       "name": "better-sqlite3",
-      "scripts": ["install"],
+      "scripts": [
+        "install"
+      ],
       "reason": "Core storage driver compiled by node-gyp at install time.",
       "removal": "Phase D: migrate storage to node:sqlite (Node >=22.13), then delete this entry and the dependency.",
-      "added": "2026-09-11",
-      "reviewedBy": "redtidev1918"
-    },
-    {
-      "name": "puppeteer",
-      "scripts": ["postinstall"],
-      "reason": "Downloads a Chromium build at install time; pulled in transitively by pixiv-token-getter ^2.4.0.",
-      "removal": "Phase B: pixiv-token-getter switches to puppeteer-core + system browser discovery, then delete this entry.",
       "added": "2026-09-11",
       "reviewedBy": "redtidev1918"
     }

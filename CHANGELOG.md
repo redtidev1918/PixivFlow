@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.18.0](https://github.com/redtidev1918/PixivFlow/compare/v2.17.0...v2.18.0) (2026-09-11)
+
+
+### Features
+
+* **login:** launch the system browser via puppeteer-core (drop install-time Chromium) ([#49](https://github.com/redtidev1918/PixivFlow/issues/49)) ([fd9d7a6](https://github.com/redtidev1918/PixivFlow/commit/fd9d7a6de9c4924e7b3ae4e48152002b451bcb4b))
+
+
+### Bug Fixes
+
+* **packaging:** make global installs script-free and native-build-free ([#55](https://github.com/redtidev1918/PixivFlow/issues/55)) ([2680cf2](https://github.com/redtidev1918/PixivFlow/commit/2680cf2dda7087e2b0cf3a332efc9906dec7f5ba))
+
 ## [2.17.0](https://github.com/redtidev1918/PixivFlow/compare/v2.16.1...v2.17.0) (2026-09-11)
 
 

@@ -123,6 +123,26 @@ export class OutboxRepository extends BaseRepository {
     return row ? this.toRow(row) : null;
   }
 
+  /**
+   * True when this delivery intent still has a row the worker can act on
+   * (pending / claimed / waiting to retry).
+   *
+   * This is the "the outbox still owns it" test. A delivery whose outbox row is
+   * done/dead/cancelled is NOT actionable: whatever happened downstream is
+   * terminal, so nobody is going to converge that delivery by retrying it.
+   */
+  hasActionableDelivery(deliveryId: string): boolean {
+    const row = this.db
+      .prepare(
+        `SELECT 1 FROM outbox
+         WHERE delivery_id = ? AND kind = 'delivery'
+           AND status IN ('pending','processing','retry_wait')
+         LIMIT 1`
+      )
+      .get(deliveryId);
+    return Boolean(row);
+  }
+
   list(status?: OutboxStatus, limit = 100): OutboxRow[] {
     const bounded = Math.max(1, Math.min(Math.trunc(limit), 500));
     const rows = status

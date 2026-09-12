@@ -15,6 +15,7 @@ import { DownloadPipeline } from './pipeline/DownloadPipeline';
 import { OperationCancelledError } from '../utils/errors';
 import { DeliveryService } from '../delivery/DeliveryService';
 import { TargetOutcome } from '../scheduler/TargetOutcome';
+import { TargetExecutionContext } from '../scheduler/WorkIdentity';
 import { IllustrationTargetHandler } from './handlers/IllustrationTargetHandler';
 import { NovelTargetHandler } from './handlers/NovelTargetHandler';
 import { createTopicPipelineFactory } from '../topic/createTopicPipeline';
@@ -100,6 +101,14 @@ export class DownloadManager implements IDownloadManager {
     slotName: string;
     slotDate: string;
   };
+
+  /** Per-cell work identity for THIS run, keyed by target id (scheduled runs only). */
+  private targetExecutionContexts = new Map<string, TargetExecutionContext>();
+
+  /** Publish the durable cell identity each handler must honour (scheduled runs). */
+  public setTargetExecutionContexts(contexts: Map<string, TargetExecutionContext>): void {
+    this.targetExecutionContexts = contexts;
+  }
 
   /**
    * Request cooperative cancellation of the current run. In-flight item
@@ -292,11 +301,15 @@ export class DownloadManager implements IDownloadManager {
   }
 
   private async dispatchTarget(target: TargetConfig): Promise<TargetOutcome> {
+    // The cell identity must reach the handler or it cannot tell a first
+    // selection from a recovery: it would re-rank and silently re-point the
+    // logical item at a different work.
+    const execution = target.id ? this.targetExecutionContexts.get(target.id) : undefined;
     switch (target.type) {
       case 'illustration':
-        return await this.illustrationHandler.handle(target);
+        return await this.illustrationHandler.handle(target, execution);
       case 'novel':
-        return await this.novelHandler.handle(target);
+        return await this.novelHandler.handle(target, execution);
       default:
         logger.warn(`Unsupported target type ${target.type}`);
         return { kind: 'failed', retryable: false, error: `unsupported target type ${target.type}` };

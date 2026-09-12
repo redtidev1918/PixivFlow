@@ -15,6 +15,7 @@ import {
   scheduleTimezone,
 } from './OccurrenceResolver';
 import { TargetOutcome } from './TargetOutcome';
+import { TargetExecutionContext, WorkBinding, isSingleWorkCell } from './WorkIdentity';
 
 /**
  * Execution-lease TTL and heartbeat cadence.
@@ -73,6 +74,38 @@ export interface SlotResolveResult {
 }
 
 /**
+ * What a `delivery_pending` cell still owes downstream, read from the durable
+ * delivery ledger.
+ *
+ *  - `live`      : a non-terminal intent still owns the cell — the outbox is
+ *                  retrying THAT work toward a terminal ACK.
+ *  - `confirmed` : the ACK already landed but the cell promotion was lost.
+ *  - `lost`      : the intent is terminally failed; nobody will converge it.
+ *  - `unknown`   : no delivery fact for this cell (not a delivery cell).
+ */
+export type CellDeliveryState =
+  | { kind: 'live' }
+  | { kind: 'confirmed'; workId: string; workType: string }
+  | { kind: 'lost'; reason: string }
+  | { kind: 'unknown' };
+
+/**
+ * Port for the delivery ledger, injected by the runtime. It lets the slot FSM
+ * hand a `delivery_pending` cell to whoever owns its delivery without this class
+ * learning anything about TelePost, bots or any hosting platform (see below).
+ */
+export interface SchedulerDeliveryPort {
+  stateFor(input: { deliveryTarget: string; slotId: string; targetId: string }): CellDeliveryState;
+}
+
+/** The delivery channel a scheduled cell publishes to (null = download-only). */
+function deliveryTargetOf(target: TargetConfig): string | null {
+  if (target.storageMode !== 'cache') return null;
+  const name = target.delivery?.target;
+  return typeof name === 'string' && name.trim() ? name.trim() : null;
+}
+
+/**
  * Owns the Schedule Slot ledger for one scheduler run. A Slot is one durable
  * execution occurrence of a Schedule (NOT a morning/evening row). It ensures
  * duplicate/concurrent/retry triggers converge on one slot, completed cells are
@@ -83,7 +116,10 @@ export interface SlotResolveResult {
  * hosting platform — only schedules, targets and the slot ledger.
  */
 export class SlotCoordinator {
-  constructor(private readonly database: Database) {}
+  constructor(
+    private readonly database: Database,
+    private readonly delivery?: SchedulerDeliveryPort
+  ) {}
 
   /**
    * Resolve + validate the canonical occurrence for a trigger. Uses ONLY the
@@ -192,15 +228,70 @@ export class SlotCoordinator {
       const cell = this.database.slots.getCell(slotId, target.id);
       if (!cell) continue;
       if (cell.status === 'submitted' || cell.status === 'no_candidate') continue;
+      // A cell whose work already has a durable delivery intent is NOT the
+      // scheduler's to re-run: the OutboxWorker retries the SAME work to a
+      // terminal ACK. Re-selecting here is what let recovery stop pointing at the
+      // cell's own work (or enqueue a second one), so it is delegated instead.
+      if (cell.status === 'delivery_pending' && isSingleWorkCell(target) && this.settlePendingDelivery(slotId, target)) {
+        continue;
+      }
       out.push({ target, cell });
     }
     return out;
+  }
+
+  /**
+   * Build the per-target execution contexts for one run, so every handler
+   * receives the cell's durable identity instead of just a TargetConfig.
+   *
+   * This is the boundary where the identity used to be dropped (`pending` was
+   * reduced to `p.target`), which is what let a resume re-rank and re-point the
+   * logical item at a different work.
+   */
+  executionContextsFor(
+    slotId: string,
+    entries: { target: TargetConfig; cell: SlotItemRecord | null }[]
+  ): Map<string, TargetExecutionContext> {
+    const contexts = new Map<string, TargetExecutionContext>();
+    for (const { target, cell } of entries) {
+      if (!target.id || !cell) continue;
+      const targetId = target.id;
+      contexts.set(targetId, {
+        slotId,
+        targetId,
+        lockedWorkId: cell.workId,
+        bind: (workId, workType) => this.lockWorkCas(slotId, targetId, workId, workType),
+        release: (workId) => this.releaseWorkCas(slotId, targetId, workId),
+      });
+    }
+    return contexts;
   }
 
   /** Lock the selected work for a cell (first selection wins; retries keep it). */
   lockWork(slotId: string, targetId: string, workId: string, workType: string): void {
     this.database.slots.ensureCell(slotId, targetId, workType);
     this.database.slots.lockCellWork(slotId, targetId, workId, workType);
+  }
+
+  /**
+   * CAS-bind a cell to the work a handler is about to process. Returns the
+   * authoritative binding: when another worker already elected a different work,
+   * `won` is false and the caller MUST continue with the returned `workId`
+   * instead of its own candidate.
+   */
+  lockWorkCas(slotId: string, targetId: string, workId: string, workType: string): WorkBinding {
+    this.database.slots.ensureCell(slotId, targetId, workType);
+    const { cell, won } = this.database.slots.tryLockCellWork(slotId, targetId, workId, workType);
+    return { workId: cell.workId ?? workId, won };
+  }
+
+  /**
+   * Release a provisional binding whose work produced no local artifact, so the
+   * next candidate of an UNBOUND cell can be tried. Refused once anything was
+   * committed (see SlotRepository.releaseCellWork).
+   */
+  releaseWorkCas(slotId: string, targetId: string, workId: string): void {
+    this.database.slots.releaseCellWork(slotId, targetId, workId);
   }
 
   /** Record a cell's terminal state from the download/delivery outcome. */
@@ -261,6 +352,53 @@ export class SlotCoordinator {
   markDelivered(slotId: string, targetId: string, workId: string, workType: string): void {
     this.database.slots.lockCellWork(slotId, targetId, workId, workType);
     this.safeTransition(slotId, targetId, 'submitted');
+  }
+
+  /**
+   * Decide what a `delivery_pending` cell owes, from the durable delivery
+   * ledger, and converge the FSM accordingly. Returns true when the scheduler
+   * must NOT run the target handler for it.
+   *
+   * Once an intent is durable the outbox owns the delivery: re-running selection
+   * could only produce a DIFFERENT work for the same logical item (and a second
+   * delivery, since the delivery idempotency key is work-scoped). A terminally
+   * failed delivery is converged explicitly — never "repaired" by picking
+   * another work behind the operator's back.
+   */
+  private settlePendingDelivery(slotId: string, target: TargetConfig): boolean {
+    const deliveryTarget = deliveryTargetOf(target);
+    if (!deliveryTarget || !this.delivery || !target.id) return false;
+    const state = this.delivery.stateFor({ deliveryTarget, slotId, targetId: target.id });
+    switch (state.kind) {
+      case 'live':
+        logger.info('Cell delivery still owned by the outbox; selection not re-run', {
+          slot: slotId,
+          target: target.id,
+          deliveryTarget,
+        });
+        return true;
+      case 'confirmed':
+        // The ACK landed but the promotion was lost (crash between the delivery
+        // ledger write and the cell transition). Heal from the ledger — the work
+        // IS delivered, so re-selecting would post a second one.
+        logger.info('Cell delivery already confirmed; promoting the cell from the ledger', {
+          slot: slotId,
+          target: target.id,
+          workId: state.workId,
+        });
+        this.markDelivered(slotId, target.id, state.workId, state.workType);
+        return true;
+      case 'lost':
+        logger.warn('Cell delivery failed terminally; failing the cell instead of re-selecting', {
+          slot: slotId,
+          target: target.id,
+          reason: state.reason,
+        });
+        this.applyOutcome(slotId, target.id, { kind: 'failed', retryable: false, error: state.reason });
+        return true;
+      case 'unknown':
+        return false;
+    }
   }
 
   private safeTransition(

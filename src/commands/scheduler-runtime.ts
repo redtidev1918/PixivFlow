@@ -25,6 +25,7 @@ import {
 } from '../scheduler/SlotCoordinator';
 import { TargetOutcome } from '../scheduler/TargetOutcome';
 import { DeliveryService } from '../delivery/DeliveryService';
+import { createDeliveryLedgerPort } from '../delivery/DeliveryLedgerPort';
 import { OutboxWorker } from '../delivery/OutboxWorker';
 import { migrateLegacyOutbox } from '../delivery/LegacyOutboxMigration';
 import { DeliveryAck } from '../delivery/DeliveryAck';
@@ -374,7 +375,7 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
       return;
     }
 
-    const coordinator = new SlotCoordinator(database);
+    const coordinator = new SlotCoordinator(database, createDeliveryLedgerPort(database));
 
     // Ad-hoc/manual execution (run-once / explicit refetch) runs the download
     // plan WITHOUT a scheduled Slot: it can never mark a scheduled occurrence
@@ -487,7 +488,16 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
     // re-runs a finished cell — that is what prevents a second post). Membership
     // comes from the materialized snapshot, so a config reload cannot add cells.
     const pending = slotCtx ? coordinator.pendingTargets(slotCtx.slotId, targets) : targets.map((target) => ({ target, cell: null }));
-    let runTargets = (onlyTarget ? pending.filter((p) => p.target.id === onlyTarget) : pending).map((p) => p.target);
+    const selected = onlyTarget ? pending.filter((p) => p.target.id === onlyTarget) : pending;
+
+    // Hand each cell its durable identity. Without this the handler cannot tell a
+    // first selection from a recovery, and would re-rank on resume — silently
+    // re-pointing the logical item at a different work than the one it owns.
+    const targetExecutionContexts = slotCtx
+      ? coordinator.executionContextsFor(slotCtx.slotId, selected)
+      : undefined;
+
+    let runTargets = selected.map((p) => p.target);
 
     if (slotCtx && runTargets.length === 0) {
       logger.info('All slot cells already complete', { slot: slotCtx.slotId });
@@ -533,6 +543,7 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
       });
     }
     const downloadManager = new DownloadManager(scopedConfig, pixivClient, database, fileService);
+    if (targetExecutionContexts) downloadManager.setTargetExecutionContexts(targetExecutionContexts);
     if (options.excludedWorkIds) downloadManager.setProcessedWorkIds(options.excludedWorkIds);
     activeDownloadManager = downloadManager;
     await downloadManager.initialise();

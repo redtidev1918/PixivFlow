@@ -349,9 +349,9 @@ function initializeTargetFields(definitions: Map<string, FieldDefinition>): void
 
   definitions.set('targets[].mode', {
     required: false,
-    description: 'Download mode: search | ranking',
+    description: 'Download mode: search | ranking | topic',
     defaultValue: 'search',
-    enumValues: ['search', 'ranking'],
+    enumValues: ['search', 'ranking', 'topic'],
     type: 'string',
   });
 

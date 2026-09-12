@@ -62,7 +62,9 @@ export class SchedulerCommand extends BaseCommand {
         telemetry: {
           beginRun: () => runtime.database.getOverviewStats().totalDownloads,
           endRun: () => runtime.database.getOverviewStats().totalDownloads,
-          requestCancel: (reason) => runtime.cancelActive(reason),
+          // `timeout`: the daemon stays alive, so the run's Slot must be taken
+          // terminal (the abort path does that) instead of staying recoverable.
+          requestCancel: (reason) => runtime.cancelActive(reason, 'timeout'),
         },
       });
       const status = manager.start(runtime.config);

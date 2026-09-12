@@ -8,16 +8,19 @@
 
 PixivFlow 的一切下载行为都由「命令 + 配置」驱动。本章讲清楚每种能力的用法与边界,配置字段细节见 [CONFIG](CONFIG.md)。
 
-## 六种下载模式
+## 七种下载模式
 
 | 模式 | 用法 | 一句话说明 |
 | --- | --- | --- |
 | URL 直链 | `download --url <链接>` | 粘贴即下,自动识别作品类型 |
 | 标签搜索 | targets 配置 `mode: "search"`(默认) | 按标签 + 筛选条件批量收集 |
 | 排行榜 | targets 配置 `mode: "ranking"` | 从日/周/月榜抓取再按条件过滤 |
+| 主题模式 | targets 配置 `mode: "topic"` + `topic` | 只给主题词,运行时自动推导相关 Tag 并取 Top N |
 | 随机下载 | `random` 命令或 target `random: true` | 从结果中随机挑选,保持惊喜感 |
 | 单作品 | URL / `illustId` / `novelId` | 精确下载一幅插画或一本小说 |
 | 用户全量 | 用户主页 URL / `userId` | 收取某位用户全部插画或小说 |
+
+主题模式的字段与默认值见 [CONFIG.md](CONFIG.md#主题模式字段mode-topic);想先看某天会选到什么,用 `pixivflow topic test --date YESTERDAY`。
 
 ## URL 直链下载
 

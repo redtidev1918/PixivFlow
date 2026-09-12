@@ -162,7 +162,7 @@ export class ExecuteSlotCommand extends BaseCommand {
           ...(excludedWorkIds ? { excludedWorkIds } : {}),
         }),
         timeoutMs,
-        () => runtime!.cancelActive(`batch timeout after ${timeoutMs}ms`),
+        () => runtime!.cancelActive(`batch timeout after ${timeoutMs}ms`, 'timeout'),
         `slot ${slotId}`
       );
 

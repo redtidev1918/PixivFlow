@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.19.1](https://github.com/redtidev1918/PixivFlow/compare/v2.19.0...v2.19.1) (2026-09-12)
+
+
+### Bug Fixes
+
+* **security:** 补齐 Telegram bot token / chat id 检测规则并收紧精确值放行 ([026bb15](https://github.com/redtidev1918/PixivFlow/commit/026bb1553d5814c5778c31e5e6d31e9bb4d9f01f))
+
 ## [2.19.0](https://github.com/redtidev1918/PixivFlow/compare/v2.18.1...v2.19.0) (2026-09-11)
 
 

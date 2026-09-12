@@ -187,7 +187,7 @@ node scripts/proxy-forwarder.js 6154 127.0.0.1:6152   # 监听端口 目标代�
 
 | 脚本 | 典型用法 | 作用 |
 | --- | --- | --- |
-| `publish.sh` | `./scripts/publish.sh patch`(可选 `minor/major/x.y.z`) | 完整发版:确认→测试→构建→升级版本号→提交→建标签→本地 npm publish→推送触发 Publish 工作流 |
+| `publish.sh` | `./scripts/publish.sh patch`(可选 `minor/major/x.y.z`) | 完整发版:确认→测试→构建→升级版本号→提交→建标签→本地 npm publish→推送触发 Release 工作流 |
 | `create-release.sh` | `./scripts/create-release.sh [version]` | 从 CHANGELOG 提取对应章节,gh CLI 创建/更新 GitHub Release |
 | `create-releases-for-tags.sh` | `./scripts/create-releases-for-tags.sh` | 为所有缺 Release 的远程标签批量补建 |
 | `check-version-sync.sh` | `npm run check:version` | 比对 package.json、npm 已发版本与 Git 标签三者一致 |

@@ -13,7 +13,7 @@ const validTelegramTarget: DeliveryTargetConfig = {
   type: 'telegram',
   botId: 'bot1',
   botToken: '${TELEGRAM_BOT1_TOKEN}',
-  chatId: '-1004318193445',
+  chatId: '-1001234567890',
   publishChatId: '@xgdShare',
   controlPlaneUrl: '${CONTROL_PLANE_URL}/control',
   controlPlaneToken: '${CONTROL_PLANE_CALLBACK_SECRET}',
@@ -88,7 +88,7 @@ describe('telegram delivery target validation', () => {
   it('accepts a literal Bot API token', () => {
     const target = {
       ...validTelegramTarget,
-      botToken: '7980653722:AAEBAQzzJHGNMoIO9U1q8RsIuzKEiDdWuqk',
+      botToken: '1234567890:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
     } as DeliveryTargetConfig;
     expect(loaderErrors(target)).toEqual([]);
     expect(unifiedErrors(target)).toEqual([]);

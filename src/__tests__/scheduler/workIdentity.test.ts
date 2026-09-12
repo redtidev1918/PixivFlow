@@ -14,6 +14,7 @@
  */
 import { Database } from '../../storage/Database';
 import { CellDeliveryState, SlotCoordinator } from '../../scheduler/SlotCoordinator';
+import { shouldTerminaliseAbortedSlot } from '../../commands/scheduler-runtime';
 import { StandaloneConfig, ScheduleConfig, TargetConfig } from '../../config';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
@@ -170,6 +171,45 @@ describe('work identity (slotId, targetId) -> workId', () => {
       coord.releaseWorkCas(slot.slotId, 'daily', '999');
 
       expect(db.slots.getCell(slot.slotId, 'daily')!.workId).toBe('100');
+    });
+  });
+
+  it('a SHUTDOWN recovery resumes the same work, not the same target with a new one', async () => {
+    await withDb(async (db) => {
+      const coord = new SlotCoordinator(db);
+      const slot = coord.resolveOccurrence(schedule, config, 'http', AT).context!;
+      coord.prepare(slot, schedule, [singleWorkTarget('daily')]);
+      coord.claimRunLease(slot.slotId, 'run-1', 180_000);
+      coord.markRunning(slot.slotId);
+      coord.lockWorkCas(slot.slotId, 'daily', '100', 'illustration');
+
+      // Shutdown is NOT the timeout path: the occurrence stays resumable.
+      expect(shouldTerminaliseAbortedSlot('shutdown', false)).toBe(false);
+      coord.releaseRunLease(slot.slotId, 'run-1');
+      expect(db.slots.recoverableSlots().map((s) => s.id)).toContain(slot.slotId);
+
+      // After the restart the same occurrence resumes — AND the same work.
+      const resumed = new SlotCoordinator(db);
+      const pending = resumed.pendingTargets(slot.slotId, [singleWorkTarget('daily')]);
+      expect(pending).toHaveLength(1);
+      expect(resumed.executionContextsFor(slot.slotId, pending).get('daily')?.lockedWorkId).toBe('100');
+    });
+  });
+
+  it('a TIMEOUT still terminalises the slot and is never re-dispatched (unchanged)', async () => {
+    await withDb((db) => {
+      const coord = new SlotCoordinator(db);
+      const slot = coord.resolveOccurrence(schedule, config, 'http', AT).context!;
+      coord.prepare(slot, schedule, [singleWorkTarget('daily')]);
+      coord.claimRunLease(slot.slotId, 'run-1', 180_000);
+      coord.markRunning(slot.slotId);
+      coord.lockWorkCas(slot.slotId, 'daily', '100', 'illustration');
+
+      // The timeout path is untouched by this fix: it must stay terminal.
+      expect(shouldTerminaliseAbortedSlot('timeout', false)).toBe(true);
+      coord.finish(slot, schedule, [singleWorkTarget('daily')]);
+      coord.releaseRunLease(slot.slotId, 'run-1');
+      expect(db.slots.recoverableSlots().map((s) => s.id)).not.toContain(slot.slotId);
     });
   });
 

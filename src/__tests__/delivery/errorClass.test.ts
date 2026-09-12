@@ -38,6 +38,17 @@ describe('classifyError', () => {
     });
   });
 
+  it('treats a local configuration error as terminal', () => {
+    // Production: a notification addressed at a submission target can never be
+    // delivered, so retrying only parked the row in retry_wait for hours.
+    expect(classifyError(new Error('Delivery target does not configure notificationUrl: bot1-submit'))).toEqual({
+      errorClass: 'configuration_error', retryable: false,
+    });
+    expect(
+      classifyError(Object.assign(new Error('missing url'), { name: 'ConfigError' }))
+    ).toEqual({ errorClass: 'configuration_error', retryable: false });
+  });
+
   it('defaults unknown errors to retryable internal_error', () => {
     expect(classifyError(new Error('something else'))).toEqual({
       errorClass: 'internal_error', retryable: true,

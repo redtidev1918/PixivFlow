@@ -10,6 +10,7 @@ export type DeliveryErrorClass =
   | 'remote_4xx'
   | 'invalid_payload'
   | 'telegram_send_failed'
+  | 'configuration_error'
   | 'duplicate'
   | 'internal_error';
 
@@ -21,6 +22,16 @@ export interface ErrorClassification {
 /** Classify one failed delivery attempt from its thrown error and/or HTTP status. */
 export function classifyError(error: unknown, status?: number): ErrorClassification {
   const message = error instanceof Error ? error.message : String(error ?? '');
+
+  // A local ConfigError is thrown before any network call and is deterministic:
+  // retrying re-reads the exact same config, so the attempt budget only parks the
+  // row in `retry_wait` for hours. Terminal for the outbox.
+  if (
+    (error as { name?: string })?.name === 'ConfigError' ||
+    /does not configure|unsupported delivery target/i.test(message)
+  ) {
+    return { errorClass: 'configuration_error', retryable: false };
+  }
 
   // Explicit HTTP status wins when present.
   if (status === 429) return { errorClass: 'rate_limited', retryable: true };

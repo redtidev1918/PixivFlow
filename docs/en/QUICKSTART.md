@@ -129,7 +129,7 @@ If every item `health` reports passes, you are ready.
 
 - [LOGIN](LOGIN.md) — sign-in details and token maintenance
 - [CONFIG](/CONFIG.md)（中文）— every configuration field
-- [USAGE](/USAGE.md)（中文）— the six download modes and all commands
+- [USAGE](/USAGE.md)（中文）— the seven download modes and all commands
 - [DOCKER](/DOCKER.md)（中文）— the preferred server deployment
 
 > Pages marked **（中文）** are currently Chinese-only. Their English versions are

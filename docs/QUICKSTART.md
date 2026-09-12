@@ -128,5 +128,5 @@ pixivflow dirs      # 各类文件的实际保存位置
 
 - [LOGIN](LOGIN.md) — 登录细节与 token 维护
 - [CONFIG](CONFIG.md) — 全部配置字段
-- [USAGE](USAGE.md) — 六种下载模式与全部命令
+- [USAGE](USAGE.md) — 七种下载模式与全部命令
 - [DOCKER](DOCKER.md) — 服务器部署首选方案

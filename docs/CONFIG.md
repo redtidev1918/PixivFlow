@@ -2,7 +2,7 @@
 
 > **English:** Every configuration option explained: config file discovery
 > and precedence, the `pixiv` credential block, all 20+ `targets` fields
-> (search / ranking / single-ID modes), storage directory organization
+> (search / ranking / topic / single-ID modes), storage directory organization
 > (12 modes), scheduler parameters, network and proxy settings, download
 > performance tuning, environment variable overrides, and date placeholders.
 

@@ -30,7 +30,7 @@ WebUI. English docs live under [`en/`](en/); the English README is
 
 | 文档 | 内容 |
 | --- | --- |
-| [USAGE](USAGE.md) | 六种下载模式、URL 直链格式、去重与断点续传、定时任务行为、全命令速查 |
+| [USAGE](USAGE.md) | 七种下载模式、URL 直链格式、去重与断点续传、定时任务行为、全命令速查 |
 | [CONFIG](CONFIG.md) | 配置文件逐项说明:targets 全字段、存储目录组织、调度器参数、代理与环境变量 |
 | [SCRIPTS](SCRIPTS.md) | `scripts/` 目录下辅助脚本的用途与用法 |
 

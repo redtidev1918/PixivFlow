@@ -20,9 +20,40 @@
 useDefault = true
 
 # ---------------------------------------------------------------------------
+# 0. Telegram bot token / supergroup chat id, context-free.
+#
+# WHY THESE RULES EXIST (verified 2026-09-12, gitleaks 8.30.1):
+#   * upstream's `telegram-bot-api-token` needs the literal `telegr` within 50
+#     characters *before* the assignment, and its secret group is `A` followed by
+#     exactly 34 LOWERCASE characters. A real token (`botToken: '798…:AAEB…'`)
+#     carries uppercase letters in the secret part and is normally assigned to a
+#     field named `botToken`, so upstream never matched it: the real leak in this
+#     repository's history is invisible to the default ruleset.
+#   * there is no upstream rule at all for a hard-coded chat id.
+# Both patterns therefore have to be declared here. Verified by feeding a real
+# token to `gitleaks detect` with `useDefault = true`: 0 findings before this
+# block, 1 finding after.
+# ---------------------------------------------------------------------------
+[[rules]]
+id = "telegram-bot-token"
+description = "Telegram Bot API token (numeric bot id : 35-char secret) regardless of the surrounding field name"
+regex = '''(?:^|[^0-9A-Za-z_-])([0-9]{8,12}:[A-Za-z0-9_-]{35})(?:[^0-9A-Za-z_-]|$)'''
+
+[[rules]]
+id = "telegram-chat-id"
+description = "Telegram supergroup chat id (-100…) hard-coded as a string literal"
+# Quoted on purpose: an unquoted `-100…` would also hit ordinary negative
+# constants such as -1000000000. (No backreference: Go's RE2 engine rejects
+# `\1`, which aborts the whole config load.)
+regex = '''['"]-100[0-9]{7,11}['"]'''
+
+# ---------------------------------------------------------------------------
 # 1. Unambiguously synthetic values and redaction markers.
 #
 # Value-shape only, deliberately WITHOUT any `paths` entry (see hard rule above).
+#
+# Evaluated against the DETECTED SECRET, so the rules above stay quiet on the
+# synthetic fixtures (`<digits>:A{35}`, `-1001234567890`).
 # ---------------------------------------------------------------------------
 [[allowlists]]
 description = "Synthetic fixtures and redaction markers (shape-only, no path scoping)"
@@ -31,8 +62,14 @@ regexes = [
   '''\d{8,10}:A{35}''',
   # Telegram-shaped tokens carrying an explicit synthetic marker.
   '''\d{8,10}:[A-Za-z0-9_-]*(?:EXAMPLE|SYNTHETIC|FAKE|DUMMY|PLACEHOLDER|NOT_A_REAL|REDACTED)[A-Za-z0-9_-]*''',
-  # Synthetic Telegram chat id used by fixtures.
+  # Synthetic Telegram chat ids used by fixtures and *.example.json templates.
+  # Pinned exact values (never a shape): a real chat id cannot equal any of them.
   '''-1001234567890''',
+  '''-100123456789''',
+  '''-1001111111111''',
+  '''-1002222222222''',
+  '''-1003333333333''',
+  '''-1004444444444''',
   # Fingerprints / redaction markers that are safe to commit.
   '''sha256:[0-9a-f]{64}''',
   '''<REDACTED>''',
@@ -71,5 +108,7 @@ regexes = [
 description = "Pixiv public OAuth client secret (protocol constant, published upstream) — pinned exact value"
 regexTarget = "secret"
 regexes = [
-  '''^lsACyCD94FhDUtGTXi3QzcFE2uU1hqtDaKeqrdwj''',
+  # `$` matters: without it any value merely *starting* with that prefix would be
+  # exempt, which re-opens the exact hole the comment above describes.
+  '''^lsACyCD94FhDUtGTXi3QzcFE2uU1hqtDaKeqrdwj$''',
 ]

@@ -74,6 +74,25 @@ export class DeliveryRepository extends BaseRepository {
   }
 
   /**
+   * Every delivery intent this ledger recorded for ONE slot cell, oldest first.
+   *
+   * Scoped by (slot_id, target_id) on purpose: the dedup key above is per WORK,
+   * so it structurally cannot answer "does this logical item still owe a
+   * delivery?" — which is the question crash recovery has to ask before it is
+   * allowed to re-run selection for a `delivery_pending` cell.
+   */
+  listForCell(deliveryTarget: string, slotId: string, targetId: string): DeliveryRow[] {
+    const rows = this.db
+      .prepare(
+        `SELECT * FROM deliveries
+         WHERE delivery_target = ? AND slot_id = ? AND target_id = ?
+         ORDER BY created_at ASC`
+      )
+      .all(deliveryTarget, slotId, targetId) as any[];
+    return rows.map((r) => this.toRow(r));
+  }
+
+  /**
    * True when this exact work is already CONFIRMED (delivered, or an attested
    * historical duplicate) for this target. Pending/failed intents do not block
    * selection — they are retried, not treated as a delivered fact.

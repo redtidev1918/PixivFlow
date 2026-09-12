@@ -66,7 +66,7 @@ describe('SlotCoordinator', () => {
     });
   });
 
-  it('a locked work id survives a resume (automatic retry never swaps it)', async () => {
+  it('a locked work id survives a resume AND is handed to the handler', async () => {
     await withDb(async (db) => {
       const coord = new SlotCoordinator(db);
       const slot = coord.resolveOccurrence(schedule, config, 'http', AT).context!;
@@ -80,6 +80,18 @@ describe('SlotCoordinator', () => {
       const cell = db.slots.getCell(slot.slotId, 'a')!;
       expect(cell.workId).toBe('100');
       expect(cell.status).toBe('selected');
+
+      // The column alone proves nothing — this was the original false comfort.
+      // The resume path must actually carry the identity to the handler; if it
+      // drops the cell, the handler re-ranks and selects a DIFFERENT work.
+      // (The end-to-end assertion lives in
+      //  __tests__/download/handlers/workIdentityRecovery.test.ts.)
+      const pending = coord2.pendingTargets(slot.slotId, [target('a')]);
+      expect(pending).toHaveLength(1);
+      expect(pending[0].cell.workId).toBe('100');
+
+      const contexts = coord2.executionContextsFor(slot.slotId, pending);
+      expect(contexts.get('a')?.lockedWorkId).toBe('100');
     });
   });
 

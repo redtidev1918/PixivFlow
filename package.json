@@ -134,6 +134,7 @@
   },
   "files": [
     "dist/",
+    "!dist/**/*.map",
     "config/examples/",
     "config/fly-two-bots.example.json",
     "README.md",

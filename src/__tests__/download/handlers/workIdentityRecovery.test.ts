@@ -20,8 +20,9 @@ import { PixivIllust } from '@redtidev/pixiv-client';
 import { Database } from '../../../storage/Database';
 import { SlotCoordinator } from '../../../scheduler/SlotCoordinator';
 import { createDeliveryLedgerPort } from '../../../delivery/DeliveryLedgerPort';
+import { DeliveryService } from '../../../delivery/DeliveryService';
 import { DownloadedArtifact } from '../../../delivery/types';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -366,5 +367,77 @@ describe('work identity across recovery', () => {
       expect(mockClient.getIllustration).not.toHaveBeenCalled();
       expect(mockPipeline.run).toHaveBeenCalled();
     });
+  });
+
+  it('maps the locked work to a STABLE delivery idempotency identity across recovery', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'pixivflow-workid-idem-'));
+    const db = new Database(join(dir, 'test.db'));
+    db.migrate();
+    const file = join(dir, '100.jpg');
+    writeFileSync(file, 'img');
+    try {
+      const coord = new SlotCoordinator(db);
+      const slot = coord.resolveOccurrence(schedule, config, 'http', AT).context!;
+      // The runtime injects the occurrence into delivery.executionContext; the
+      // intent key must be scoped to this slot, not fall back to 'adhoc'.
+      const scopedTarget = {
+        ...target(),
+        delivery: { target: SLOT_TARGET, executionContext: { slotId: slot.slotId } },
+      } as TargetConfig;
+      coord.prepare(slot, schedule, [scopedTarget]);
+
+      // Crash after the download bound A, before any delivery intent existed.
+      coord.lockWorkCas(slot.slotId, TARGET_ID, '100', 'illustration');
+
+      const recoveringHandler = new IllustrationTargetHandler(
+        mockClient,
+        mockDatabase,
+        mockRankingService,
+        mockIllustrationDownloader,
+        mockPipeline,
+        undefined,
+        new DeliveryService(db)
+      );
+      mockClient.getIllustration.mockResolvedValue(createMockIllust(100));
+      mockIllustrationDownloader.downloadIllustration.mockResolvedValue({
+        type: 'illustration',
+        pixivId: '100',
+        title: 'Illust 100',
+        files: [file],
+        pageCount: 1,
+        cachedDir: dir,
+      } as unknown as DownloadedArtifact);
+
+      const resumed = new SlotCoordinator(db);
+      const pending = resumed.pendingTargets(slot.slotId, [scopedTarget]);
+      const outcome = await recoveringHandler.handle(
+        scopedTarget,
+        resumed.executionContextsFor(slot.slotId, pending).get(TARGET_ID)
+      );
+
+      expect(outcome.kind).toBe('delivery_pending');
+      const intents = db.deliveries.listForCell(SLOT_TARGET, slot.slotId, TARGET_ID);
+      // One logical item => exactly one intent, still pointing at the locked work.
+      expect(intents).toHaveLength(1);
+      expect(intents[0].pixivId).toBe('100');
+
+      // The key is a pure function of the work identity, so recovering the SAME
+      // work always yields the SAME downstream idempotency identity (a replay
+      // converges to one remote record instead of double-posting).
+      const keyFor = (pixivId: string) =>
+        DeliveryService.idempotencyKey(
+          SLOT_TARGET,
+          { type: 'illustration', pixivId } as DownloadedArtifact,
+          slot.slotId,
+          TARGET_ID
+        );
+      expect(intents[0].idempotencyKey).toBe(keyFor('100'));
+      // ...whereas a swapped work would carry a different identity — which is
+      // exactly what silently re-pointing the item at B would have produced.
+      expect(keyFor('200')).not.toBe(keyFor('100'));
+    } finally {
+      db.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

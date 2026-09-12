@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.19.4](https://github.com/redtidev1918/PixivFlow/compare/v2.19.3...v2.19.4) (2026-09-12)
+
+
+### Bug Fixes
+
+* **delivery:** a remote failure is never an end-to-end success ([#69](https://github.com/redtidev1918/PixivFlow/issues/69)) ([84b0d1c](https://github.com/redtidev1918/PixivFlow/commit/84b0d1c20fa05964c5679152cb7cad1f50e8b64e))
+
 ## [2.19.3](https://github.com/redtidev1918/PixivFlow/compare/v2.19.2...v2.19.3) (2026-09-12)
 
 

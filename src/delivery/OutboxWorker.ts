@@ -345,6 +345,19 @@ export class OutboxWorker {
         });
         this.onDeliveryTerminal?.(row.deliveryId, ack, payload);
         break;
+      case 'remote_failed':
+        // The provider persisted the record, but it will never publish and the
+        // idempotency key pins us to that same record forever: retrying cannot
+        // change the outcome. Terminal, so the failure reaches the Slot instead
+        // of being masked as a delivered cell. Content is kept for inspection.
+        this.database.deliveries.recordAck(row.deliveryId, {
+          status: 'failed',
+          remoteId: ack.remoteId,
+          remoteStatus: ack.remoteStatus,
+          error: ack.error,
+        });
+        this.onDeliveryTerminal?.(row.deliveryId, ack, payload);
+        break;
       case 'permanent_failure':
         // Deterministic rejection: still retry a couple times to survive a
         // misconfigured blip, the outbox max-attempts then dead-letters it.

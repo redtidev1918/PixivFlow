@@ -27,6 +27,7 @@ import { TargetOutcome } from '../scheduler/TargetOutcome';
 import { DeliveryService } from '../delivery/DeliveryService';
 import { createDeliveryLedgerPort } from '../delivery/DeliveryLedgerPort';
 import { OutboxWorker } from '../delivery/OutboxWorker';
+import { settleDeliveryTerminal } from '../delivery/settleDeliveryTerminal';
 import { migrateLegacyOutbox } from '../delivery/LegacyOutboxMigration';
 import { DeliveryAck } from '../delivery/DeliveryAck';
 import { NotificationPolicy } from '../notification/NotificationPolicy';
@@ -332,21 +333,10 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
   const outboxWorker = new OutboxWorker(database, deliveryDispatcher, {
     retryBaseMs: config.delivery?.outboxRetryBaseMs,
     retryMaxMs: config.delivery?.outboxRetryMaxMs,
-    // A confirmed ACK promotes the delivery_pending cell to submitted.
+    // A confirmed ACK settles the owning Slot cell (submitted / duplicate /
+    // failed); see settleDeliveryTerminal for the invariant it enforces.
     onDeliveryTerminal: (deliveryId, ack) => {
-      const row = database.deliveries.getById(deliveryId);
-      if (!row || !row.slotId || !row.targetId) return;
-      if (ack.kind === 'duplicate_existing') {
-        const coord = new SlotCoordinator(database);
-        coord.applyOutcome(row.slotId, row.targetId, {
-          kind: 'duplicate',
-          workId: row.pixivId,
-          reason: 'downstream attested historical duplicate',
-        });
-        return;
-      }
-      const coord = new SlotCoordinator(database);
-      coord.markDelivered(row.slotId, row.targetId, row.pixivId, row.workType as 'illustration' | 'novel');
+      settleDeliveryTerminal(database, deliveryId, ack);
     },
   });
   const notificationPolicy = new NotificationPolicy(database, config);

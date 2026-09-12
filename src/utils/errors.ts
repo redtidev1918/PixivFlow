@@ -96,6 +96,19 @@ export class NetworkError extends PixivFlowError {
   }
 }
 
+/**
+ * The pagination adapter returned a cursor it had already handed back (the same
+ * `next` twice, or a cycle). Re-requesting would repeat the previous page
+ * forever, which is exactly the Attempt 2 fallback-day failure, so the pager
+ * fails deterministically instead of spinning.
+ */
+export class PaginationError extends PixivFlowError {
+  constructor(message: string, cause?: Error) {
+    super(message, 'PAGINATION_ERROR', undefined, cause);
+    this.name = 'PaginationError';
+  }
+}
+
 export class DownloadError extends PixivFlowError {
   constructor(
     message: string,

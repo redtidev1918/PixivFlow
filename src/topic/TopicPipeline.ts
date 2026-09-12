@@ -3,7 +3,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { logger } from '../logger';
 import { calculatePopularityScore } from '../utils/pixiv-utils';
 import { isAIIllustration } from '../utils/ai-detection';
-import { rethrowIfCancelled, throwIfAborted } from '../utils/errors';
+import { PaginationError, rethrowIfCancelled, throwIfAborted } from '../utils/errors';
 import type { TargetConfig } from '../config';
 import type { TopicResolver } from './TopicResolver';
 import type {
@@ -155,6 +155,9 @@ export class TopicPipeline {
       // A cancellation must not be degraded into "no results for this tag": that
       // would silently continue the cancelled run across the remaining tags.
       rethrowIfCancelled(error, this.signal);
+      // A broken pager contract must not degrade either: reporting "no works
+      // today" would hide the failure and let the run claim success.
+      if (error instanceof PaginationError) throw error;
       logger.warn('[TopicCollector] search failed tag=' + tag + ' type=' + contentType + ': ' + (error instanceof Error ? error.message : String(error)));
       return [];
     }

@@ -11,7 +11,7 @@ import { logger } from '../logger';
 import { parseDateRange } from '../utils/date-utils';
 import { isDateInRange } from '../utils/date-utils';
 import { sortPixivItems } from '../utils/pixiv-sort';
-import { throwIfAborted } from '../utils/errors';
+import { PaginationError, throwIfAborted } from '../utils/errors';
 import type { TargetConfig } from '../config';
 import { mapTargetToIllustQuery, mapTargetToNovelQuery } from './query-mapper';
 
@@ -86,7 +86,7 @@ export class TargetSearchRunner {
       target,
       tag,
       requestDelayMs,
-      (options) => this.kit.illustrations.searchPage(options),
+      (options, cursor) => this.kit.illustrations.searchPage(options, cursor),
       (t, g) => mapTargetToIllustQuery({ ...t, tag: g }),
       signal
     );
@@ -102,7 +102,7 @@ export class TargetSearchRunner {
       target,
       tag,
       requestDelayMs,
-      (options) => this.kit.novels.searchPage(options),
+      (options, cursor) => this.kit.novels.searchPage(options, cursor),
       (t, g) => mapTargetToNovelQuery({ ...t, tag: g }),
       signal
     );
@@ -120,11 +120,11 @@ export class TargetSearchRunner {
     target: TargetConfig,
     tag: string,
     requestDelayMs: number,
-    fetchPage: (options: O) => Promise<{ items: T[]; next: string | null }>,
+    fetchPage: (options: O, cursor: string | null) => Promise<{ items: T[]; next: string | null }>,
     buildBase: (t: TargetConfig, tag: string) => O,
     signal?: AbortSignal
   ): Promise<T[]> {
-    const fetchOne = fetchPage as (options: IllustSearchOptions | NovelSearchOptions) => Promise<{ items: T[]; next: string | null }>;
+    const fetchOne = fetchPage as (options: IllustSearchOptions | NovelSearchOptions, cursor: string | null) => Promise<{ items: T[]; next: string | null }>;
     logger.debug('Searching Pixiv', {
       tag,
       sort: target.sort,
@@ -154,24 +154,45 @@ export class TargetSearchRunner {
     let cursor: string | null = null;
     let pageCount = 0;
     let shouldStop = false;
+    // Progress invariant: every iteration must terminate, advance to a cursor we
+    // have never fetched, or fail explicitly. A cursor that repeats (same `next`
+    // twice, or an A -> B -> A cycle) proves the upstream adapter is not making
+    // progress; re-requesting would spin forever, so we refuse instead.
+    const seenCursors = new Set<string>();
 
     while ((!fetchLimit || results.length < fetchLimit) && !shouldStop) {
       throwIfAborted(signal, 'search cancelled');
       pageCount++;
       // Dates are intentionally filtered CLIENT-side below (legacy behavior;
       // PixivFlow needs the early-stop walk on create_date).
-      const page = await fetchOne({
-        word: base.word,
-        sort: base.sort,
-        searchTarget: base.searchTarget,
-        includeR18: base.includeR18,
-        cursor,
-        // Threaded into the kit transport, which combines it with its per-request
-        // timeout and honours it in retry back-off. Without this the pager could
-        // stay blocked in a single hung request for the rest of the run.
-        signal,
-      });
-      cursor = page.next;
+      //
+      // The cursor must travel as searchPage's SECOND POSITIONAL argument: the
+      // kit reads `options.cursor` only inside its own `search()`. Putting it in
+      // the options object left the cursor permanently null, so page 1 (the
+      // newest works) was re-fetched on every iteration and a search that found
+      // no in-range work on that page never terminated.
+      const page = await fetchOne(
+        {
+          word: base.word,
+          sort: base.sort,
+          searchTarget: base.searchTarget,
+          includeR18: base.includeR18,
+          signal,
+        },
+        cursor
+      );
+      const nextCursor = page.next;
+      if (nextCursor !== null) {
+        if (nextCursor === cursor || seenCursors.has(nextCursor)) {
+          throw new PaginationError(
+            `Search pager for tag "${tag}" did not advance: page ${pageCount} returned a cursor that ` +
+              (nextCursor === cursor ? 'equals the one just fetched' : 'was already fetched') +
+              `. Refusing to re-request it indefinitely.`
+          );
+        }
+        seenCursors.add(nextCursor);
+      }
+      cursor = nextCursor;
 
       for (const item of page.items) {
         const decision = this.filterItemByDate(item, target, startDate, endDate, sortMode);

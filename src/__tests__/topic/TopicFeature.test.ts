@@ -13,6 +13,7 @@ import { TopicCache } from '../../topic/TopicCache';
 import { TopicResolver } from '../../topic/TopicResolver';
 import { TopicPipeline } from '../../topic/TopicPipeline';
 import type { TopicClient, WorkLike } from '../../topic/types';
+import { PaginationError } from '../../utils/errors';
 
 const tag = (name: string) => ({ name });
 const work = (id: number, tags: string[], opts: Partial<WorkLike> = {}): WorkLike => ({
@@ -333,5 +334,26 @@ describe('TopicPipeline', () => {
     for (const s of seen) {
       expect(s.includeR18).toBe(true);
     }
+  });
+
+  it('propagates a broken pager contract instead of degrading it into "no works today"', async () => {
+    // A non-terminating cursor is a deterministic contract violation. Swallowing
+    // it as "no results for this tag" would hide the failure and let the run
+    // report success, so the collector must rethrow it.
+    const brokenClient: TopicClient = {
+      getTagAutocomplete: async () => [{ name: 'seed' }],
+      searchIllustrationsForTags: async () => {
+        throw new PaginationError('Search pager for tag "seed" did not advance');
+      },
+      searchNovelsForTags: async () => [],
+    };
+    const dir = await fs.mkdtemp(join(os.tmpdir(), 'topic-pager-'));
+    const resolver = new TopicResolver(brokenClient, new TopicCache(dir), 0);
+    const pipeline = new TopicPipeline(brokenClient, resolver, 0);
+    const target = { type: 'illustration', mode: 'topic', topic: 'seed' } as never;
+
+    await expect(
+      pipeline.selectWorks(target, 'illustration', DAY, 1, {}, {})
+    ).rejects.toBeInstanceOf(PaginationError);
   });
 });

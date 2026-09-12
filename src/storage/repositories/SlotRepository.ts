@@ -217,6 +217,62 @@ export class SlotRepository extends BaseRepository {
     return this.getCell(slotId, targetId)!;
   }
 
+  /**
+   * Compare-and-set the cell's work binding, with real concurrency semantics.
+   *
+   * `lockCellWork` above only stops *this* process from overwriting an existing
+   * id (COALESCE); it cannot elect a winner between two callers that both read
+   * "no binding". This one can: the write is guarded by `work_id IS NULL OR
+   * work_id = @workId`, so if two workers select A and B at the same instant
+   * exactly one UPDATE lands. The returned record is authoritative — a losing
+   * caller MUST continue with `cell.workId`, never with its own candidate, or
+   * the cell would process a work it does not own.
+   */
+  public tryLockCellWork(
+    slotId: string,
+    targetId: string,
+    workId: string,
+    workType: string
+  ): { cell: SlotItemRecord; won: boolean } {
+    this.db
+      .prepare(
+        `UPDATE schedule_slot_items
+         SET work_id = @workId,
+             work_type = CASE WHEN work_id IS NULL THEN @workType ELSE work_type END,
+             status = CASE WHEN status = 'pending' THEN 'selected' ELSE status END,
+             attempt_count = CASE WHEN work_id IS NULL THEN attempt_count + 1 ELSE attempt_count END,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE slot_id = @slotId AND target_id = @targetId
+           AND (work_id IS NULL OR work_id = @workId)`
+      )
+      .run({ slotId, targetId, workId, workType });
+    const cell = this.getCell(slotId, targetId)!;
+    return { cell, won: cell.workId === workId };
+  }
+
+  /**
+   * Roll back a PROVISIONAL binding taken for a work that produced no local
+   * artifact (a candidate that failed while the cell was still unbound).
+   *
+   * Deliberately narrow: it only clears the row while it still holds exactly
+   * `workId` AND is still `selected`. Once the cell moved on (an artifact was
+   * persisted -> delivery_pending/submitted/..., or another writer rebound it)
+   * the release is refused, so it can never erase a committed work identity.
+   * Re-selecting is only ever allowed while nothing was committed — that is what
+   * keeps (slotId,targetId) -> workId stable.
+   */
+  public releaseCellWork(slotId: string, targetId: string, workId: string): boolean {
+    const info = this.db
+      .prepare(
+        `UPDATE schedule_slot_items
+         SET work_id = NULL, status = 'pending', updated_at = CURRENT_TIMESTAMP
+         WHERE slot_id = @slotId AND target_id = @targetId
+           AND work_id = @workId AND status = 'selected'`
+      )
+      .run({ slotId, targetId, workId });
+    return info.changes > 0;
+  }
+
   /** Explicit operator action: forget the locked work so a re-run picks another candidate. */
   public clearCellWork(slotId: string, targetId: string): void {
     this.db

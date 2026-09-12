@@ -11,11 +11,20 @@ import { calculatePopularityScore } from '../../utils/pixiv-utils';
 import { PixivNovel } from '@redtidev/pixiv-client';
 import { DeliveryService } from '../../delivery/DeliveryService';
 import { TargetOutcome } from '../../scheduler/TargetOutcome';
+import { TargetExecutionContext, isSingleWorkCell } from '../../scheduler/WorkIdentity';
+import type { DownloadedArtifact } from '../../delivery/types';
 import type { TopicPipelineFactory } from '../../topic/createTopicPipeline';
 import { getTargetLabel } from '../../utils/target-label';
 
 export class NovelTargetHandler {
   private outcomes: TargetOutcome[] = [];
+
+  /**
+   * Cell identity for this handle() call. Set only for a single-work cell of a
+   * scheduled occurrence; null for ad-hoc runs and N-works-per-run targets, which
+   * have no single (slotId,targetId) -> workId identity to honour.
+   */
+  private execution: TargetExecutionContext | null = null;
 
   constructor(
     private readonly client: IPixivClient,
@@ -27,8 +36,19 @@ export class NovelTargetHandler {
     private readonly deliveryService?: DeliveryService
   ) {}
 
-  async handle(target: TargetConfig): Promise<TargetOutcome> {
+  async handle(target: TargetConfig, execution?: TargetExecutionContext): Promise<TargetOutcome> {
     this.outcomes = [];
+    this.execution = execution && isSingleWorkCell(target) ? execution : null;
+
+    // A cell that already owns a work is in RECOVERY, not in a new selection.
+    // Crash/shutdown recovery is not an intentional second run: running the
+    // candidate pipeline here would re-rank and could bind this logical item to a
+    // different work than the one it already committed to.
+    if (this.execution?.lockedWorkId) {
+      await this.recoverLockedWork(target, this.execution.lockedWorkId);
+      return this.summarize();
+    }
+
     if (target.novelId !== undefined && target.novelId !== null && target.novelId !== ('' as unknown)) {
       const novelNum = typeof target.novelId === 'number' ? target.novelId : Number(target.novelId);
       if (!Number.isFinite(novelNum)) {
@@ -535,13 +555,102 @@ export class NovelTargetHandler {
     });
   }
 
+  /**
+   * Continue the work this cell ALREADY owns. Selection is deliberately skipped:
+   * no search, no ranking, no topic expansion, no backfill pool, and no
+   * "already downloaded / already delivered" exclusion — the cell's own work must
+   * never be filtered out of its own recovery.
+   *
+   * A locked work that is permanently gone is a terminal failure of THIS logical
+   * item (`LOCKED_WORK_UNAVAILABLE`). It is never silently replaced by another
+   * candidate; that would mutate the item's identity behind the operator's back.
+   */
+  private async recoverLockedWork(target: TargetConfig, lockedWorkId: string): Promise<void> {
+    const displayTag = getTargetLabel(target);
+    logger.info(`Recovering locked work ${lockedWorkId} for ${displayTag}; candidate selection is skipped`, {
+      slotId: this.execution?.slotId,
+      targetId: this.execution?.targetId,
+      lockedWorkId,
+    });
+
+    const novelId = Number(lockedWorkId);
+    if (!Number.isFinite(novelId)) {
+      this.outcomes.push({
+        kind: 'failed',
+        retryable: false,
+        error: `LOCKED_WORK_UNAVAILABLE: cell work id "${lockedWorkId}" is not a valid novel id`,
+      });
+      return;
+    }
+
+    try {
+      const detail = await this.client.getNovelDetail(novelId);
+      const novel: PixivNovel = {
+        id: detail.id,
+        title: detail.title,
+        user: detail.user,
+        create_date: detail.create_date,
+      };
+      await this.downloadAndDeliver(novel, `novel-${novelId}`, target);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const retryable = isRetryableNetworkError(error);
+      this.logError(error, `Failed to recover locked novel ${lockedWorkId}`);
+      this.outcomes.push({
+        kind: 'failed',
+        retryable,
+        error: retryable
+          ? `locked work ${lockedWorkId} could not be fetched (will retry the SAME work): ${message}`
+          : `LOCKED_WORK_UNAVAILABLE: locked work ${lockedWorkId} is no longer fetchable: ${message}`,
+      });
+    }
+  }
+
+  /**
+   * Process ONE candidate work for this cell.
+   *
+   * The cell is bound to `novel` BEFORE any side effect: it is the binding, not
+   * the candidate list, that decides what a later recovery resumes. The binding
+   * is only rolled back when the attempt produced no artifact at all, so in-run
+   * backfill still works for a cell that has committed to nothing.
+   */
   private async downloadAndDeliver(
     novel: PixivNovel,
     tag: string,
     target: TargetConfig
   ): Promise<void> {
-    const artifact = await this.novelDownloader.download(novel, tag, target);
-    if (!artifact) return;
+    const execution = this.execution;
+    const workId = String(novel.id);
+    // Recovery continues a work the cell already bound; it must never be released.
+    const recovering = Boolean(execution?.lockedWorkId);
+    if (execution && !recovering) {
+      const binding = execution.bind(workId, 'novel');
+      if (!binding.won) {
+        // Another writer elected a different work for this cell. First selection
+        // is authoritative: never process a work the cell does not own.
+        logger.warn(`Cell is bound to work ${binding.workId}; declining to select ${workId}`, {
+          slotId: execution.slotId,
+          targetId: execution.targetId,
+          boundWorkId: binding.workId,
+        });
+        return;
+      }
+    }
+
+    let artifact: DownloadedArtifact | undefined;
+    try {
+      artifact = await this.novelDownloader.download(novel, tag, target);
+    } catch (error) {
+      // Nothing was persisted, so the cell may still pick another candidate.
+      if (execution && !recovering) execution.release(workId);
+      throw error;
+    }
+    if (!artifact) {
+      if (execution && !recovering) execution.release(workId);
+      return;
+    }
+    // Committed: the artifact is durable and this work now defines the cell. Even
+    // if the delivery below throws, recovery must resume THIS work — never release.
     const isDelivery = target.storageMode === 'cache' && target.delivery?.target?.trim();
     if (!isDelivery || !this.deliveryService) {
       this.outcomes.push({ kind: 'stored', workId: artifact.pixivId, workType: artifact.type });

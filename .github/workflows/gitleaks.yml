@@ -1,0 +1,79 @@
+name: Secret Scan
+
+# Blocks NEW credential leaks immediately and provides an on-demand deep scan.
+#
+# Scope by design:
+#   * pull_request / push  -> scans ONLY the commits in that range, so the gate
+#     is meaningful today and is not defeated by the V1/V2-era history that still
+#     needs rewriting. A brand-new real credential fails the build right away.
+#   * workflow_dispatch    -> `full_history=true` scans every commit. That run is
+#     EXPECTED to keep failing (5 known leaks in docs/ from 2025-11-10) until the
+#     history rewrite lands; it is a tracking signal, not a merge gate.
+#
+# This workflow is intentionally NOT scheduled: production is frozen and no new
+# cron trigger may be introduced.
+
+on:
+  push:
+    branches:
+      - master
+      - main
+      - develop
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      full_history:
+        description: 'Scan the entire git history (expected to fail until the history rewrite lands)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gitleaks-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gitleaks:
+    name: gitleaks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Depth 0 so the scanner can compute the exact commit range itself.
+          fetch-depth: 0
+
+      - name: Decide scan scope
+        id: scope
+        env:
+          EVENT: ${{ github.event_name }}
+          FULL: ${{ github.event.inputs.full_history }}
+        run: |
+          if [ "$EVENT" = "workflow_dispatch" ] && [ "$FULL" = "true" ]; then
+            echo "log_opts=" >> "$GITHUB_OUTPUT"
+            echo "label=full-history" >> "$GITHUB_OUTPUT"
+          elif [ "$EVENT" = "pull_request" ]; then
+            echo "log_opts=${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}" >> "$GITHUB_OUTPUT"
+            echo "label=pull-request-range" >> "$GITHUB_OUTPUT"
+          elif [ "$EVENT" = "push" ]; then
+            echo "log_opts=${{ github.event.before }}..${{ github.event.after }}" >> "$GITHUB_OUTPUT"
+            echo "label=push-range" >> "$GITHUB_OUTPUT"
+          else
+            echo "log_opts=" >> "$GITHUB_OUTPUT"
+            echo "label=full-history" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_CONFIG: .gitleaks.toml
+          GITLEAKS_LOG_OPTS: ${{ steps.scope.outputs.log_opts }}
+          GITLEAKS_ENABLE_SUMMARY: 'true'
+
+      - name: Report scan scope
+        if: always()
+        run: |
+          echo "gitleaks scope: ${{ steps.scope.outputs.label }}"

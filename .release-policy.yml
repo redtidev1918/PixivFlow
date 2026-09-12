@@ -32,6 +32,9 @@
       "verify": "docker buildx imagetools inspect ghcr.io/redtidev1918/pixivflow:$RELEASE_VERSION"
     }
   },
+  "release": {
+    "post_publish": "python3 .github/scripts/update_download_page.py && git config user.name github-actions[bot] && git config user.email 41898282+github-actions[bot]@users.noreply.github.com && git add docs/download.md docs/en/download.md && (git diff --cached --quiet || (git commit -m 'docs: update release download page' && git push))"
+  },
   "retention": {
     "stable": 1,
     "prerelease": 1,

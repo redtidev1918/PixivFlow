@@ -5,7 +5,7 @@ import { OutboxRow, OutboxStatus, RecordEventInput } from '../storage/repositori
 import { DeliveryDispatcher } from './DeliveryDispatcher';
 import { DeliveryRequest } from './types';
 import { DeliveryAck } from './DeliveryAck';
-import { classifyError } from './errorClass';
+import { classifyError, DeliveryErrorClass } from './errorClass';
 import { redactError } from '../utils/redact';
 import { logger } from '../logger';
 
@@ -276,24 +276,23 @@ export class OutboxWorker {
       }
       return 'done';
     } catch (error) {
-      // Transport-level error (fetch threw) or ack-classified failure: retryable.
       const message = redactError(error).slice(0, 1000);
       const { errorClass } = classifyError(error);
+
+      // A local configuration error is deterministic: every attempt re-reads the
+      // same config, so retrying only parks the row in `retry_wait` until its
+      // attempt budget runs out. Dead-letter it now so it is visible instead.
+      if (errorClass === 'configuration_error') {
+        this.database.outbox.markDead(row.id, message);
+        this.deadLetter(row, `${message} (configuration error)`, errorClass);
+        return 'dead';
+      }
+
+      // Transport-level error (fetch threw) or ack-classified failure: retryable.
       const delay = backoffDelayMs(row.attempts + 1, this.retryBaseMs, this.retryMaxMs);
       const status = this.database.outbox.markRetry(row.id, Date.now() + delay, message);
       if (status === 'dead') {
-        logger.error('Outbox item dead after max attempts', { outboxId: row.id, kind: row.kind, error: message });
-        this.recordEvent(row, {
-          event: 'outbox.dead',
-          errorClass,
-          retryable: false,
-          countsAsAttempt: 1,
-          detail: { attempt: row.attempts + 1 },
-        });
-        this.onDead?.(row, message);
-        if (row.deliveryId) {
-          this.database.deliveries.recordAck(row.deliveryId, { status: 'failed', error: message });
-        }
+        this.deadLetter(row, message, errorClass);
       } else {
         logger.warn('Outbox item will retry', { outboxId: row.id, kind: row.kind, attempt: row.attempts + 1, delayMs: delay });
         this.recordEvent(row, {
@@ -305,6 +304,22 @@ export class OutboxWorker {
         });
       }
       return status;
+    }
+  }
+
+  /** Terminal delivery failure: audit it, release the delivery, notify the hooks. */
+  private deadLetter(row: OutboxRow, message: string, errorClass: DeliveryErrorClass): void {
+    logger.error('Outbox item dead', { outboxId: row.id, kind: row.kind, errorClass, error: message });
+    this.recordEvent(row, {
+      event: 'outbox.dead',
+      errorClass,
+      retryable: false,
+      countsAsAttempt: 1,
+      detail: { attempt: row.attempts + 1 },
+    });
+    this.onDead?.(row, message);
+    if (row.deliveryId) {
+      this.database.deliveries.recordAck(row.deliveryId, { status: 'failed', error: message });
     }
   }
 

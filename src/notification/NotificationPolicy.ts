@@ -23,6 +23,26 @@ export class NotificationPolicy {
     return target.delivery?.target?.trim() || null;
   }
 
+  /**
+   * Delivery targets that can actually RECEIVE an operational notification.
+   *
+   * `delivery.target` names a SUBMISSION endpoint (multipart POST of a work).
+   * Only targets that also declare a `notificationUrl` accept notifications —
+   * the same rule `config/validation.ts` enforces for `noMatchPolicy.notify`
+   * and that `docs/CONFIG.md` documents. A submission endpoint without one
+   * rejects every notification, so enqueuing to it would only grow an outbox
+   * row that can never be delivered.
+   */
+  private notifiableTargets(): Set<string> {
+    const targets = this.config.delivery?.targets ?? {};
+    return new Set(
+      Object.keys(targets).filter((name) => {
+        const target = targets[name];
+        return target?.type === 'httpMultipart' && Boolean(target.notificationUrl?.trim());
+      })
+    );
+  }
+
   /** Stable slot-scoped keys (two occurrences on one date never collide). */
   static keys = {
     noMatch: (slotId: string, targetId: string) => `notification:${slotId}:${targetId}:no-candidate`,
@@ -40,6 +60,9 @@ export class NotificationPolicy {
   ): void {
     const name = this.targetName(target);
     if (!name) return;
+    // No notifiable endpoint configured: drop the notification instead of
+    // enqueuing it against a submission target that will reject it forever.
+    if (!this.notifiableTargets().has(name)) return;
     const label = target.id || target.filterTag || target.tag || target.type;
 
     if (outcome.kind === 'no_candidate' && target.noMatchPolicy?.notify === true) {
@@ -68,13 +91,7 @@ export class NotificationPolicy {
     schedule: ScheduleConfig,
     rows: Array<{ targetId: string; label: string; workType: string; status: string; workId: string | null; error: string | null }>
   ): void {
-    const targets = this.config.delivery?.targets ?? {};
-    const notifiable = new Set(
-      Object.keys(targets).filter((n) => {
-        const target = targets[n];
-        return target?.type === 'httpMultipart' && Boolean(target.notificationUrl?.trim());
-      })
-    );
+    const notifiable = this.notifiableTargets();
     if (notifiable.size === 0 || rows.length === 0) return;
 
     const icon = (s: string) =>

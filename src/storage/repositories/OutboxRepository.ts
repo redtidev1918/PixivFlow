@@ -185,6 +185,23 @@ export class OutboxRepository extends BaseRepository {
       .run({ id, now });
   }
 
+  /**
+   * Dead-letter a row whose failure cannot be fixed by retrying — a local
+   * configuration error is re-read identically on every attempt, so scheduling
+   * retries would only keep the row in `retry_wait` until the budget runs out.
+   */
+  markDead(id: string, error: string, now: number = Date.now()): void {
+    this.db
+      .prepare(
+        `UPDATE outbox
+         SET attempts=attempts+1, status='dead',
+             lease_owner=NULL, lease_until=NULL,
+             last_error=@error, updated_at=@now
+         WHERE id=@id`
+      )
+      .run({ id, error: error.slice(0, 1000), now });
+  }
+
   /** Schedule a later retry, or flip to dead once attempts are exhausted. */
   markRetry(
     id: string,

@@ -1,0 +1,75 @@
+# gitleaks configuration — PixivFlow
+#
+# Goal: no real credential can enter the repository again, while values that are
+# provably not secrets stay legal.
+#
+# Scope note: this config is used by .github/workflows/gitleaks.yml.
+#   * pull_request / push  -> scans ONLY the commits in that range, so a new
+#     leak is blocked immediately even before the historical rewrite lands.
+#   * workflow_dispatch full_history=true -> scans the entire history; it is
+#     expected to keep failing until the V1/V2-era commits are rewritten.
+#
+# HARD RULE (verified 2026-09-12 with gitleaks 8.30.1): inside a single
+# [[allowlists]] block, `paths` and `regexes` are OR-ed, not AND-ed. A
+# directory-level `paths` entry therefore exempts *every* file below it from
+# scanning, whatever else the block contains. Two such entries existed here and
+# made a real GCP key undetectable in 5/5 field-shape variants. Never allowlist
+# by directory in this file; allowlist by exact value or by unambiguous shape.
+
+[extend]
+useDefault = true
+
+# ---------------------------------------------------------------------------
+# 1. Unambiguously synthetic values and redaction markers.
+#
+# Value-shape only, deliberately WITHOUT any `paths` entry (see hard rule above).
+# ---------------------------------------------------------------------------
+[[allowlists]]
+description = "Synthetic fixtures and redaction markers (shape-only, no path scoping)"
+regexes = [
+  # Telegram bot tokens whose secret part is literally 35 x 'A'.
+  '''\d{8,10}:A{35}''',
+  # Telegram-shaped tokens carrying an explicit synthetic marker.
+  '''\d{8,10}:[A-Za-z0-9_-]*(?:EXAMPLE|SYNTHETIC|FAKE|DUMMY|PLACEHOLDER|NOT_A_REAL|REDACTED)[A-Za-z0-9_-]*''',
+  # Synthetic Telegram chat id used by fixtures.
+  '''-1001234567890''',
+  # Fingerprints / redaction markers that are safe to commit.
+  '''sha256:[0-9a-f]{64}''',
+  '''<REDACTED>''',
+]
+
+# ---------------------------------------------------------------------------
+# 2. The fake refreshToken literal used by scripts/verify-git-safety.sh to prove
+# the local pre-commit hook fires on a refreshToken-shaped value.
+#
+# Matched against the DETECTED SECRET (regexTarget = "secret"), so only a value
+# that is exactly `test` + digits is exempt; a real token cannot look like that.
+# ---------------------------------------------------------------------------
+[[allowlists]]
+description = "Fake refreshToken literal used to self-test the pre-commit hook"
+regexTarget = "secret"
+regexes = [
+  '''^test\d{20,}$''',
+]
+
+# ---------------------------------------------------------------------------
+# 3. Pixiv's public-by-design OAuth client credential.
+#
+# The value below is a protocol constant copied from Pixiv's own Android app and
+# published verbatim by many open-source clients (pixivpy and friends). It is NOT
+# a user secret, cannot be rotated by the operator, and has no security value.
+#
+# Pinned to the EXACT value on purpose. An earlier revision allowlisted it by
+# field shape ("clientSecret"\s*:\s*"..." ), which silently exempted *any*
+# provider's credential placed in a clientSecret/clientId field — a real GCP API
+# key survived 5/5 such variants. Exact-value matching keeps every other secret
+# visible.
+#
+# Investigation trail: 2026-09-12 account audit, finding #3.
+# ---------------------------------------------------------------------------
+[[allowlists]]
+description = "Pixiv public OAuth client secret (protocol constant, published upstream) — pinned exact value"
+regexTarget = "secret"
+regexes = [
+  '''^lsACyCD94FhDUtGTXi3QzcFE2uU1hqtDaKeqrdwj''',
+]

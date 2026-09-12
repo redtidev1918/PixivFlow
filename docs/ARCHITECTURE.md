@@ -10,7 +10,7 @@
 graph TD
     A[终端 / Docker] --> B["src/index.ts<br/>CLI 入口"]
     A2[浏览器] --> W["WebUI 服务器<br/>src/webui/server/server.ts"]
-    B --> C[CommandRegistry<br/>20 个命令类]
+    B --> C[CommandRegistry<br/>29 个命令类]
     C --> D1[DownloadManager<br/>src/download/]
     C --> D2[Scheduler<br/>src/scheduler/]
     C --> D3["WebUICommand → startWebUI"]
@@ -29,7 +29,7 @@ graph TD
 | 层 | 目录 | 职责 |
 | --- | --- | --- |
 | 入口层 | `src/index.ts`、`src/cli/` | 解析参数、路由到命令、组装 `CommandContext` |
-| 命令层 | `src/commands/` | 20 个命令类 + 注册表,每个命令只做编排 |
+| 命令层 | `src/commands/` | 29 个命令类 + 注册表,每个命令只做编排 |
 | 业务层 | `src/download/`、`src/scheduler/` | 下载管线、并发控制、定时调度 |
 | 数据访问层 | `src/storage/`、`src/download/FileService.ts` | SQLite 仓储、文件落盘与整理 |
 | 外部集成层 | `src/pixiv-client/`(适配器)、`packages/pixiv-client`(独立 Kit)、`src/auth/`、`src/terminal-login/` | OAuth 令牌、Pixiv API、浏览器登录 |
@@ -43,7 +43,7 @@ graph TD
 | --- | --- | --- |
 | `src/index.ts` | `bootstrap()` | 注册命令 → 解析参数 → 加载配置 → 执行或走默认行为 |
 | `src/cli/` | `ArgumentParser`、`InteractivePrompt` | 参数解析;抛出 `VersionRequest`/`HelpRequest` 特殊错误 |
-| `src/commands/` | `CommandRegistry`、`BaseCommand`、20 个命令 | 注册、别名、分类元数据、参数校验、错误建议 |
+| `src/commands/` | `CommandRegistry`、`BaseCommand`、29 个命令 | 注册、别名、分类元数据、参数校验、错误建议 |
 | `src/config/` | `defaults`、`environment`、`loader`、`validation`、`placeholders`、`path-resolution` | 配置类型、默认值、加载链、环境变量覆盖 |
 | `src/di/` | `Container` | 极简 DI 容器(实例/工厂/单例三种注册方式);CLI 主路径目前是手工组装依赖,容器是可选基础设施 |
 | `src/download/` | `DownloadManager`、`plan/`、`pipeline/`、`exec/`、`handlers/`、`recovery/`、`report/`、两个 Downloader、`FileService`、`FileNormalizationService` | 下载编排:计划 → 执行 → 落盘 → 记录 → 恢复 |
@@ -82,28 +82,37 @@ executeCommand():command.validate?(args) → command.execute(context, args)
 
 未指定命令时的默认行为(`executeDefaultBehavior`):`config.scheduler.enabled` 为 true 则执行 `scheduler`,否则执行 `download`。
 
-注册的 20 个命令(`src/commands/index.ts` 的 `registerAllCommands`,主名称与别名均来自源码):
+注册的 29 个命令(`src/commands/index.ts` 的 `registerAllCommands`,主名称与别名均来自源码,顺序按 `pixivflow help` 的分类):
 
 | 命令 | 别名 | 说明(译自源码 description) |
 | --- | --- | --- |
-| `help` | `-h`、`--help` | 显示帮助 |
 | `login` | `l`、`login-interactive`、`li` | 交互式登录(浏览器) |
 | `login-headless` | `lh` | 无头登录,需 `-u`/`-p` |
 | `refresh` | `r`、`login-token`、`token-login`、`set-token`、`lt` | 用已有刷新令牌登录或刷新访问令牌;带 `preExecute` 钩子 |
 | `download` | `d` | 执行一次下载任务 |
 | `random` | `rd` | 从热门标签随机下载一张图 |
-| `scheduler` | `run`、`s` | 启动定时调度(longRunning) |
-| `migrate-config` | `mc` | 迁移配置路径(绝对转相对) |
-| `normalize` | `nf` | 规范化并重排已下载文件 |
-| `webui` | `w` | 启动 WebUI 服务器(longRunning) |
-| `health` | `check`、`diagnostic` | 系统健康检查 |
-| `status` | `stats`、`info` | 显示下载统计 |
-| `logs` | `log` | 查看最近日志 |
-| `config` | `cfg`、`conf` | 配置管理 |
-| `backup` | `backup-data` | 配置与数据备份 |
-| `maintain` | `maintenance`、`cleanup` | 自动维护(清日志、优化数据库等) |
-| `monitor` | `watch`、`status-monitor` | 实时监控进程状态 |
+| `topic` | `topics` | 把语义主题解析成相关标签(`resolve`),或试跑某天的选片(`test`) |
+| `run-once` | `refetch`、`now` | 立即把所有启用的 schedule 各跑一次后退出 |
+| `execute-slot` | `batch` | 按一次 canonical occurrence 执行(批处理/CI 执行面) |
+| `scheduler` | `s` | 启动定时调度(longRunning) |
+| `config` | `cfg`、`conf` | 配置管理(查看/编辑/备份/恢复) |
 | `setup` | `init`、`wizard` | 首次配置向导 |
+| `migrate-config` | `mc` | 迁移配置路径(绝对转相对) |
+| `tags` | `tag` | 发现相关标签并显式应用选中的标签 |
+| `health` | `check`、`diagnostic` | 系统健康检查 |
+| `doctor` | — | 诊断并(配 `--repair`)收敛 slot、delivery 与 outbox |
+| `diagnose` | `diag` | Pixiv 数据面出站探测(用法 `diagnose egress`) |
+| `reconcile` | — | 对账下游已确认的历史重复投递(默认 dry-run) |
+| `status` | `stats`、`info` | 下载统计与最近记录 |
+| `logs` | `log` | 查看最近日志 |
+| `monitor` | `watch`、`status-monitor` | 实时监控进程状态与性能指标(longRunning) |
+| `backup` | `backup-data` | 配置与数据自动备份 |
+| `maintain` | `maintenance`、`cleanup` | 自动维护(清理日志、优化数据库等) |
+| `normalize` | `nf` | 规范化并重排已下载文件 |
+| `runs` | — | 列出调度执行或查看单次执行汇总 |
+| `outbox` | — | 列出、检视、重试或取消待投递意图 |
+| `help` | `-h`、`--help` | 显示帮助 |
+| `webui` | `w` | 启动 WebUI 服务器(longRunning) |
 | `dirs` | `directories`、`paths` | 显示目录信息 |
 | `version` | `v` | 显示版本 |
 

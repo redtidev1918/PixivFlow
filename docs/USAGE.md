@@ -134,23 +134,27 @@ pixivflow webui     # 监听 3000 端口,浏览器打开 http://localhost:3000
 
 ## 全部命令速查
 
-共 20 个命令,分类与 `pixivflow help` 输出一致:
+共 29 个命令,分类与 `pixivflow help` 输出一致。别名与参数细节以 `pixivflow help <命令>` 为准。
 
 ### 认证
 
 | 命令 | 说明 |
 | --- | --- |
-| `login [-u -p]` | 交互式登录(浏览器授权,也可带账号参数) |
+| `login [-u -p]` | 交互式登录(浏览器授权,也可带账号参数);别名 `l` |
 | `login-headless -u -p` | 无图形界面环境登录;`--password-stdin` 可让密码经 stdin 传入 |
-| `refresh <token>` | 注入已有 refresh token(别名 login-token / set-token);传 `-` 改从 stdin 读取 |
+| `refresh <token>` | 注入已有 refresh token(别名 `login-token` / `set-token`);传 `-` 改从 stdin 读取 |
 
 ### 下载
 
 | 命令 | 说明 |
 | --- | --- |
-| `download [--url \| --targets \| --config]` | 执行一次下载(别名 d) |
-| `random` | 从热门标签随机下载一张 |
-| `scheduler` | 启动定时任务常驻进程 |
+| `download [--url \| --targets \| --config]` | 执行一次下载(别名 `d`) |
+| `random` | 从热门标签随机下载一张(别名 `rd`) |
+| `topic resolve <主题>` | 把语义主题解析成相关标签(别名 `topics`) |
+| `topic test [--date]` | 用指定日期的配置试跑一次选片,不落盘 |
+| `run-once` | 把所有启用的 schedule 各跑一次后退出(别名 `now` / `refetch`) |
+| `execute-slot` | 按一次 canonical occurrence 执行,供批处理与 CI 执行面调用(别名 `batch`) |
+| `scheduler` | 启动定时任务常驻进程(别名 `s`) |
 
 ### 配置
 
@@ -159,6 +163,7 @@ pixivflow webui     # 监听 3000 端口,浏览器打开 http://localhost:3000
 | `config` | 查看 / 编辑 / 备份 / 恢复配置 |
 | `setup` | 交互式配置向导,首次使用推荐 |
 | `migrate-config` | 迁移旧版配置路径(绝对路径转相对) |
+| `tags` | 发现相关标签并显式应用选中的标签(别名 `tag`) |
 
 ### 监控与状态
 
@@ -166,6 +171,9 @@ pixivflow webui     # 监听 3000 端口,浏览器打开 http://localhost:3000
 | --- | --- |
 | `status` | 下载统计与最近记录 |
 | `health` | 健康检查:配置、目录可写性、连通性 |
+| `doctor` | 诊断 slot、delivery 与 outbox 状态;加 `--repair` 落库收敛 |
+| `diagnose egress` | Pixiv 数据面的出站探测(别名 `diag`) |
+| `reconcile` | 对账下游已确认的历史重复投递,默认 dry-run |
 | `logs` | 查看最近日志 |
 | `monitor` | 实时监控进程状态与性能指标 |
 
@@ -176,13 +184,15 @@ pixivflow webui     # 监听 3000 端口,浏览器打开 http://localhost:3000
 | `backup` | 自动备份配置与数据 |
 | `maintain` | 自动维护:清理日志、优化数据库等 |
 | `normalize` | 归一化整理已下载文件的目录结构 |
-| `dirs` | 显示各类文件的实际保存位置 |
+| `runs list` / `runs show <id>` | 列出调度执行,或查看单次执行汇总 |
+| `outbox list` / `outbox inspect` / `outbox retry` / `outbox cancel` | 列出、检视、重试或取消待投递意图 |
 
 ### 工具
 
 | 命令 | 说明 |
 | --- | --- |
 | `help [command]` | 总帮助或单命令帮助 |
+| `dirs` | 显示各类文件的实际保存位置 |
 | `version` | 显示版本号 |
 | `webui` | 启动 WebUI 服务器 |
 

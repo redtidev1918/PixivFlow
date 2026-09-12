@@ -46,6 +46,23 @@ const APP_HEADERS = {
   'App-Version': '7.13.3',
 };
 
+/**
+ * Marker reason for the per-request timeout abort. `withTimeout()` aborts its
+ * own controller with it so the retry path can tell our own timeout apart from
+ * a caller/run cancellation: the caller reason is opaque (the downloader passes
+ * a plain string) and must not be inspected.
+ */
+const TIMEOUT_REASON = '__pixiv_timeout__';
+
+/** Structural AbortError test: also matches DOMException (not an Error subclass). */
+function isAbortErrorLike(e: unknown): boolean {
+  return typeof e === 'object' && e !== null && (e as { name?: unknown }).name === 'AbortError';
+}
+
+function isTimeoutReason(e: unknown): boolean {
+  return e instanceof Error && e.message === TIMEOUT_REASON;
+}
+
 
 function proxyUrl(p: ProxyOptions): string {
   const protocol = (p.protocol ?? 'http').toLowerCase();
@@ -419,22 +436,36 @@ export class Transport {
       return { action: 'throw', error: e };
     }
 
-    // AbortError from fetch/axios: distinguish our own timeout abort from a
-    // caller-provided signal abort. The internal timeout controller has NO
-    // external signal, so callerAborted cleanly separates the two cases
-    // (undici/axios attach different reasons; do not rely on their internals).
-    if (e instanceof Error && e.name === 'AbortError') {
-      const reason = (e as { cause?: unknown }).cause;
-      const isOurTimeout =
-        !callerAborted ||
-        (reason instanceof Error && reason.message === '__pixiv_timeout__');
-      if (isOurTimeout) {
-        return this.maybeTransientRetry(
-          new PixivTimeoutError(`Request timeout after ${this.timeoutMs}ms`, { endpoint: url, cause: e, code: 'timeout' }),
-          attempt,
-          url
-        );
-      }
+    // Tell our own per-request timeout apart from a caller/run cancellation.
+    // The abort reason is authoritative, not the error shape:
+    //   - our timeout aborts with TIMEOUT_REASON; undici rejects the fetch with
+    //     that reason object directly (so it arrives as a plain Error, NOT an
+    //     AbortError), while abort-wrapping runtimes expose it via `cause`;
+    //   - the caller reason is opaque (a plain string from the downloader), so
+    //     it must be classified from the signal state.
+    const abortCause = (e as { cause?: unknown } | null)?.cause;
+    if (isTimeoutReason(e) || isTimeoutReason(abortCause)) {
+      return this.maybeTransientRetry(
+        new PixivTimeoutError(`Request timeout after ${this.timeoutMs}ms`, { endpoint: url, cause: e, code: 'timeout' }),
+        attempt,
+        url
+      );
+    }
+
+    if (isAbortErrorLike(e) && !callerAborted) {
+      // An abort we cannot attribute to the caller can only be our own timeout
+      // (the only other abort source on this path).
+      return this.maybeTransientRetry(
+        new PixivTimeoutError(`Request timeout after ${this.timeoutMs}ms`, { endpoint: url, cause: e, code: 'timeout' }),
+        attempt,
+        url
+      );
+    }
+
+    if (callerAborted) {
+      // Run/scheduler cancellation is terminal by definition and must never be
+      // charged to the retry budget (waitRetry would otherwise sit out the
+      // back-off before the next attempt noticed the cancel).
       return { action: 'throw', error: new PixivAbortError('Request aborted', { cause: e, endpoint: url }) };
     }
 
@@ -467,6 +498,11 @@ export class Transport {
   }
 
   private async waitRetry(waitMs: number, signal?: AbortSignal): Promise<void> {
+    // An already-aborted signal never fires 'abort' again, so the sleeper would
+    // sit out the entire back-off before the next attempt noticed the cancel.
+    if (signal?.aborted) {
+      throw new PixivAbortError('aborted before retry back-off');
+    }
     if (waitMs <= 0) return;
     try {
       await this.sleeper(waitMs, signal);
@@ -477,15 +513,42 @@ export class Transport {
 
   // -- helpers ---------------------------------------------------------------
 
+  /**
+   * Effective per-attempt signal = the caller's/run cancellation **OR** the
+   * per-request timeout, whichever fires first.
+   *
+   * Both sources must stay armed. A caller signal may not replace the timeout:
+   * that would let a single hung socket wait for the whole schedule timeout
+   * (the caller only cancels at run level). The timeout may not replace the
+   * caller signal either: a cancelled run must not keep its request alive.
+   */
   private withTimeout(timeoutMs: number, external?: AbortSignal): { signal: AbortSignal; cancel: () => void } {
-    if (external) return { signal: external, cancel: () => {} };
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(new Error('__pixiv_timeout__')), timeoutMs);
+    const timer = setTimeout(() => controller.abort(new Error(TIMEOUT_REASON)), timeoutMs);
     if (typeof timer.unref === 'function') timer.unref();
+
+    if (!external) {
+      return {
+        signal: controller.signal,
+        cancel: () => {
+          clearTimeout(timer);
+        },
+      };
+    }
+
+    // Forward the caller reason verbatim so cancellation stays observable.
+    const onExternalAbort = (): void => controller.abort(external.reason);
+    if (external.aborted) {
+      onExternalAbort();
+    } else {
+      external.addEventListener('abort', onExternalAbort, { once: true });
+    }
+
     return {
       signal: controller.signal,
       cancel: () => {
         clearTimeout(timer);
+        external.removeEventListener('abort', onExternalAbort);
       },
     };
   }

@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.19.3](https://github.com/redtidev1918/PixivFlow/compare/v2.19.2...v2.19.3) (2026-09-12)
+
+
+### Bug Fixes
+
+* **scheduler:** preserve locked work identity across recovery ([#66](https://github.com/redtidev1918/PixivFlow/issues/66)) ([7c55230](https://github.com/redtidev1918/PixivFlow/commit/7c5523071e04ac1a04cb13e64c499ed4fa6726ed))
+* **search:** advance pager cursor across fallback pages ([#68](https://github.com/redtidev1918/PixivFlow/issues/68)) ([8b6c5dd](https://github.com/redtidev1918/PixivFlow/commit/8b6c5dd1f86e7e288a7c12e3ae5247f55dabd492))
+
 ## [2.19.2](https://github.com/redtidev1918/PixivFlow/compare/v2.19.1...v2.19.2) (2026-09-12)
 
 

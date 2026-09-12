@@ -60,7 +60,7 @@ export class SchedulerRunOnceCommand extends BaseCommand {
           // occurrence complete nor be resumed as one. Explicit replacement.
           runtime.runJob(runtime.config, plan, { adhoc: true, triggerSource: 'manual', onlyTarget: targetFilter }),
           timeoutMs,
-          () => runtime.cancelActive(`run timeout after ${timeoutMs}ms`),
+          () => runtime.cancelActive(`run timeout after ${timeoutMs}ms`, 'timeout'),
           `plan ${plan.id}`
         );
       }

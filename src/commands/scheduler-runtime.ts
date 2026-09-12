@@ -77,6 +77,40 @@ export function withDeliveryMode<T extends { delivery?: unknown }>(
   return targets.map((target) => (target.delivery ? { ...target, delivery: undefined } : target));
 }
 
+/**
+ * Who asked for the cancellation, which decides whether the abandoned Slot is
+ * allowed to stay recoverable.
+ *
+ *  - `timeout`: a watchdog inside this process (scheduler timeout, run-once or
+ *    execute-slot bound). The process stays up, so nothing will ever finish the
+ *    Slot — it must be terminalised, or the recovery sweep re-dispatches the
+ *    same occurrence on every tick forever.
+ *  - `shutdown`: the process is going away. The Slot is deliberately left
+ *    non-terminal so recovery resumes the same occurrence after restart; no
+ *    worker survives to duplicate it.
+ */
+export type CancelOrigin = 'timeout' | 'shutdown';
+
+/**
+ * Decide a scheduled run's Slot fate when `runAllTargets()` aborts abnormally
+ * instead of reporting per-target failures.
+ *
+ * Returning `false` leaves the Slot recoverable, which is only correct when the
+ * process is genuinely going away — because `recoverableSlots()` treats a
+ * released/NULL lease as "recorded but never claimed", so a live process that
+ * merely drops its lease is re-dispatched on every recovery tick, forever.
+ */
+export function shouldTerminaliseAbortedSlot(
+  origin: CancelOrigin | null,
+  slotAbandoned: boolean
+): boolean {
+  // The abandon path already wrote a terminal `failed`; rolling up again would
+  // only overwrite it when the wedged job finally settles.
+  if (slotAbandoned) return false;
+  // Shutdown is not a failure: recovery is meant to resume this occurrence.
+  return origin !== 'shutdown';
+}
+
 export interface SchedulerRuntime {
   config: StandaloneConfig;
   database: Database;
@@ -85,8 +119,14 @@ export interface SchedulerRuntime {
   tokenMaintenance: ReturnType<typeof createTokenMaintenanceService>;
   /** Run one schedule's enabled targets once (the same job the cron fires). */
   runJob(snapshot: StandaloneConfig, schedule: ScheduleConfig, options?: RunJobOptions): Promise<void>;
-  /** Cancel the in-flight download plan, if any. */
-  cancelActive(reason: string): void;
+  /**
+   * Cancel the in-flight download plan, if any holding a Slot.
+   *
+   * `origin` states whether this process is staying alive (`timeout`: the
+   * run is finished and its Slot must be terminalised) or going away
+   * (`shutdown`: leave the Slot non-terminal so recovery resumes it).
+   */
+  cancelActive(reason: string, origin?: CancelOrigin): void;
   /**
    * The active run never settled after its timeout and drain window. Stop
    * renewing its lease and take its Slot terminal so recovery cannot re-dispatch
@@ -277,6 +317,13 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
    * Set while a lease is held and cleared as soon as it is released.
    */
   let activeLeaseHooks: { stopHeartbeat(): void; abandon(reason: string): void } | null = null;
+  /**
+   * Why the in-flight run was cancelled, if it was. This is what lets the abort
+   * path tell a CRASH (nothing runs here — the process is gone) apart from an
+   * ABANDONMENT (this process is alive and will never touch the Slot again).
+   * `null` while no cancellation has been requested for the current run.
+   */
+  let activeAbortOrigin: CancelOrigin | null = null;
 
   // Independently-pumped durable outbox (content + notifications). Started in
   // the long-running scheduler daemon; run-once drains explicitly before exit.
@@ -388,6 +435,9 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
       // Only the process that actually owns the lease may report the slot as
       // running; the accepting adapter records it as pending instead.
       coordinator.markRunning(activeSlot.slotId);
+      // This run owns the Slot now: any cancellation recorded against a previous
+      // run must not decide how THIS run's abort is handled.
+      activeAbortOrigin = null;
       let cancelled = false;
       const heartbeat = setInterval(() => {
         // A cancelled/timed-out run must stop renewing its lease. An infinitely
@@ -537,9 +587,24 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
       await downloadManager.runAllTargets();
     } catch (error) {
       if (!slotCtx || !(error instanceof Error) || !/^All \d+ target\(s\) failed\./.test(error.message)) {
-        // Abnormal abort: no roll-up is possible, so hand the slot back now
-        // instead of holding it until the lease TTL expires. Recovery sees a
-        // non-terminal slot with no live lease and resumes the SAME occurrence.
+        // Abnormal abort. Two very different situations land here, and treating
+        // them as one is what produced the production loop:
+        //
+        //  - this process cancelled itself (scheduler timeout / watchdog) and is
+        //    still alive. It will never touch the Slot again, so releasing the
+        //    lease while leaving the status `running` makes the Slot look exactly
+        //    like a crashed worker: `recoverableSlots()` matches a NULL lease on
+        //    purpose (its "recorded but never claimed" case), so the recovery
+        //    sweep re-dispatches the SAME occurrence on every tick, forever.
+        //    Terminalise it instead: the occurrence is finished, and failed.
+        //
+        //  - the process is going away (`shutdown`). Deliberately leave the Slot
+        //    non-terminal so recovery resumes the same occurrence after restart.
+        if (slotCtx && shouldTerminaliseAbortedSlot(activeAbortOrigin, slotAbandoned)) {
+          coordinator.finish(slotCtx, schedule, targets);
+        }
+        // Hand the lease back either way: a terminal Slot cannot be re-dispatched,
+        // and a non-terminal one (shutdown) must not wait for its TTL to expire.
         releaseLease?.();
         throw error;
       }
@@ -581,12 +646,13 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
     logger.info('='.repeat(60));
   };
 
-  const cancelActive = (reason: string): void => {
+  const cancelActive = (reason: string, origin: CancelOrigin = 'timeout'): void => {
+    activeAbortOrigin = origin;
     activeDownloadManager?.cancel(reason);
     // Scheduler timeout / process shutdown also stop the lease heartbeat. The run
     // is on its way out (or about to be killed with the process), so it must not
-    // keep the slot locked while it unwinds. A shutdown deliberately leaves the
-    // slot NON-terminal: recovery resumes the same occurrence after restart.
+    // keep the slot locked while it unwinds. Whether the Slot is then terminalised
+    // or left recoverable is decided by `origin` in the abort path of runJob.
     activeLeaseHooks?.stopHeartbeat();
   };
 
@@ -599,7 +665,7 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
 
   const close = (): void => {
     outboxWorker.stop();
-    cancelActive('process shutdown');
+    cancelActive('process shutdown', 'shutdown');
     if (tokenMaintenance) {
       tokenMaintenance.stop();
     }

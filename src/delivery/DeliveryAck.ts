@@ -26,10 +26,21 @@ export type DeliveryAck =
       matchedKey?: string;
       raw?: unknown;
     }
+  /**
+   * The provider accepted the request and persisted a record, but that record
+   * is in a TERMINAL FAILURE state (`failed`/`rejected`/`invalid`/`expired`).
+   * Nothing will ever be published from this intent, and because the provider
+   * keys its record by OUR idempotency_key, another attempt only returns the
+   * same failed record. Terminal: never retried, never reported as delivered.
+   */
+  | { kind: 'remote_failed'; remoteId?: string; remoteStatus: string; error: string; raw?: unknown }
   /** Transient failure: timeouts, 5xx, 429, connection errors. Retryable. */
   | { kind: 'retryable_failure'; retryAfterMs?: number; error: string }
   /** Deterministic failure: 4xx (except 408/429), validation rejection. */
   | { kind: 'permanent_failure'; error: string };
+
+/** Downstream record states that will never become a published delivery. */
+const TERMINAL_REMOTE_STATUSES = new Set(['failed', 'rejected', 'invalid', 'expired']);
 
 /** Where the provider put the machine-readable result in its envelope. */
 export interface AckEnvelopeHints {
@@ -102,6 +113,22 @@ export function parseDeliveryAck(
     typeof idValue === 'number' ? String(idValue) : asString(idValue);
   const remoteStatus = asString(rec[h.statusField]);
   const reused = rec[h.reusedField] === true;
+  // A 2xx envelope can still describe a RECORD THAT FAILED downstream: the
+  // provider persists the record before doing the real work, so "accepted" and
+  // "the persisted record is broken" arrive on the same HTTP status. The record
+  // is what gets published (and what a retry will find again), so its terminal
+  // state outranks the transport-level success of this request — otherwise a
+  // remote failure is recorded here as an end-to-end success.
+  const terminalStatus = remoteStatus?.trim().toLowerCase();
+  if (terminalStatus && TERMINAL_REMOTE_STATUSES.has(terminalStatus)) {
+    return {
+      kind: 'remote_failed',
+      remoteId,
+      remoteStatus: terminalStatus,
+      error: `delivery endpoint reported terminal status ${terminalStatus}`,
+      raw: body,
+    };
+  }
   if (!reused) {
     return { kind: 'accepted', remoteId, remoteStatus, raw: body };
   }

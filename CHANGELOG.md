@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.19.2](https://github.com/redtidev1918/PixivFlow/compare/v2.19.1...v2.19.2) (2026-09-12)
+
+
+### Bug Fixes
+
+* **delivery:** only notify endpoints that can receive notifications ([07067f6](https://github.com/redtidev1918/PixivFlow/commit/07067f6c655042c101338110bb656290224acf7d))
+* **scheduler:** terminalise a Slot abandoned by its own timeout ([a0edcde](https://github.com/redtidev1918/PixivFlow/commit/a0edcde29b004428fc5ac5074cb524b366140a28))
+* **transport:** combine the caller signal with the per-request timeout ([4eb13c5](https://github.com/redtidev1918/PixivFlow/commit/4eb13c578ddc5b18710ac5ea0b269ff003a35af5))
+
 ## [2.19.1](https://github.com/redtidev1918/PixivFlow/compare/v2.19.0...v2.19.1) (2026-09-12)
 
 

@@ -157,6 +157,8 @@ export interface TriggerHandlers {
   status(scheduleId: string): unknown;
   /** Optional: pump due durable outbox rows (used to converge after cold start). */
   drainOutbox?(): Promise<{ processed?: number; done?: number; retried?: number; dead?: number }>;
+  /** Admit one target into a durable, separate manual Slot. */
+  refetch?(targetId: string, requestId: string): Promise<{ slotId: string; disposition: string }>;
 }
 
 export class ScheduleTriggerServer {
@@ -164,7 +166,8 @@ export class ScheduleTriggerServer {
 
   constructor(
     private readonly token: string | undefined,
-    private readonly handlers: TriggerHandlers
+    private readonly handlers: TriggerHandlers,
+    private readonly refetchToken: string | undefined = process.env.PIXIVFLOW_REFETCH_TOKEN?.trim() || undefined
   ) {}
 
   /** Token from config or SCHEDULER_TRIGGER_TOKEN env; empty => fail closed. */
@@ -257,6 +260,27 @@ export class ScheduleTriggerServer {
       }
     );
 
+    app.post('/internal/targets/:targetId/refetch', this.refetchAuth, async (req: Request, res: Response) => {
+      const requestId = req.body?.requestId;
+      if (typeof requestId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestId)) {
+        res.status(400).json({ status: 'error', error: 'requestId must be a UUID' });
+        return;
+      }
+      if (!this.handlers.refetch) {
+        res.status(503).json({ status: 'error', error: 'refetch is unavailable' });
+        return;
+      }
+      try {
+        const result = await this.handlers.refetch(req.params.targetId, requestId);
+        res.status(202).json({ status: 'accepted', ...result });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        const status = message === 'unknown target' ? 404 : message === 'ambiguous target' ? 409 : 500;
+        logger.warn('Manual refetch rejected', { targetId: req.params.targetId, requestId, status, error: message });
+        res.status(status).json({ status: 'error', error: status === 500 ? 'refetch admission failed' : message });
+      }
+    });
+
     // Convergence endpoint: after a machine stop/start, an operator or an
     // external watcher can ask the process to flush due deliveries/notifications
     // without running candidate selection. Deployment-agnostic (no platform refs).
@@ -344,16 +368,23 @@ export class ScheduleTriggerServer {
   }
 
   private auth = (req: Request, res: Response, next: () => void): void => {
-    if (!this.token) {
+    this.authenticate(this.token, req, res, next);
+  };
+
+  private refetchAuth = (req: Request, res: Response, next: () => void): void => {
+    this.authenticate(this.refetchToken, req, res, next);
+  };
+
+  private authenticate(expected: string | undefined, req: Request, res: Response, next: () => void): void {
+    if (!expected) {
       // Fail closed: never allow an unauthenticated trigger in production. This
       // is an admission failure, so it is reported with the status actually sent.
-      res.status(503).json({ status: 'error', error: 'trigger disabled: SCHEDULER_TRIGGER_TOKEN not configured' });
-      this.triggerOutcome('schedule.trigger_unauthorized', 503, req, res, { reason: 'trigger disabled: no token configured' });
+      res.status(503).json({ status: 'error', error: 'endpoint disabled: token not configured' });
+      this.triggerOutcome('schedule.trigger_unauthorized', 503, req, res, { reason: 'endpoint disabled: no token configured' });
       return;
     }
     const header = req.headers.authorization ?? '';
     const presented = header.startsWith('Bearer ') ? header.slice(7).trim() : '';
-    const expected = this.token;
     let ok = presented.length === expected.length;
     if (ok) {
       try {
@@ -369,7 +400,7 @@ export class ScheduleTriggerServer {
       return;
     }
     next();
-  };
+  }
 
   stop(): void {
     this.server?.close();

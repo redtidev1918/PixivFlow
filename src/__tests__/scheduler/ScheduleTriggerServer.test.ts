@@ -5,6 +5,7 @@
  */
 import http from 'node:http';
 
+import { logger } from '../../logger';
 import { ScheduleTriggerServer } from '../../scheduler/ScheduleTriggerServer';
 
 const ctx = {
@@ -256,6 +257,274 @@ describe('trigger endpoint auth + dispatch (live ephemeral express)', () => {
         headers: { Authorization: 'Bearer secret-token' },
       });
       expect(res.status).toBe(503);
+    } finally {
+      close();
+    }
+  });
+});
+
+/**
+ * Admission observability: every request outcome must leave exactly one
+ * structured line, and the HTTP status the clock sees must match the `event` an
+ * operator reads. Before this, a trigger rejected with 401/404/429/503 — or one
+ * that never arrived — was indistinguishable from a healthy one.
+ */
+describe('trigger admission observability', () => {
+  let info: jest.SpyInstance;
+  let warn: jest.SpyInstance;
+  let error: jest.SpyInstance;
+
+  // Every argument of every captured line: a leak assertion that only looked at
+  // the meta object would miss a secret embedded in the message itself.
+  const allLines = (): unknown[][] => [...info.mock.calls, ...warn.mock.calls, ...error.mock.calls];
+  const linesWithEvent = (event: string): unknown[][] =>
+    allLines().filter((call) => (call[1] as { event?: string } | undefined)?.event === event);
+  const metaFor = (event: string): Record<string, unknown> | undefined =>
+    linesWithEvent(event)[0]?.[1] as Record<string, unknown> | undefined;
+
+  beforeEach(() => {
+    info = jest.spyOn(logger, 'info').mockImplementation(() => {});
+    warn = jest.spyOn(logger, 'warn').mockImplementation(() => {});
+    error = jest.spyOn(logger, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  const runResult = (disposition: string, status: string) =>
+    jest.fn(async (id: string) => ({ scheduleId: id, slotId: ctx.slotId, disposition, status }));
+
+  // Requirement 1: disposition -> BOTH the HTTP status and the exact event name.
+  const CASES: Array<{ disposition: string; httpStatus: number; event: string; note: string }> = [
+    { disposition: 'accepted', httpStatus: 202, event: 'schedule.trigger_accepted', note: 'queued' },
+    { disposition: 'already_running', httpStatus: 202, event: 'schedule.trigger_already_running', note: 'already_running' },
+    { disposition: 'already_completed', httpStatus: 200, event: 'schedule.trigger_already_completed', note: 'already_completed' },
+    { disposition: 'rejected', httpStatus: 503, event: 'schedule.trigger_rejected', note: 'rejected' },
+  ];
+
+  it.each(CASES)(
+    'disposition $disposition answers $httpStatus and logs $event',
+    async ({ disposition, httpStatus, event, note }) => {
+      const h = handlers({ run: runResult(disposition, 'pending') });
+      const { base, close } = await boot('secret-token', h);
+      try {
+        const res = await fetch(`${base}/internal/schedules/schedule-a/run`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer secret-token' },
+          body: '{}',
+        });
+        expect(res.status).toBe(httpStatus);
+        // The wire body is unchanged: an external clock depends on it.
+        expect(await res.json()).toMatchObject({ note, schedule: { disposition } });
+
+        // Exactly one outcome line, and it names THIS status.
+        const outcomeLines = allLines().filter((call) => {
+          const name = (call[1] as { event?: string } | undefined)?.event;
+          return typeof name === 'string' && name.startsWith('schedule.trigger_') && name !== 'schedule.trigger_received';
+        });
+        expect(outcomeLines).toHaveLength(1);
+
+        const meta = metaFor(event);
+        expect(meta).toBeDefined();
+        expect(meta?.http_status).toBe(httpStatus);
+        expect(meta?.disposition).toBe(disposition);
+      } finally {
+        close();
+      }
+    }
+  );
+
+  it('unknown schedule answers 404 and logs schedule.trigger_not_found', async () => {
+    const h = handlers();
+    const { base, close } = await boot('secret-token', h);
+    try {
+      const res = await fetch(`${base}/internal/schedules/nope/run`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer secret-token' },
+        body: '{}',
+      });
+      expect(res.status).toBe(404);
+      expect(metaFor('schedule.trigger_not_found')).toMatchObject({ http_status: 404, schedule_id: 'nope' });
+      expect(h.run).not.toHaveBeenCalled();
+    } finally {
+      close();
+    }
+  });
+
+  it('a resolve refusal logs schedule.trigger_rejected with the real status, not 503', async () => {
+    const h = handlers({ resolve: jest.fn(() => ({ error: 'occurrence expired (grace 90m)', status: 410 })) });
+    const { base, close } = await boot('secret-token', h);
+    try {
+      const res = await fetch(`${base}/internal/schedules/schedule-a/run`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer secret-token' },
+        body: '{}',
+      });
+      expect(res.status).toBe(410);
+      expect(metaFor('schedule.trigger_rejected')).toMatchObject({
+        http_status: 410,
+        disposition: 'rejected',
+        reason: 'occurrence expired (grace 90m)',
+      });
+    } finally {
+      close();
+    }
+  });
+
+  // Requirement 2: correlation id + well-formed occurrence identity.
+  it('carries attempt_id, slot_id and a well-formed occurrence_at for an accepted trigger', async () => {
+    const { base, close } = await boot('secret-token', handlers());
+    try {
+      const res = await fetch(`${base}/internal/schedules/schedule-a/run`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer secret-token',
+          'x-schedule-attempt-id': '  bot1-daily:2026-09-08T02:00Z  ',
+        },
+        body: '{}',
+      });
+      expect(res.status).toBe(202);
+      const meta = metaFor('schedule.trigger_accepted');
+      expect(meta?.attempt_id).toBe('bot1-daily:2026-09-08T02:00Z');
+      expect(meta?.slot_id).toBe(ctx.slotId);
+      expect(meta?.occurrence_at).toBe('2026-09-08T02:00:00.000Z');
+      expect(new Date(String(meta?.occurrence_at)).toISOString()).toBe(meta?.occurrence_at);
+      expect(meta?.trigger_source).toBe('http');
+      expect(typeof meta?.elapsed_ms).toBe('number');
+    } finally {
+      close();
+    }
+  });
+
+  it('falls back to x-attempt-id, and omits attempt_id when no clock id was sent', async () => {
+    const { base, close } = await boot('secret-token', handlers());
+    try {
+      await fetch(`${base}/internal/schedules/schedule-a/run`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer secret-token',
+          'x-attempt-id': 'fallback-id',
+        },
+        body: '{}',
+      });
+      expect(metaFor('schedule.trigger_received')?.attempt_id).toBe('fallback-id');
+
+      info.mockClear();
+      await fetch(`${base}/internal/schedules/schedule-a/run`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer secret-token' },
+        body: '{}',
+      });
+      // Omitted, never replaced by a random value: the clock is the only issuer.
+      const received = metaFor('schedule.trigger_received');
+      expect(received).toBeDefined();
+      expect(Object.prototype.hasOwnProperty.call(received, 'attempt_id')).toBe(false);
+    } finally {
+      close();
+    }
+  });
+
+  // Provider self-identification is log-only correlation and nothing more.
+  it('records X-Schedule-Provider as sanitized log-only metadata, and it cannot change behaviour', async () => {
+    const { base, close } = await boot('secret-token', handlers());
+    try {
+      const send = (provider?: string) =>
+        fetch(`${base}/internal/schedules/schedule-a/run`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: 'Bearer secret-token',
+            ...(provider ? { 'x-schedule-provider': provider } : {}),
+          },
+          body: '{}',
+        });
+
+      const messy = `  cron-job-org; rm -rf / <script> ${'x'.repeat(60)}  `;
+      expect((await send(messy)).status).toBe(202);
+      const recorded = String(metaFor('schedule.trigger_accepted')?.provider);
+      // Bounded, and reduced to a log-safe alphabet: no shell/HTML can survive.
+      expect(recorded.length).toBeLessThanOrEqual(32);
+      expect(recorded).toMatch(/^[A-Za-z0-9._-]+$/);
+      expect(recorded.startsWith('cron-job-org')).toBe(true);
+      expect(JSON.stringify(allLines())).not.toContain('<script>');
+
+      // Omitted, never defaulted, so "unidentified clock" stays visible.
+      info.mockClear();
+      expect((await send()).status).toBe(202);
+      const anonymous = metaFor('schedule.trigger_received');
+      expect(Object.prototype.hasOwnProperty.call(anonymous, 'provider')).toBe(false);
+
+      // A clock that names itself `cloudflare` is NOT thereby trusted: provider
+      // is observability, never authorization, and never occurrence identity.
+      info.mockClear();
+      expect((await send('cloudflare')).status).toBe(202);
+      const spoofed = metaFor('schedule.trigger_accepted');
+      expect(spoofed?.provider).toBe('cloudflare');
+      expect(spoofed?.slot_id).toBe(ctx.slotId);
+      expect(spoofed?.occurrence_at).toBe('2026-09-08T02:00:00.000Z');
+    } finally {
+      close();
+    }
+  });
+
+  // Requirement 3: no auth material anywhere in the logs, ever.
+  it('never logs the bearer token or any fragment of it', async () => {
+    const SECRET = 'hunter2-super-secret';
+    const { base, close } = await boot(SECRET, handlers());
+    try {
+      const accepted = await fetch(`${base}/internal/schedules/schedule-a/run`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${SECRET}` },
+        body: '{}',
+      });
+      const refused = await fetch(`${base}/internal/schedules/schedule-a/run`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${SECRET}-nope` },
+        body: '{}',
+      });
+      expect(accepted.status).toBe(202);
+      expect(refused.status).toBe(401);
+
+      // Non-vacuous: real lines were produced by both requests.
+      expect(linesWithEvent('schedule.trigger_accepted')).toHaveLength(1);
+      expect(linesWithEvent('schedule.trigger_unauthorized')).toHaveLength(1);
+
+      const dumped = JSON.stringify(allLines());
+      expect(dumped).not.toContain(SECRET);
+      expect(dumped).not.toContain(SECRET.slice(0, 8)); // 'hunter2-'
+      expect(dumped.toLowerCase()).not.toContain('authorization');
+    } finally {
+      close();
+    }
+  });
+
+  // Requirement 4: the arrival line is emitted before auth, and is clean.
+  it('logs schedule.trigger_received before auth and carries no request secrets', async () => {
+    const { base, close } = await boot('hunter2-super-secret', handlers());
+    try {
+      const res = await fetch(`${base}/internal/schedules/schedule-a/run`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer wrong-token' },
+        body: JSON.stringify({ label: 'x' }),
+      });
+      expect(res.status).toBe(401);
+
+      const indexOf = (name: string): number =>
+        allLines().findIndex((call) => (call[1] as { event?: string } | undefined)?.event === name);
+      const receivedAt = indexOf('schedule.trigger_received');
+      const refusedAt = indexOf('schedule.trigger_unauthorized');
+      expect(receivedAt).toBeGreaterThanOrEqual(0);
+      expect(refusedAt).toBeGreaterThan(receivedAt); // arrival recorded BEFORE the refusal
+
+      const meta = metaFor('schedule.trigger_received') as Record<string, unknown>;
+      expect(meta).toMatchObject({ path: '/internal/schedules/schedule-a/run', method: 'POST' });
+      expect(meta.http_status).toBeUndefined();
+      expect(JSON.stringify(meta).toLowerCase()).not.toContain('bearer');
+      expect(JSON.stringify(meta).toLowerCase()).not.toContain('wrong-token');
+      expect(JSON.stringify(meta)).not.toContain('hunter2-super-secret');
     } finally {
       close();
     }

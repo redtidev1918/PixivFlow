@@ -85,6 +85,20 @@ export interface TargetConfig {
    */
   limit?: number;
   /**
+   * Maximum CANDIDATE works one execution may attempt (not produce) while
+   * looking for an eligible work. A scheduled "one post per slot" target has
+   * `limit: 1`, so without this the run would hold a single candidate: if that
+   * one candidate is already delivered / deleted / private, the slot ends with
+   * nothing submitted. The scan walks up to N candidates in ranking order,
+   * skipping unusable ones, and is strictly bounded so a page full of
+   * duplicates cannot loop.
+   *
+   * Overrides `download.candidateScanLimit` / `PIXIV_CANDIDATE_SCAN_LIMIT`.
+   * Clamped to 1..100 and never below `limit`, so a multi-work target can still
+   * fill its own limit.
+   */
+  candidateScanLimit?: number;
+  /**
    * Search target parameter for Pixiv API.
    */
   searchTarget?: 'partial_match_for_tags' | 'exact_match_for_tags' | 'title_and_caption';
@@ -684,6 +698,13 @@ export interface StandaloneConfig {
      * Default: 60000
      */
     timeout?: number;
+    /**
+     * How many CANDIDATE works one execution may attempt while looking for an
+     * eligible one. Per-target `candidateScanLimit` overrides this.
+     *
+     * Default: 5 (clamped to 1..100)
+     */
+    candidateScanLimit?: number;
   };
 }
 

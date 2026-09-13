@@ -5,6 +5,7 @@ import { IDatabase } from '../../../interfaces/IDatabase';
 import { RankingService } from '../../../download/RankingService';
 import { NovelDownloader } from '../../../download/NovelDownloader';
 import { DownloadPipeline } from '../../../download/pipeline/DownloadPipeline';
+import { emptyCandidateScan } from '../../../scheduler/TargetOutcome';
 import { PixivNovel } from '@redtidev/pixiv-client';
 import { NetworkError } from '../../../utils/errors';
 import { logger } from '../../../logger';
@@ -86,6 +87,7 @@ describe('NovelTargetHandler', () => {
         skipped: 0,
         alreadyDownloaded: 0,
         filteredOut: 0,
+        scan: emptyCandidateScan(),
       });
 
       await handler.handle(target);
@@ -113,6 +115,7 @@ describe('NovelTargetHandler', () => {
         skipped: 0,
         alreadyDownloaded: 0,
         filteredOut: 0,
+        scan: emptyCandidateScan(),
       });
 
       await handler.handle(target);
@@ -135,6 +138,7 @@ describe('NovelTargetHandler', () => {
         skipped: 0,
         alreadyDownloaded: 0,
         filteredOut: 0,
+        scan: emptyCandidateScan(),
       });
 
       await handler.handle(target);
@@ -203,6 +207,7 @@ describe('NovelTargetHandler', () => {
         skipped: 0,
         alreadyDownloaded: 0,
         filteredOut: 0,
+        scan: emptyCandidateScan(),
       });
 
       await handler.handle(target);
@@ -228,6 +233,7 @@ describe('NovelTargetHandler', () => {
         skipped: 0,
         alreadyDownloaded: 0,
         filteredOut: 0,
+        scan: emptyCandidateScan(),
       });
 
       await handler.handle(target);
@@ -425,6 +431,7 @@ describe('NovelTargetHandler', () => {
         skipped: 0,
         alreadyDownloaded: 0,
         filteredOut: 0,
+        scan: emptyCandidateScan(),
       });
 
       await handler.handle(target);
@@ -450,6 +457,7 @@ describe('NovelTargetHandler', () => {
         skipped: 0,
         alreadyDownloaded: 0,
         filteredOut: 0,
+        scan: emptyCandidateScan(),
       });
 
       await handler.handle(target);
@@ -479,6 +487,7 @@ describe('NovelTargetHandler', () => {
         skipped: 0,
         alreadyDownloaded: 0,
         filteredOut: 0,
+        scan: emptyCandidateScan(),
       });
 
       await handler.handle(target);
@@ -505,6 +514,7 @@ describe('NovelTargetHandler', () => {
         skipped: 0,
         alreadyDownloaded: 0,
         filteredOut: 0,
+        scan: emptyCandidateScan(),
       });
 
       await handler.handle(target);
@@ -533,6 +543,7 @@ describe('NovelTargetHandler', () => {
         skipped: 0,
         alreadyDownloaded: 0,
         filteredOut: 0,
+        scan: emptyCandidateScan(),
       });
 
       await handler.handle(target);
@@ -559,6 +570,7 @@ describe('NovelTargetHandler', () => {
         skipped: 0,
         alreadyDownloaded: 0,
         filteredOut: 0,
+        scan: emptyCandidateScan(),
       });
 
       await handler.handle(target);
@@ -585,6 +597,7 @@ describe('NovelTargetHandler', () => {
         skipped: 0,
         alreadyDownloaded: 0,
         filteredOut: 0,
+        scan: emptyCandidateScan(),
       });
 
       await handler.handle(target);
@@ -615,6 +628,7 @@ describe('NovelTargetHandler', () => {
         skipped: 0,
         alreadyDownloaded: 0,
         filteredOut: 0,
+        scan: emptyCandidateScan(),
       });
 
       await handler.handle(target);
@@ -640,6 +654,7 @@ describe('NovelTargetHandler', () => {
         skipped: 0,
         alreadyDownloaded: 0,
         filteredOut: 0,
+        scan: emptyCandidateScan(),
       });
 
       await handler.handle(target);
@@ -666,6 +681,7 @@ describe('NovelTargetHandler', () => {
         skipped: 0,
         alreadyDownloaded: 1,
         filteredOut: 0,
+        scan: emptyCandidateScan(),
       });
 
       await handler.handle(target);
@@ -692,6 +708,7 @@ describe('NovelTargetHandler', () => {
         skipped: 0,
         alreadyDownloaded: 0,
         filteredOut: 1,
+        scan: emptyCandidateScan(),
       });
 
       await handler.handle(target);
@@ -718,6 +735,7 @@ describe('NovelTargetHandler', () => {
         skipped: 1,
         alreadyDownloaded: 0,
         filteredOut: 0,
+        scan: emptyCandidateScan(),
       });
 
       await expect(handler.handle(target)).resolves.toMatchObject({ kind: 'failed', retryable: true });
@@ -737,6 +755,7 @@ describe('NovelTargetHandler', () => {
         skipped: 5,
         alreadyDownloaded: 0,
         filteredOut: 0,
+        scan: emptyCandidateScan(),
       });
 
       await handler.handle(target);
@@ -760,6 +779,7 @@ describe('NovelTargetHandler', () => {
         skipped: 1,
         alreadyDownloaded: 1,
         filteredOut: 0,
+        scan: emptyCandidateScan(),
       });
 
       await handler.handle(target);
@@ -785,7 +805,9 @@ describe('NovelTargetHandler', () => {
         },
       });
       mockPipeline.run.mockReset();
-      results.forEach((result) => mockPipeline.run.mockResolvedValueOnce(result));
+      results.forEach((result) =>
+        mockPipeline.run.mockResolvedValueOnce({ ...result, scan: emptyCandidateScan() })
+      );
       const topicHandler = new NovelTargetHandler(
         mockClient,
         mockDatabase,
@@ -853,6 +875,7 @@ describe('NovelTargetHandler', () => {
         skipped: 0,
         alreadyDownloaded: 0,
         filteredOut: 0,
+        scan: emptyCandidateScan(),
       });
 
       await handler.handle(target);
@@ -882,6 +905,7 @@ describe('NovelTargetHandler', () => {
         skipped: 0,
         alreadyDownloaded: 0,
         filteredOut: 0,
+        scan: emptyCandidateScan(),
       });
 
       // When no novels found and limit > 0, it should throw an error

@@ -61,6 +61,18 @@ export class DeliveryService {
   }
 
   /**
+   * Bulk CANDIDATE SELECTION dedupe: works already delivered to this target, or
+   * whose review submission is still PENDING an answer. A pending work is
+   * already submitted for review, so it must not be selected (and submitted)
+   * again; the scan moves on to the next candidate instead. Within-slot RESUME
+   * keeps using `isAlreadyDelivered` — a cell continuing its OWN pending work is
+   * resuming it, not duplicating it.
+   */
+  submittedIds(deliveryTarget: string, workType: string, pixivIds: string[]): Set<string> {
+    return this.database.deliveries.submittedIds(deliveryTarget, workType, pixivIds);
+  }
+
+  /**
    * Atomically create the delivery intent + outbox row and advance the cell.
    * Missing local artifact files are treated as a recoverable error (the
    * caller re-runs the download); a crash leaves the intent pending for the

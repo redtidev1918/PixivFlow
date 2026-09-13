@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.20.0](https://github.com/redtidev1918/PixivFlow/compare/v2.19.5...v2.20.0) (2026-09-13)
+
+
+### Features
+
+* **refetch:** durable manual candidate replacement workflow ([#76](https://github.com/redtidev1918/PixivFlow/issues/76)) ([e78d3d5](https://github.com/redtidev1918/PixivFlow/commit/e78d3d5124a31139981a3327a85f3363c3f3d905))
+* **scheduler:** 让 schedule 的准入与终态结果可观察 ([8938ca9](https://github.com/redtidev1918/PixivFlow/commit/8938ca91abe233aade5e593eba797285167598ed))
+* **scheduler:** 让 schedule 的准入与终态结果可观察 ([ba71680](https://github.com/redtidev1918/PixivFlow/commit/ba71680928f251a4c0af1799ba4181856406c2ab))
+
 ## [2.19.5](https://github.com/redtidev1918/PixivFlow/compare/v2.19.4...v2.19.5) (2026-09-13)
 
 

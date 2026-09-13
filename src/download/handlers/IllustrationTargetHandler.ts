@@ -26,6 +26,7 @@ import type { DownloadedArtifact } from '../../delivery/types';
 import type { TopicPipelineFactory } from '../../topic/createTopicPipeline';
 import { getTargetLabel } from '../../utils/target-label';
 import { resolveCandidateScanLimit } from '../plan/DownloadPlanner';
+import { deliveryContextFields } from './deliveryContext';
 
 export class IllustrationTargetHandler {
   /** Outcomes produced during this handle() call (deliveries + terminal non-matches). */
@@ -815,7 +816,7 @@ export class IllustrationTargetHandler {
     const res = this.deliveryService.enqueue(artifact, target, {
       slotId,
       fields: target.delivery?.fields as Record<string, unknown> | undefined,
-      extraContext: this.executionContextFields(target),
+      extraContext: deliveryContextFields(target),
     });
     if (res.duplicate) {
       return {
@@ -834,18 +835,5 @@ export class IllustrationTargetHandler {
       deliveryId: res.deliveryId,
     });
     return { kind: 'selected', workId: artifact.pixivId, workType: artifact.type };
-  }
-
-  private executionContextFields(target: TargetConfig): Record<string, unknown> {
-    const ec = (target.delivery as { executionContext?: Record<string, unknown>; slotContext?: Record<string, unknown> } | undefined);
-    return {
-      scheduleId: ec?.executionContext?.scheduleId,
-      executionId: ec?.executionContext?.slotId,
-      occurrenceAt: ec?.executionContext?.occurrenceAtIso,
-      triggerSource: ec?.executionContext?.triggerSource,
-      slotId: ec?.slotContext?.slotId ?? ec?.executionContext?.slotId,
-      slotName: ec?.slotContext?.slotName ?? ec?.executionContext?.slotName,
-      slotDate: ec?.slotContext?.slotDate ?? ec?.executionContext?.slotDate,
-    };
   }
 }

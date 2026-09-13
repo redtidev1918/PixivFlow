@@ -104,25 +104,49 @@ export class HttpMultipartDelivery implements DeliveryProvider {
 
   /** Single notification attempt; the outbox owns retries. */
   async notifyOnce(request: DeliveryNotificationRequest): Promise<{ status: number; body: unknown }> {
-    const url = this.config.notificationUrl?.trim();
-    if (!url) throw new Error('HTTP delivery notificationUrl is not configured');
+    const outcome = request.refetchOutcome;
+    const url = (outcome ? this.config.refetchOutcomeUrl?.trim() : this.config.notificationUrl?.trim());
+    if (!url) {
+      throw new Error(
+        outcome
+          ? 'HTTP delivery refetchOutcomeUrl is not configured'
+          : 'HTTP delivery notificationUrl is not configured'
+      );
+    }
     const headers = {
       ...this.resolveHeaders(this.config.headers ?? {}),
       'Content-Type': 'application/json',
     };
+    // Refetch verdicts are machine-readable JSON (the requester's review state
+    // machine consumes disposition, not prose). Plain notifications remain
+    // {text, idempotency_key}.
+    const body = outcome
+      ? {
+          request_id: outcome.requestId,
+          disposition: outcome.disposition,
+          reason: outcome.reason,
+          work_id: outcome.workId,
+          scanned: outcome.scanned,
+          skipped: outcome.skipped,
+        }
+      : { text: request.text, idempotency_key: request.idempotencyKey };
     const options: Record<string, unknown> = {
       method: 'POST',
       headers,
-      body: JSON.stringify({ text: request.text, idempotency_key: request.idempotencyKey }),
+      body: JSON.stringify(body),
     };
     if (this.dispatcher) options.dispatcher = this.dispatcher;
     const response = await fetch(this.interpolateEnvironment(url), options as Parameters<typeof fetch>[1]);
     const text = await response.text();
-    let body: unknown = text;
-    if (text) { try { body = JSON.parse(text); } catch { /* plain ok */ } }
+    let parsed: unknown = text;
+    if (text) { try { parsed = JSON.parse(text); } catch { /* plain ok */ } }
     if (!response.ok) throw new Error(`notification endpoint returned HTTP ${response.status}`);
-    logger.info('HTTP delivery notification sent', { url: redactUrl(url), status: response.status });
-    return { status: response.status, body };
+    logger.info('HTTP delivery notification sent', {
+      url: redactUrl(url),
+      status: response.status,
+      hasRefetchOutcome: Boolean(outcome),
+    });
+    return { status: response.status, body: parsed };
   }
 
   private async attempt(request: DeliveryRequest): Promise<DeliveryResult> {

@@ -548,9 +548,29 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
     downloadManager.setTargetOutcomeHook((target, outcome: TargetOutcome) => {
       if (!target.id) return;
       options.onTargetOutcome?.(target.id, outcome);
-      if (!scheduleSlot) return;
+      if (!scheduleSlot) {
+        // No durable slot (run-once CLI): nothing to converge or report.
+        return;
+      }
       coordinator.applyOutcome(scheduleSlot.slotId, target.id, outcome);
       notificationPolicy.noteOutcome(scheduleSlot.slotId, scheduleSlot, schedule, target, outcome);
+      // A remote manual replacement ("重抓") must report its terminal verdict
+      // back to the reviewer. Only terminal outcomes are reported: a candidate
+      // the scan skipped is not a verdict, and a durable delivery intent
+      // ('delivery_pending' / later 'submitted') is reported through the
+      // replacement submission itself (the caller correlates on requestId).
+      const manualRequestId = scheduleSlot.manualRequestId;
+      if (manualRequestId) {
+        const terminal =
+          outcome.kind === 'no_candidate' ||
+          outcome.kind === 'duplicate' ||
+          (outcome.kind === 'failed' && !outcome.retryable);
+        if (terminal) {
+          notificationPolicy.noteRefetchOutcome(
+            scheduleSlot, schedule, target, manualRequestId, outcome
+          );
+        }
+      }
     });
     if (scheduleSlot) {
       downloadManager.slotContext = {

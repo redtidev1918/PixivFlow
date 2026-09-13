@@ -310,6 +310,14 @@ export function validateConfig(config: Partial<StandaloneConfig>, location: stri
           errors.push(`${prefix}.notificationUrl: Must be a valid HTTP or HTTPS URL`);
         }
       }
+      if (delivery.refetchOutcomeUrl && !/\$\{[A-Za-z_][A-Za-z0-9_]*\}/.test(delivery.refetchOutcomeUrl)) {
+        try {
+          const url = new URL(delivery.refetchOutcomeUrl);
+          if (!['http:', 'https:'].includes(url.protocol)) throw new Error('unsupported protocol');
+        } catch {
+          errors.push(`${prefix}.refetchOutcomeUrl: Must be a valid HTTP or HTTPS URL`);
+        }
+      }
       if (delivery.readinessUrl && !/\$\{[A-Za-z_][A-Za-z0-9_]*\}/.test(delivery.readinessUrl)) {
         try {
           const url = new URL(delivery.readinessUrl);

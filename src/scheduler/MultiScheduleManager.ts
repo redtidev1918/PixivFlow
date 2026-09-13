@@ -227,6 +227,8 @@ export class MultiScheduleManager {
         triggerSource: asTriggerSource(slot.triggerSource),
         slotName: slot.slotName || slot.occurrenceLabel,
         slotDate: slot.slotDate || slot.occurrenceDate,
+        manualRequestId: slot.manualRequestId ?? undefined,
+        correlationId: slot.correlationId ?? undefined,
       };
 
       const admitted = this.triggerSchedule(slot.scheduleId, {

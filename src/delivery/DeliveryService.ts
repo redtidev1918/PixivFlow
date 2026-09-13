@@ -25,6 +25,27 @@ export interface EnqueueResult {
   created: boolean;
 }
 
+/**
+ * Machine-readable terminal verdict of a remote manual replacement ("重抓"),
+ * reported back to the requester (TelePost) through the durable outbox.
+ * Never contains credentials; ids are the opaque request UUID and Pixiv work ids.
+ */
+export interface RefetchOutcomePayload {
+  requestId: string;
+  /** 'no_alternative' | 'failed' (replacement success rides the submission). */
+  disposition: 'no_alternative' | 'failed';
+  reason?: string;
+  workId?: string;
+  /** Bounded candidate-scan bookkeeping for diagnostics (spec-compatible). */
+  scanned?: number;
+  skipped?: {
+    total: number;
+    duplicate: number;
+    invalid: number;
+    unavailable: number;
+  };
+}
+
 export class DeliveryService {
   constructor(private readonly database: Database) {}
 
@@ -234,12 +255,17 @@ export class DeliveryService {
   }
 
   /** Enqueue a durable notification (retried independently; never affects content). */
-  enqueueNotification(deliveryTarget: string, text: string, idempotencyKey: string): void {
+  enqueueNotification(
+    deliveryTarget: string,
+    text: string,
+    idempotencyKey: string,
+    refetchOutcome?: RefetchOutcomePayload
+  ): void {
     this.database.outbox.enqueue({
       kind: 'notification',
       deliveryTarget,
       idempotencyKey,
-      payload: { text },
+      payload: refetchOutcome ? { text, refetchOutcome } : { text },
     });
   }
 

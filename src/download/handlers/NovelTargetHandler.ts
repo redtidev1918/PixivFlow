@@ -26,6 +26,7 @@ import type { DownloadedArtifact } from '../../delivery/types';
 import type { TopicPipelineFactory } from '../../topic/createTopicPipeline';
 import { getTargetLabel } from '../../utils/target-label';
 import { resolveCandidateScanLimit } from '../plan/DownloadPlanner';
+import { deliveryContextFields } from './deliveryContext';
 
 export class NovelTargetHandler {
   private outcomes: TargetOutcome[] = [];
@@ -859,6 +860,7 @@ export class NovelTargetHandler {
     const res = this.deliveryService.enqueue(artifact, target, {
       slotId,
       fields: target.delivery?.fields as Record<string, unknown> | undefined,
+      extraContext: deliveryContextFields(target),
     });
     if (res.duplicate) {
       return {

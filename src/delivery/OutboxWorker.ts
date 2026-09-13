@@ -3,7 +3,7 @@ import { unlink } from 'node:fs/promises';
 import { Database } from '../storage/Database';
 import { OutboxRow, OutboxStatus, RecordEventInput } from '../storage/repositories/OutboxRepository';
 import { DeliveryDispatcher } from './DeliveryDispatcher';
-import { DeliveryRequest } from './types';
+import { DeliveryNotificationRequest, DeliveryRequest } from './types';
 import { DeliveryAck } from './DeliveryAck';
 import { classifyError, DeliveryErrorClass } from './errorClass';
 import { redactError } from '../utils/redact';
@@ -38,6 +38,8 @@ export interface DeliveryPayload {
 /** Notification side-effect payload. */
 export interface NotificationPayload {
   text: string;
+  /** Optional structured remote-manual-replacement verdict (refetch outcome). */
+  refetchOutcome?: unknown;
 }
 
 /** Exponential backoff with jitter, capped. */
@@ -245,6 +247,10 @@ export class OutboxWorker {
         await this.dispatcher.notify(row.deliveryTarget, {
           text: payload.text,
           idempotencyKey: row.idempotencyKey ?? row.id,
+          refetchOutcome:
+            payload.refetchOutcome !== undefined
+              ? (payload.refetchOutcome as DeliveryNotificationRequest['refetchOutcome'])
+              : undefined,
         });
       } else {
         const payload = JSON.parse(row.payloadJson) as DeliveryPayload;

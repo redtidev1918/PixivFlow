@@ -96,6 +96,15 @@ export class DatabaseMigration {
             lease_owner TEXT,
             lease_until INTEGER,
             heartbeat_at INTEGER,
+            -- Request UUID of a remote manual replacement ("重抓"). NULL for a
+            -- scheduled occurrence. Persisted in the SAME transaction that
+            -- opens the manual slot, so the acceptance ACK and the caller's
+            -- retry converge on one row instead of racing a second slot.
+            manual_request_id TEXT,
+            -- Opaque caller correlation (review chain / review id). Recorded so
+            -- the terminal outcome can be reported back to the requester
+            -- without this service learning anything about the review.
+            correlation_id TEXT,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             started_at DATETIME,
             completed_at DATETIME,
@@ -226,6 +235,8 @@ export class DatabaseMigration {
         lease_owner: 'ALTER TABLE schedule_slots ADD COLUMN lease_owner TEXT',
         lease_until: 'ALTER TABLE schedule_slots ADD COLUMN lease_until INTEGER',
         heartbeat_at: 'ALTER TABLE schedule_slots ADD COLUMN heartbeat_at INTEGER',
+        manual_request_id: 'ALTER TABLE schedule_slots ADD COLUMN manual_request_id TEXT',
+        correlation_id: 'ALTER TABLE schedule_slots ADD COLUMN correlation_id TEXT',
       };
       const columnAlters: string[] = [];
       for (const [col, sql] of Object.entries(slotColumnMigrations)) {

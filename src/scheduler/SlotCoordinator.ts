@@ -32,8 +32,8 @@ export const SLOT_LEASE_TTL_MS = 3 * 60 * 1000;
 export const SLOT_HEARTBEAT_MS = 30 * 1000;
 
 /**
- * Durable execution context attached to a run. A scheduled occurrence always
- * has a slotId; an ad-hoc/manual run has none (it never touches the slot ledger).
+ * Durable execution context attached to a scheduled occurrence or a remote
+ * manual replacement. The local run-once CLI has no SlotContext.
  */
 export interface SlotContext {
   slotId: string;
@@ -50,6 +50,16 @@ export interface SlotContext {
    */
   slotName: string;
   slotDate: string;
+  /**
+   * Remote manual replacement ("重抓") request UUID. Present only on slots
+   * opened by the authenticated refetch endpoint; null for scheduled
+   * occurrences. Persisted with the slot so a sleeping worker that recovers
+   * the slot still knows it was a manual replacement (delivery correlation,
+   * outcome reporting) without any in-memory state.
+   */
+  manualRequestId?: string;
+  /** Opaque caller correlation (review chain / review id). Null unless manual. */
+  correlationId?: string;
 }
 
 export interface SlotCellSummary {
@@ -266,6 +276,8 @@ export class SlotCoordinator {
       triggerSource: slot.triggerSource,
       slotDate: slot.slotDate,
       slotName: slot.slotName,
+      manualRequestId: slot.manualRequestId ?? null,
+      correlationId: slot.correlationId ?? null,
     });
     if (created) {
       // Freeze membership: materialize one cell per target id from the snapshot.

@@ -542,6 +542,13 @@ export interface HttpMultipartDeliveryConfig {
   url: string;
   /** Optional JSON endpoint used for no-match operational notifications. */
   notificationUrl?: string;
+  /**
+   * Optional JSON endpoint for remote manual replacement ("重抓") terminal
+   * verdicts (no_alternative / failed). Must be http(s); if unset, manual
+   * outcome reports are skipped (the work itself is still durable). Reuses
+   * `headers` for auth, so no extra credential is needed.
+   */
+  refetchOutcomeUrl?: string;
   method?: 'POST' | 'PUT';
   /** 支持 ${ENV_NAME} 环境变量插值 */
   headers?: Record<string, string>;

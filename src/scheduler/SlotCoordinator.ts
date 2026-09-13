@@ -50,6 +50,16 @@ export interface SlotContext {
    */
   slotName: string;
   slotDate: string;
+  /**
+   * Remote manual replacement ("重抓") request UUID. Present only on slots
+   * opened by the authenticated refetch endpoint; null for scheduled
+   * occurrences. Persisted with the slot so a sleeping worker that recovers
+   * the slot still knows it was a manual replacement (delivery correlation,
+   * outcome reporting) without any in-memory state.
+   */
+  manualRequestId?: string;
+  /** Opaque caller correlation (review chain / review id). Null unless manual. */
+  correlationId?: string;
 }
 
 export interface SlotCellSummary {
@@ -266,6 +276,8 @@ export class SlotCoordinator {
       triggerSource: slot.triggerSource,
       slotDate: slot.slotDate,
       slotName: slot.slotName,
+      manualRequestId: slot.manualRequestId ?? null,
+      correlationId: slot.correlationId ?? null,
     });
     if (created) {
       // Freeze membership: materialize one cell per target id from the snapshot.

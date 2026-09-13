@@ -36,6 +36,10 @@ export interface SlotRecord {
   leaseOwner: string | null;
   leaseUntil: number | null;
   heartbeatAt: number | null;
+  /** Request UUID of a remote manual replacement; null for scheduled slots. */
+  manualRequestId: string | null;
+  /** Opaque caller correlation (review chain / review id); null unless manual. */
+  correlationId: string | null;
 }
 
 export interface SlotItemRecord {
@@ -81,15 +85,19 @@ export class SlotRepository extends BaseRepository {
       // Legacy display fields (optional).
       slotDate?: string;
       slotName?: string;
+      /** Remote manual replacement request UUID (opens a `manual-` slot). */
+      manualRequestId?: string | null;
+      /** Opaque caller correlation recorded with a manual slot. */
+      correlationId?: string | null;
     }
   ): { slot: SlotRecord; created: boolean } {
     const insert = this.db.prepare(
       `INSERT INTO schedule_slots
          (id, schedule_id, occurrence_at, occurrence_date, occurrence_label, timezone, target_ids,
-          status, trigger_source, slot_date, slot_name)
+          status, trigger_source, slot_date, slot_name, manual_request_id, correlation_id)
        VALUES
          (@id, @scheduleId, @occurrenceAt, @occurrenceDate, @occurrenceLabel, @timezone, @targetIds,
-          'pending', @triggerSource, @slotDate, @slotName)
+          'pending', @triggerSource, @slotDate, @slotName, @manualRequestId, @correlationId)
        ON CONFLICT(id) DO NOTHING`
     );
     const info = insert.run({
@@ -103,6 +111,8 @@ export class SlotRepository extends BaseRepository {
       triggerSource: data.triggerSource ?? null,
       slotDate: data.slotDate ?? data.occurrenceDate ?? '',
       slotName: data.slotName ?? '',
+      manualRequestId: data.manualRequestId ?? null,
+      correlationId: data.correlationId ?? null,
     });
     const created = info.changes > 0;
     return { slot: this.getSlot(id)!, created };
@@ -472,6 +482,8 @@ export class SlotRepository extends BaseRepository {
       leaseOwner: row.lease_owner ?? null,
       leaseUntil: row.lease_until ?? null,
       heartbeatAt: row.heartbeat_at ?? null,
+      manualRequestId: row.manual_request_id ?? null,
+      correlationId: row.correlation_id ?? null,
     };
   }
 

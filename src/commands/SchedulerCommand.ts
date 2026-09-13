@@ -170,7 +170,7 @@ export class SchedulerCommand extends BaseCommand {
               };
             },
             drainOutbox: () => runtime.drainOutbox(),
-            refetch: async (targetId, requestId) => {
+            refetch: async (targetId, requestId, correlationId) => {
               const cfg = resolveConfig();
               const plans = (cfg.schedules ?? []).filter((plan) =>
                 plan.enabled !== false && selectScheduleTargets(cfg.targets, plan).some((target) => target.id === targetId)
@@ -193,6 +193,8 @@ export class SchedulerCommand extends BaseCommand {
                 triggerSource: 'manual' as const,
                 slotName: '审核群重抓',
                 slotDate: date,
+                manualRequestId: requestId,
+                correlationId: correlationId || undefined,
               };
               const existing = runtime.database.slots.getSlot(slot.slotId);
               if (existing && (existing.scheduleId !== plan.id || existing.targetIds.length !== 1 || existing.targetIds[0] !== targetId)) {

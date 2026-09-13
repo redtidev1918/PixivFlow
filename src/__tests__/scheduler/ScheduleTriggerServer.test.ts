@@ -63,10 +63,28 @@ describe('trigger endpoint auth + dispatch (live ephemeral express)', () => {
       const invalid = await fetch(url, { method: 'POST', headers: { Authorization: 'Bearer refetch-token', 'Content-Type': 'application/json' }, body: JSON.stringify({ requestId: 'bad' }) });
       expect(invalid.status).toBe(400);
       expect(refetch).not.toHaveBeenCalled();
-      const accepted = await fetch(url, { method: 'POST', headers: { Authorization: 'Bearer refetch-token', 'Content-Type': 'application/json' }, body: JSON.stringify({ requestId }) });
+      const accepted = await fetch(url, { method: 'POST', headers: { Authorization: 'Bearer refetch-token', 'Content-Type': 'application/json' }, body: JSON.stringify({ requestId, correlationId: 'chain-1' }) });
       expect(accepted.status).toBe(202);
       expect(await accepted.json()).toMatchObject({ status: 'accepted', slotId: 'manual-slot' });
-      expect(refetch).toHaveBeenCalledWith('target-a', requestId);
+      expect(refetch).toHaveBeenCalledWith('target-a', requestId, 'chain-1');
+    } finally {
+      close();
+    }
+  });
+
+  it('accepts an optional correlation id and rejects an oversized one', async () => {
+    const refetch = jest.fn(async () => ({ slotId: 'manual-slot', disposition: 'accepted' }));
+    const h = handlers({ refetch });
+    const { base, close } = await boot('schedule-token', h, 'refetch-token');
+    const url = `${base}/internal/targets/target-a/refetch`;
+    const requestId = '6eb50329-20f2-4ea7-b95b-e4676b50d9f1';
+    try {
+      const without = await fetch(url, { method: 'POST', headers: { Authorization: 'Bearer refetch-token', 'Content-Type': 'application/json' }, body: JSON.stringify({ requestId }) });
+      expect(without.status).toBe(202);
+      expect(refetch).toHaveBeenLastCalledWith('target-a', requestId, undefined);
+      const oversized = await fetch(url, { method: 'POST', headers: { Authorization: 'Bearer refetch-token', 'Content-Type': 'application/json' }, body: JSON.stringify({ requestId, correlationId: 'x'.repeat(201) }) });
+      expect(oversized.status).toBe(400);
+      expect(refetch).toHaveBeenCalledTimes(1);
     } finally {
       close();
     }

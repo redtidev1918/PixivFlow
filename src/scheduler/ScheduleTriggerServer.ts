@@ -158,7 +158,11 @@ export interface TriggerHandlers {
   /** Optional: pump due durable outbox rows (used to converge after cold start). */
   drainOutbox?(): Promise<{ processed?: number; done?: number; retried?: number; dead?: number }>;
   /** Admit one target into a durable, separate manual Slot. */
-  refetch?(targetId: string, requestId: string): Promise<{ slotId: string; disposition: string }>;
+  refetch?(
+    targetId: string,
+    requestId: string,
+    correlationId?: string
+  ): Promise<{ slotId: string; disposition: string }>;
 }
 
 export class ScheduleTriggerServer {
@@ -266,12 +270,20 @@ export class ScheduleTriggerServer {
         res.status(400).json({ status: 'error', error: 'requestId must be a UUID' });
         return;
       }
+      // Opaque caller correlation (review chain / review id). Optional; bounded
+      // length, never interpreted here. Recorded with the manual Slot so a
+      // recovered worker still correlates the outcome with the requester.
+      const correlationId = req.body?.correlationId;
+      if (correlationId !== undefined && (typeof correlationId !== 'string' || correlationId.length > 200)) {
+        res.status(400).json({ status: 'error', error: 'correlationId must be a string of at most 200 chars' });
+        return;
+      }
       if (!this.handlers.refetch) {
         res.status(503).json({ status: 'error', error: 'refetch is unavailable' });
         return;
       }
       try {
-        const result = await this.handlers.refetch(req.params.targetId, requestId);
+        const result = await this.handlers.refetch(req.params.targetId, requestId, correlationId ?? undefined);
         res.status(202).json({ status: 'accepted', ...result });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);

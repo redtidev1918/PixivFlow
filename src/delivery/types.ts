@@ -96,6 +96,19 @@ export interface DeliveryResult {
 export interface DeliveryNotificationRequest {
   text: string;
   idempotencyKey: string;
+  /**
+   * Optional structured remote-manual-replacement verdict. When present the
+   * delivery sends a JSON body to the target's `refetchOutcomeUrl` instead of
+   * a plain text notification to `notificationUrl` (auth reuses `headers`).
+   */
+  refetchOutcome?: {
+    requestId: string;
+    disposition: 'no_alternative' | 'failed';
+    reason?: string;
+    workId?: string;
+    scanned?: number;
+    skipped?: { total: number; duplicate: number; invalid: number; unavailable: number };
+  };
 }
 
 export interface DeliveryProvider {

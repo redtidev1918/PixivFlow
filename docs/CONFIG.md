@@ -401,9 +401,17 @@ Authorization: Bearer <SCHEDULER_TRIGGER_TOKEN>
 
 服务端**只**根据该 schedule 自己的 `cron` + `timezone` 与当前时刻解析 canonical occurrence；请求体不接受日期，无法回填历史。重复/并发/重试触发都收敛到同一个 durable occurrence。
 
-> internal 的 cron、外部 HTTP、`run-once` 手动执行，都进入同一个执行服务；差别只是 trigger source（`cron`/`http`/`manual`/`catchup`）。`run-once`（含 TelePost「重抓/换一张」）是 **ad-hoc** 执行：跑下载计划但**不**打开定时 occurrence，绝不会把某次定时任务标记为完成。
+审核群的目标级重抓使用独立端点：
 
-**投递模板里的执行来源变量**（scheduled 运行时注入；ad-hoc 为空）：
+```
+POST /internal/targets/{targetId}/refetch
+Authorization: Bearer <PIXIVFLOW_REFETCH_TOKEN>
+{ "requestId": "<UUID>" }
+```
+
+`PIXIVFLOW_REFETCH_TOKEN` 缺失时端点拒绝请求。请求只选一个已启用 schedule 中的 target；`requestId` 是重试幂等键，重复请求复用同一个 `manual-` Slot。服务端先持久化再返回 `202 accepted`，执行和投递在后台进行；手动 Slot 与定时 occurrence 分离，不会把定时任务标为完成。`run-once` CLI 仍是无 Slot 的 ad-hoc 命令。
+
+**投递模板里的执行来源变量**（有 Slot 的定时和远程重抓运行时注入；`run-once` CLI 为空）：
 `{{scheduleId}}`、`{{executionId}}`（durable occurrence id）、`{{occurrenceAt}}`（ISO）、
 `{{triggerSource}}`，以及兼容别名 `{{slotId}}`/`{{slotName}}`/`{{slotDate}}`。
 它们都是通用执行上下文，可投递到任意 HTTP 端点，不绑定特定下游。

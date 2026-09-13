@@ -32,8 +32,8 @@ export const SLOT_LEASE_TTL_MS = 3 * 60 * 1000;
 export const SLOT_HEARTBEAT_MS = 30 * 1000;
 
 /**
- * Durable execution context attached to a run. A scheduled occurrence always
- * has a slotId; an ad-hoc/manual run has none (it never touches the slot ledger).
+ * Durable execution context attached to a scheduled occurrence or a remote
+ * manual replacement. The local run-once CLI has no SlotContext.
  */
 export interface SlotContext {
   slotId: string;

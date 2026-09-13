@@ -177,7 +177,7 @@ executeCommand():command.validate?(args) → command.execute(context, args)
 - **Readiness 边界**：delivery target 配置 `readinessUrl` 后，非 2xx 只释放租约并延后消费，attempt 不增加；`/live` 不能代替 `/ready`。
 - **媒体边界**：cache 模式插画可在 `previews` multipart 字段提供一一对应的 Pixiv preview；原图仍保留在 `files`，接收端决定审核展示与安全 fallback，PixivFlow 不替接收端解码原图。
 - **运行租约**：重复 HTTP 触发对同一 slot 只会有一个 owner（`claimSlotLease` 比较-设置）；冲突触发观察/恢复而非并行执行，崩溃后租约过期才可被接管。
-- **Scheduled vs Ad-hoc**：`run-once` / 「重抓」是 ad-hoc 执行，跑下载计划但**不**打开 occurrence，绝不能把某次定时 occurrence 标记为完成或被 resume。
+- **Scheduled vs Manual**：定时执行使用 canonical occurrence；审核群远程「重抓」创建带请求 UUID 的独立 `manual-` Slot，先落库、可恢复，绝不改写定时 occurrence。`run-once` CLI 仍是无 Slot 的 ad-hoc 执行。
 
 **架构不变量（Architecture Invariants）**：
 

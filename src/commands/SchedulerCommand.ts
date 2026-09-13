@@ -170,6 +170,39 @@ export class SchedulerCommand extends BaseCommand {
               };
             },
             drainOutbox: () => runtime.drainOutbox(),
+            refetch: async (targetId, requestId) => {
+              const cfg = resolveConfig();
+              const plans = (cfg.schedules ?? []).filter((plan) =>
+                plan.enabled !== false && selectScheduleTargets(cfg.targets, plan).some((target) => target.id === targetId)
+              );
+              if (plans.length === 0) throw new Error('unknown target');
+              if (plans.length !== 1) throw new Error('ambiguous target');
+              const plan = plans[0];
+              const target = selectScheduleTargets(cfg.targets, plan).find((item) => item.id === targetId)!;
+              const now = new Date();
+              const date = new Intl.DateTimeFormat('en-CA', {
+                timeZone: plan.timezone ?? 'UTC', year: 'numeric', month: '2-digit', day: '2-digit',
+              }).format(now);
+              const slot = {
+                slotId: `${plan.id}@manual-${requestId.toLowerCase()}`,
+                scheduleId: plan.id,
+                occurrenceAt: now.getTime(),
+                occurrenceDate: date,
+                occurrenceLabel: 'manual',
+                timezone: plan.timezone ?? 'UTC',
+                triggerSource: 'manual' as const,
+                slotName: '审核群重抓',
+                slotDate: date,
+              };
+              const existing = runtime.database.slots.getSlot(slot.slotId);
+              if (existing && (existing.scheduleId !== plan.id || existing.targetIds.length !== 1 || existing.targetIds[0] !== targetId)) {
+                throw new Error('ambiguous target');
+              }
+              const prepared = coordinator.prepare(slot, plan, [target]);
+              if (prepared.alreadyCompleted) return { slotId: slot.slotId, disposition: 'already_completed' };
+              const started = manager.triggerSchedule(plan.id, { slot, onlyTarget: targetId, triggerSource: 'manual' });
+              return { slotId: slot.slotId, disposition: started ? 'accepted' : 'queued' };
+            },
             status: (scheduleId) => {
               const cfg = resolveConfig();
               const plan = findPlan(cfg, scheduleId);

@@ -1,7 +1,10 @@
 import type { TargetConfig } from '../../../config';
 import type { IDatabase } from '../../../interfaces/IDatabase';
 import type { PixivIllust } from '@redtidev/pixiv-client';
-import { DownloadPlanner } from '../../../download/plan/DownloadPlanner';
+import {
+  DEFAULT_CANDIDATE_SCAN_LIMIT,
+  DownloadPlanner,
+} from '../../../download/plan/DownloadPlanner';
 
 jest.mock('../../../logger', () => ({
   logger: {
@@ -190,18 +193,30 @@ describe('DownloadPlanner', () => {
     expect(plan.queue.map((item) => item.id)).toEqual([1, 2, 3]);
   });
 
-  it('keeps a bounded ordered retry pool for topic illustration failures', () => {
+  it('bounds the topic candidate window by the configured scan limit, not the fetch pool', () => {
     const { database } = createDatabaseMock();
     const planner = new DownloadPlanner(database);
     const items = Array.from({ length: 30 }, (_, index) => createIllustration(index + 1));
 
-    const plan = planner.planDownloads(
+    // Topic discovery is still fetched as a ranked pool of 20, but a run may
+    // only ATTEMPT `candidateScanLimit` (default 5) of them: one knob governs
+    // attempts, so a page full of rejects cannot become a crawl.
+    const bounded = planner.planDownloads(
       items,
       createTarget({ mode: 'topic', topic: '丸呑み', limit: 1 }),
       'illustration'
     );
+    expect(bounded.scanBound).toBe(DEFAULT_CANDIDATE_SCAN_LIMIT);
+    expect(bounded.queue.map((item) => item.id)).toEqual([1, 2, 3, 4, 5]);
 
-    expect(plan.queue.map((item) => item.id)).toEqual(
+    // An operator who needs the deeper pool says so explicitly.
+    const deeper = planner.planDownloads(
+      items,
+      createTarget({ mode: 'topic', topic: '丸呑み', limit: 1, candidateScanLimit: 20 }),
+      'illustration'
+    );
+    expect(deeper.scanBound).toBe(20);
+    expect(deeper.queue.map((item) => item.id)).toEqual(
       Array.from({ length: 20 }, (_, index) => index + 1)
     );
   });

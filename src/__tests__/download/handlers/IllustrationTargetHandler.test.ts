@@ -5,6 +5,7 @@ import { IDatabase } from '../../../interfaces/IDatabase';
 import { RankingService } from '../../../download/RankingService';
 import { IllustrationDownloader } from '../../../download/IllustrationDownloader';
 import { DownloadPipeline } from '../../../download/pipeline/DownloadPipeline';
+import { emptyCandidateScan } from '../../../scheduler/TargetOutcome';
 import { PixivIllust } from '@redtidev/pixiv-client';
 import { NetworkError } from '../../../utils/errors';
 import { logger } from '../../../logger';
@@ -89,6 +90,7 @@ describe('IllustrationTargetHandler', () => {
         skipped: 0,
         alreadyDownloaded: 0,
         filteredOut: 0,
+        scan: emptyCandidateScan(),
       });
 
       await handler.handle(target);
@@ -116,6 +118,7 @@ describe('IllustrationTargetHandler', () => {
         skipped: 0,
         alreadyDownloaded: 0,
         filteredOut: 0,
+        scan: emptyCandidateScan(),
       });
 
       await handler.handle(target);
@@ -138,6 +141,7 @@ describe('IllustrationTargetHandler', () => {
         skipped: 0,
         alreadyDownloaded: 0,
         filteredOut: 0,
+        scan: emptyCandidateScan(),
       });
 
       await handler.handle(target);
@@ -186,6 +190,7 @@ describe('IllustrationTargetHandler', () => {
         skipped: 0,
         alreadyDownloaded: 1,
         filteredOut: 0,
+        scan: emptyCandidateScan(),
       });
 
       await topicHandler.handle(target);
@@ -215,8 +220,8 @@ describe('IllustrationTargetHandler', () => {
         },
       });
       mockPipeline.run
-        .mockResolvedValueOnce({ downloaded: 0, skipped: 0, alreadyDownloaded: 0, filteredOut: 0 })
-        .mockResolvedValueOnce({ downloaded: 1, skipped: 0, alreadyDownloaded: 0, filteredOut: 0 });
+        .mockResolvedValueOnce({ downloaded: 0, skipped: 0, alreadyDownloaded: 0, filteredOut: 0, scan: emptyCandidateScan() })
+        .mockResolvedValueOnce({ downloaded: 1, skipped: 0, alreadyDownloaded: 0, filteredOut: 0, scan: emptyCandidateScan() });
       const topicHandler = new IllustrationTargetHandler(
         mockClient, mockDatabase, mockRankingService, mockIllustrationDownloader,
         mockPipeline, () => ({ selectWorks } as any)
@@ -242,6 +247,7 @@ describe('IllustrationTargetHandler', () => {
       });
       mockPipeline.run.mockResolvedValue({
         downloaded: 0, skipped: 0, alreadyDownloaded: 0, filteredOut: 0,
+        scan: emptyCandidateScan(),
       });
       const topicHandler = new IllustrationTargetHandler(
         mockClient, mockDatabase, mockRankingService, mockIllustrationDownloader,
@@ -313,6 +319,7 @@ describe('IllustrationTargetHandler', () => {
         skipped: 0,
         alreadyDownloaded: 0,
         filteredOut: 0,
+        scan: emptyCandidateScan(),
       });
 
       await handler.handle(target);
@@ -338,6 +345,7 @@ describe('IllustrationTargetHandler', () => {
         skipped: 0,
         alreadyDownloaded: 0,
         filteredOut: 0,
+        scan: emptyCandidateScan(),
       });
 
       await handler.handle(target);
@@ -367,6 +375,7 @@ describe('IllustrationTargetHandler', () => {
         skipped: 0,
         alreadyDownloaded: 0,
         filteredOut: 0,
+        scan: emptyCandidateScan(),
       });
 
       await handler.handle(target);
@@ -392,6 +401,7 @@ describe('IllustrationTargetHandler', () => {
         skipped: 0,
         alreadyDownloaded: 0,
         filteredOut: 0,
+        scan: emptyCandidateScan(),
       });
 
       await handler.handle(target);
@@ -421,6 +431,7 @@ describe('IllustrationTargetHandler', () => {
         skipped: 0,
         alreadyDownloaded: 0,
         filteredOut: 0,
+        scan: emptyCandidateScan(),
       });
 
       await handler.handle(target);
@@ -447,6 +458,7 @@ describe('IllustrationTargetHandler', () => {
         skipped: 0,
         alreadyDownloaded: 0,
         filteredOut: 0,
+        scan: emptyCandidateScan(),
       });
 
       await handler.handle(target);
@@ -475,6 +487,7 @@ describe('IllustrationTargetHandler', () => {
         skipped: 0,
         alreadyDownloaded: 0,
         filteredOut: 0,
+        scan: emptyCandidateScan(),
       });
 
       await handler.handle(target);
@@ -501,6 +514,7 @@ describe('IllustrationTargetHandler', () => {
         skipped: 0,
         alreadyDownloaded: 0,
         filteredOut: 0,
+        scan: emptyCandidateScan(),
       });
 
       await handler.handle(target);
@@ -527,6 +541,7 @@ describe('IllustrationTargetHandler', () => {
         skipped: 0,
         alreadyDownloaded: 0,
         filteredOut: 0,
+        scan: emptyCandidateScan(),
       });
 
       await handler.handle(target);
@@ -557,6 +572,7 @@ describe('IllustrationTargetHandler', () => {
         skipped: 0,
         alreadyDownloaded: 0,
         filteredOut: 0,
+        scan: emptyCandidateScan(),
       });
 
       await handler.handle(target);
@@ -582,6 +598,7 @@ describe('IllustrationTargetHandler', () => {
         skipped: 0,
         alreadyDownloaded: 0,
         filteredOut: 0,
+        scan: emptyCandidateScan(),
       });
 
       await handler.handle(target);
@@ -608,6 +625,7 @@ describe('IllustrationTargetHandler', () => {
         skipped: 0,
         alreadyDownloaded: 1,
         filteredOut: 0,
+        scan: emptyCandidateScan(),
       });
 
       await handler.handle(target);
@@ -634,6 +652,7 @@ describe('IllustrationTargetHandler', () => {
         skipped: 0,
         alreadyDownloaded: 0,
         filteredOut: 1,
+        scan: emptyCandidateScan(),
       });
 
       await handler.handle(target);
@@ -659,6 +678,7 @@ describe('IllustrationTargetHandler', () => {
         skipped: 0,
         alreadyDownloaded: 0,
         filteredOut: 0,
+        scan: emptyCandidateScan(),
       });
 
       await handler.handle(target);
@@ -685,6 +705,7 @@ describe('IllustrationTargetHandler', () => {
         skipped: 1,
         alreadyDownloaded: 0,
         filteredOut: 0,
+        scan: emptyCandidateScan(),
       });
 
       await expect(handler.handle(target)).resolves.toMatchObject({ kind: 'failed', retryable: true });
@@ -704,6 +725,7 @@ describe('IllustrationTargetHandler', () => {
         skipped: 5,
         alreadyDownloaded: 0,
         filteredOut: 0,
+        scan: emptyCandidateScan(),
       });
 
       await handler.handle(target);
@@ -727,6 +749,7 @@ describe('IllustrationTargetHandler', () => {
         skipped: 1,
         alreadyDownloaded: 1,
         filteredOut: 0,
+        scan: emptyCandidateScan(),
       });
 
       await handler.handle(target);

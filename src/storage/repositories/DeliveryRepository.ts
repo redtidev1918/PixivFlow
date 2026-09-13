@@ -111,8 +111,32 @@ export class DeliveryRepository extends BaseRepository {
 
   /** Batch form for candidate-pipeline pre-lock dedupe. */
   deliveredIds(deliveryTarget: string, workType: string, pixivIds: string[]): Set<string> {
+    return this.idsByStatus(deliveryTarget, workType, pixivIds, ['delivered', 'duplicate']);
+  }
+
+  /**
+   * Batch pre-lock dedupe for CANDIDATE SELECTION: works already delivered, or
+   * whose review submission is still PENDING.
+   *
+   * Deliberately broader than `deliveredIds`: a pending intent is a work already
+   * submitted for human review that has not been answered yet. Re-selecting it
+   * would submit the same work a second time, which is the user-visible defect
+   * this scan exists to prevent. Within-slot RESUME keeps using `isDelivered`:
+   * a cell resuming its OWN pending work is continuing it, not duplicating it.
+   */
+  submittedIds(deliveryTarget: string, workType: string, pixivIds: string[]): Set<string> {
+    return this.idsByStatus(deliveryTarget, workType, pixivIds, ['pending', 'delivered', 'duplicate']);
+  }
+
+  private idsByStatus(
+    deliveryTarget: string,
+    workType: string,
+    pixivIds: string[],
+    statuses: DeliveryStatus[]
+  ): Set<string> {
     const out = new Set<string>();
     if (pixivIds.length === 0) return out;
+    const statusList = statuses.map((status) => `'${status}'`).join(',');
     const CHUNK = 400;
     for (let i = 0; i < pixivIds.length; i += CHUNK) {
       const slice = pixivIds.slice(i, i + CHUNK);
@@ -120,7 +144,7 @@ export class DeliveryRepository extends BaseRepository {
       const rows = this.db
         .prepare(
           `SELECT DISTINCT pixiv_id FROM deliveries
-           WHERE delivery_target = ? AND work_type = ? AND status IN ('delivered','duplicate')
+           WHERE delivery_target = ? AND work_type = ? AND status IN (${statusList})
              AND pixiv_id IN (${placeholders})`
         )
         .all(deliveryTarget, workType, ...slice) as Array<{ pixiv_id: string }>;

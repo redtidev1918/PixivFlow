@@ -4,6 +4,7 @@ import { parseDateRange, isDateInRange } from '../../utils/date-utils';
 import { isAIIllustration } from '../../utils/ai-detection';
 import { logger } from '../../logger';
 import type { IDatabase } from '../../interfaces/IDatabase';
+import type { CandidateSkip } from '../../scheduler/TargetOutcome';
 
 export type DownloadItem = PixivIllust | PixivNovel;
 
@@ -17,14 +18,52 @@ export interface PlannedDownload<T extends DownloadItem> {
   queue: T[];
   mode: 'sequential' | 'random';
   limit: number;
+  /**
+   * Maximum candidates this plan may ATTEMPT. Always `queue.length`, so the
+   * bound is enforced structurally: the pipeline cannot scan further than the
+   * window it was handed. Reported in the terminal outcome as "scanning N".
+   */
+  scanBound: number;
   filteredOut: number;
   deduplicated: number;
   alreadyDownloaded: number;
   availableCount: number;
   originalCount: number;
+  /**
+   * Candidates the planner itself dropped BEFORE the download attempt —
+   * already in download history, already CONFIRMED delivered to this target, or
+   * already handled per durable history. They are skips, not failures, and are
+   * reported in the terminal outcome so "skipping Y candidates" includes the
+   * ones that never had to be downloaded.
+   */
+  prefiltered: CandidateSkip[];
   random?: {
     maxAttempts: number;
   };
+}
+
+/**
+ * Default candidate-scan window. Five candidates is enough to survive a few
+ * already-delivered works on a ranking page without turning one slot into a
+ * long crawl; the operator can raise it per target or globally.
+ */
+export const DEFAULT_CANDIDATE_SCAN_LIMIT = 5;
+
+/** Hard ceiling on the scan so a misconfigured value cannot become a crawl. */
+export const MAX_CANDIDATE_SCAN_LIMIT = 100;
+
+/**
+ * Resolve the candidate-scan bound for one target: per-target override, then
+ * the global `download.candidateScanLimit`, then the default. Clamped so a bad
+ * value degrades to a working bound instead of disabling the bound.
+ */
+export function resolveCandidateScanLimit(
+  target: TargetConfig,
+  fallback?: number
+): number {
+  const configured = target.candidateScanLimit ?? fallback ?? DEFAULT_CANDIDATE_SCAN_LIMIT;
+  if (!Number.isFinite(configured)) return DEFAULT_CANDIDATE_SCAN_LIMIT;
+  return Math.min(Math.max(Math.trunc(configured), 1), MAX_CANDIDATE_SCAN_LIMIT);
 }
 
 /**
@@ -33,6 +72,13 @@ export interface PlannedDownload<T extends DownloadItem> {
 export interface DeliveryDedupeSource {
   /** Returns the subset of ids already CONFIRMED delivered to this target. */
   deliveredIds?(deliveryTarget: string, workType: 'illustration' | 'novel', ids: string[]): Set<string>;
+  /**
+   * Returns the subset of ids already SUBMITTED for this target — delivered OR
+   * still awaiting a review answer. Candidate selection prefers this over
+   * `deliveredIds`: a work whose review submission is pending is already in the
+   * human queue, so selecting it again would submit it twice.
+   */
+  submittedIds?(deliveryTarget: string, workType: 'illustration' | 'novel', ids: string[]): Set<string>;
   /**
    * Works this bot has already handled ANYWHERE — durable history owned by a
    * control plane, supplied by the caller.
@@ -48,7 +94,12 @@ export interface DeliveryDedupeSource {
 export class DownloadPlanner {
   constructor(
     private readonly database: IDatabase,
-    private readonly deliveryDedupe?: DeliveryDedupeSource
+    private readonly deliveryDedupe?: DeliveryDedupeSource,
+    /**
+     * Global candidate-scan bound (`download.candidateScanLimit`). A per-target
+     * `candidateScanLimit` overrides it.
+     */
+    private readonly defaultCandidateScanLimit?: number
   ) {}
 
   planDownloads<T extends DownloadItem>(
@@ -58,35 +109,71 @@ export class DownloadPlanner {
   ): PlannedDownload<T> {
     const filtered = this.filterItems(items, target, itemType);
     const { items: deduplicatedItems, removed } = this.deduplicate(filtered.items);
+    /**
+     * Candidates dropped before any download attempt. Reported as explicit
+     * skips so the terminal outcome can say "skipping Y candidates" instead of
+     * claiming a run produced nothing for no stated reason.
+     */
+    const prefiltered: CandidateSkip[] = [];
+    const ruleFiltered = new Set(deduplicatedItems.map((item) => String(item.id)));
+    for (const item of items) {
+      const id = String(item.id);
+      if (!ruleFiltered.has(id)) {
+        // Excluded by the target's own rules (bookmarks/date/AI) — or a
+        // repeated id inside the page. Both are candidate-level skips.
+        prefiltered.push({ code: 'filtered', workId: id, reason: 'excluded by target filters (bookmarks/date/AI)' });
+      }
+    }
 
     const itemIds = deduplicatedItems.map((item) => String(item.id));
     const downloadedIds =
       itemIds.length > 0 ? this.database.getDownloadedIds(itemIds, itemType) : new Set<string>();
     let available = deduplicatedItems.filter((item) => !downloadedIds.has(String(item.id)));
     const alreadyDownloadedCount = deduplicatedItems.length - available.length;
+    for (const item of deduplicatedItems) {
+      const id = String(item.id);
+      if (downloadedIds.has(id)) {
+        prefiltered.push({ code: 'duplicate', workId: id, reason: 'already in download history' });
+      }
+    }
 
     // DELIVERY dedupe (pre-lock, distinct from download dedupe): skip works
-    // already CONFIRMED delivered to THIS target so ranking falls through to
-    // the next valid candidate instead of selecting a historical duplicate.
+    // already SUBMITTED for THIS target — confirmed delivered, or still awaiting
+    // a review answer — so ranking falls through to the next valid candidate
+    // instead of selecting a historical duplicate. `submittedIds` is preferred
+    // because a pending review submission is already in the human queue.
     // Best-effort only: downstream reconciliation remains the final safety net.
     const deliveryTarget = target.delivery?.target?.trim();
+    const submittedQuery =
+      this.deliveryDedupe?.submittedIds ?? this.deliveryDedupe?.deliveredIds;
     let deliveryDuplicateCount = 0;
     if (
       deliveryTarget &&
-      this.deliveryDedupe?.deliveredIds &&
+      submittedQuery &&
       typeof (this.database as { deliveries?: unknown }).deliveries === 'object'
     ) {
       try {
-        const delivered = this.deliveryDedupe.deliveredIds(
+        const taken = submittedQuery.call(
+          this.deliveryDedupe,
           deliveryTarget,
           itemType,
           available.map((item) => String(item.id))
         );
         const before = available.length;
-        available = available.filter((item) => !delivered.has(String(item.id)));
+        for (const item of available) {
+          const id = String(item.id);
+          if (taken.has(id)) {
+            prefiltered.push({
+              code: 'duplicate',
+              workId: id,
+              reason: `already submitted to ${deliveryTarget} (delivery ledger)`,
+            });
+          }
+        }
+        available = available.filter((item) => !taken.has(String(item.id)));
         deliveryDuplicateCount = before - available.length;
         if (deliveryDuplicateCount > 0) {
-          logger.info(`Delivery dedupe skipped ${deliveryDuplicateCount} already-delivered ${itemType}(s) for ${deliveryTarget}`);
+          logger.info(`Delivery dedupe skipped ${deliveryDuplicateCount} already-submitted ${itemType}(s) for ${deliveryTarget}`);
         }
       } catch (error) {
         logger.warn('Delivery dedupe preflight failed; continuing (downstream net remains)', {
@@ -102,6 +189,12 @@ export class DownloadPlanner {
       try {
         const processed = processedSource(itemType, available.map((item) => String(item.id)));
         const before = available.length;
+        for (const item of available) {
+          const id = String(item.id);
+          if (processed.has(id)) {
+            prefiltered.push({ code: 'duplicate', workId: id, reason: 'already handled (durable history)' });
+          }
+        }
         available = available.filter((item) => !processed.has(String(item.id)));
         const skipped = before - available.length;
         if (skipped > 0) {
@@ -115,43 +208,68 @@ export class DownloadPlanner {
     }
 
     const limit = target.limit && target.limit > 0 ? target.limit : 10;
+    // How many candidates this run may ATTEMPT. Distinct from `limit`, which is
+    // how many it may PRODUCE. A scheduled one-post-per-slot target has
+    // `limit: 1`, so keying the candidate window off `limit` alone handed the
+    // pipeline exactly one candidate: the first duplicate ended the slot with
+    // nothing submitted. Never below `limit`, so a multi-work target can still
+    // fill its own limit.
+    const scanBound = Math.max(limit, resolveCandidateScanLimit(target, this.defaultCandidateScanLimit));
 
     if (target.random) {
       const shuffled = this.shuffle(available);
-      const maxAttempts = Math.min(shuffled.length, 50);
+      // Historical 50-attempt random pool, unless the operator set an explicit
+      // bound — in which case that bound is the contract.
+      const attemptPool = target.candidateScanLimit !== undefined ? scanBound : 50;
+      const maxAttempts = Math.min(shuffled.length, Math.max(limit, attemptPool));
       const queue = shuffled.slice(0, maxAttempts);
       return {
         queue,
         mode: 'random',
         limit,
+        scanBound: queue.length,
         filteredOut: filtered.filteredOut,
         deduplicated: removed,
         alreadyDownloaded: alreadyDownloadedCount,
         availableCount: available.length,
         originalCount: filtered.originalCount,
+        prefiltered,
         random: { maxAttempts },
       };
     }
 
-    // Language is detected from the full novel body during download. Keep a
-    // bounded popularity-ordered retry pool so a non-matching Top-1 candidate
-    // can be skipped and replaced by the next matching novel.
-    const backfillLimit = itemType === 'novel' && target.languageFilter
+    // How many candidates the run may ATTEMPT:
+    //   window = clamp(candidateScanLimit, lower = limit, upper = pool)
+    // where `pool` is what the operator asked to consider — the whole page for a
+    // plain search/ranking target, and a deliberately deeper pool for full-text
+    // novel language filtering or topic discovery. `candidateScanLimit` is the
+    // hard cap; it is never exceeded, and it is never allowed below `limit`
+    // because a multi-work target must still be able to fill its own limit.
+    const pool = itemType === 'novel' && target.languageFilter
       ? Math.max(limit, Math.min(target.languageCandidateLimit ?? 20, 100))
       : target.mode === 'topic'
         ? Math.max(limit, 20)
-        : limit;
-    const queue = available.slice(0, Math.min(available.length, backfillLimit));
+        : available.length;
+    const windowSize = Math.max(limit, Math.min(pool, scanBound));
+    const queue = available.slice(0, Math.min(available.length, windowSize));
+    if (queue.length > limit) {
+      logger.info(
+        `Candidate scan window: up to ${queue.length} candidate(s) to fill ${limit} slot(s) ` +
+          `(bound ${scanBound}, pool ${pool}, ${available.length} available)`
+      );
+    }
 
     return {
       queue,
       mode: 'sequential',
       limit,
+      scanBound: queue.length,
       filteredOut: filtered.filteredOut,
       deduplicated: removed,
       alreadyDownloaded: alreadyDownloadedCount,
       availableCount: available.length,
       originalCount: filtered.originalCount,
+      prefiltered,
     };
   }
 

@@ -406,14 +406,15 @@ Authorization: Bearer <SCHEDULER_TRIGGER_TOKEN>
 ```
 POST /internal/targets/{targetId}/refetch
 Authorization: Bearer <PIXIVFLOW_REFETCH_TOKEN>
-{ "requestId": "<UUID>" }
+{ "requestId": "<UUID>", "correlationId": "<opaque, ≤200 chars, optional>" }
 ```
 
-`PIXIVFLOW_REFETCH_TOKEN` 缺失时端点拒绝请求。请求只选一个已启用 schedule 中的 target；`requestId` 是重试幂等键，重复请求复用同一个 `manual-` Slot。服务端先持久化再返回 `202 accepted`，执行和投递在后台进行；手动 Slot 与定时 occurrence 分离，不会把定时任务标为完成。`run-once` CLI 仍是无 Slot 的 ad-hoc 命令。
+`PIXIVFLOW_REFETCH_TOKEN` 缺失时端点拒绝请求。请求只选一个已启用 schedule 中的 target；`requestId` 是重试幂等键，重复请求复用同一个 `manual-` Slot；`correlationId`（通常是审核链 id）随 Slot 持久化，只用于恢复后的结果关联，本服务不解释其内容。服务端先持久化再返回 `202 accepted`（`{status:"accepted", slotId, disposition}`），执行和投递在后台进行；手动 Slot 与定时 occurrence 分离，不会把定时任务标为完成。手动 Slot 的请求 UUID 同时写入 `schedule_slots.manual_request_id`，因此**休眠机器恢复该 Slot 后仍知道它是人工替换**：投递负载携带 `refetch_request_id`（定时执行为空串），并可通过 delivery target 的 `refetchOutcomeUrl` 把终态判定（`no_alternative` / 非重试 `failed`）经 durable outbox 回报给请求方；同一 manual Slot 的判定只入队一次。`run-once` CLI 仍是无 Slot 的 ad-hoc 命令。
 
 **投递模板里的执行来源变量**（有 Slot 的定时和远程重抓运行时注入；`run-once` CLI 为空）：
 `{{scheduleId}}`、`{{executionId}}`（durable occurrence id）、`{{occurrenceAt}}`（ISO）、
-`{{triggerSource}}`，以及兼容别名 `{{slotId}}`/`{{slotName}}`/`{{slotDate}}`。
+`{{triggerSource}}`、`{{refetchRequestId}}`（人工重抓 UUID，否则空串），以及兼容别名
+`{{slotId}}`/`{{slotName}}`/`{{slotDate}}`。
 它们都是通用执行上下文，可投递到任意 HTTP 端点，不绑定特定下游。
 
 热重载流程为“读入新快照 → 默认值/路径处理 → 完整校验 → 整表替换”。失败时旧计划

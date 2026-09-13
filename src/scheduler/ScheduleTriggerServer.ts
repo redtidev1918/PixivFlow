@@ -54,6 +54,93 @@ export interface TriggerRunResult {
   cells?: Array<{ targetId: string; status: string; workId: string | null; error?: string | null }>;
 }
 
+/**
+ * The ONE place a disposition is bound to both its HTTP status and its log
+ * event. The response write and the `trigger.*` log line both read this table,
+ * so the status an external clock sees and the outcome an operator reads can
+ * never drift apart. Neither adds nor renames any status code or event name.
+ */
+interface TriggerOutcomeSpec {
+  event: string;
+  httpStatus: number;
+  /** Response body `status` field (unchanged wire format). */
+  status: string;
+  /** Response body `note` field (unchanged wire format). */
+  note: string;
+}
+
+const TRIGGER_OUTCOMES: Record<TriggerDisposition, TriggerOutcomeSpec> = {
+  accepted: { event: 'schedule.trigger_accepted', httpStatus: 202, status: 'accepted', note: 'queued' },
+  already_running: {
+    event: 'schedule.trigger_already_running',
+    httpStatus: 202,
+    status: 'running',
+    note: 'already_running',
+  },
+  already_completed: {
+    event: 'schedule.trigger_already_completed',
+    httpStatus: 200,
+    status: 'completed',
+    note: 'already_completed',
+  },
+  rejected: { event: 'schedule.trigger_rejected', httpStatus: 503, status: 'rejected', note: 'rejected' },
+};
+
+/** Bounded, log-safe correlation token. */
+const ATTEMPT_ID_MAX_LENGTH = 64;
+const ATTEMPT_ID_UNSAFE = /[^A-Za-z0-9._:-]/g;
+
+/**
+ * Correlation id issued by the calling clock (`x-schedule-attempt-id`, falling
+ * back to `x-attempt-id`).
+ *
+ * Purely diagnostic: it is trimmed, reduced to `[A-Za-z0-9._:-]` and capped, and
+ * it NEVER participates in occurrence identity. When the clock sends nothing
+ * usable the field is omitted rather than synthesized — a made-up id would make
+ * a missing clock indistinguishable from a satisfied one, which is exactly the
+ * blindness this logging exists to remove.
+ */
+export function scheduleAttemptId(req: Request): string | undefined {
+  const raw = req.headers['x-schedule-attempt-id'] ?? req.headers['x-attempt-id'];
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  if (typeof value !== 'string') return undefined;
+  const cleaned = value.trim().replace(ATTEMPT_ID_UNSAFE, '').slice(0, ATTEMPT_ID_MAX_LENGTH);
+  return cleaned.length > 0 ? cleaned : undefined;
+}
+
+/** Max length and character set of the provider tag, which is log-only metadata. */
+const PROVIDER_MAX_LENGTH = 32;
+const PROVIDER_UNSAFE = /[^A-Za-z0-9._-]/g;
+
+/**
+ * Optional self-identification from the clock that fired: `X-Schedule-Provider`
+ * (e.g. `cron-job-org`, `cloudflare`, `manual`).
+ *
+ * OBSERVABILITY ONLY. It NEVER participates in authorization and NEVER in
+ * occurrence identity: a clock that lies about its name changes one log field
+ * and nothing else. That is deliberate — a self-declared header must not be able
+ * to alter which occurrence runs or whether the request is admitted. Sanitized
+ * and bounded like the attempt id, and omitted when the clock sends nothing
+ * usable rather than defaulted, so "we do not know which clock this was" stays
+ * distinguishable from "the clock identified itself".
+ */
+export function scheduleProvider(req: Request): string | undefined {
+  const raw = req.headers['x-schedule-provider'];
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  if (typeof value !== 'string') return undefined;
+  const cleaned = value.trim().replace(PROVIDER_UNSAFE, '').slice(0, PROVIDER_MAX_LENGTH);
+  return cleaned.length > 0 ? cleaned : undefined;
+}
+
+/** Epoch ms -> ISO 8601 UTC. Undefined when the value is not a usable instant. */
+function isoUtc(epochMs: number | null | undefined): string | undefined {
+  if (typeof epochMs !== 'number' || !Number.isFinite(epochMs)) return undefined;
+  const date = new Date(epochMs);
+  // `toISOString` throws on an out-of-range Date, and inside the handler that
+  // would turn a real 202 into a 500 — logging must never move the status code.
+  return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
+}
+
 export interface TriggerHandlers {
   /** Enabled schedule ids (for 404 on unknown / GET listing). */
   listSchedules(): string[];
@@ -88,6 +175,8 @@ export class ScheduleTriggerServer {
   start(host: string, port: number): void {
     const app: Express = express();
     app.use(express.json());
+    // Correlation + clock start for every route. Cheap enough to be unconditional.
+    app.use(this.correlate);
 
     app.get('/health', (_req: Request, res: Response) => {
       res.json({ status: 'ok', service: 'pixivflow-scheduler-trigger' });
@@ -101,72 +190,77 @@ export class ScheduleTriggerServer {
 
     // Trigger one schedule by id. The server resolves the occurrence from the
     // schedule cron; the body carries no date and cannot back-fill history.
-    app.post('/internal/schedules/:scheduleId/run', this.auth, async (req: Request, res: Response) => {
-      try {
-        const scheduleId = req.params.scheduleId;
-        if (!this.handlers.listSchedules().includes(scheduleId)) {
-          res.status(404).json({ status: 'error', error: `unknown schedule: ${scheduleId}` });
-          return;
-        }
+    //
+    // `received` runs BEFORE auth so a trigger that is never admitted (bad token,
+    // disabled endpoint) still leaves durable evidence that the clock fired —
+    // "the clock never arrived" and "the clock was rejected" used to look the
+    // same from outside: nothing at all.
+    app.post(
+      '/internal/schedules/:scheduleId/run',
+      this.received,
+      this.auth,
+      async (req: Request, res: Response) => {
+        try {
+          const scheduleId = req.params.scheduleId;
+          if (!this.handlers.listSchedules().includes(scheduleId)) {
+            res.status(404).json({ status: 'error', error: `unknown schedule: ${scheduleId}` });
+            this.triggerOutcome('schedule.trigger_not_found', 404, req, res, { schedule_id: scheduleId });
+            return;
+          }
 
-        // Optional human label for provenance (e.g. a deploy-layer "今日早班").
-        // Bounded; never parsed; identity always derives from the cron occurrence.
-        const label =
-          typeof req.body?.label === 'string' ? req.body.label.slice(0, 80) : undefined;
+          // Optional human label for provenance (e.g. a deploy-layer "今日早班").
+          // Bounded; never parsed; identity always derives from the cron occurrence.
+          const label =
+            typeof req.body?.label === 'string' ? req.body.label.slice(0, 80) : undefined;
 
-        const resolved = this.handlers.resolve(scheduleId, 'http', new Date(), label);
-        if (!('context' in resolved)) {
-          res.status(resolved.status).json({ status: 'error', error: resolved.error });
-          return;
-        }
+          const resolved = this.handlers.resolve(scheduleId, 'http', new Date(), label);
+          if (!('context' in resolved)) {
+            // A resolve refusal (expired occurrence 410, too-early 425, bad cron
+            // 400) is a business rejection, so it reports `resolved.status`
+            // rather than the transport-level 503.
+            res.status(resolved.status).json({ status: 'error', error: resolved.error });
+            this.triggerOutcome('schedule.trigger_rejected', resolved.status, req, res, {
+              schedule_id: scheduleId,
+              disposition: 'rejected',
+              reason: resolved.error,
+            });
+            return;
+          }
 
-        const result = await this.handlers.run(scheduleId, resolved.context);
-        // Business disposition, not HTTP luck: an accepted or already-running
-        // occurrence is NOT a completed one. Returning 200/"completed" for a run
-        // that is still executing makes an external clock stop retrying and
-        // silently lose the slot, so 'running' is reported as 202 here.
-        switch (result.disposition) {
-          case 'already_completed':
-            res.status(200).json({
-              status: 'completed',
-              schedule: result,
-              note: 'already_completed',
-            });
-            return;
-          case 'accepted':
-            res.status(202).json({
-              status: 'accepted',
-              schedule: result,
-              note: 'queued',
-            });
-            return;
-          case 'already_running':
-            res.status(202).json({
-              status: 'running',
-              schedule: result,
-              note: 'already_running',
-            });
-            return;
-          default:
-            res.status(503).json({
-              status: 'rejected',
-              schedule: result,
-              note: 'rejected',
-            });
-            return;
+          const context = resolved.context;
+          const result = await this.handlers.run(scheduleId, context);
+          // Business disposition, not HTTP luck: an accepted or already-running
+          // occurrence is NOT a completed one. Returning 200/"completed" for a run
+          // that is still executing makes an external clock stop retrying and
+          // silently lose the slot, so 'running' is reported as 202 here.
+          // Status code, body and log event all come from ONE table.
+          const spec = TRIGGER_OUTCOMES[result.disposition] ?? TRIGGER_OUTCOMES.rejected;
+          res.status(spec.httpStatus).json({ status: spec.status, schedule: result, note: spec.note });
+          this.triggerOutcome(spec.event, spec.httpStatus, req, res, {
+            schedule_id: scheduleId,
+            slot_id: context.slotId,
+            occurrence_at: isoUtc(context.occurrenceAt),
+            disposition: result.disposition,
+            reason: result.cells?.find((cell) => cell.error)?.error ?? undefined,
+            trigger_source: context.triggerSource,
+          });
+        } catch (error) {
+          logger.error('Schedule trigger failed', { error: error instanceof Error ? error.message : String(error) });
+          // The slot ledger resumes on the next trigger; a 500 tells the clock to
+          // retry safely (idempotent — the same occurrence/ slot is reused).
+          res.status(500).json({ status: 'error', error: 'schedule run failed; the occurrence will resume on the next trigger' });
+          this.triggerOutcome('schedule.trigger_error', 500, req, res, {
+            schedule_id: req.params.scheduleId,
+            reason: error instanceof Error ? error.message : String(error),
+          });
         }
-      } catch (error) {
-        logger.error('Schedule trigger failed', { error: error instanceof Error ? error.message : String(error) });
-        // The slot ledger resumes on the next trigger; a 500 tells the clock to
-        // retry safely (idempotent — the same occurrence/ slot is reused).
-        res.status(500).json({ status: 'error', error: 'schedule run failed; the occurrence will resume on the next trigger' });
       }
-    });
+    );
 
     // Convergence endpoint: after a machine stop/start, an operator or an
     // external watcher can ask the process to flush due deliveries/notifications
     // without running candidate selection. Deployment-agnostic (no platform refs).
-    app.post('/internal/outbox/drain', this.auth, async (_req: Request, res: Response) => {
+    app.post('/internal/outbox/drain', this.auth, async (req: Request, res: Response) => {
       try {
         if (!this.handlers.drainOutbox) {
           res.status(503).json({ status: 'error', error: 'outbox worker not available in this runtime' });
@@ -175,7 +269,11 @@ export class ScheduleTriggerServer {
         const result = await this.handlers.drainOutbox();
         res.json({ status: 'ok', result });
       } catch (error) {
-        logger.error('Outbox drain failed', { error: error instanceof Error ? error.message : String(error) });
+        // Same correlation as the trigger lines, at zero extra cost.
+        logger.error('Outbox drain failed', {
+          ...this.attemptMeta(req, res),
+          error: error instanceof Error ? error.message : String(error),
+        });
         res.status(500).json({ status: 'error', error: 'outbox drain failed; rows remain durable and retry' });
       }
     });
@@ -185,10 +283,72 @@ export class ScheduleTriggerServer {
     });
   }
 
+  /**
+   * Per-request correlation, installed before every route. It records only the
+   * sanitized attempt id and the arrival instant, so each later line can report
+   * the same `attempt_id` and a handler-relative `elapsed_ms`.
+   */
+  private correlate = (req: Request, res: Response, next: () => void): void => {
+    res.locals.triggerStartedAt = Date.now();
+    res.locals.triggerAttemptId = scheduleAttemptId(req);
+    res.locals.triggerProvider = scheduleProvider(req);
+    next();
+  };
+
+  /**
+   * `trigger.received` — the clock arrived. Runs before auth, so it carries only
+   * non-sensitive request metadata: never the Authorization header, the bearer
+   * value, the configured token, or any fragment of them.
+   */
+  private received = (req: Request, res: Response, next: () => void): void => {
+    logger.info('Schedule trigger received', { event: 'schedule.trigger_received', ...this.attemptMeta(req, res) });
+    next();
+  };
+
+  /**
+   * The single writer for every post-resolution `trigger.*` line. `event` and
+   * `http_status` are passed in from the caller's outcome table, so the line
+   * always describes the same status the response carried.
+   */
+  private triggerOutcome(
+    event: string,
+    httpStatus: number,
+    req: Request,
+    res: Response,
+    extra: Record<string, unknown>
+  ): void {
+    logger.info('Schedule trigger outcome', {
+      event,
+      ...this.attemptMeta(req, res),
+      http_status: httpStatus,
+      ...extra,
+    });
+  }
+
+  /**
+   * The non-sensitive correlation fields shared by every `schedule.trigger_*`
+   * line. `attempt_id` and `provider` are OMITTED (never defaulted) when the
+   * clock did not send them, so an unidentified clock stays visible as such.
+   */
+  private attemptMeta(req: Request, res: Response): Record<string, unknown> {
+    const attemptId: string | undefined = res.locals.triggerAttemptId;
+    const provider: string | undefined = res.locals.triggerProvider;
+    const startedAt: number = res.locals.triggerStartedAt ?? Date.now();
+    return {
+      ...(attemptId ? { attempt_id: attemptId } : {}),
+      ...(provider ? { provider } : {}),
+      path: req.path,
+      method: req.method,
+      elapsed_ms: Date.now() - startedAt,
+    };
+  }
+
   private auth = (req: Request, res: Response, next: () => void): void => {
     if (!this.token) {
-      // Fail closed: never allow an unauthenticated trigger in production.
+      // Fail closed: never allow an unauthenticated trigger in production. This
+      // is an admission failure, so it is reported with the status actually sent.
       res.status(503).json({ status: 'error', error: 'trigger disabled: SCHEDULER_TRIGGER_TOKEN not configured' });
+      this.triggerOutcome('schedule.trigger_unauthorized', 503, req, res, { reason: 'trigger disabled: no token configured' });
       return;
     }
     const header = req.headers.authorization ?? '';
@@ -197,6 +357,7 @@ export class ScheduleTriggerServer {
     let ok = presented.length === expected.length;
     if (ok) {
       try {
+        // Values only, never logged: the timing check is deliberately opaque.
         ok = timingSafeEqual(Buffer.from(presented), Buffer.from(expected));
       } catch {
         ok = false;
@@ -204,6 +365,7 @@ export class ScheduleTriggerServer {
     }
     if (!ok) {
       res.status(401).json({ status: 'error', error: 'unauthorized' });
+      this.triggerOutcome('schedule.trigger_unauthorized', 401, req, res, { reason: 'invalid or missing bearer token' });
       return;
     }
     next();

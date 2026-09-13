@@ -166,6 +166,10 @@ export class DownloadManager implements IDownloadManager {
     this.planner = new DownloadPlanner(database, {
       deliveredIds: (target, type, ids) =>
         this.deliveryService.deliveredIds(target, type, ids),
+      // CANDIDATE SELECTION dedupe: also treats a work whose review submission is
+      // still PENDING as taken, so it is skipped instead of submitted again.
+      submittedIds: (target, type, ids) =>
+        this.deliveryService.submittedIds(target, type, ids),
       // Durable duplicate history handed in by the caller (the batch runner asks
       // the control plane for it). Independent of any local delivery target, so it
       // also works for a shadow run that delivers nowhere.
@@ -174,7 +178,10 @@ export class DownloadManager implements IDownloadManager {
         if (!known || known.size === 0) return new Set<string>();
         return new Set(ids.filter((id) => known.has(id)));
       },
-    });
+      // Global bounded candidate-scan window (`download.candidateScanLimit`).
+      // Per-target `candidateScanLimit` overrides it. Without this the pipeline
+      // would only ever see as many candidates as the target's own `limit`.
+    }, config.download?.candidateScanLimit);
     this.executor = new DownloadExecutor();
 
     const downloadConfig = config.download ?? {};
@@ -233,6 +240,12 @@ export class DownloadManager implements IDownloadManager {
       topicFactory,
       this.deliveryService
     );
+
+    // The FETCH stage needs the same bound the planner applies to the attempt
+    // window, or a `limit: 1` target would ask the ranking API for one work and
+    // leave the bounded scan nothing to scan.
+    this.illustrationHandler.setDefaultCandidateScanLimit(config.download?.candidateScanLimit);
+    this.novelHandler.setDefaultCandidateScanLimit(config.download?.candidateScanLimit);
   }
 
   setProgressCallback(callback: (current: number, total: number, message?: string) => void): void {

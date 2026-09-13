@@ -10,15 +10,58 @@ import { NetworkError, isRetryableNetworkError, isPixivKitError } from '../../ut
 import { calculatePopularityScore } from '../../utils/pixiv-utils';
 import { PixivIllust } from '@redtidev/pixiv-client';
 import { DeliveryService } from '../../delivery/DeliveryService';
-import { TargetOutcome } from '../../scheduler/TargetOutcome';
+import {
+  CandidateAttempt,
+  CandidateScanSummary,
+  TargetOutcome,
+  classifyCandidateFailure,
+  classifyJobLevelOutage,
+  hasTransientFailure,
+  mergeScanSummaries,
+  noEligibleCandidateText,
+  skipCandidateWithoutRetry,
+} from '../../scheduler/TargetOutcome';
 import { TargetExecutionContext, isSingleWorkCell } from '../../scheduler/WorkIdentity';
 import type { DownloadedArtifact } from '../../delivery/types';
 import type { TopicPipelineFactory } from '../../topic/createTopicPipeline';
 import { getTargetLabel } from '../../utils/target-label';
+import { resolveCandidateScanLimit } from '../plan/DownloadPlanner';
 
 export class IllustrationTargetHandler {
   /** Outcomes produced during this handle() call (deliveries + terminal non-matches). */
   private outcomes: TargetOutcome[] = [];
+
+  /**
+   * Candidate scan of the last pipeline.run() of this handle() call: how many
+   * candidates were attempted, which were skipped and why, and whether any
+   * job-level outage appeared. This is what turns an empty result into an
+   * explicit verdict instead of an ambiguous "completed".
+   */
+  private scan: CandidateScanSummary | null = null;
+
+  /**
+   * Global candidate-scan bound (`download.candidateScanLimit`), supplied by
+   * DownloadManager. This is what lets the FETCH stage ask for more than one
+   * candidate: a scheduled one-post-per-slot target has `limit: 1`, and asking
+   * the ranking API for exactly one work is the reason a single duplicate used
+   * to be unfixable downstream.
+   */
+  private defaultCandidateScanLimit?: number;
+
+  /** Publish the global candidate-scan bound for the fetch stage. */
+  public setDefaultCandidateScanLimit(limit: number | undefined): void {
+    this.defaultCandidateScanLimit = limit;
+  }
+
+  /**
+   * How many candidates to FETCH so the bounded scan has something to choose
+   * from. Same rule the planner applies to the attempt window, so fetch and
+   * scan agree on one bound.
+   */
+  private candidateFetchLimit(target: TargetConfig): number {
+    const targetLimit = target.limit && target.limit > 0 ? target.limit : 10;
+    return Math.max(targetLimit, resolveCandidateScanLimit(target, this.defaultCandidateScanLimit));
+  }
 
   /**
    * Cell identity for this handle() call. Set only for a single-work cell of a
@@ -39,6 +82,7 @@ export class IllustrationTargetHandler {
 
   async handle(target: TargetConfig, execution?: TargetExecutionContext): Promise<TargetOutcome> {
     this.outcomes = [];
+    this.scan = null;
     this.execution = execution && isSingleWorkCell(target) ? execution : null;
 
     // A cell that already owns a work is in RECOVERY, not in a new selection.
@@ -76,6 +120,7 @@ export class IllustrationTargetHandler {
         'illustration',
         (illust, tag) => this.downloadAndDeliver(illust, tag, target)
       );
+      this.scan = result.scan;
       this.handleDownloadResult(result, target, mode, illusts.length);
       return this.summarize(target);
     } catch (error) {
@@ -83,37 +128,87 @@ export class IllustrationTargetHandler {
     }
   }
 
-  /** Reduce the outcomes collected while processing one target to one cell result. */
+  /**
+   * Reduce the outcomes collected while processing one target to one cell
+   * result, including the bounded-scan bookkeeping.
+   *
+   * A `duplicate` is deliberately NOT a target verdict here: a duplicate is a
+   * CANDIDATE problem (skip it and try the next candidate), which is what the
+   * scan already did. Returning it as the target outcome is the bug that made a
+   * scheduled slot report success after submitting nothing.
+   */
   private summarize(target: TargetConfig): TargetOutcome {
+    const scan = this.scan ?? undefined;
     const submitted = this.outcomes.find((o) => o.kind === 'submitted');
-    if (submitted) return submitted;
+    if (submitted) return scan ? { ...submitted, scan } : submitted;
     const stored = this.outcomes.find((o) => o.kind === 'stored');
-    if (stored) return stored;
+    if (stored) return scan ? { ...stored, scan } : stored;
     const pending = this.outcomes.find((o) => o.kind === 'delivery_pending');
-    if (pending) return pending;
-    const duplicate = this.outcomes.find((o) => o.kind === 'duplicate');
-    if (duplicate) return duplicate;
-    const failed = this.outcomes.find((o) => o.kind === 'failed');
-    if (failed) return failed;
-    return { kind: 'no_candidate', reason: 'no matching illustration after filtering/dedupe' };
+    if (pending) return scan ? { ...pending, scan } : pending;
+    const alreadyFailed = this.outcomes.find((o) => o.kind === 'failed');
+    if (alreadyFailed) return scan ? { ...alreadyFailed, scan } : alreadyFailed;
+    const terminalDuplicate = this.outcomes.find((o) => o.kind === 'duplicate');
+    if (terminalDuplicate) return scan ? { ...terminalDuplicate, scan } : terminalDuplicate;
+    // A job-level outage is never an empty candidate list. Failing here keeps
+    // the existing retry/backoff semantics: the scheduler retries the job on a
+    // later trigger instead of recording a clean no-op.
+    if (scan && scan.outages.length > 0) {
+      return {
+        kind: 'failed',
+        retryable: true,
+        error: `job-level outage while scanning candidates: ${scan.outages.join(', ')}`,
+        scan,
+      };
+    }
+    if (scan && hasTransientFailure(scan)) {
+      return {
+        kind: 'failed',
+        retryable: true,
+        error:
+          `candidate scan hit transient infrastructure failures ` +
+          `(${scan.skipped.filter((s) => s.retryable).length} of ${scan.attempted} attempted)`,
+        scan,
+      };
+    }
+    if (scan && (scan.attempted > 0 || scan.skipped.length > 0)) {
+      return { kind: 'no_candidate', reason: noEligibleCandidateText(scan), scan };
+    }
+    return {
+      kind: 'no_candidate',
+      reason: 'no matching illustration after filtering/dedupe',
+      ...(scan ? { scan } : {}),
+    };
   }
 
   private classifyError(error: unknown, displayTag: string, mode: string, target: TargetConfig): TargetOutcome {
     const message = error instanceof Error ? error.message : String(error);
+    const scan = this.scan ?? undefined;
+    // A hard job-level outage is named as such and is never recorded as a
+    // no-candidate business outcome, whatever its message happens to look like.
+    const outage = classifyJobLevelOutage(error);
     this.database.logExecution(displayTag, 'illustration', 'failed', message);
     logger.error(`Illustration ${mode === 'ranking' ? 'ranking' : 'tag'} ${displayTag} failed`, {
       error: message,
       errorType: error instanceof Error ? error.constructor.name : typeof error,
+      ...(outage ? { jobLevelOutage: outage } : {}),
     });
+    if (outage) {
+      return {
+        kind: 'failed',
+        retryable: true,
+        error: `job-level outage (${outage}): ${message}`,
+        ...(scan ? { scan } : {}),
+      };
+    }
     // Explicit no-candidate signals are business outcomes, not failures.
     if (/no matching|all .*filtered|no_candidate/i.test(message)) {
-      return { kind: 'no_candidate', reason: message };
+      return { kind: 'no_candidate', reason: message, ...(scan ? { scan } : {}) };
     }
     // Network/transient => retryable so the SAME work resumes on next trigger.
     const retryable =
         isRetryableNetworkError(error) ||
         (error instanceof Error && /timeout|econn|enotfound|etimed|429|5\d\d/i.test(error.message));
-    return { kind: 'failed', retryable, error: message };
+    return { kind: 'failed', retryable, error: message, ...(scan ? { scan } : {}) };
   }
 
   private async fetchIllustrations(target: TargetConfig, mode: string): Promise<PixivIllust[]> {
@@ -178,16 +273,38 @@ export class IllustrationTargetHandler {
         'illustration',
         (illust, tag) => this.downloadAndDeliver(illust, tag, attemptTarget)
       );
+      // The lookback loop is one bounded scan: accumulate every day's
+      // skips/outages so the final verdict covers all candidates attempted.
+      this.scan = mergeScanSummaries(this.scan, result.scan);
       if (result.downloaded > 0) {
         this.handleDownloadResult(result, target, 'topic', illusts.length);
         return;
       }
+      if (this.scan && this.scan.outages.length > 0) {
+        // A dead token / dead database / dead network is not "no matching
+        // illustration": stop looking back and let the job fail/retry.
+        return;
+      }
     }
 
-    const message = `No matching illustrations found after checking ${checkedDays.length} day(s): ${checkedDays.join(', ')}`;
+    const scan = this.scan;
+    // An explicit no-eligible-candidate verdict needs something to have been
+    // considered. When the scan is empty (nothing surfaced at all) the richer
+    // existing message — which names the days actually checked — is the honest
+    // one, so it is kept.
+    const considered = Boolean(scan && (scan.attempted > 0 || scan.skipped.length > 0));
+    const message = considered
+      ? `${noEligibleCandidateText(scan!)} (checked ${checkedDays.join(', ')})`
+      : `No matching illustrations found after checking ${checkedDays.length} day(s): ${checkedDays.join(', ')}`;
+    // A bounded, exhausted scan IS the success path for a no-op day: nothing
+    // was eligible and nothing was submitted. Recorded as an explicit verdict.
     this.database.logExecution(displayTag, 'illustration', 'success', message);
-    logger.warn(`Illustration topic ${displayTag} produced no matching result`, { checkedDays });
-    this.outcomes.push({ kind: 'no_candidate', reason: message });
+    logger.warn(`Illustration topic ${displayTag} produced no matching result`, { checkedDays, message });
+    this.outcomes.push({
+      kind: 'no_candidate',
+      reason: message,
+      ...(scan ? { scan } : {}),
+    });
   }
 
   private resolveTopicDay(target: TargetConfig): string {
@@ -221,13 +338,17 @@ export class IllustrationTargetHandler {
         endDate: rankingDate,
         limit: Math.max(targetLimit * 20, 100),
       };
+      const fetchLimit = this.candidateFetchLimit(target);
       let illusts = await this.client.searchIllustrations(searchTarget);
       logger.info(`Found ${illusts.length} illustration(s) for ${rankingDate}`);
-      this.sortByPopularityAndLog(illusts, targetLimit, 'illustration');
+      this.sortByPopularityAndLog(illusts, fetchLimit, 'illustration');
 
-      if (illusts.length > targetLimit) {
-        illusts = illusts.slice(0, targetLimit);
-        logger.info(`Selected top ${illusts.length} illustration(s) by popularity`);
+      if (illusts.length > fetchLimit) {
+        illusts = illusts.slice(0, fetchLimit);
+        logger.info(
+          `Selected top ${illusts.length} illustration(s) by popularity ` +
+            `(to fill ${targetLimit}, candidate scan bound ${fetchLimit})`
+        );
       }
       return illusts;
     } else {
@@ -238,10 +359,12 @@ export class IllustrationTargetHandler {
       }
 
       logger.info(`Fetching ranking illustrations (mode: ${rankingMode}, date: ${rankingDate})`);
+      // Ask for the whole bounded scan window, not `limit`: the planner then
+      // narrows it to the candidates this run may attempt.
       const illusts = await this.rankingService.getRankingIllustrationsWithFallback(
         rankingMode,
         rankingDate,
-        target.limit
+        this.candidateFetchLimit(target)
       );
       logger.info(`Ranking API returned ${illusts.length} illustration(s)`);
       return illusts;
@@ -279,6 +402,7 @@ export class IllustrationTargetHandler {
       alreadyDownloaded: number;
       filteredOut: number;
       skipDetails?: { id: string; error: string }[];
+      scan: CandidateScanSummary;
     },
     target: TargetConfig,
     mode: string,
@@ -288,9 +412,23 @@ export class IllustrationTargetHandler {
     const targetLimit = target.limit || 10;
     const tagForLog = getTargetLabel(target);
 
-    if (downloaded === 0 && targetLimit > 0) {
+    // The bounded scan produced its own explicit verdict when it attempted
+    // candidates or pre-filtered some, so the legacy "zero downloads" reporter
+    // is only the fallback for a scan that had nothing at all to look at.
+    const scanOwnsVerdict = result.scan.attempted > 0 || result.scan.skipped.length > 0;
+    if (downloaded === 0 && targetLimit > 0 && !scanOwnsVerdict) {
       this.handleZeroDownloads(
         alreadyDownloaded, skipped, filteredOut, totalFound, targetLimit, tagForLog, mode, result.skipDetails
+      );
+    }
+
+    if (scanOwnsVerdict && downloaded > 0) {
+      // The explicit success sentence the operator needs: which work was
+      // submitted, and how many unusable candidates were skipped to reach it.
+      logger.info(
+        `Candidate scan verdict for ${tagForLog}: submitted after skipping ` +
+          `${result.scan.skipped.length} candidate(s) of ${result.scan.attempted} attempted ` +
+          `(bound ${result.scan.bound})`
       );
     }
 
@@ -372,12 +510,29 @@ export class IllustrationTargetHandler {
     try {
       if (this.database.hasDownloaded(String(illustId), 'illustration')) {
         logger.info(`Illustration ${illustId} already downloaded, skipping`);
+        // A pinned single-work target has no candidate list to advance to, but
+        // the reason is still recorded as a candidate skip so the terminal
+        // outcome names it instead of reporting an unexplained no-op.
+        this.scan = {
+          bound: 1,
+          attempted: 0,
+          skipped: [
+            { code: 'duplicate', workId: String(illustId), reason: 'already in download history' },
+          ],
+          outages: [],
+        };
         return;
       }
 
       const detail = await this.client.getIllustration(illustId);
       // Use the detail directly as it's already a PixivIllust
-      await this.downloadAndDeliver(detail, `illust-${illustId}`, target);
+      const attempt = await this.downloadAndDeliver(detail, `illust-${illustId}`, target);
+      this.scan = {
+        bound: 1,
+        attempted: 1,
+        skipped: attempt.kind === 'skipped' ? [attempt.skip] : [],
+        outages: [],
+      };
       logger.info(`Successfully downloaded illustration ${illustId}`);
     } catch (error) {
       this.logError(error, `Failed to download illustration ${illustId}`);
@@ -411,6 +566,7 @@ export class IllustrationTargetHandler {
         'illustration',
         (illust, tag) => this.downloadAndDeliver(illust, tag, target)
       );
+      this.scan = result.scan;
       this.handleDownloadResult(result, target, 'user', illusts.length);
     } catch (error) {
       this.logError(error, `Failed to download illustrations for user ${userId}`);
@@ -505,7 +661,18 @@ export class IllustrationTargetHandler {
 
     try {
       const detail = await this.client.getIllustration(illustId);
-      await this.downloadAndDeliver(detail, displayTag, target);
+      const attempt = await this.downloadAndDeliver(detail, displayTag, target);
+      if (attempt.kind === 'skipped') {
+        // A cell that already owns a work cannot advance to another candidate —
+        // its identity is fixed. An already-delivered locked work is therefore a
+        // terminal business duplicate for THIS cell (it published nothing new),
+        // not a candidate skip and not an empty candidate list.
+        this.outcomes.push(
+          attempt.skip.code === 'duplicate'
+            ? { kind: 'duplicate', workId: lockedWorkId, reason: attempt.skip.reason }
+            : { kind: 'failed', retryable: false, error: `LOCKED_WORK_UNAVAILABLE: ${attempt.skip.reason}` }
+        );
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       const retryable = isRetryableNetworkError(error);
@@ -523,6 +690,11 @@ export class IllustrationTargetHandler {
   /**
    * Process ONE candidate work for this cell.
    *
+   * Returns what happened to THIS candidate, so the pipeline can advance to the
+   * next one when it was unusable. Throwing is reserved for JOB-level failures
+   * (dead database / dead token / dead delivery provider): a candidate-level
+   * failure is reported as a `skipped` attempt and never as a job verdict.
+   *
    * The cell is bound to `illust` BEFORE any side effect: it is the binding, not
    * the candidate list, that decides what a later recovery resumes. The binding
    * is only rolled back when the attempt produced no artifact at all, so in-run
@@ -532,7 +704,7 @@ export class IllustrationTargetHandler {
     illust: PixivIllust,
     tag: string,
     target: TargetConfig
-  ): Promise<void> {
+  ): Promise<CandidateAttempt> {
     const execution = this.execution;
     const workId = String(illust.id);
     // Recovery continues a work the cell already bound; it must never be released.
@@ -547,7 +719,14 @@ export class IllustrationTargetHandler {
           targetId: execution.targetId,
           boundWorkId: binding.workId,
         });
-        return;
+        return {
+          kind: 'skipped',
+          skip: {
+            code: 'duplicate',
+            workId,
+            reason: `cell already owns work ${binding.workId} (concurrent selection)`,
+          },
+        };
       }
     }
 
@@ -567,15 +746,37 @@ export class IllustrationTargetHandler {
     } catch (error) {
       // Nothing was persisted, so the cell may still pick another candidate.
       if (execution && !recovering) execution.release(workId);
-      throw error;
+      const failure = classifyCandidateFailure(error, workId);
+      if (failure.scope === 'job' || !skipCandidateWithoutRetry(failure.skip)) {
+        // Job-level outage, or a transient candidate failure: re-thrown so the
+        // queue's existing retry/backoff owns it and the scheduler records a JOB
+        // failure — never an exhausted candidate list.
+        throw error;
+      }
+      this.logError(error, `Candidate illustration ${workId} skipped (${failure.skip.code})`);
+      return { kind: 'skipped', skip: failure.skip };
     }
     if (!artifact) {
+      // Nothing was persisted: the downloader deliberately declined this
+      // candidate (over maxPageCount, AI metadata check, already on disk). That
+      // is a fact about the work, so the scan moves on instead of retrying it.
       if (execution && !recovering) execution.release(workId);
-      return;
+      return {
+        kind: 'skipped',
+        skip: { code: 'filtered', workId, reason: 'downloader declined this candidate (no artifact)' },
+      };
     }
-    // Committed: the artifact is durable and this work now defines the cell. Even
-    // if enqueue throws below, recovery must resume THIS work — never release.
-    this.recordArtifactOutcome(artifact, target);
+    // The artifact is durable, but this cell has NOT committed to it until the
+    // delivery below actually claims it. A candidate that turns out to be a
+    // duplicate must give the binding BACK, or `bind()` would refuse the next
+    // candidate and the scan could never advance — the whole point of this
+    // change. `releaseCellWork` itself refuses once the cell moved on
+    // (delivery_pending/submitted), so a committed identity stays stable.
+    const attempt = this.recordArtifactOutcome(artifact, target);
+    if (attempt.kind === 'skipped' && execution && !recovering) {
+      execution.release(workId);
+    }
+    return attempt;
   }
 
   /**
@@ -583,22 +784,33 @@ export class IllustrationTargetHandler {
    * delivery mode the DeliveryService creates the durable intent atomically and
    * the result is 'delivery_pending' (NOT submitted — the OutboxWorker confirms
    * the ACK). Persistent/download-only runs are 'stored'.
+   *
+   * An ALREADY-DELIVERED work is returned as a candidate SKIP, never as a
+   * target outcome: the run must try the next candidate instead of ending the
+   * slot as a `duplicate`. The delivery idempotency ledger is what makes the
+   * second concurrent worker lose this race instead of double-submitting.
    */
   private recordArtifactOutcome(
     artifact: import('../../delivery/types').DownloadedArtifact,
     target: TargetConfig
-  ): void {
+  ): CandidateAttempt {
     const isDelivery = target.storageMode === 'cache' && target.delivery?.target?.trim();
     if (!isDelivery || !this.deliveryService) {
       this.outcomes.push({ kind: 'stored', workId: artifact.pixivId, workType: artifact.type });
-      return;
+      return { kind: 'selected', workId: artifact.pixivId, workType: artifact.type };
     }
     // Pre-lock delivery dedupe (after selection): if the ledger already knows it,
     // that is a confirmed fact, not a new submission.
     const slotId = (target.delivery as { executionContext?: { slotId?: string } } | undefined)?.executionContext?.slotId;
     if (this.deliveryService.isAlreadyDelivered(target.delivery!.target!, artifact.type, artifact.pixivId)) {
-      this.outcomes.push({ kind: 'duplicate', workId: artifact.pixivId, reason: 'already delivered to target (ledger)' });
-      return;
+      return {
+        kind: 'skipped',
+        skip: {
+          code: 'duplicate',
+          workId: artifact.pixivId,
+          reason: 'already delivered to target (delivery ledger)',
+        },
+      };
     }
     const res = this.deliveryService.enqueue(artifact, target, {
       slotId,
@@ -606,10 +818,22 @@ export class IllustrationTargetHandler {
       extraContext: this.executionContextFields(target),
     });
     if (res.duplicate) {
-      this.outcomes.push({ kind: 'duplicate', workId: artifact.pixivId, reason: 'already delivered to target (ledger)' });
-    } else {
-      this.outcomes.push({ kind: 'delivery_pending', workId: artifact.pixivId, workType: artifact.type, deliveryId: res.deliveryId });
+      return {
+        kind: 'skipped',
+        skip: {
+          code: 'duplicate',
+          workId: artifact.pixivId,
+          reason: 'already delivered to target (idempotency ledger)',
+        },
+      };
     }
+    this.outcomes.push({
+      kind: 'delivery_pending',
+      workId: artifact.pixivId,
+      workType: artifact.type,
+      deliveryId: res.deliveryId,
+    });
+    return { kind: 'selected', workId: artifact.pixivId, workType: artifact.type };
   }
 
   private executionContextFields(target: TargetConfig): Record<string, unknown> {

@@ -100,6 +100,24 @@ export function applyEnvironmentOverrides(config: Partial<StandaloneConfig>): Pa
     }
   }
 
+  // Override the bounded candidate-scan window. A non-numeric or non-positive
+  // value is ignored (the config-file value stays authoritative) rather than
+  // silently becoming NaN, which would disable the bound entirely.
+  if (process.env.PIXIV_CANDIDATE_SCAN_LIMIT !== undefined) {
+    const parsed = Number.parseInt(process.env.PIXIV_CANDIDATE_SCAN_LIMIT, 10);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      if (!overridden.download) {
+        overridden.download = { candidateScanLimit: parsed };
+      } else {
+        overridden.download.candidateScanLimit = parsed;
+      }
+    } else {
+      logger.warn('Ignoring PIXIV_CANDIDATE_SCAN_LIMIT: expected a positive integer', {
+        value: process.env.PIXIV_CANDIDATE_SCAN_LIMIT,
+      });
+    }
+  }
+
   // Override proxy from environment variables
   // Priority: all_proxy > https_proxy > http_proxy
   const proxyUrl = process.env.all_proxy || process.env.ALL_PROXY || 

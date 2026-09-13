@@ -2,9 +2,8 @@
  * Scheduler run-once command
  *
  * Runs every enabled schedule's download plan exactly once, then exits.
- * This is the backend for the review-group "重抓/换一张" refetch button:
- * a second scheduler daemon would never exit (and would double-fire cron),
- * so refetch needs a bounded one-shot invocation instead.
+ * This is the local CLI path. Remote review-group refetch uses the authenticated
+ * trigger server and a durable manual Slot so a sleeping worker can recover it.
  */
 
 import { BaseCommand } from './Command';

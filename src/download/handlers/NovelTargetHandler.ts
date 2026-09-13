@@ -10,14 +10,57 @@ import { getTodayDate, getYesterdayDate } from '../../utils/pixiv-date-utils';
 import { calculatePopularityScore } from '../../utils/pixiv-utils';
 import { PixivNovel } from '@redtidev/pixiv-client';
 import { DeliveryService } from '../../delivery/DeliveryService';
-import { TargetOutcome } from '../../scheduler/TargetOutcome';
+import {
+  CandidateAttempt,
+  CandidateScanSummary,
+  TargetOutcome,
+  classifyCandidateFailure,
+  classifyJobLevelOutage,
+  hasTransientFailure,
+  mergeScanSummaries,
+  noEligibleCandidateText,
+  skipCandidateWithoutRetry,
+} from '../../scheduler/TargetOutcome';
 import { TargetExecutionContext, isSingleWorkCell } from '../../scheduler/WorkIdentity';
 import type { DownloadedArtifact } from '../../delivery/types';
 import type { TopicPipelineFactory } from '../../topic/createTopicPipeline';
 import { getTargetLabel } from '../../utils/target-label';
+import { resolveCandidateScanLimit } from '../plan/DownloadPlanner';
 
 export class NovelTargetHandler {
   private outcomes: TargetOutcome[] = [];
+
+  /**
+   * Candidate scan of the last pipeline.run() of this handle() call: how many
+   * candidates were attempted, which were skipped and why, and whether any
+   * job-level outage appeared. This is what turns an empty result into an
+   * explicit verdict instead of an ambiguous "completed".
+   */
+  private scan: CandidateScanSummary | null = null;
+
+  /**
+   * Global candidate-scan bound (`download.candidateScanLimit`), supplied by
+   * DownloadManager. This is what lets the FETCH stage ask for more than one
+   * candidate: a scheduled one-post-per-slot target has `limit: 1`, and asking
+   * the ranking API for exactly one work is the reason a single duplicate used
+   * to be unfixable downstream.
+   */
+  private defaultCandidateScanLimit?: number;
+
+  /** Publish the global candidate-scan bound for the fetch stage. */
+  public setDefaultCandidateScanLimit(limit: number | undefined): void {
+    this.defaultCandidateScanLimit = limit;
+  }
+
+  /**
+   * How many candidates to FETCH so the bounded scan has something to choose
+   * from. Same rule the planner applies to the attempt window, so fetch and
+   * scan agree on one bound.
+   */
+  private candidateFetchLimit(target: TargetConfig): number {
+    const targetLimit = target.limit && target.limit > 0 ? target.limit : 10;
+    return Math.max(targetLimit, resolveCandidateScanLimit(target, this.defaultCandidateScanLimit));
+  }
 
   /**
    * Cell identity for this handle() call. Set only for a single-work cell of a
@@ -38,6 +81,7 @@ export class NovelTargetHandler {
 
   async handle(target: TargetConfig, execution?: TargetExecutionContext): Promise<TargetOutcome> {
     this.outcomes = [];
+    this.scan = null;
     this.execution = execution && isSingleWorkCell(target) ? execution : null;
 
     // A cell that already owns a work is in RECOVERY, not in a new selection.
@@ -88,6 +132,7 @@ export class NovelTargetHandler {
         'novel',
         (novel, tag) => this.downloadAndDeliver(novel, tag, target)
       );
+      this.scan = result.scan;
       await this.handleDownloadResult(result, target, mode, novels.length);
       return this.summarize();
     } catch (error) {
@@ -95,30 +140,82 @@ export class NovelTargetHandler {
     }
   }
 
+  /**
+   * Reduce the outcomes collected while processing one target to one verdict,
+   * including the bounded-scan bookkeeping.
+   *
+   * A `duplicate` is deliberately NOT a target verdict for a scan: a duplicate
+   * is a CANDIDATE problem (skip it and try the next), which is what the scan
+   * already did. Returning it here is the bug that made a scheduled slot report
+   * success after submitting nothing. It remains a verdict only for the
+   * single-work RECOVERY path, whose cell identity is fixed.
+   */
   private summarize(): TargetOutcome {
-    return (
-      this.outcomes.find((o) => o.kind === 'submitted') ??
-      this.outcomes.find((o) => o.kind === 'stored') ??
-      this.outcomes.find((o) => o.kind === 'delivery_pending') ??
-      this.outcomes.find((o) => o.kind === 'duplicate') ??
-      this.outcomes.find((o) => o.kind === 'failed') ?? {
-        kind: 'no_candidate',
-        reason: 'no matching novel after filtering/dedupe',
-      }
-    );
+    const scan = this.scan ?? undefined;
+    const submitted = this.outcomes.find((o) => o.kind === 'submitted');
+    if (submitted) return scan ? { ...submitted, scan } : submitted;
+    const stored = this.outcomes.find((o) => o.kind === 'stored');
+    if (stored) return scan ? { ...stored, scan } : stored;
+    const pending = this.outcomes.find((o) => o.kind === 'delivery_pending');
+    if (pending) return scan ? { ...pending, scan } : pending;
+    const duplicate = this.outcomes.find((o) => o.kind === 'duplicate');
+    if (duplicate) return scan ? { ...duplicate, scan } : duplicate;
+    const failed = this.outcomes.find((o) => o.kind === 'failed');
+    if (failed) return scan ? { ...failed, scan } : failed;
+    if (scan && scan.outages.length > 0) {
+      return {
+        kind: 'failed',
+        retryable: true,
+        error: `job-level outage while scanning candidates: ${scan.outages.join(', ')}`,
+        scan,
+      };
+    }
+    if (scan && hasTransientFailure(scan)) {
+      return {
+        kind: 'failed',
+        retryable: true,
+        error:
+          `candidate scan hit transient infrastructure failures ` +
+          `(${scan.skipped.filter((s) => s.retryable).length} of ${scan.attempted} attempted)`,
+        scan,
+      };
+    }
+    if (scan && (scan.attempted > 0 || scan.skipped.length > 0)) {
+      return { kind: 'no_candidate', reason: noEligibleCandidateText(scan), scan };
+    }
+    return {
+      kind: 'no_candidate',
+      reason: 'no matching novel after filtering/dedupe',
+      ...(scan ? { scan } : {}),
+    };
   }
 
   private classifyError(error: unknown, displayTag: string, mode: string): TargetOutcome {
     const message = error instanceof Error ? error.message : String(error);
+    const scan = this.scan ?? undefined;
+    // A hard job-level outage is named as such and is never recorded as a
+    // no-candidate business outcome, whatever its message happens to look like.
+    const outage = classifyJobLevelOutage(error);
     this.database.logExecution(displayTag, 'novel', 'failed', message);
-    logger.error(`Novel ${mode === 'ranking' ? 'ranking' : 'tag'} ${displayTag} failed`, { error: message });
+    logger.error(`Novel ${mode === 'ranking' ? 'ranking' : 'tag'} ${displayTag} failed`, {
+      error: message,
+      ...(outage ? { jobLevelOutage: outage } : {}),
+    });
+    if (outage) {
+      return {
+        kind: 'failed',
+        retryable: true,
+        error: `job-level outage (${outage}): ${message}`,
+        ...(scan ? { scan } : {}),
+      };
+    }
     if (/no matching|all .*filtered|no_candidate|language filter/i.test(message)) {
-      return { kind: 'no_candidate', reason: message };
+      return { kind: 'no_candidate', reason: message, ...(scan ? { scan } : {}) };
     }
     const retryable =
         isRetryableNetworkError(error) ||
         (error instanceof Error && /timeout|econn|enotfound|etimed|429|5\d\d/i.test(error.message));
-    return { kind: 'failed', retryable, error: message };
+    return { kind: 'failed', retryable, error: message, ...(scan ? { scan } : {}) };
   }
 
   private async fetchNovels(target: TargetConfig, mode: string): Promise<PixivNovel[]> {
@@ -167,6 +264,7 @@ export class NovelTargetHandler {
       skipped: 0,
       alreadyDownloaded: 0,
       filteredOut: 0,
+      scan: { bound: 0, attempted: 0, skipped: [], outages: [] },
     };
     let totalFound = 0;
 
@@ -193,11 +291,21 @@ export class NovelTargetHandler {
         'novel',
         (novel, tag) => this.downloadAndDeliver(novel, tag, attemptTarget)
       );
+      // The lookback loop is ONE bounded scan: accumulate every day's
+      // skips/outages so the verdict covers all candidates attempted.
+      aggregate.scan = mergeScanSummaries(aggregate.scan, result.scan);
       aggregate.downloaded += result.downloaded;
       aggregate.skipped += result.skipped;
       aggregate.alreadyDownloaded += result.alreadyDownloaded;
       aggregate.filteredOut += result.filteredOut;
+      if (aggregate.scan.outages.length > 0) {
+        // A dead token / dead database / dead network is not "no matching
+        // novel": stop looking back and let the job fail/retry.
+        break;
+      }
     }
+
+    this.scan = aggregate.scan;
 
     await this.handleDownloadResult(
       aggregate,
@@ -237,13 +345,17 @@ export class NovelTargetHandler {
         endDate: rankingDate,
         limit: Math.max(targetLimit * 20, 100),
       };
+      const fetchLimit = this.candidateFetchLimit(target);
       let novels = await this.client.searchNovels(searchTarget);
       logger.info(`Found ${novels.length} novel(s) for ${rankingDate}`);
-      this.sortByPopularityAndLog(novels, targetLimit);
+      this.sortByPopularityAndLog(novels, fetchLimit);
 
-      if (novels.length > targetLimit) {
-        novels = novels.slice(0, targetLimit);
-        logger.info(`Selected top ${novels.length} novel(s) by popularity`);
+      if (novels.length > fetchLimit) {
+        novels = novels.slice(0, fetchLimit);
+        logger.info(
+          `Selected top ${novels.length} novel(s) by popularity ` +
+            `(to fill ${targetLimit}, candidate scan bound ${fetchLimit})`
+        );
       }
       return novels;
     } else {
@@ -254,7 +366,13 @@ export class NovelTargetHandler {
       }
 
       logger.info(`Fetching ranking novels (mode: ${rankingMode}, date: ${rankingDate})`);
-      const novels = await this.rankingService.getRankingNovelsWithFallback(rankingMode, rankingDate, target.limit);
+      // Ask for the whole bounded scan window, not `limit`: the planner then
+      // narrows it to the candidates this run may attempt.
+      const novels = await this.rankingService.getRankingNovelsWithFallback(
+        rankingMode,
+        rankingDate,
+        this.candidateFetchLimit(target)
+      );
       logger.info(`Ranking API returned ${novels.length} novel(s)`);
       return novels;
     }
@@ -291,6 +409,7 @@ export class NovelTargetHandler {
       alreadyDownloaded: number;
       filteredOut: number;
       skipDetails?: { id: string; error: string }[];
+      scan: CandidateScanSummary;
     },
     target: TargetConfig,
     mode: string,
@@ -301,7 +420,11 @@ export class NovelTargetHandler {
     const targetLimit = target.limit || 10;
     const tagForLog = getTargetLabel(target);
 
-    if (downloaded === 0 && targetLimit > 0) {
+    // The bounded scan produced its own explicit verdict when it attempted
+    // candidates or pre-filtered some, so the legacy "zero downloads" reporter
+    // is only the fallback for a scan that had nothing at all to look at.
+    const scanOwnsVerdict = result.scan.attempted > 0 || result.scan.skipped.length > 0;
+    if (downloaded === 0 && targetLimit > 0 && !scanOwnsVerdict) {
       await this.handleZeroDownloads(
         alreadyDownloaded,
         skipped,
@@ -315,6 +438,14 @@ export class NovelTargetHandler {
         result.skipDetails
       );
       return;
+    }
+
+    if (scanOwnsVerdict && downloaded > 0) {
+      logger.info(
+        `Candidate scan verdict for ${tagForLog}: submitted after skipping ` +
+          `${result.scan.skipped.length} candidate(s) of ${result.scan.attempted} attempted ` +
+          `(bound ${result.scan.bound})`
+      );
     }
 
     if (downloaded > 0 && downloaded < targetLimit * 0.5 && skipped > 0) {
@@ -496,6 +627,7 @@ export class NovelTargetHandler {
         'novel',
         (novel, tag) => this.downloadAndDeliver(novel, tag, target)
       );
+      this.scan = result.scan;
       this.handleDownloadResult(result, target, 'user', novels.length);
     } catch (error) {
       this.logError(error, `Failed to download novels for user ${userId}`);
@@ -591,7 +723,17 @@ export class NovelTargetHandler {
         user: detail.user,
         create_date: detail.create_date,
       };
-      await this.downloadAndDeliver(novel, `novel-${novelId}`, target);
+      const attempt = await this.downloadAndDeliver(novel, `novel-${novelId}`, target);
+      if (attempt.kind === 'skipped') {
+        // A cell that already owns a work cannot advance to another candidate —
+        // its identity is fixed. An already-delivered locked work is therefore a
+        // terminal business duplicate for THIS cell (it published nothing new).
+        this.outcomes.push(
+          attempt.skip.code === 'duplicate'
+            ? { kind: 'duplicate', workId: lockedWorkId, reason: attempt.skip.reason }
+            : { kind: 'failed', retryable: false, error: `LOCKED_WORK_UNAVAILABLE: ${attempt.skip.reason}` }
+        );
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       const retryable = isRetryableNetworkError(error);
@@ -609,6 +751,11 @@ export class NovelTargetHandler {
   /**
    * Process ONE candidate work for this cell.
    *
+   * Returns what happened to THIS candidate, so the pipeline can advance to the
+   * next one when it was unusable. Throwing is reserved for JOB-level failures
+   * (dead database / dead token / dead delivery provider): a candidate-level
+   * failure is reported as a `skipped` attempt and never as a job verdict.
+   *
    * The cell is bound to `novel` BEFORE any side effect: it is the binding, not
    * the candidate list, that decides what a later recovery resumes. The binding
    * is only rolled back when the attempt produced no artifact at all, so in-run
@@ -618,7 +765,7 @@ export class NovelTargetHandler {
     novel: PixivNovel,
     tag: string,
     target: TargetConfig
-  ): Promise<void> {
+  ): Promise<CandidateAttempt> {
     const execution = this.execution;
     const workId = String(novel.id);
     // Recovery continues a work the cell already bound; it must never be released.
@@ -633,7 +780,14 @@ export class NovelTargetHandler {
           targetId: execution.targetId,
           boundWorkId: binding.workId,
         });
-        return;
+        return {
+          kind: 'skipped',
+          skip: {
+            code: 'duplicate',
+            workId,
+            reason: `cell already owns work ${binding.workId} (concurrent selection)`,
+          },
+        };
       }
     }
 
@@ -643,33 +797,85 @@ export class NovelTargetHandler {
     } catch (error) {
       // Nothing was persisted, so the cell may still pick another candidate.
       if (execution && !recovering) execution.release(workId);
-      throw error;
+      const failure = classifyCandidateFailure(error, workId);
+      if (failure.scope === 'job' || !skipCandidateWithoutRetry(failure.skip)) {
+        // Job-level outage, or a transient candidate failure: re-thrown so the
+        // queue's existing retry/backoff owns it and the scheduler records a JOB
+        // failure — never an exhausted candidate list.
+        throw error;
+      }
+      this.logError(error, `Candidate novel ${workId} skipped (${failure.skip.code})`);
+      return { kind: 'skipped', skip: failure.skip };
     }
     if (!artifact) {
       if (execution && !recovering) execution.release(workId);
-      return;
+      return {
+        kind: 'skipped',
+        skip: { code: 'filtered', workId, reason: 'downloader declined this candidate (no artifact)' },
+      };
     }
-    // Committed: the artifact is durable and this work now defines the cell. Even
-    // if the delivery below throws, recovery must resume THIS work — never release.
+    // The artifact is durable, but this cell has NOT committed to it until the
+    // delivery below actually claims it. A candidate that turns out to be a
+    // duplicate must give the binding BACK, or `bind()` would refuse the next
+    // candidate and the scan could never advance — the whole point of this
+    // change. `releaseCellWork` itself refuses once the cell moved on
+    // (delivery_pending/submitted), so a committed identity stays stable.
+    const attempt = this.recordArtifactOutcome(artifact, target);
+    if (attempt.kind === 'skipped' && execution && !recovering) {
+      execution.release(workId);
+    }
+    return attempt;
+  }
+
+  /**
+   * Turn a downloaded novel artifact into the target's business outcome.
+   *
+   * An ALREADY-DELIVERED work is returned as a candidate SKIP, never as a
+   * target outcome: the run must try the next candidate instead of ending the
+   * slot as a `duplicate`. The delivery idempotency ledger is what makes the
+   * second concurrent worker lose this race instead of double-submitting.
+   */
+  private recordArtifactOutcome(
+    artifact: DownloadedArtifact,
+    target: TargetConfig
+  ): CandidateAttempt {
     const isDelivery = target.storageMode === 'cache' && target.delivery?.target?.trim();
     if (!isDelivery || !this.deliveryService) {
       this.outcomes.push({ kind: 'stored', workId: artifact.pixivId, workType: artifact.type });
-      return;
+      return { kind: 'selected', workId: artifact.pixivId, workType: artifact.type };
     }
     const ec = target.delivery as { executionContext?: { slotId?: string } } | undefined;
     const slotId = ec?.executionContext?.slotId;
     if (this.deliveryService.isAlreadyDelivered(target.delivery!.target!, artifact.type, artifact.pixivId)) {
-      this.outcomes.push({ kind: 'duplicate', workId: artifact.pixivId, reason: 'already delivered to target (ledger)' });
-      return;
+      return {
+        kind: 'skipped',
+        skip: {
+          code: 'duplicate',
+          workId: artifact.pixivId,
+          reason: 'already delivered to target (delivery ledger)',
+        },
+      };
     }
     const res = this.deliveryService.enqueue(artifact, target, {
       slotId,
       fields: target.delivery?.fields as Record<string, unknown> | undefined,
     });
-    this.outcomes.push(
-      res.duplicate
-        ? { kind: 'duplicate', workId: artifact.pixivId, reason: 'already delivered (ledger)' }
-        : { kind: 'delivery_pending', workId: artifact.pixivId, workType: artifact.type, deliveryId: res.deliveryId }
-    );
+    if (res.duplicate) {
+      return {
+        kind: 'skipped',
+        skip: {
+          code: 'duplicate',
+          workId: artifact.pixivId,
+          reason: 'already delivered (idempotency ledger)',
+        },
+      };
+    }
+    this.outcomes.push({
+      kind: 'delivery_pending',
+      workId: artifact.pixivId,
+      workType: artifact.type,
+      deliveryId: res.deliveryId,
+    });
+    return { kind: 'selected', workId: artifact.pixivId, workType: artifact.type };
   }
 }

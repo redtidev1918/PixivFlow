@@ -115,8 +115,20 @@ describe('work identity across recovery', () => {
    */
   function pipelineDownloadsEveryCandidate(): void {
     mockPipeline.run.mockImplementation(async (items: any, _t: any, _ty: any, downloadFn: any) => {
-      for (const item of items) await downloadFn(item, 'landscape');
-      return { downloaded: items.length, skipped: 0, alreadyDownloaded: 0, filteredOut: 0 };
+      const skipped: any[] = [];
+      let produced = 0;
+      for (const item of items) {
+        const attempt = await downloadFn(item, 'landscape');
+        if (attempt?.kind === 'skipped') skipped.push(attempt.skip);
+        else produced += 1;
+      }
+      return {
+        downloaded: produced,
+        skipped: 0,
+        alreadyDownloaded: 0,
+        filteredOut: 0,
+        scan: { bound: items.length, attempted: items.length, skipped, outages: [] },
+      };
     });
   }
 
@@ -327,7 +339,14 @@ describe('work identity across recovery', () => {
         coord.executionContextsFor(slotId, coord.pendingTargets(slotId, [target()])).get(TARGET_ID)
       );
 
-      expect(outcome.kind).toBe('failed');
+      // A 404 is a CANDIDATE-level fact, not a job failure: the candidate is
+      // skipped, so with no further candidate the target reports the explicit
+      // "no eligible candidate" verdict instead of a failed job.
+      expect(outcome.kind).toBe('no_candidate');
+      expect(outcome.scan?.skipped).toEqual([
+        expect.objectContaining({ code: 'deleted', workId: '100' }),
+      ]);
+      expect(outcome.scan?.attempted).toBe(1);
       const cell = db.slots.getCell(slotId, TARGET_ID)!;
       expect(cell.workId).toBeNull();
       expect(cell.status).toBe('pending');

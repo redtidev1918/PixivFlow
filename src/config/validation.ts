@@ -487,6 +487,23 @@ export function validateConfig(config: Partial<StandaloneConfig>, location: stri
     if (config.download.maxRetries !== undefined && (config.download.maxRetries < 0 || config.download.maxRetries > 10)) {
       warnings.push('download.maxRetries: Should be between 0 and 10');
     }
+    if (
+      config.download.candidateScanLimit !== undefined &&
+      (!Number.isInteger(config.download.candidateScanLimit) ||
+        config.download.candidateScanLimit < 1 ||
+        config.download.candidateScanLimit > 100)
+    ) {
+      warnings.push('download.candidateScanLimit: Should be an integer between 1 and 100');
+    }
+  }
+
+  // The bounded candidate scan is what stops a page full of duplicates from
+  // burning a whole scheduled slot, so a non-integer value is reported here.
+  for (const target of config.targets ?? []) {
+    if (target.candidateScanLimit === undefined) continue;
+    if (!Number.isInteger(target.candidateScanLimit) || target.candidateScanLimit < 1 || target.candidateScanLimit > 100) {
+      warnings.push(`targets.${target.id ?? target.tag ?? '?'}.candidateScanLimit: Should be an integer between 1 and 100`);
+    }
   }
 
   // Validate log level

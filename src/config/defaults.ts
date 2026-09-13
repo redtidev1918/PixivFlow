@@ -40,6 +40,10 @@ export const DEFAULT_CONFIG = {
     maxRetries: 3,
     retryDelay: 2000,
     timeout: 60000,
+    // Candidates one execution may ATTEMPT while looking for an eligible work.
+    // Bounded so a ranking page full of already-delivered works cannot loop,
+    // but large enough that a single duplicate no longer burns the slot.
+    candidateScanLimit: 5,
   },
   initialDelay: 0,
 } as const;

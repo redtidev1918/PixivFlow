@@ -5,6 +5,7 @@
  */
 import { Database } from '../../storage/Database';
 import { SlotCoordinator } from '../../scheduler/SlotCoordinator';
+import { logger } from '../../logger';
 import { StandaloneConfig, ScheduleConfig, TargetConfig } from '../../config';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
@@ -191,6 +192,187 @@ describe('SlotCoordinator failure injection', () => {
 
       coord.markDelivered(slot.slotId, 'a', '100', 'illustration');
       expect(db.slots.getCell(slot.slotId, 'a')!.status).toBe('submitted');
+    });
+  });
+});
+
+/**
+ * Terminal occurrence outcome: the ONE `schedule.outcome` record that says how an
+ * occurrence actually ended. It is deduped by the existing durable
+ * `execution.summary` row, so recovery that re-rolls the same terminal slot must
+ * produce neither a second line nor a second row.
+ */
+describe('SlotCoordinator terminal schedule outcome', () => {
+  let info: jest.SpyInstance;
+
+  const outcomeCalls = (): unknown[][] =>
+    info.mock.calls.filter((call) => (call[1] as { event?: string } | undefined)?.event === 'schedule.outcome');
+  const lastOutcome = (): Record<string, any> => outcomeCalls().slice(-1)[0]?.[1] as Record<string, any>;
+
+  beforeEach(() => {
+    info = jest.spyOn(logger, 'info').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  // Requirement 5: exactly one line per terminal occurrence, even across a re-roll.
+  it('emits schedule.outcome exactly once for a terminal slot, and not again on a re-roll', async () => {
+    await withDb(async (db) => {
+      const coord = new SlotCoordinator(db);
+      const slot = coord.resolveOccurrence(schedule, config, 'http', AT).context!;
+      coord.prepare(slot, schedule, [target('a')]);
+      coord.markRunning(slot.slotId); // gives the slot row its started_at
+      coord.lockWork(slot.slotId, 'a', '100', 'illustration');
+      coord.markCell(slot.slotId, 'a', 'submitted');
+
+      coord.finish(slot, schedule, [target('a')]);
+      expect(outcomeCalls()).toHaveLength(1);
+
+      const rec = lastOutcome();
+      expect(rec.slot_id).toBe(slot.slotId);
+      expect(rec.schedule_id).toBe('schedule-a');
+      expect(rec.status).toBe('success');
+      expect(rec.occurrence_at).toBe('2026-09-08T02:00:00.000Z');
+      expect(rec.occurrence_date).toBe('2026-09-08');
+      expect(typeof rec.duration_ms).toBe('number');
+      expect(rec.duration_ms).toBeGreaterThanOrEqual(0);
+      expect(rec.cells).toMatchObject({
+        total: 1,
+        submitted: 1,
+        no_match: 0,
+        duplicate: 0,
+        all_duplicates: false,
+        executor_failed: 0,
+        delivery_failed: 0,
+      });
+
+      // Recovery/restart re-rolls the SAME terminal occurrence: its durable
+      // identity already exists, so no second row and no second line may appear.
+      coord.finish(slot, schedule, [target('a')]);
+      expect(outcomeCalls()).toHaveLength(1);
+
+      // The durable row carries the IDENTICAL object, so the two cannot disagree.
+      const rows = db.outbox
+        .listEvents({ executionId: slot.slotId })
+        .filter((e) => e.event === 'execution.summary');
+      expect(rows).toHaveLength(1);
+      const persisted = JSON.parse(String(rows[0].detail)) as { outcome: Record<string, unknown> };
+      expect(persisted.outcome).toEqual(rec);
+    });
+  });
+
+  // Requirement 6a: no_candidate is its own business category — not a failure,
+  // not a duplicate — even though the aggregate slot status is `partial`.
+  it('counts a no_candidate cell as no_match and never as a duplicate or failure', async () => {
+    await withDb(async (db) => {
+      const coord = new SlotCoordinator(db);
+      const slot = coord.resolveOccurrence(schedule, config, 'http', AT).context!;
+      coord.prepare(slot, schedule, [target('a'), target('b')]);
+      coord.lockWork(slot.slotId, 'a', '100', 'illustration');
+      coord.markCell(slot.slotId, 'a', 'submitted');
+      coord.markCell(slot.slotId, 'b', 'no_candidate', 'no matching works');
+
+      const summary = coord.finish(slot, schedule, [target('a'), target('b')]);
+      expect(summary.status).toBe('partial');
+
+      const rec = lastOutcome();
+      expect(rec.status).toBe('partial');
+      expect(rec.cells).toMatchObject({
+        total: 2,
+        submitted: 1,
+        no_match: 1,
+        duplicate: 0,
+        all_duplicates: false,
+        executor_failed: 0,
+        delivery_failed: 0,
+      });
+      expect(rec.cells.targets).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ target_id: 'a', status: 'submitted', work_id: '100' }),
+          expect.objectContaining({ target_id: 'b', status: 'no_candidate', error: 'no matching works' }),
+        ])
+      );
+    });
+  });
+
+  // Requirement 6b: "there was nothing new to post" is reported as such.
+  it('reports all_duplicates when every non-submitted cell is a duplicate', async () => {
+    await withDb(async (db) => {
+      const coord = new SlotCoordinator(db);
+      const slot = coord.resolveOccurrence(schedule, config, 'http', AT).context!;
+      coord.prepare(slot, schedule, [target('a'), target('b'), target('c')]);
+      coord.lockWork(slot.slotId, 'a', '100', 'illustration');
+      coord.markCell(slot.slotId, 'a', 'submitted');
+      coord.lockWork(slot.slotId, 'b', '101', 'illustration');
+      coord.markCell(slot.slotId, 'b', 'duplicate', 'already posted');
+      coord.lockWork(slot.slotId, 'c', '102', 'illustration');
+      coord.markCell(slot.slotId, 'c', 'duplicate', 'already posted');
+
+      coord.finish(slot, schedule, [target('a'), target('b'), target('c')]);
+
+      const rec = lastOutcome();
+      expect(rec.cells).toMatchObject({
+        total: 3,
+        submitted: 1,
+        duplicate: 2,
+        all_duplicates: true,
+        executor_failed: 0,
+        delivery_failed: 0,
+      });
+    });
+  });
+
+  // A terminally lost delivery is a DISTINCT business failure, read from the
+  // durable delivery ledger — never guessed from an error string.
+  it('classifies a terminally lost delivery as delivery_failed, not executor_failed', async () => {
+    await withDb(async (db) => {
+      const cacheTarget = (id: string): TargetConfig =>
+        ({ id, type: 'illustration', storageMode: 'cache', delivery: { target: 'telepost' } }) as unknown as TargetConfig;
+      const delivery = {
+        stateFor: ({ targetId }: { targetId: string }) =>
+          targetId === 'lost'
+            ? { kind: 'lost' as const, reason: 'permanent upstream 400' }
+            : { kind: 'unknown' as const },
+      };
+      const coord = new SlotCoordinator(db, delivery);
+      const slot = coord.resolveOccurrence(schedule, config, 'http', AT).context!;
+      const targets = [cacheTarget('lost'), cacheTarget('broke')];
+      coord.prepare(slot, schedule, targets);
+      coord.markCell(slot.slotId, 'lost', 'failed', 'delivery intent dead');
+      coord.markCell(slot.slotId, 'broke', 'failed', 'handler threw');
+
+      coord.finish(slot, schedule, targets);
+
+      const rec = lastOutcome();
+      expect(rec.cells).toMatchObject({
+        total: 2,
+        submitted: 0,
+        delivery_failed: 1,
+        executor_failed: 1,
+      });
+      // Both cells are status `failed`; the durable ledger is what separated them.
+      expect(db.slots.getCell(slot.slotId, 'lost')!.status).toBe('failed');
+      expect(db.slots.getCell(slot.slotId, 'broke')!.status).toBe('failed');
+    });
+  });
+
+  // A non-terminal occurrence has no terminal outcome to report at all.
+  it('writes no schedule.outcome while a cell is still delivery_pending', async () => {
+    await withDb(async (db) => {
+      const coord = new SlotCoordinator(db);
+      const slot = coord.resolveOccurrence(schedule, config, 'http', AT).context!;
+      coord.prepare(slot, schedule, [target('a'), target('b')]);
+      coord.lockWork(slot.slotId, 'a', '100', 'illustration');
+      coord.markCell(slot.slotId, 'a', 'submitted');
+      coord.applyOutcome(slot.slotId, 'b', {
+        kind: 'delivery_pending', workId: '101', workType: 'illustration', deliveryId: 'd-1',
+      });
+
+      const summary = coord.finish(slot, schedule, [target('a'), target('b')]);
+      expect(summary.status).toBe('running');
+      expect(outcomeCalls()).toHaveLength(0);
     });
   });
 });

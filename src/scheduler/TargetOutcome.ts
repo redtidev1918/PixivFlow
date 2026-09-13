@@ -104,11 +104,19 @@ export type CandidateAttempt =
  * `bound` is the configured cap (never exceeded), `attempted` the real count.
  */
 export interface CandidateScanSummary {
-  /** Configured cap on candidates this scan was allowed to attempt. */
+  /**
+   * Cap on candidates this scan was allowed to attempt: the effective window,
+   * never above the configured `candidateScanLimit` unless the target's own
+   * `limit` is larger (a multi-work target must be able to fill its limit).
+   */
   bound: number;
   /** Candidates actually attempted. Always <= bound. */
   attempted: number;
-  /** Candidates skipped before the scan ended, in scan order. */
+  /**
+   * Candidates skipped before the scan ended, in the order they were skipped —
+   * strictly candidate order whenever the scan is serial, which is always the
+   * case for a single-work cell.
+   */
   skipped: CandidateSkip[];
   /** Job-level outages observed while scanning (never a candidate verdict). */
   outages: JobLevelOutage[];

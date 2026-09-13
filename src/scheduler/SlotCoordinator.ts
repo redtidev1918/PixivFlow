@@ -67,6 +67,58 @@ export interface SlotRunSummary {
   cells: SlotCellSummary[];
 }
 
+/** Terminal statuses only: the rollup that ends an occurrence's life. */
+export type ScheduleOutcomeStatus = 'success' | 'partial' | 'failed';
+
+export interface ScheduleOutcomeTarget {
+  target_id: string;
+  status: CellStatus;
+  work_id: string | null;
+  error: string | null;
+}
+
+/**
+ * Business categories an operator actually asks about, counted per cell. The
+ * point is to separate "nothing suitable existed" (no_match) and "already
+ * delivered" (duplicate) from real failures: lumping them together made a
+ * healthy run look broken, and a broken one look routine.
+ *
+ * Each cell lands in exactly ONE category, in this precedence:
+ * submitted -> no_match -> duplicate -> delivery_failed -> executor_failed.
+ * `delivery_failed` is checked before `executor_failed` because a terminally
+ * lost delivery ALSO leaves the cell in the `failed` state — counting it twice
+ * would invent a second failure that does not exist.
+ */
+export interface ScheduleOutcomeCells {
+  total: number;
+  submitted: number;
+  no_match: number;
+  duplicate: number;
+  /** True when there is at least one non-submitted cell and ALL of them are duplicates. */
+  all_duplicates: boolean;
+  executor_failed: number;
+  delivery_failed: number;
+  targets: ScheduleOutcomeTarget[];
+}
+
+/**
+ * The single structured terminal record for one schedule occurrence. The SAME
+ * object is both logged as `schedule.outcome` and persisted into the existing
+ * `execution.summary` detail, so the log line and the durable row cannot
+ * disagree — and no second event name or shadow ledger is introduced.
+ */
+export interface ScheduleOutcomeRecord {
+  event: 'schedule.outcome';
+  schedule_id: string;
+  slot_id: string;
+  occurrence_at: string | undefined;
+  occurrence_date: string;
+  status: ScheduleOutcomeStatus;
+  /** From the slot row's own started_at/completed_at columns, when both exist. */
+  duration_ms: number | undefined;
+  cells: ScheduleOutcomeCells;
+}
+
 export interface SlotResolveResult {
   context?: SlotContext;
   error?: string;
@@ -103,6 +155,31 @@ function deliveryTargetOf(target: TargetConfig): string | null {
   if (target.storageMode !== 'cache') return null;
   const name = target.delivery?.target;
   return typeof name === 'string' && name.trim() ? name.trim() : null;
+}
+
+/**
+ * SQLite `CURRENT_TIMESTAMP` is UTC "YYYY-MM-DD HH:MM:SS". It carries no zone
+ * marker, and `Date.parse` reads that shape as LOCAL time — so the zone is
+ * added explicitly instead of being trusted to the engine.
+ */
+function sqliteUtcMs(value: string | null | undefined): number | undefined {
+  if (!value) return undefined;
+  const normalized = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value)
+    ? `${value.replace(' ', 'T')}Z`
+    : value;
+  const ms = Date.parse(normalized);
+  return Number.isNaN(ms) ? undefined : ms;
+}
+
+/**
+ * Epoch ms -> ISO 8601 UTC, or undefined when it is not a usable instant.
+ * `toISOString` throws on an out-of-range Date, and a throw here would abort the
+ * terminal rollup — a logging field must never be able to break dispatch.
+ */
+function isoUtcOrUndefined(epochMs: number | null | undefined): string | undefined {
+  if (typeof epochMs !== 'number' || !Number.isFinite(epochMs)) return undefined;
+  const date = new Date(epochMs);
+  return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
 }
 
 /**
@@ -444,7 +521,6 @@ export class SlotCoordinator {
     }
     const status = this.database.slots.deriveSlotStatus(slot.slotId);
     this.database.slots.markSlotStatus(slot.slotId, status);
-    this.persistExecutionSummary(slot.slotId, status);
 
     const cells = this.database.slots.getCells(slot.slotId).map((c) => ({
       targetId: c.targetId,
@@ -452,6 +528,10 @@ export class SlotCoordinator {
       workId: c.workId,
       error: c.lastError,
     }));
+
+    // Rolled up AFTER the slot row carries its terminal status/completed_at, so
+    // the outcome reports the durable timestamps rather than a fresh clock read.
+    this.persistExecutionSummary(slot.slotId, status, this.scheduleOutcome(slot, status, targets));
 
     const icon = (s: CellStatus) =>
       s === 'submitted' ? '✅' : s === 'no_candidate' ? '⚠️ no_candidate' : '❌ failed';
@@ -465,12 +545,135 @@ export class SlotCoordinator {
   }
 
   /**
+   * Project the terminal slot row into the one structured outcome record. Every
+   * field comes from durable state — the slot row, its cells, and the delivery
+   * ledger. Nothing is inferred from error-message text.
+   */
+  private scheduleOutcome(
+    slot: SlotContext,
+    status: SlotStatus,
+    targets: TargetConfig[]
+  ): ScheduleOutcomeRecord {
+    const slotRec = this.database.slots.getSlot(slot.slotId);
+    const cellRows = this.database.slots.getCells(slot.slotId);
+
+    // Only targets the caller still knows about can name a delivery channel; a
+    // cell with no known channel has no delivery fact to consult.
+    const deliveryTargetByTargetId = new Map<string, string>();
+    for (const target of targets) {
+      const deliveryTarget = deliveryTargetOf(target);
+      if (target.id && deliveryTarget) deliveryTargetByTargetId.set(target.id, deliveryTarget);
+    }
+
+    let submitted = 0;
+    let no_match = 0;
+    let duplicate = 0;
+    let executor_failed = 0;
+    let delivery_failed = 0;
+
+    const targetsDetail = cellRows.map((cell) => {
+      const classified = this.classifyCell(cell.status, slot.slotId, cell.targetId, deliveryTargetByTargetId);
+      if (classified === 'submitted') submitted += 1;
+      else if (classified === 'no_match') no_match += 1;
+      else if (classified === 'duplicate') duplicate += 1;
+      else if (classified === 'delivery_failed') delivery_failed += 1;
+      else if (classified === 'executor_failed') executor_failed += 1;
+      return {
+        target_id: cell.targetId,
+        status: cell.status,
+        work_id: cell.workId,
+        error: cell.lastError,
+      };
+    });
+
+    // A fully-submitted slot has no non-submitted cell at all, and reporting
+    // `all_duplicates` there would be a lie — so the count must be non-zero.
+    const nonSubmitted = cellRows.length - submitted;
+    const all_duplicates = nonSubmitted > 0 && duplicate === nonSubmitted;
+
+    const startedMs = sqliteUtcMs(slotRec?.startedAt);
+    const completedMs = sqliteUtcMs(slotRec?.completedAt);
+    const duration_ms =
+      startedMs !== undefined && completedMs !== undefined
+        ? Math.max(0, completedMs - startedMs)
+        : undefined;
+
+    const occurrenceAt = slotRec?.occurrenceAt ?? slot.occurrenceAt;
+
+    return {
+      event: 'schedule.outcome',
+      schedule_id: slotRec?.scheduleId ?? slot.scheduleId,
+      slot_id: slot.slotId,
+      occurrence_at: isoUtcOrUndefined(occurrenceAt),
+      occurrence_date: slotRec?.occurrenceDate ?? slot.occurrenceDate,
+      status: status as ScheduleOutcomeStatus,
+      duration_ms,
+      cells: {
+        total: cellRows.length,
+        submitted,
+        no_match,
+        duplicate,
+        all_duplicates,
+        executor_failed,
+        delivery_failed,
+        targets: targetsDetail,
+      },
+    };
+  }
+
+  /**
+   * One cell -> one business category. `delivery_failed` is derived from the
+   * durable delivery ledger through the SAME port the FSM already uses, never
+   * from an error string, and it is decided BEFORE `executor_failed` because a
+   * terminally lost delivery also leaves the cell `failed`: one cause, one count.
+   */
+  private classifyCell(
+    cellStatus: CellStatus,
+    slotId: string,
+    targetId: string,
+    deliveryTargetByTargetId: Map<string, string>
+  ): 'submitted' | 'no_match' | 'duplicate' | 'delivery_failed' | 'executor_failed' | 'other' {
+    if (cellStatus === 'submitted') return 'submitted';
+    if (cellStatus === 'no_candidate') return 'no_match';
+    if (cellStatus === 'duplicate') return 'duplicate';
+    const deliveryTarget = deliveryTargetByTargetId.get(targetId);
+    if (deliveryTarget && this.delivery) {
+      try {
+        const state = this.delivery.stateFor({ deliveryTarget, slotId, targetId });
+        if (state.kind === 'lost') return 'delivery_failed';
+      } catch (error) {
+        // Observability must never break the rollup.
+        logger.debug('Delivery state unavailable for outcome rollup', {
+          slot: slotId,
+          target: targetId,
+          error: (error as Error).message,
+        });
+      }
+    }
+    if (cellStatus === 'failed') return 'executor_failed';
+    // Non-terminal (delivery_pending / artifact_ready): such a slot is not
+    // terminal either, so no outcome record is written for it at all.
+    return 'other';
+  }
+
+  /**
    * Persist a one-row incident/execution summary into delivery_events
    * (event='execution.summary') at the terminal rollup only. Event-row storage
    * reuses the audit table + `runs show` read path instead of inventing a
    * summary table or overloading execution_log's illustration/novel typing.
+   *
+   * The `schedule.outcome` line is emitted HERE, immediately after that durable
+   * write and behind the SAME `hasExecutionSummary` dedupe, because the summary
+   * row is the occurrence-level terminal identity that already exists. Recovery
+   * that re-rolls the same terminal slot therefore logs nothing a second time,
+   * with no shadow ledger and no second event name. The identical object goes to
+   * both sinks, so the line and the row cannot disagree.
    */
-  private persistExecutionSummary(slotId: string, status: string): void {
+  private persistExecutionSummary(
+    slotId: string,
+    status: SlotStatus,
+    outcome: ScheduleOutcomeRecord
+  ): void {
     if (status !== 'success' && status !== 'partial' && status !== 'failed') return;
     try {
       if (this.database.outbox.hasExecutionSummary(slotId)) return;
@@ -480,8 +683,12 @@ export class SlotCoordinator {
         slotId,
         event: 'execution.summary',
         countsAsAttempt: 0,
-        detail: { summary },
+        detail: { summary, outcome },
       });
+      logger.info(
+        'Schedule occurrence reached a terminal outcome',
+        outcome as unknown as Record<string, unknown>
+      );
     } catch (error) {
       logger.debug('Failed to persist execution summary', { slot: slotId, error: (error as Error).message });
     }

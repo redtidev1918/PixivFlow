@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.19.5](https://github.com/redtidev1918/PixivFlow/compare/v2.19.4...v2.19.5) (2026-09-13)
+
+
+### Bug Fixes
+
+* **scheduler:** a duplicate candidate advances the scan instead of ending the slot ([6cf145a](https://github.com/redtidev1918/PixivFlow/commit/6cf145a94460002fd2e7d45dbd6811c8743dd41a))
+* **scheduler:** 重复候选推进扫描而不是结束槽位 ([d5522d9](https://github.com/redtidev1918/PixivFlow/commit/d5522d999a07b801b1bf668c1bb870db25f2c663))
+
 ## [2.19.4](https://github.com/redtidev1918/PixivFlow/compare/v2.19.3...v2.19.4) (2026-09-12)
 
 

@@ -748,21 +748,26 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
     if (slotCtx && !slotAbandoned) {
       const summary = coordinator.finish(slotCtx, schedule, targets);
       for (const target of targets) if (target.id) notificationPolicy.noteTerminalRefetchCell(slotCtx.slotId, target.id);
-      notificationPolicy.sendSlotSummary(
-        slotCtx,
-        schedule,
-        summary.cells.map((c) => {
-          const t = targets.find((x) => x.id === c.targetId);
-          return {
-            targetId: c.targetId,
-            label: c.targetId,
-            workType: t?.type ?? 'unknown',
-            status: c.status,
-            workId: c.workId,
-            error: c.error ?? null,
-          };
-        })
-      );
+      // Terminal summaries are for SCHEDULED occurrences (P0-B). Remote manual
+      // replacements already report through their own verdict channel
+      // (refetchOutcomeUrl); a schedule summary would double-notify the group.
+      if (!slotCtx.manualRequestId) {
+        notificationPolicy.sendSlotSummary(
+          slotCtx,
+          schedule,
+          summary.cells.map((c) => {
+            const t = targets.find((x) => x.id === c.targetId);
+            return {
+              targetId: c.targetId,
+              label: c.targetId,
+              workType: t?.type ?? 'unknown',
+              status: c.status,
+              workId: c.workId,
+              error: c.error ?? null,
+            };
+          })
+        );
+      }
       releaseLease();
     }
     if (!slotCtx && allTargetsFailed) throw allTargetsFailed;

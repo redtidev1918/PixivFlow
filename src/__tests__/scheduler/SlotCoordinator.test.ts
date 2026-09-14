@@ -56,13 +56,15 @@ describe('SlotCoordinator', () => {
     await withDb(async (db) => {
       const coord = new SlotCoordinator(db);
       const slot = coord.resolveOccurrence(schedule, config, 'http', AT).context!;
-      coord.prepare(slot, schedule, [target('a'), target('b'), target('c')]);
+      coord.prepare(slot, schedule, [target('a'), target('b'), target('c'), target('d'), target('e')]);
 
       coord.lockWork(slot.slotId, 'a', '100', 'illustration');
       coord.markCell(slot.slotId, 'a', 'submitted');
       coord.markCell(slot.slotId, 'b', 'no_candidate', 'no matching works');
+      coord.markCell(slot.slotId, 'd', 'duplicate', 'downstream historical duplicate');
+      coord.markCell(slot.slotId, 'e', 'failed', 'delivery exhausted');
 
-      const pending = coord.pendingTargets(slot.slotId, [target('a'), target('b'), target('c')]);
+      const pending = coord.pendingTargets(slot.slotId, [target('a'), target('b'), target('c'), target('d'), target('e')]);
       expect(pending.map((p) => p.target.id)).toEqual(['c']);
     });
   });

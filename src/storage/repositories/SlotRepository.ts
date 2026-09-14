@@ -156,6 +156,19 @@ export class SlotRepository extends BaseRepository {
     return rows.map((r) => this.toSlot(r));
   }
 
+  /** Completed cells whose summary enqueue or aggregate rollup was interrupted. */
+  public getUnreportedTerminalSchedules(): SlotRecord[] {
+    const rows = this.db.prepare(`SELECT s.* FROM schedule_slots s
+      WHERE s.manual_request_id IS NULL AND s.status != 'expired'
+        AND EXISTS (SELECT 1 FROM schedule_slot_items c WHERE c.slot_id = s.id)
+        AND NOT EXISTS (SELECT 1 FROM schedule_slot_items c WHERE c.slot_id = s.id
+          AND c.status NOT IN ('submitted', 'no_candidate', 'duplicate', 'failed'))
+        AND (s.status IN ('pending', 'running') OR NOT EXISTS (
+          SELECT 1 FROM outbox o WHERE o.idempotency_key = 'notification:' || s.id || ':summary'
+        ))`).all() as any[];
+    return rows.map((row) => this.toSlot(row));
+  }
+
   public markSlotStatus(id: string, status: SlotStatus, error?: string): void {
     const stamp = status === 'running' ? 'started_at' : status === 'success' || status === 'partial' || status === 'failed' ? 'completed_at' : null;
     const sets = ['status = @status', 'last_error = @error'];

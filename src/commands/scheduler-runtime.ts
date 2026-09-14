@@ -343,6 +343,7 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
   const deliveryDispatcher = new DeliveryDispatcher(config.delivery, buildProxyUrl(config.network));
   const notificationPolicy = new NotificationPolicy(database, config);
   const outboxWorker = new OutboxWorker(database, deliveryDispatcher, {
+    beforeDrain: () => notificationPolicy.reconcileScheduleSummaries(),
     retryBaseMs: config.delivery?.outboxRetryBaseMs,
     retryMaxMs: config.delivery?.outboxRetryMaxMs,
     // A confirmed ACK settles the owning Slot cell (submitted / duplicate /
@@ -571,16 +572,16 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
       Math.min(10, Number(runtimeConfig.download?.maxFallbackStages ?? 3))
     );
     const boostScanLimit = fallbackScanLimit;
-    const boostedTargets = (list: typeof runTargets, stage: number): typeof runTargets =>
-      stage === 0
-        ? list
-        : list.map((t) => ({
-            ...t,
-            candidateScanLimit: boostScanLimit(
-              t.candidateScanLimit ?? runtimeConfig.download?.candidateScanLimit,
-              stage
-            ),
-          }));
+    const boostedTargets = (list: typeof runTargets): typeof runTargets =>
+      list.map((t) => {
+        const stage = scheduleSlot && t.id ? coordinator.cellFallbackStage(scheduleSlot.slotId, t.id) : 0;
+        return stage === 0 ? t : {
+          ...t,
+          candidateScanLimit: boostScanLimit(
+            t.candidateScanLimit ?? runtimeConfig.download?.candidateScanLimit, stage
+          ),
+        };
+      });
 
     const buildManager = (list: typeof runTargets) => {
       const scoped: StandaloneConfig = {
@@ -661,7 +662,7 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
       }
     };
 
-    let downloadManager = buildManager(boostedTargets(runTargets, 0));
+    let downloadManager = buildManager(boostedTargets(runTargets));
     activeDownloadManager = downloadManager;
     await downloadManager.initialise();
 
@@ -705,8 +706,7 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
         if (pendingFallback.length === 0) break;
         downloadManager = buildManager(
           boostedTargets(
-            pendingFallback.map((p) => p.target),
-            pass + 1
+            pendingFallback.map((p) => p.target)
           )
         );
         activeDownloadManager = downloadManager;

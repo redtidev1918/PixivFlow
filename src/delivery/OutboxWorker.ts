@@ -10,6 +10,8 @@ import { redactError } from '../utils/redact';
 import { logger } from '../logger';
 
 export interface OutboxWorkerOptions {
+  /** Reconcile durable notification intents before consuming due rows. */
+  beforeDrain?: () => void;
   /** How often to scan for due rows. */
   pollIntervalMs?: number;
   /** Row lease duration while one attempt is in flight. */
@@ -74,7 +76,7 @@ export class OutboxWorker {
   constructor(
     private readonly database: Database,
     private readonly dispatcher: DeliveryDispatcher,
-    options: OutboxWorkerOptions = {}
+    private readonly options: OutboxWorkerOptions = {}
   ) {
     this.pollIntervalMs = options.pollIntervalMs ?? 10_000;
     this.leaseMs = options.leaseMs ?? 120_000;
@@ -113,6 +115,7 @@ export class OutboxWorker {
     let retried = 0;
     let dead = 0;
     for (let round = 0; round < maxRounds; round++) {
+      this.options.beforeDrain?.();
       const rows = this.database.outbox.claimDue(this.owner, this.leaseMs, this.batchSize);
       if (rows.length === 0) break;
       let deferred = false;
@@ -139,6 +142,7 @@ export class OutboxWorker {
     if (this.running || this.stopped) return;
     this.running = true;
     try {
+      this.options.beforeDrain?.();
       const rows = this.database.outbox.claimDue(this.owner, this.leaseMs, this.batchSize);
       for (const row of rows) {
         if (this.stopped) {

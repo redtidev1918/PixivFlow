@@ -46,6 +46,20 @@ export interface RefetchOutcomePayload {
   };
 }
 
+/** Terminal SCHEDULE occurrence verdict (success/partial/failed), reported via
+ * the durable outbox to TelePost, which relays the user-visible summary. */
+export interface ScheduleOutcomePayload {
+  scheduleId: string;
+  slotId: string;
+  status: 'success' | 'partial' | 'failed';
+  targets?: Array<{
+    targetId: string;
+    workType: string;
+    status: string;
+    workId?: string | null;
+  }>;
+}
+
 export class DeliveryService {
   constructor(private readonly database: Database) {}
 
@@ -259,13 +273,18 @@ export class DeliveryService {
     deliveryTarget: string,
     text: string,
     idempotencyKey: string,
-    refetchOutcome?: RefetchOutcomePayload
+    refetchOutcome?: RefetchOutcomePayload,
+    scheduleOutcome?: ScheduleOutcomePayload
   ): void {
     this.database.outbox.enqueue({
       kind: 'notification',
       deliveryTarget,
       idempotencyKey,
-      payload: refetchOutcome ? { text, refetchOutcome } : { text },
+      payload: refetchOutcome
+        ? { text, refetchOutcome }
+        : scheduleOutcome
+          ? { text, scheduleOutcome }
+          : { text },
     });
   }
 

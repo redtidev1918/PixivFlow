@@ -54,8 +54,13 @@ export class DeliveryDispatcher {
     if (target.type !== 'httpMultipart') {
       throw new ConfigError(`Unsupported delivery target type: ${(target as { type?: string }).type}`);
     }
-    if (!(request.refetchOutcome ? target.refetchOutcomeUrl : target.notificationUrl)?.trim()) {
-      throw new ConfigError(`Delivery target does not configure ${request.refetchOutcome ? 'refetchOutcomeUrl' : 'notificationUrl'}: ${name}`);
+    const urlKey = request.refetchOutcome
+      ? 'refetchOutcomeUrl'
+      : request.scheduleOutcome
+        ? 'scheduleOutcomeUrl'
+        : 'notificationUrl';
+    if (!(target[urlKey] as string | undefined)?.trim()) {
+      throw new ConfigError(`Delivery target does not configure ${urlKey}: ${name}`);
     }
     return new HttpMultipartDelivery(target, this.proxyUrl).notifyOnce(request);
   }

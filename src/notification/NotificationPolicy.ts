@@ -93,8 +93,8 @@ export class NotificationPolicy {
     schedule: ScheduleConfig,
     rows: Array<{ targetId: string; label: string; workType: string; status: string; workId: string | null; error: string | null }>
   ): void {
-    const notifiable = this.notifiableTargets();
-    if (notifiable.size === 0 || rows.length === 0) return;
+    const targets = this.targetsWithUrl('scheduleOutcomeUrl');
+    if (targets.size === 0 || rows.length === 0) return;
 
     const icon = (s: string) =>
       s === 'submitted' ? '✅' : s === 'no_candidate' ? '⚠️' : s === 'duplicate' ? '♱' : s === 'delivery_pending' ? '🕓' : '❌';
@@ -112,10 +112,47 @@ export class NotificationPolicy {
       `结果：${submitted === rows.length ? 'success' : submitted > 0 ? 'partial' : 'failed'}（${submitted}/${rows.length} 已确认投递）`,
     ].join('\n');
 
+    const outcomeStatus: 'success' | 'partial' | 'failed' =
+      submitted === rows.length ? 'success' : submitted > 0 ? 'partial' : 'failed';
+
     const service = new DeliveryService(this.database);
-    for (const name of notifiable) {
-      service.enqueueNotification(name, text, NotificationPolicy.keys.summary(slot.slotId));
+    for (const name of targets) {
+      service.enqueueNotification(
+        name,
+        text,
+        NotificationPolicy.keys.summary(slot.slotId),
+        undefined,
+        {
+          scheduleId: schedule.id,
+          slotId: slot.slotId,
+          status: outcomeStatus,
+          targets: rows.map((r) => ({
+            targetId: r.targetId,
+            workType: r.workType,
+            status: r.status,
+            workId: r.workId,
+          })),
+        }
+      );
     }
+  }
+
+  /**
+   * Delivery targets whose HTTP target declares the given outcome URL.
+   * Schedule summaries require `scheduleOutcomeUrl`; manual refetch outcomes
+   * use `refetchOutcomeUrl`; generic notifications use `notificationUrl`.
+   */
+  private targetsWithUrl(urlKey: 'scheduleOutcomeUrl' | 'refetchOutcomeUrl' | 'notificationUrl'): Set<string> {
+    const result = new Set<string>();
+    for (const target of this.config.targets ?? []) {
+      const deliveryTarget = target.delivery?.target;
+      if (!deliveryTarget) continue;
+      const delivery = this.config.delivery?.targets?.[deliveryTarget];
+      if (delivery?.type === 'httpMultipart' && delivery[urlKey]?.trim()) {
+        result.add(deliveryTarget);
+      }
+    }
+    return result;
   }
 
   private send(targetName: string, key: string, text: string): void {

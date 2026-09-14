@@ -40,6 +40,8 @@ export interface NotificationPayload {
   text: string;
   /** Optional structured remote-manual-replacement verdict (refetch outcome). */
   refetchOutcome?: unknown;
+  /** Optional structured terminal SCHEDULE occurrence verdict. */
+  scheduleOutcome?: unknown;
 }
 
 /** Exponential backoff with jitter, capped. */
@@ -250,6 +252,10 @@ export class OutboxWorker {
           refetchOutcome:
             payload.refetchOutcome !== undefined
               ? (payload.refetchOutcome as DeliveryNotificationRequest['refetchOutcome'])
+              : undefined,
+          scheduleOutcome:
+            payload.scheduleOutcome !== undefined
+              ? (payload.scheduleOutcome as DeliveryNotificationRequest['scheduleOutcome'])
               : undefined,
         });
       } else {

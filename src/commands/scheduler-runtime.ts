@@ -280,6 +280,17 @@ function buildProxyUrl(network: StandaloneConfig['network']): string | undefined
   return `${protocol}://${auth}${proxy.host}:${proxy.port}`;
 }
 
+/**
+ * Expanded, still-bounded candidate scan bound for one fallback stage
+ * (§schedule-recovery). Stage 0 is the primary pass; stage N scans
+ * `base * (N + 1)` candidates, hard-capped so a fallback can never become an
+ * unbounded scan of the whole tag. `undefined` (no declared bound) stays
+ * `undefined`: the handler's own default applies, not a fabricated number.
+ */
+export function fallbackScanLimit(base: number | undefined, stage: number): number | undefined {
+  return base === undefined ? undefined : Math.min(Math.max(base, 1) * (stage + 1), 100);
+}
+
 export async function createSchedulerRuntime(configPathArg?: string): Promise<SchedulerRuntime> {
   logger.info('PixivFlow runtime starting', { component: 'pixivflow', version: BUILD.version, commit: BUILD.commit });
   // Keep TODAY/YESTERDAY placeholders intact. They are resolved afresh for
@@ -550,24 +561,90 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
         targets: runTargets.map((t) => t.id),
       });
     }
-    const downloadManager = new DownloadManager(scopedConfig, pixivClient, database, fileService);
-    if (targetExecutionContexts) downloadManager.setTargetExecutionContexts(targetExecutionContexts);
-    if (options.excludedWorkIds) downloadManager.setProcessedWorkIds(options.excludedWorkIds);
-    activeDownloadManager = downloadManager;
-    await downloadManager.initialise();
-
     const scheduleSlot = slotCtx; // stable for callbacks; null for ad-hoc runs
+
+    // Bounded candidate fallback budget (§schedule-recovery): a missing required
+    // target must exhaust its recovery stages before the occurrence may roll up
+    // as a degraded (partial) terminal result.
+    const maxFallbackStages = Math.max(
+      0,
+      Math.min(10, Number(runtimeConfig.download?.maxFallbackStages ?? 3))
+    );
+    const boostScanLimit = fallbackScanLimit;
+    const boostedTargets = (list: typeof runTargets, stage: number): typeof runTargets =>
+      stage === 0
+        ? list
+        : list.map((t) => ({
+            ...t,
+            candidateScanLimit: boostScanLimit(
+              t.candidateScanLimit ?? runtimeConfig.download?.candidateScanLimit,
+              stage
+            ),
+          }));
+
+    const buildManager = (list: typeof runTargets) => {
+      const scoped: StandaloneConfig = {
+        ...runtimeConfig,
+        targets: withDeliveryMode(
+          list.map((t) => ({
+            ...t,
+            delivery: t.delivery
+              ? { ...t.delivery, slotContext: slotCtx ?? undefined, executionContext }
+              : t.delivery,
+          })),
+          options.deliveryMode
+        ),
+      };
+      const manager = new DownloadManager(scoped, pixivClient, database, fileService);
+      if (targetExecutionContexts) manager.setTargetExecutionContexts(targetExecutionContexts);
+      if (options.excludedWorkIds) manager.setProcessedWorkIds(options.excludedWorkIds);
+      manager.setTargetOutcomeHook(outcomeHook);
+      if (scheduleSlot) {
+        manager.slotContext = {
+          slotId: scheduleSlot.slotId,
+          scheduleId: scheduleSlot.scheduleId,
+          occurrenceAtIso: new Date(scheduleSlot.occurrenceAt).toISOString(),
+          triggerSource: scheduleSlot.triggerSource,
+          slotName: scheduleSlot.slotName,
+          slotDate: scheduleSlot.slotDate,
+        };
+      }
+      return manager;
+    };
+
     // TYPED outcome -> explicit FSM transition. No message regex, no
     // "no throw => submitted". Only a confirmed ACK yields 'submitted'.
     //
     // Registered for EVERY run, not just scheduled ones: the batch runner
     // (execute-slot) runs without a Slot and still has to report a
     // machine-readable per-target result to its caller.
-    downloadManager.setTargetOutcomeHook((target, outcome: TargetOutcome) => {
+    const outcomeHook = (target: TargetConfig, outcome: TargetOutcome) => {
       if (!target.id) return;
       options.onTargetOutcome?.(target.id, outcome);
       if (!scheduleSlot) {
         // No durable slot (run-once CLI): nothing to converge or report.
+        return;
+      }
+      // A scheduled (non-manual) target with nothing to submit advances to its
+      // next bounded fallback stage instead of terminalising: the cell returns
+      // to `pending` and the next pass re-selects it with expanded scan bounds.
+      // The FINAL stage (stage == maxFallbackStages - 1) does NOT advance: its
+      // real terminal outcome (no_candidate / duplicate / failed) is applied, so
+      // an exhausted occurrence reports the true cause — never a generic
+      // "target did not complete".
+      if (
+        !scheduleSlot.manualRequestId &&
+        (outcome.kind === 'no_candidate' || outcome.kind === 'duplicate') &&
+        coordinator.cellFallbackStage(scheduleSlot.slotId, target.id) < maxFallbackStages - 1
+      ) {
+        coordinator.advanceFallback(
+          scheduleSlot.slotId,
+          target.id,
+          outcome.kind === 'duplicate'
+            ? `duplicate candidates (stage ${coordinator.cellFallbackStage(scheduleSlot.slotId, target.id)})`
+            : outcome.reason ?? 'no eligible candidate',
+          maxFallbackStages
+        );
         return;
       }
       coordinator.applyOutcome(scheduleSlot.slotId, target.id, outcome);
@@ -582,17 +659,11 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
           scheduleSlot, schedule, target, scheduleSlot.manualRequestId, outcome
         );
       }
-    });
-    if (scheduleSlot) {
-      downloadManager.slotContext = {
-        slotId: scheduleSlot.slotId,
-        scheduleId: scheduleSlot.scheduleId,
-        occurrenceAtIso: new Date(scheduleSlot.occurrenceAt).toISOString(),
-        triggerSource: scheduleSlot.triggerSource,
-        slotName: scheduleSlot.slotName,
-        slotDate: scheduleSlot.slotDate,
-      };
-    }
+    };
+
+    let downloadManager = buildManager(boostedTargets(runTargets, 0));
+    activeDownloadManager = downloadManager;
+    await downloadManager.initialise();
 
     // Apply initial delay if configured
     if (runtimeConfig.initialDelay && runtimeConfig.initialDelay > 0) {
@@ -616,7 +687,31 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
     let releaseLease: () => void = () => undefined;
     if (slotCtx && varReleaseLease) releaseLease = varReleaseLease;
     try {
-      await downloadManager.runAllTargets();
+      // Candidate fallback passes (§schedule-recovery): after each pass, cells
+      // still mid-fallback (advanced stages) are re-selected with expanded,
+      // still-bounded scan limits. Successful sibling cells are NEVER re-run:
+      // pendingTargets only returns unconverged cells of this slot.
+      for (let pass = 0; ; pass += 1) {
+        await downloadManager.runAllTargets();
+        if (!slotCtx || pass >= maxFallbackStages - 1) break;
+        const pendingFallback = coordinator
+          .pendingTargets(slotCtx.slotId, targets)
+          .filter(
+            (p) =>
+              p.cell &&
+              p.cell.fallback_stage > 0 &&
+              p.cell.fallback_stage < maxFallbackStages
+          );
+        if (pendingFallback.length === 0) break;
+        downloadManager = buildManager(
+          boostedTargets(
+            pendingFallback.map((p) => p.target),
+            pass + 1
+          )
+        );
+        activeDownloadManager = downloadManager;
+        await downloadManager.initialise();
+      }
     } catch (error) {
       if (!slotCtx || !(error instanceof Error) || !/^All \d+ target\(s\) failed\./.test(error.message)) {
         // Abnormal abort. Two very different situations land here, and treating

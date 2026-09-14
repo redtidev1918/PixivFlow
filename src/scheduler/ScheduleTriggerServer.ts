@@ -163,6 +163,7 @@ export interface TriggerHandlers {
     requestId: string,
     correlationId?: string
   ): Promise<{ slotId: string; disposition: string }>;
+  refetchStatus?(targetId: string, requestId: string): { requestId: string; slotId: string; state: string; slotStatus: string } | null;
 }
 
 export class ScheduleTriggerServer {
@@ -291,6 +292,20 @@ export class ScheduleTriggerServer {
         logger.warn('Manual refetch rejected', { targetId: req.params.targetId, requestId, status, error: message });
         res.status(status).json({ status: 'error', error: status === 500 ? 'refetch admission failed' : message });
       }
+    });
+
+    app.get('/internal/targets/:targetId/refetch/:requestId', this.refetchAuth, (req: Request, res: Response) => {
+      const { targetId, requestId } = req.params;
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestId)) {
+        res.status(400).json({ status: 'error', error: 'requestId must be a UUID' });
+        return;
+      }
+      const status = this.handlers.refetchStatus?.(targetId, requestId);
+      if (!status) {
+        res.status(404).json({ status: 'error', error: 'manual refetch not found' });
+        return;
+      }
+      res.json(status);
     });
 
     // Convergence endpoint: after a machine stop/start, an operator or an

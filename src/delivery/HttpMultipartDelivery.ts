@@ -134,6 +134,7 @@ export class HttpMultipartDelivery implements DeliveryProvider {
       method: 'POST',
       headers,
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(5 * 60_000),
     };
     if (this.dispatcher) options.dispatcher = this.dispatcher;
     const response = await fetch(this.interpolateEnvironment(url), options as Parameters<typeof fetch>[1]);
@@ -167,6 +168,7 @@ export class HttpMultipartDelivery implements DeliveryProvider {
       body: multipart.body,
       headers,
       duplex: 'half',
+      signal: AbortSignal.timeout(5 * 60_000),
     };
     if (this.dispatcher) options.dispatcher = this.dispatcher;
 
@@ -240,6 +242,9 @@ export class HttpMultipartDelivery implements DeliveryProvider {
       Object.entries(fields).map(([name, value]) => {
         const values = Array.isArray(value) ? value : [value];
         const rendered = values.map((item) => renderDeliveryTemplate(String(item), variables));
+        if (name === 'refetch_request_id' && rendered.some((item) => /\{\{[^{}]+\}\}/.test(item))) {
+          throw new Error('Unresolved refetch_request_id template');
+        }
         switch (this.config.arrayFormat ?? 'comma') {
           case 'repeat':
             return [name, rendered];

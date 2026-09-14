@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.20.4](https://github.com/redtidev1918/PixivFlow/compare/v2.20.3...v2.20.4) (2026-09-14)
+
+
+### Bug Fixes
+
+* no schedule summary for manual refetch slots ([afe8856](https://github.com/redtidev1918/PixivFlow/commit/afe88568ef937d6e3c21a59cf96372c264406fde))
+* reconcile terminal schedule summaries and stage fallback per cell ([#85](https://github.com/redtidev1918/PixivFlow/issues/85)) ([1d57891](https://github.com/redtidev1918/PixivFlow/commit/1d57891d0d9b576c4f29cc47a558d8aab901fe8a))
+
 ## [2.20.3](https://github.com/redtidev1918/PixivFlow/compare/v2.20.2...v2.20.3) (2026-09-14)
 
 

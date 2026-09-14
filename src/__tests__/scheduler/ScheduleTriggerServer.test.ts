@@ -51,6 +51,28 @@ describe('ScheduleTriggerServer token resolution', () => {
 });
 
 describe('trigger endpoint auth + dispatch (live ephemeral express)', () => {
+  it('reads exact manual refetch state with the refetch token', async () => {
+    const requestId = '6eb50329-20f2-4ea7-b95b-e4676b50d9f1';
+    const refetchStatus = jest.fn((targetId: string, id: string) =>
+      targetId === 'target-a' && id === requestId
+        ? { requestId: id, slotId: 'manual-slot', state: 'delivery_pending', slotStatus: 'running' }
+        : null
+    );
+    const { base, close } = await boot('schedule-token', handlers({ refetchStatus }), 'refetch-token');
+    const url = `${base}/internal/targets/target-a/refetch/${requestId}`;
+    try {
+      expect((await fetch(url)).status).toBe(401);
+      expect((await fetch(url, { headers: { Authorization: 'Bearer schedule-token' } })).status).toBe(401);
+      const response = await fetch(url, { headers: { Authorization: 'Bearer refetch-token' } });
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({ requestId, state: 'delivery_pending' });
+      expect((await fetch(`${base}/internal/targets/other/refetch/${requestId}`, { headers: { Authorization: 'Bearer refetch-token' } })).status).toBe(404);
+      expect((await fetch(`${base}/internal/targets/target-a/refetch/bad`, { headers: { Authorization: 'Bearer refetch-token' } })).status).toBe(400);
+    } finally {
+      close();
+    }
+  });
+
   it('accepts a single-target manual refetch only with its own token and a UUID', async () => {
     const refetch = jest.fn(async () => ({ slotId: 'manual-slot', disposition: 'accepted' }));
     const h = handlers({ refetch });

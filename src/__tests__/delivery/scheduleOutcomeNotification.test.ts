@@ -144,6 +144,60 @@ describe('schedule outcome notification', () => {
     });
   });
 
+  it('waits for every cell and never sends manual or other-bot summaries', () => {
+    withDb((db) => {
+      const config = cfg();
+      config.targets.push({ id: 'bot2-illust', type: 'illustration', delivery: { target: 'bot2-submit' } });
+      config.delivery.targets['bot2-submit'] = {
+        type: 'httpMultipart', url: 'https://telepost.example/bot2/submit',
+        scheduleOutcomeUrl: 'https://telepost.example/bot2/outcome',
+      };
+      const policy = new NotificationPolicy(db, config);
+      policy.sendSlotSummary(slot, schedule, [r('bot1-illust', 'illustration', 'delivery_pending', '1')]);
+      policy.sendSlotSummary({ ...slot, manualRequestId: 'request-uuid' }, schedule,
+        [r('bot1-illust', 'illustration', 'failed')]);
+      expect(enqueued(db)).toHaveLength(0);
+      policy.sendSlotSummary(slot, schedule, [r('bot1-illust', 'illustration', 'submitted', '1')]);
+      expect(enqueued(db)).toHaveLength(1);
+      expect(enqueued(db)[0].deliveryTarget).toBe('bot1-submit');
+    });
+  });
+
+  it('recovers a summary after crash or late delivery ACK through the outbox pump', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'pixivflow-outcome-restart-'));
+    const path = join(dir, 'test.db');
+    let db = new Database(path);
+    db.migrate();
+    db.slots.getOrCreateSlot(slot.slotId, { ...slot, targetIds: ['bot1-illust', 'bot1-novel'] });
+    db.slots.materializeCells(slot.slotId, ['bot1-illust', 'bot1-novel'], () => 'illustration');
+    db.slots.setCellStatus(slot.slotId, 'bot1-illust', 'submitted');
+    db.slots.setCellStatus(slot.slotId, 'bot1-novel', 'delivery_pending');
+    new NotificationPolicy(db, cfg()).reconcileScheduleSummaries();
+    expect(enqueued(db)).toHaveLength(0);
+    // ACK is durable but the process dies before rollup/notification enqueue.
+    db.slots.setCellStatus(slot.slotId, 'bot1-novel', 'submitted');
+    db.close();
+    db = new Database(path);
+    const originalFetch = global.fetch;
+    const send = jest.fn().mockResolvedValue(new Response('{"ok":true}', { status: 200 }));
+    global.fetch = send as typeof fetch;
+    try {
+      const policy = new NotificationPolicy(db, cfg());
+      const worker = new OutboxWorker(db, new DeliveryDispatcher(cfg().delivery), {
+        beforeDrain: () => policy.reconcileScheduleSummaries(),
+      });
+      expect((await worker.drainOnce()).done).toBe(1);
+      expect(db.slots.getSlot(slot.slotId)?.status).toBe('success');
+      expect(payloadJson(db).scheduleOutcome.status).toBe('success');
+      await worker.drainOnce();
+      expect(send).toHaveBeenCalledTimes(1);
+    } finally {
+      global.fetch = originalFetch;
+      db.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('stays silent only when NO delivery target declares scheduleOutcomeUrl', () => {
     withDb((db) => {
       const bare: any = cfg();

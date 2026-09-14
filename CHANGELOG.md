@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.20.2](https://github.com/redtidev1918/PixivFlow/compare/v2.20.1...v2.20.2) (2026-09-14)
+
+
+### Bug Fixes
+
+* **refetch:** converge manual outcomes from durable slot state ([c5974aa](https://github.com/redtidev1918/PixivFlow/commit/c5974aaa32859a2d1f3381d21c93354c98ba09c3))
+* **refetch:** converge manual outcomes from durable slot state ([e0834c7](https://github.com/redtidev1918/PixivFlow/commit/e0834c78e25c375d2e56338c6fb4db64f466fd65))
+
 ## [2.20.1](https://github.com/redtidev1918/PixivFlow/compare/v2.20.0...v2.20.1) (2026-09-14)
 
 

@@ -38,7 +38,8 @@
   "retention": {
     "stable": 1,
     "prerelease": 1,
-    "failed_draft": 2
+    "failed_draft": 2,
+    "pruneStable": true
   },
   "checksums": true,
   "sbom": true,

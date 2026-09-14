@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.20.1](https://github.com/redtidev1918/PixivFlow/compare/v2.20.0...v2.20.1) (2026-09-14)
+
+
+### Bug Fixes
+
+* **delivery:** render refetchRequestId into submission fields (was literal template) ([#77](https://github.com/redtidev1918/PixivFlow/issues/77)) ([274432f](https://github.com/redtidev1918/PixivFlow/commit/274432f59b6944e5567ad0631c758eba03fdedfb))
+
 ## [2.20.0](https://github.com/redtidev1918/PixivFlow/compare/v2.19.5...v2.20.0) (2026-09-13)
 
 

@@ -105,20 +105,27 @@ export class HttpMultipartDelivery implements DeliveryProvider {
   /** Single notification attempt; the outbox owns retries. */
   async notifyOnce(request: DeliveryNotificationRequest): Promise<{ status: number; body: unknown }> {
     const outcome = request.refetchOutcome;
-    const url = (outcome ? this.config.refetchOutcomeUrl?.trim() : this.config.notificationUrl?.trim());
+    const scheduleOutcome = request.scheduleOutcome;
+    const url = (
+      outcome ? this.config.refetchOutcomeUrl?.trim()
+      : scheduleOutcome ? this.config.scheduleOutcomeUrl?.trim()
+      : this.config.notificationUrl?.trim()
+    );
     if (!url) {
       throw new Error(
         outcome
           ? 'HTTP delivery refetchOutcomeUrl is not configured'
-          : 'HTTP delivery notificationUrl is not configured'
+          : scheduleOutcome
+            ? 'HTTP delivery scheduleOutcomeUrl is not configured'
+            : 'HTTP delivery notificationUrl is not configured'
       );
     }
     const headers = {
       ...this.resolveHeaders(this.config.headers ?? {}),
       'Content-Type': 'application/json',
     };
-    // Refetch verdicts are machine-readable JSON (the requester's review state
-    // machine consumes disposition, not prose). Plain notifications remain
+    // Refetch verdicts and schedule outcomes are machine-readable JSON for
+    // TelePost's state machines/relays. Plain notifications remain
     // {text, idempotency_key}.
     const body = outcome
       ? {
@@ -129,7 +136,19 @@ export class HttpMultipartDelivery implements DeliveryProvider {
           scanned: outcome.scanned,
           skipped: outcome.skipped,
         }
-      : { text: request.text, idempotency_key: request.idempotencyKey };
+      : scheduleOutcome
+        ? {
+            schedule_id: scheduleOutcome.scheduleId,
+            slot_id: scheduleOutcome.slotId,
+            status: scheduleOutcome.status,
+            targets: (scheduleOutcome.targets ?? []).map((t) => ({
+              target_id: t.targetId,
+              work_type: t.workType,
+              status: t.status,
+              work_id: t.workId ?? null,
+            })),
+          }
+        : { text: request.text, idempotency_key: request.idempotencyKey };
     const options: Record<string, unknown> = {
       method: 'POST',
       headers,

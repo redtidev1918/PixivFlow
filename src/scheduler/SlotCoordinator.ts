@@ -516,7 +516,33 @@ export class SlotCoordinator {
     this.database.slots.releaseSlotLease(slotId, owner);
   }
 
-  /** Roll cell results up into the slot status (one place computes the aggregate). */
+  /**
+   * Current durable fallback stage of a cell (0 = primary selection pass).
+   * Mirrors the repository accessor so scheduler-runtime reads one surface.
+   */
+  cellFallbackStage(slotId: string, targetId: string): number {
+    return this.database.slots.cellFallbackStage(slotId, targetId);
+  }
+
+  /**
+   * Advance a recoverable candidate cell to its next durable fallback stage
+   * (§schedule-recovery). no_candidate/duplicate from a non-final stage MUST
+   * NOT terminalize: pendingTargets then re-selects the same target with
+   * expanded, still-bounded scan parameters. Returns the new stage, or the
+   * previous stage when the budget was already exhausted (callers then let the
+   * terminal outcome apply).
+   */
+  advanceFallback(slotId: string, targetId: string, reason: string,
+                  maxStages: number): number {
+    const current = this.database.slots.cellFallbackStage(slotId, targetId);
+    if (current >= maxStages) return current;
+    const next = this.database.slots.bumpFallbackStage(slotId, targetId, reason);
+    logger.info('Candidate fallback advanced', {
+      slot: slotId, target: targetId, stage: next, reason: String(reason).slice(0, 160),
+    });
+    return next;
+  }
+
   finish(slot: SlotContext, schedule: ScheduleConfig, targets: TargetConfig[]): SlotRunSummary {
     const membership = this.database.slots.getSlotTargetIds(slot.slotId);
     const ids = membership.length > 0 ? membership : targets.map((t) => t.id).filter(Boolean) as string[];

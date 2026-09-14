@@ -121,6 +121,7 @@ export class DatabaseMigration {
             work_type TEXT,
             status TEXT NOT NULL DEFAULT 'pending',
             attempt_count INTEGER NOT NULL DEFAULT 0,
+            fallback_stage INTEGER NOT NULL DEFAULT 0,
             last_error TEXT,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -241,6 +242,10 @@ export class DatabaseMigration {
       const columnAlters: string[] = [];
       for (const [col, sql] of Object.entries(slotColumnMigrations)) {
         if (!slotCols.includes(col)) columnAlters.push(sql);
+      }
+      const itemCols = (this.db.prepare(`PRAGMA table_info(schedule_slot_items)`).all() as Array<{ name: string }>).map((c) => c.name);
+      if (!itemCols.includes('fallback_stage')) {
+        columnAlters.push(`ALTER TABLE schedule_slot_items ADD COLUMN fallback_stage INTEGER NOT NULL DEFAULT 0`);
       }
 
       // Create indexes for better query performance

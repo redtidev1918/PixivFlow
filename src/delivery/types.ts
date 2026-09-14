@@ -115,6 +115,22 @@ export interface DeliveryNotificationRequest {
     scanned?: number;
     skipped?: { total: number; duplicate: number; invalid: number; unavailable: number };
   };
+  /**
+   * Structured terminal schedule verdict for a SCHEDULED occurrence. When
+   * present the delivery posts JSON to `scheduleOutcomeUrl` instead of
+   * `notificationUrl` (auth reuses `headers`).
+   */
+  scheduleOutcome?: {
+    scheduleId: string;
+    slotId: string;
+    status: 'success' | 'partial' | 'failed';
+    targets?: Array<{
+      targetId: string;
+      workType: string;
+      status: string;
+      workId?: string | null;
+    }>;
+  };
 }
 
 export interface DeliveryProvider {

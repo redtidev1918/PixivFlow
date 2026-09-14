@@ -549,6 +549,12 @@ export interface HttpMultipartDeliveryConfig {
    * `headers` for auth, so no extra credential is needed.
    */
   refetchOutcomeUrl?: string;
+  /**
+   * Optional JSON endpoint for TERMINAL SCHEDULE occurrence summaries
+   * (success/partial/failed) — delivered by the durable outbox to TelePost,
+   * which relays a user/operator-visible message. Reuses `headers` for auth.
+   */
+  scheduleOutcomeUrl?: string;
   method?: 'POST' | 'PUT';
   /** 支持 ${ENV_NAME} 环境变量插值 */
   headers?: Record<string, string>;
@@ -712,6 +718,12 @@ export interface StandaloneConfig {
      * Default: 5 (clamped to 1..100)
      */
     candidateScanLimit?: number;
+    /**
+     * Bounded candidate-fallback budget for SCHEDULED occurrences
+     * (§schedule-recovery). 0 disables fallback (no_candidate/duplicate
+     * terminalises immediately). Default: 3.
+     */
+    maxFallbackStages?: number;
   };
 }
 

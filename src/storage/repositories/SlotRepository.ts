@@ -50,6 +50,12 @@ export interface SlotItemRecord {
   workType: string | null;
   status: CellStatus;
   attemptCount: number;
+  /**
+   * Bounded candidate-fallback depth for this cell (§schedule-recovery). 0 means
+   * the primary selection pass; each advance re-selects the SAME target with
+   * expanded scan bounds. Durable so a crash-resume re-enters at the same stage.
+   */
+  fallback_stage: number;
   lastError: string | null;
   createdAt: string;
   updatedAt: string;
@@ -301,6 +307,32 @@ export class SlotRepository extends BaseRepository {
       .run({ slotId, targetId });
   }
 
+  /** Durable candidate-fallback bookkeeping (§schedule-recovery). */
+  public bumpFallbackStage(slotId: string, targetId: string, reason: string): number {
+    const item = this.db
+      .prepare(`SELECT fallback_stage FROM schedule_slot_items WHERE slot_id = ? AND target_id = ?`)
+      .get(slotId, targetId) as { fallback_stage?: number } | undefined;
+    const stage = Number(item?.fallback_stage ?? 0);
+    this.db
+      .prepare(
+        `UPDATE schedule_slot_items
+            SET fallback_stage = ?, last_error = ?,
+                status = 'pending',
+                updated_at = CURRENT_TIMESTAMP,
+                completed_at = NULL
+          WHERE slot_id = ? AND target_id = ?`
+      )
+      .run(stage + 1, String(reason).slice(0, 400), slotId, targetId);
+    return stage + 1;
+  }
+
+  public cellFallbackStage(slotId: string, targetId: string): number {
+    const item = this.db
+      .prepare(`SELECT fallback_stage FROM schedule_slot_items WHERE slot_id = ? AND target_id = ?`)
+      .get(slotId, targetId) as { fallback_stage?: number } | undefined;
+    return Number(item?.fallback_stage ?? 0);
+  }
+
   public setCellStatus(slotId: string, targetId: string, status: CellStatus, error?: string): void {
     const terminal =
       status === 'submitted' ||
@@ -502,6 +534,7 @@ export class SlotRepository extends BaseRepository {
       workType: row.work_type,
       status: row.status,
       attemptCount: row.attempt_count,
+      fallback_stage: Number(row.fallback_stage ?? 0),
       lastError: row.last_error,
       createdAt: row.created_at,
       updatedAt: row.updated_at,

@@ -139,7 +139,7 @@ export class NotificationPolicy {
    * that already returned remain idempotent.
    */
   noteRefetchOutcome(
-    slot: SlotContext,
+    slot: Pick<SlotContext, 'slotId'>,
     _schedule: ScheduleConfig,
     target: TargetConfig,
     requestId: string,
@@ -201,6 +201,25 @@ export class NotificationPolicy {
         error: error instanceof Error ? error.message : String(error),
       });
     }
+  }
+
+  /** Report the durable terminal cell, including failures finalized after retry exhaustion. */
+  noteTerminalRefetchCell(slotId: string, targetId: string): void {
+    const slot = this.database.slots.getSlot(slotId);
+    const cell = this.database.slots.getCell(slotId, targetId);
+    if (!slot?.manualRequestId || !cell) return;
+    const target = this.config.targets.find((item) => item.id === targetId);
+    if (!target) return;
+    const outcome: TargetOutcome | null = cell.status === 'no_candidate'
+      ? { kind: 'no_candidate', reason: cell.lastError ?? 'no eligible candidate' }
+      : cell.status === 'duplicate'
+        ? { kind: 'duplicate', workId: cell.workId ?? '', reason: cell.lastError ?? 'historical duplicate' }
+        : cell.status === 'failed'
+          ? { kind: 'failed', retryable: false, error: cell.lastError ?? slot.lastError ?? 'manual refetch failed' }
+          : null;
+    if (outcome) this.noteRefetchOutcome(
+      { slotId }, { id: slot.scheduleId } as ScheduleConfig, target, slot.manualRequestId, outcome
+    );
   }
 }
 

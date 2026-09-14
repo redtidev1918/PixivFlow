@@ -10,6 +10,7 @@
  * attempts stayed admitted and the progress watchdog timed them out.
  */
 import { buildTemplateVariables, renderDeliveryTemplate } from '../../delivery/HttpMultipartDelivery';
+import { HttpMultipartDelivery } from '../../delivery/HttpMultipartDelivery';
 
 describe('refetchRequestId delivery template variable', () => {
   it('exposes the manual request UUID from the payload context', () => {
@@ -38,5 +39,17 @@ describe('refetchRequestId delivery template variable', () => {
 
     const scheduled = buildTemplateVariables({ context: {} } as never);
     expect(renderDeliveryTemplate('{{refetchRequestId}}', scheduled)).toBe('');
+  });
+
+  it('refuses unresolved refetch provenance before the HTTP request', () => {
+    const fields = { refetch_request_id: '{{unknownRequestId}}' };
+    const provider = new HttpMultipartDelivery({
+      type: 'httpMultipart',
+      url: 'https://telepost.example/submit',
+      fields,
+    });
+    expect(() => (provider as any).resolveFields(fields, {
+      context: { refetchRequestId: '16720a61-59d8-4725-a7e0-662c62ca98ac' },
+    })).toThrow('Unresolved refetch_request_id template');
   });
 });

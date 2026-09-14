@@ -66,6 +66,12 @@ export interface SlotItemRecord {
  * the same row instead of emitting a second work for the same slot/target.
  */
 export class SlotRepository extends BaseRepository {
+  /** Exact manual request/target lookup for authenticated convergence checks. */
+  public findManualSlot(requestId: string, targetId: string): SlotRecord | null {
+    const rows = this.db.prepare(`SELECT * FROM schedule_slots WHERE manual_request_id = ?`).all(requestId) as any[];
+    return rows.map((row) => this.toSlot(row)).find((slot) => slot.targetIds.includes(targetId)) ?? null;
+  }
+
   /**
    * Fetch an existing slot or create it. On creation the schedule's target
    * membership is snapshotted (target_ids); a later config reload never mutates

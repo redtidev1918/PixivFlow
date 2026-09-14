@@ -409,7 +409,9 @@ Authorization: Bearer <PIXIVFLOW_REFETCH_TOKEN>
 { "requestId": "<UUID>", "correlationId": "<opaque, ≤200 chars, optional>" }
 ```
 
-`PIXIVFLOW_REFETCH_TOKEN` 缺失时端点拒绝请求。请求只选一个已启用 schedule 中的 target；`requestId` 是重试幂等键，重复请求复用同一个 `manual-` Slot；`correlationId`（通常是审核链 id）随 Slot 持久化，只用于恢复后的结果关联，本服务不解释其内容。服务端先持久化再返回 `202 accepted`（`{status:"accepted", slotId, disposition}`），执行和投递在后台进行；手动 Slot 与定时 occurrence 分离，不会把定时任务标为完成。手动 Slot 的请求 UUID 同时写入 `schedule_slots.manual_request_id`，因此**休眠机器恢复该 Slot 后仍知道它是人工替换**：投递负载携带 `refetch_request_id`（定时执行为空串），并可通过 delivery target 的 `refetchOutcomeUrl` 把终态判定（`no_alternative` / 非重试 `failed`）经 durable outbox 回报给请求方；同一 manual Slot 的判定只入队一次。`run-once` CLI 仍是无 Slot 的 ad-hoc 命令。
+`PIXIVFLOW_REFETCH_TOKEN` 缺失时端点拒绝请求。请求只选一个已启用 schedule 中的 target，且该 target 必须配置 `refetchOutcomeUrl` 与精确的 `refetch_request_id: "{{refetchRequestId}}"` 投递字段。`requestId` 是重试幂等键，重复请求复用同一个 `manual-` Slot；`correlationId`（通常是审核链 id）随 Slot 持久化，只用于恢复后的结果关联，本服务不解释其内容。服务端先持久化再返回 `202 accepted`（`{status:"accepted", slotId, disposition}`），执行和投递在后台进行；手动 Slot 与定时 occurrence 分离，不会把定时任务标为完成。手动 Slot 的请求 UUID 同时写入 `schedule_slots.manual_request_id`，因此**休眠机器恢复该 Slot 后仍知道它是人工替换**：投递负载携带 `refetch_request_id`（定时执行为空串）；无候选、重复或最终失败时，通过 `refetchOutcomeUrl` 的 durable outbox 回报 `no_alternative` / `failed`。成功替换由投稿本身携带 UUID 关联。`run-once` CLI 仍是无 Slot 的 ad-hoc 命令。
+
+请求方可用同一 token 只读核对 durable 状态：`GET /internal/targets/{targetId}/refetch/{requestId}`。存在时返回 `{requestId, slotId, state, slotStatus}`；`state` 为 cell 状态（`pending`、`selected`、`artifact_ready`、`delivery_pending`、`submitted`、`no_candidate`、`duplicate`、`failed`），请求或 target 不匹配返回 404。`submitted` 只表示下游投稿 ACK，最终审核替换仍以 TelePost 的 review/attempt 状态为准。dead-letter 的 outcome 可在确认目标配置已修复后用 `pixivflow outbox retry <id>` 按 exact row 审计重试。
 
 **投递模板里的执行来源变量**（有 Slot 的定时和远程重抓运行时注入；`run-once` CLI 为空）：
 `{{scheduleId}}`、`{{executionId}}`（durable occurrence id）、`{{occurrenceAt}}`（ISO）、

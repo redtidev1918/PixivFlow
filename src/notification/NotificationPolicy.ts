@@ -2,7 +2,7 @@ import { Database } from '../storage/Database';
 import { DeliveryService, RefetchOutcomePayload } from '../delivery/DeliveryService';
 import { ScheduleConfig, StandaloneConfig, TargetConfig } from '../config';
 import { TargetOutcome } from '../scheduler/TargetOutcome';
-import { SlotContext } from '../scheduler/SlotCoordinator';
+import { SlotContext, SlotCoordinator } from '../scheduler/SlotCoordinator';
 import { logger } from '../logger';
 
 /**
@@ -93,8 +93,12 @@ export class NotificationPolicy {
     schedule: ScheduleConfig,
     rows: Array<{ targetId: string; label: string; workType: string; status: string; workId: string | null; error: string | null }>
   ): void {
-    const targets = this.targetsWithUrl('scheduleOutcomeUrl');
-    if (targets.size === 0 || rows.length === 0) return;
+    if (slot.manualRequestId || rows.length === 0 || rows.some((r) =>
+      !['submitted', 'no_candidate', 'duplicate', 'failed'].includes(r.status)
+    )) return;
+    const memberIds = new Set(rows.map((r) => r.targetId));
+    const targets = this.targetsWithUrl('scheduleOutcomeUrl', memberIds);
+    if (targets.size === 0) return;
 
     const icon = (s: string) =>
       s === 'submitted' ? '✅' : s === 'no_candidate' ? '⚠️' : s === 'duplicate' ? '♱' : s === 'delivery_pending' ? '🕓' : '❌';
@@ -116,11 +120,11 @@ export class NotificationPolicy {
       submitted === rows.length ? 'success' : submitted > 0 ? 'partial' : 'failed';
 
     const service = new DeliveryService(this.database);
-    for (const name of targets) {
+    for (const [index, name] of [...targets].entries()) {
       service.enqueueNotification(
         name,
         text,
-        NotificationPolicy.keys.summary(slot.slotId),
+        NotificationPolicy.keys.summary(slot.slotId) + (index === 0 ? '' : `:${name}`),
         undefined,
         {
           scheduleId: schedule.id,
@@ -142,9 +146,10 @@ export class NotificationPolicy {
    * Schedule summaries require `scheduleOutcomeUrl`; manual refetch outcomes
    * use `refetchOutcomeUrl`; generic notifications use `notificationUrl`.
    */
-  private targetsWithUrl(urlKey: 'scheduleOutcomeUrl' | 'refetchOutcomeUrl' | 'notificationUrl'): Set<string> {
+  private targetsWithUrl(urlKey: 'scheduleOutcomeUrl' | 'refetchOutcomeUrl' | 'notificationUrl', memberIds?: Set<string>): Set<string> {
     const result = new Set<string>();
     for (const target of this.config.targets ?? []) {
+      if (memberIds && !memberIds.has(target.id ?? '')) continue;
       const deliveryTarget = target.delivery?.target;
       if (!deliveryTarget) continue;
       const delivery = this.config.delivery?.targets?.[deliveryTarget];
@@ -153,6 +158,27 @@ export class NotificationPolicy {
       }
     }
     return result;
+  }
+
+  /** The durable cells remain the notification intent across crashes and late ACKs. */
+  reconcileScheduleSummaries(): void {
+    for (const record of this.database.slots.getUnreportedTerminalSchedules()) {
+      const slot: SlotContext = {
+        slotId: record.id, scheduleId: record.scheduleId,
+        occurrenceAt: record.occurrenceAt ?? 0, occurrenceDate: record.occurrenceDate,
+        occurrenceLabel: record.occurrenceLabel, timezone: record.timezone,
+        triggerSource: 'http', slotName: record.slotName, slotDate: record.slotDate,
+      };
+      const schedule = this.config.schedules?.find((item) => item.id === record.scheduleId)
+        ?? { id: record.scheduleId } as ScheduleConfig;
+      const targets = this.config.targets.filter((target) => record.targetIds.includes(target.id ?? ''));
+      const summary = new SlotCoordinator(this.database).finish(slot, schedule, targets);
+      this.sendSlotSummary(slot, schedule, summary.cells.map((cell) => ({
+        ...cell, label: cell.targetId,
+        workType: targets.find((target) => target.id === cell.targetId)?.type ?? 'unknown',
+        error: cell.error ?? null,
+      })));
+    }
   }
 
   private send(targetName: string, key: string, text: string): void {

@@ -330,6 +330,7 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
   // Independently-pumped durable outbox (content + notifications). Started in
   // the long-running scheduler daemon; run-once drains explicitly before exit.
   const deliveryDispatcher = new DeliveryDispatcher(config.delivery, buildProxyUrl(config.network));
+  const notificationPolicy = new NotificationPolicy(database, config);
   const outboxWorker = new OutboxWorker(database, deliveryDispatcher, {
     retryBaseMs: config.delivery?.outboxRetryBaseMs,
     retryMaxMs: config.delivery?.outboxRetryMaxMs,
@@ -337,9 +338,19 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
     // failed); see settleDeliveryTerminal for the invariant it enforces.
     onDeliveryTerminal: (deliveryId, ack) => {
       settleDeliveryTerminal(database, deliveryId, ack);
+      const delivery = database.deliveries.getById(deliveryId);
+      if (delivery?.slotId && delivery.targetId) notificationPolicy.noteTerminalRefetchCell(delivery.slotId, delivery.targetId);
+    },
+    onDead: (row, error) => {
+      if (!row.deliveryId) return;
+      const delivery = database.deliveries.getById(row.deliveryId);
+      if (!delivery?.slotId || !delivery.targetId) return;
+      new SlotCoordinator(database).applyOutcome(delivery.slotId, delivery.targetId, {
+        kind: 'failed', retryable: false, error,
+      });
+      notificationPolicy.noteTerminalRefetchCell(delivery.slotId, delivery.targetId);
     },
   });
-  const notificationPolicy = new NotificationPolicy(database, config);
 
   const runJob = async (
     snapshot: StandaloneConfig,
@@ -463,6 +474,12 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
           cancelled = true;
           slotAbandoned = true;
           clearInterval(heartbeat);
+          for (const target of targets) {
+            if (!target.id) continue;
+            if (database.slots.getCell(activeSlot.slotId, target.id)?.status === 'delivery_pending') continue;
+            coordinator.applyOutcome(activeSlot.slotId, target.id, { kind: 'failed', retryable: false, error: reason });
+            notificationPolicy.noteTerminalRefetchCell(activeSlot.slotId, target.id);
+          }
           database.slots.markSlotStatus(
             activeSlot.slotId,
             'failed',
@@ -492,6 +509,7 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
     if (slotCtx && runTargets.length === 0) {
       logger.info('All slot cells already complete', { slot: slotCtx.slotId });
       coordinator.finish(slotCtx, schedule, targets);
+      for (const target of targets) if (target.id) notificationPolicy.noteTerminalRefetchCell(slotCtx.slotId, target.id);
       // Release LAST: the slot must stay owned until its aggregate state has
       // been rolled up, otherwise a concurrent trigger could claim and re-run it
       // against a half-finished ledger.
@@ -554,22 +572,15 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
       }
       coordinator.applyOutcome(scheduleSlot.slotId, target.id, outcome);
       notificationPolicy.noteOutcome(scheduleSlot.slotId, scheduleSlot, schedule, target, outcome);
-      // A remote manual replacement ("重抓") must report its terminal verdict
-      // back to the reviewer. Only terminal outcomes are reported: a candidate
-      // the scan skipped is not a verdict, and a durable delivery intent
-      // ('delivery_pending' / later 'submitted') is reported through the
-      // replacement submission itself (the caller correlates on requestId).
-      const manualRequestId = scheduleSlot.manualRequestId;
-      if (manualRequestId) {
-        const terminal =
-          outcome.kind === 'no_candidate' ||
-          outcome.kind === 'duplicate' ||
-          (outcome.kind === 'failed' && !outcome.retryable);
-        if (terminal) {
-          notificationPolicy.noteRefetchOutcome(
-            scheduleSlot, schedule, target, manualRequestId, outcome
-          );
-        }
+      if (scheduleSlot.manualRequestId && (
+        outcome.kind === 'no_candidate' || outcome.kind === 'duplicate' ||
+        (outcome.kind === 'failed' && !outcome.retryable)
+      )) {
+        // Preserve scan bookkeeping; later durable-cell reporting is the
+        // fallback for retry exhaustion, timeout, and outbox dead-letter.
+        notificationPolicy.noteRefetchOutcome(
+          scheduleSlot, schedule, target, scheduleSlot.manualRequestId, outcome
+        );
       }
     });
     if (scheduleSlot) {
@@ -623,6 +634,7 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
         //    non-terminal so recovery resumes the same occurrence after restart.
         if (slotCtx && shouldTerminaliseAbortedSlot(activeAbortOrigin, slotAbandoned)) {
           coordinator.finish(slotCtx, schedule, targets);
+          for (const target of targets) if (target.id) notificationPolicy.noteTerminalRefetchCell(slotCtx.slotId, target.id);
         }
         // Hand the lease back either way: a terminal Slot cannot be re-dispatched,
         // and a non-terminal one (shutdown) must not wait for its TTL to expire.
@@ -640,6 +652,7 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
 
     if (slotCtx && !slotAbandoned) {
       const summary = coordinator.finish(slotCtx, schedule, targets);
+      for (const target of targets) if (target.id) notificationPolicy.noteTerminalRefetchCell(slotCtx.slotId, target.id);
       notificationPolicy.sendSlotSummary(
         slotCtx,
         schedule,

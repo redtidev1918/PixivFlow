@@ -179,6 +179,14 @@ export class SchedulerCommand extends BaseCommand {
               if (plans.length !== 1) throw new Error('ambiguous target');
               const plan = plans[0];
               const target = selectScheduleTargets(cfg.targets, plan).find((item) => item.id === targetId)!;
+              const deliveryName = target.delivery?.target;
+              const delivery = deliveryName ? cfg.delivery?.targets?.[deliveryName] : undefined;
+              if (delivery?.type !== 'httpMultipart' || !delivery.refetchOutcomeUrl?.trim()) {
+                throw new Error('refetch outcome endpoint not configured');
+              }
+              if ((target.delivery?.fields?.refetch_request_id ?? delivery.fields?.refetch_request_id) !== '{{refetchRequestId}}') {
+                throw new Error('refetch_request_id delivery field not configured');
+              }
               const now = new Date();
               const date = new Intl.DateTimeFormat('en-CA', {
                 timeZone: plan.timezone ?? 'UTC', year: 'numeric', month: '2-digit', day: '2-digit',
@@ -204,6 +212,13 @@ export class SchedulerCommand extends BaseCommand {
               if (prepared.alreadyCompleted) return { slotId: slot.slotId, disposition: 'already_completed' };
               const started = manager.triggerSchedule(plan.id, { slot, onlyTarget: targetId, triggerSource: 'manual' });
               return { slotId: slot.slotId, disposition: started ? 'accepted' : 'queued' };
+            },
+            refetchStatus: (targetId, requestId) => {
+              const slot = runtime.database.slots.findManualSlot(requestId, targetId);
+              const cell = slot && runtime.database.slots.getCell(slot.id, targetId);
+              return slot && cell
+                ? { requestId, slotId: slot.id, state: cell.status, slotStatus: slot.status }
+                : null;
             },
             status: (scheduleId) => {
               const cfg = resolveConfig();

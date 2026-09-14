@@ -52,6 +52,12 @@ export interface DeliveryContext {
   /** Pixiv view count — rendered as {{viewCount}}. */
   viewCount?: number;
   /**
+   * Request UUID of the remote manual replacement ("重抓") that produced this
+   * delivery; EMPTY for scheduled/original runs. The receiving service uses it
+   * to correlate the review with its durable refetch attempt.
+   */
+  refetchRequestId?: string;
+  /**
    * Generic schedule-execution provenance. Attached to scheduled runs only
    * (absent for ad-hoc/manual runs). Delivery-agnostic: any adapter may surface
    * these to its endpoint; they are never parsed by PixivFlow Core.

@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.20.3](https://github.com/redtidev1918/PixivFlow/compare/v2.20.2...v2.20.3) (2026-09-14)
+
+
+### Bug Fixes
+
+* bounded candidate fallback and terminal schedule outcome notifications ([#82](https://github.com/redtidev1918/PixivFlow/issues/82)) ([25f96b4](https://github.com/redtidev1918/PixivFlow/commit/25f96b4c001093b0b3a986078549b767e6bdc5b2))
+
 ## [2.20.2](https://github.com/redtidev1918/PixivFlow/compare/v2.20.1...v2.20.2) (2026-09-14)
 
 

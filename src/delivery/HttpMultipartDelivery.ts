@@ -410,6 +410,10 @@ export function buildTemplateVariables(request: DeliveryRequest): Record<string,
     // key) converges remotely as idempotent_replay instead of being mistaken for
     // a historical duplicate or, worse, double-posting.
     idempotencyKey: (c.idempotencyKey as string) ?? '',
+    // Remote manual replacement ("重抓") request UUID; empty for scheduled runs.
+    // Carried through the delivery payload context (extraContext) so the
+    // receiving service can correlate the review with its refetch attempt.
+    refetchRequestId: (c.refetchRequestId as string) ?? '',
   };
 }
 

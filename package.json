@@ -1,7 +1,7 @@
 {
   "name": "pixivflow",
   "version": "2.20.5",
-  "description": "🎨 智能的 Pixiv 自动化下载工具 - 支持批量下载插画和小说、定时任务、Docker部署 | Intelligent Pixiv Automation Downloader with batch download, scheduler, and Docker support",
+  "description": "🎨 Pixiv 下载、筛选与自动收集工具 - 批量下载插画和小说、按标签/热度/日期筛选、定时任务与可靠 HTTP 交付 | Pixiv downloader and automation toolkit with filtering, scheduling and reliable HTTP delivery",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/redtidev1918/PixivFlow.git"

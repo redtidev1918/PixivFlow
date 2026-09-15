@@ -70,6 +70,7 @@ regexes = [
   '''-1002222222222''',
   '''-1003333333333''',
   '''-1004444444444''',
+  '''-1009000000001''',
   # Fingerprints / redaction markers that are safe to commit.
   '''sha256:[0-9a-f]{64}''',
   '''<REDACTED>''',

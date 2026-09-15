@@ -143,6 +143,14 @@ export interface SchedulerRuntime {
   ): Promise<void>;
   /** Start the independent outbox pump (long-running daemon). */
   startOutboxWorker(): void;
+  /**
+   * Number of slot executions currently awaiting async work in THIS process
+   * (candidate scan / download / delivery). Bounded second belt for the idle
+   * lifecycle: exit is only allowed when this is 0 AND the durable ledger is
+   * empty (§idle-inflight). In-memory only; crash recovery still rides the
+   * durable slot/outbox rows.
+   */
+  activeExecutionCount(): number;
   /** Drain due outbox rows once (run-once / watchdog wake). */
   drainOutbox(): Promise<{ processed: number; done: number; retried: number; dead: number }>;
   /** Stop token maintenance, cancel any in-flight download and close the DB. */
@@ -363,6 +371,8 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
       notificationPolicy.noteTerminalRefetchCell(delivery.slotId, delivery.targetId);
     },
   });
+
+  let activeExecutions = 0;
 
   const runJob = async (
     snapshot: StandaloneConfig,
@@ -674,6 +684,10 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
       await new Promise((resolve) => setTimeout(resolve, runtimeConfig.initialDelay!));
     }
 
+    // Execution belt (§idle-inflight): this run is live until releaseLease
+    // completes. The idle detector must see it even if a durable row lags.
+    activeExecutions += 1;
+    try {
     logger.info('='.repeat(60));
     logger.info('Starting scheduled Pixiv download plan', {
       scheduleId: schedule.id,
@@ -778,6 +792,9 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
       slot: slotCtx?.slotId ?? '(ad-hoc)',
     });
     logger.info('='.repeat(60));
+    } finally {
+      activeExecutions -= 1;
+    }
   };
 
   const cancelActive = (reason: string, origin: CancelOrigin = 'timeout'): void => {
@@ -815,6 +832,7 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
     runJob,
     cancelActive,
     abandonActiveRun,
+    activeExecutionCount: () => activeExecutions,
     startOutboxWorker: () => outboxWorker.start(),
     drainOutbox: () => outboxWorker.drainOnce(),
     notifyScheduleFailure: (snapshot, schedule, failure) =>

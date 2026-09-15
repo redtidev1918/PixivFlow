@@ -56,3 +56,28 @@ PixivFlow 负责 Pixiv 认证、候选发现/排序/去重、下载、审核链�
   `npx jest src/__tests__/<area>`。
 - tsc 本机可能挂起（`pkill -f 'tsc --noEmit'` 后再试）；CI 的
   Test (Node 22/24)、tarball smoke、branch-contract、gitleaks 是权威 gate。
+## 外部 worker 生命周期（§idle-inflight）
+
+- **CAN_SHUT_DOWN 的唯一条件**（同时满足）：
+  - durable active slots == 0（manual refetch slot 与普通 schedule slot 一样计入：
+    `trigger_source='manual'` 的 `schedule_slots` 行在 `countActiveSlots()`/`recoverableSlots()`
+    中一视同仁）；
+  - processing / pending(retry_wait) outbox == 0；
+  - **active in-process executions == 0**（`activeExecutionCount` 是第二道保险：即使某行
+    DB 状态比其 await 的 Promise 领先一拍，或任何未来错误提前把行写成 terminal，idle
+    detector 也不得在真实执行中途退出）。
+- `maxLifetimeMs` 只是兜底：到期时仅 graceful close（不 stop 不 terminalize 未完成业务），
+  下次 wake 从同一 durable slot/outbox 行恢复。
+- outbox 的 `dead` 行不阻塞停机；`pending/retry_wait` 在有限重试内视为活跃。
+
+## Manual refetch 是 first-class durable business execution（§manual-resume）
+
+- 链路：accepted request → durable manual slot → durable cell → durable work binding →
+  durable delivery intent → durable outcome → terminal callback。每个阶段 crash/restart 后
+  都能继续。
+- **同一 request UUID 幂等**：`<plan>@manual-<uuid>` slot id 派生自 UUID；`prepare` 幂等
+  resume 同一 slot，绝不新建第二条 refetch attempt / slot / review chain。
+- **已锁定 work_id 只能续用**（crash-resume 不重选候选）；**已存在的 delivery intent 只能
+  retry same work**（`settlePendingDelivery` 拒绝重选）。
+- 恢复按 durable slot 恢复，不重新解析 cron occurrence；普通 schedule 的 occurrence
+  resolver 绝不重复触发 manual refetch。

@@ -1,6 +1,10 @@
+<!-- docsite-release-repo: redtidev1918/PixivFlow -->
+<!-- docsite-release-tag: v2.20.4 -->
 # 📥 下载 PixivFlow
 
 **语言 / Language:** 中文 · [English](/en/download.md)
+
+<!-- docsite: generated from redtidev1918/PixivFlow release v2.20.4; do not edit by hand -->
 
 本页由 GitHub Actions 在每次发版时**自动更新**，始终指向最新 Release。
 

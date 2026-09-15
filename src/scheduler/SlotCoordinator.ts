@@ -14,7 +14,7 @@ import {
   resolveOccurrence,
   scheduleTimezone,
 } from './OccurrenceResolver';
-import { TargetOutcome } from './TargetOutcome';
+import { TERMINAL_REASON_MESSAGES, TargetOutcome, terminalReasonFor } from './TargetOutcome';
 import { TargetExecutionContext, WorkBinding, isSingleWorkCell } from './WorkIdentity';
 
 /**
@@ -60,6 +60,16 @@ export interface SlotContext {
   manualRequestId?: string;
   /** Opaque caller correlation (review chain / review id). Null unless manual. */
   correlationId?: string;
+  /**
+   * Remote manual RECOVERY request UUID (§manual-recovery). Present only on
+   * slots opened by the authenticated recover endpoint; null for scheduled
+   * occurrences and review refetches. A recovery slot re-runs the failed
+   * target(s) under an occurrence-scoped recovery policy and reports through
+   * the schedule-outcome channel.
+   */
+  recoveryRequestId?: string;
+  /** Recovery policy preset ('normal' | 'relaxed'); null for non-recovery slots. */
+  recoveryMode?: 'normal' | 'relaxed';
 }
 
 export interface SlotCellSummary {
@@ -67,6 +77,10 @@ export interface SlotCellSummary {
   status: CellStatus;
   workId: string | null;
   error?: string | null;
+  /** Normalized terminal failure code (§terminal-reason); null when not failed. */
+  terminalReasonCode?: string | null;
+  /** User-facing business reason message (§terminal-reason). */
+  terminalReasonMessage?: string | null;
 }
 
 export interface SlotRunSummary {
@@ -278,6 +292,8 @@ export class SlotCoordinator {
       slotName: slot.slotName,
       manualRequestId: slot.manualRequestId ?? null,
       correlationId: slot.correlationId ?? null,
+      recoveryRequestId: slot.recoveryRequestId ?? null,
+      recoveryMode: slot.recoveryMode ?? null,
     });
     if (created) {
       // Freeze membership: materialize one cell per target id from the snapshot.
@@ -419,11 +435,15 @@ export class SlotCoordinator {
       case 'no_candidate':
         // Only terminal if the cell never locked a work; a locked work whose
         // delivery is still pending must not be collapsed to no_candidate.
-        if (!cell.workId) this.safeTransition(slotId, targetId, 'no_candidate', outcome.reason);
+        if (!cell.workId) {
+          this.safeTransition(slotId, targetId, 'no_candidate', outcome.reason);
+          this.persistTerminalReason(slotId, targetId, outcome);
+        }
         return;
       case 'duplicate':
         this.database.slots.lockCellWork(slotId, targetId, outcome.workId, cell.workType ?? 'unknown');
         this.safeTransition(slotId, targetId, 'duplicate', outcome.reason);
+        this.persistTerminalReason(slotId, targetId, outcome);
         return;
       case 'failed':
         if (outcome.retryable) {
@@ -433,7 +453,26 @@ export class SlotCoordinator {
           return;
         }
         this.safeTransition(slotId, targetId, 'failed', outcome.error);
+        this.persistTerminalReason(slotId, targetId, outcome);
         return;
+    }
+  }
+
+  /**
+   * Persist the normalized terminal reason (§terminal-reason) for a cell that
+   * just reached a terminal state. Never unwinds the run and never leaks raw
+   * error internals: only the stable code + business message are stored.
+   */
+  private persistTerminalReason(slotId: string, targetId: string, outcome: TargetOutcome): void {
+    try {
+      const reason = terminalReasonFor(outcome);
+      if (!reason) return;
+      this.database.slots.setCellTerminalReason(slotId, targetId, reason.code, reason.message);
+    } catch (error) {
+      logger.debug('Failed to persist terminal reason', {
+        slot: slotId, target: targetId,
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 
@@ -554,7 +593,23 @@ export class SlotCoordinator {
       if (cell.status === 'delivery_pending' || cell.status === 'artifact_ready') continue;
       if (cell.status === 'pending' || cell.status === 'selected') {
         // Ran but never reached a terminal state (target threw before delivery).
-        this.database.slots.setCellStatus(slot.slotId, targetId, 'failed', cell.lastError ?? 'target did not complete');
+        // Persist a normalized reason so the operator sees a first-level cause,
+        // not a bare "target did not complete".
+        const error = cell.lastError ?? 'target did not complete';
+        this.database.slots.setCellStatus(slot.slotId, targetId, 'failed', error);
+        try {
+          this.database.slots.setCellTerminalReason(
+            slot.slotId,
+            targetId,
+            'internal_error',
+            TERMINAL_REASON_MESSAGES.internal_error
+          );
+        } catch (reasonError) {
+          logger.debug('Failed to persist terminal reason in rollup', {
+            slot: slot.slotId, target: targetId,
+            error: reasonError instanceof Error ? reasonError.message : String(reasonError),
+          });
+        }
       }
     }
     const status = this.database.slots.deriveSlotStatus(slot.slotId);
@@ -565,6 +620,8 @@ export class SlotCoordinator {
       status: c.status,
       workId: c.workId,
       error: c.lastError,
+      terminalReasonCode: c.terminalReasonCode,
+      terminalReasonMessage: c.terminalReasonMessage,
     }));
 
     // Rolled up AFTER the slot row carries its terminal status/completed_at, so
@@ -621,6 +678,8 @@ export class SlotCoordinator {
         status: cell.status,
         work_id: cell.workId,
         error: cell.lastError,
+        terminal_reason_code: cell.terminalReasonCode,
+        terminal_reason_message: cell.terminalReasonMessage,
       };
     });
 

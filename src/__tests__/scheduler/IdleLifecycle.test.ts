@@ -14,7 +14,13 @@ import {
   isIdle,
 } from '../../commands/SchedulerIdleLifecycle';
 
-const IDLE: IdleSnapshot = { activeSlots: 0, processingOutbox: 0, pendingOutbox: 0, activeExecutions: 0 };
+const IDLE: IdleSnapshot = {
+  activeSlots: 0,
+  processingOutbox: 0,
+  pendingOutbox: 0,
+  activeExecutions: 0,
+  waitingForResource: 0,
+};
 
 const POLL_MS = 15_000;
 const GRACE_MS = 60_000;
@@ -72,7 +78,7 @@ describe('SchedulerIdleLifecycle', () => {
   });
 
   it('stays awake while a non-terminal Slot is still owned by the ledger', () => {
-    snapshot = { activeSlots: 1, processingOutbox: 0, pendingOutbox: 0, activeExecutions: 0 };
+    snapshot = { ...IDLE, activeSlots: 1 };
     const lifecycle = build();
     lifecycle.start();
 
@@ -82,14 +88,14 @@ describe('SchedulerIdleLifecycle', () => {
 
   it('stays awake while an outbox row is in flight or waiting on backoff', () => {
     const processing = build();
-    snapshot = { activeSlots: 0, processingOutbox: 1, pendingOutbox: 0, activeExecutions: 0 };
+    snapshot = { ...IDLE, processingOutbox: 1 };
     processing.start();
     jest.advanceTimersByTime(10 * 60 * 1000);
     expect(onExit).not.toHaveBeenCalled();
 
     onExit.mockClear();
     const retrying = build();
-    snapshot = { activeSlots: 0, processingOutbox: 0, pendingOutbox: 1, activeExecutions: 0 };
+    snapshot = { ...IDLE, pendingOutbox: 1 };
     retrying.start();
     jest.advanceTimersByTime(10 * 60 * 1000);
     expect(onExit).not.toHaveBeenCalled();
@@ -101,7 +107,7 @@ describe('SchedulerIdleLifecycle', () => {
 
     // Idle from t=15s, so the original window would close at t=75s.
     jest.advanceTimersByTime(45_000);
-    snapshot = { activeSlots: 1, processingOutbox: 0, pendingOutbox: 0, activeExecutions: 0 };
+    snapshot = { ...IDLE, activeSlots: 1 };
     jest.advanceTimersByTime(15_000); // t=60s: busy cancels the window
     expect(onExit).not.toHaveBeenCalled();
 
@@ -116,7 +122,7 @@ describe('SchedulerIdleLifecycle', () => {
   });
 
   it('exits on the maxLifetimeMs backstop even with work outstanding', () => {
-    snapshot = { activeSlots: 1, processingOutbox: 1, pendingOutbox: 2, activeExecutions: 0 };
+    snapshot = { ...IDLE, activeSlots: 1, processingOutbox: 1, pendingOutbox: 2 };
     const lifecycle = build({ maxLifetimeMs: 120_000 });
     lifecycle.start();
 
@@ -191,7 +197,39 @@ describe('in-flight execution belt (§idle-inflight)', () => {
   });
 
   it('idle requires BOTH empty durable ledger AND zero in-flight executions', () => {
-    expect(isIdle({ ...IDLE, activeSlots: 0, processingOutbox: 0, pendingOutbox: 0, activeExecutions: 0 })).toBe(true);
+    expect(isIdle({ ...IDLE })).toBe(true);
     expect(isIdle({ ...IDLE, activeExecutions: 0, activeSlots: 1 })).toBe(false);
+  });
+});
+
+describe('resource waiting belt (§waiting-is-not-idle)', () => {
+  it('work parked waiting for resource capacity is unfinished work, not idleness', () => {
+    expect(isIdle({ ...IDLE, waitingForResource: 1 })).toBe(false);
+    expect(isIdle({ ...IDLE, waitingForResource: 0 })).toBe(true);
+  });
+
+  it('never exits while a run is parked in the resource queue', () => {
+    jest.useFakeTimers();
+    const onExit = jest.fn();
+    const snapshot: IdleSnapshot = {
+      activeSlots: 0,
+      processingOutbox: 0,
+      pendingOutbox: 0,
+      activeExecutions: 0,
+      waitingForResource: 1,
+    };
+    const lifecycle = new SchedulerIdleLifecycle({
+      snapshot: () => snapshot,
+      onExit,
+      idleGraceMs: 60_000,
+      maxLifetimeMs: DEFAULT_MAX_LIFETIME_MS,
+      pollMs: POLL_MS,
+    });
+    lifecycle.start();
+
+    jest.advanceTimersByTime(10 * 60 * 1000);
+    expect(onExit).not.toHaveBeenCalled();
+    lifecycle.stop();
+    jest.useRealTimers();
   });
 });

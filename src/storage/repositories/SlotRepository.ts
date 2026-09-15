@@ -40,6 +40,15 @@ export interface SlotRecord {
   manualRequestId: string | null;
   /** Opaque caller correlation (review chain / review id); null unless manual. */
   correlationId: string | null;
+  /**
+   * Request UUID of a remote MANUAL RECOVERY run (§manual-recovery); null for
+   * scheduled occurrences and review refetches. A recovery slot re-runs the
+   * failed target(s) under a per-occurrence recovery policy and reports its
+   * outcome through the schedule-outcome channel.
+   */
+  recoveryRequestId: string | null;
+  /** Recovery policy preset ('normal'|'relaxed'); null for non-recovery slots. */
+  recoveryMode: string | null;
 }
 
 export interface SlotItemRecord {
@@ -57,6 +66,14 @@ export interface SlotItemRecord {
    */
   fallback_stage: number;
   lastError: string | null;
+  /**
+   * Normalized terminal failure reason code (§terminal-reason) — one of the
+   * stable codes in TargetOutcome's failure taxonomy. Null for non-terminal
+   * cells or successful submissions.
+   */
+  terminalReasonCode: string | null;
+  /** User-facing business message for the terminal reason. */
+  terminalReasonMessage: string | null;
   createdAt: string;
   updatedAt: string;
   completedAt: string | null;
@@ -75,6 +92,12 @@ export class SlotRepository extends BaseRepository {
   /** Exact manual request/target lookup for authenticated convergence checks. */
   public findManualSlot(requestId: string, targetId: string): SlotRecord | null {
     const rows = this.db.prepare(`SELECT * FROM schedule_slots WHERE manual_request_id = ?`).all(requestId) as any[];
+    return rows.map((row) => this.toSlot(row)).find((slot) => slot.targetIds.includes(targetId)) ?? null;
+  }
+
+  /** Exact manual RECOVERY request/target lookup (§manual-recovery). */
+  public findRecoverySlot(requestId: string, targetId: string): SlotRecord | null {
+    const rows = this.db.prepare(`SELECT * FROM schedule_slots WHERE recovery_request_id = ?`).all(requestId) as any[];
     return rows.map((row) => this.toSlot(row)).find((slot) => slot.targetIds.includes(targetId)) ?? null;
   }
 
@@ -101,15 +124,21 @@ export class SlotRepository extends BaseRepository {
       manualRequestId?: string | null;
       /** Opaque caller correlation recorded with a manual slot. */
       correlationId?: string | null;
+      /** Manual recovery request UUID (opens a `recover-` slot). */
+      recoveryRequestId?: string | null;
+      /** Manual recovery policy preset ('normal' | 'relaxed'). */
+      recoveryMode?: string | null;
     }
   ): { slot: SlotRecord; created: boolean } {
     const insert = this.db.prepare(
       `INSERT INTO schedule_slots
          (id, schedule_id, occurrence_at, occurrence_date, occurrence_label, timezone, target_ids,
-          status, trigger_source, slot_date, slot_name, manual_request_id, correlation_id)
+          status, trigger_source, slot_date, slot_name, manual_request_id, correlation_id,
+          recovery_request_id, recovery_mode)
        VALUES
          (@id, @scheduleId, @occurrenceAt, @occurrenceDate, @occurrenceLabel, @timezone, @targetIds,
-          'pending', @triggerSource, @slotDate, @slotName, @manualRequestId, @correlationId)
+          'pending', @triggerSource, @slotDate, @slotName, @manualRequestId, @correlationId,
+          @recoveryRequestId, @recoveryMode)
        ON CONFLICT(id) DO NOTHING`
     );
     const info = insert.run({
@@ -125,6 +154,8 @@ export class SlotRepository extends BaseRepository {
       slotName: data.slotName ?? '',
       manualRequestId: data.manualRequestId ?? null,
       correlationId: data.correlationId ?? null,
+      recoveryRequestId: data.recoveryRequestId ?? null,
+      recoveryMode: data.recoveryMode ?? null,
     });
     const created = info.changes > 0;
     return { slot: this.getSlot(id)!, created };
@@ -360,6 +391,27 @@ export class SlotRepository extends BaseRepository {
   }
 
   /**
+   * Persist the normalized terminal failure reason for a cell (§terminal-reason).
+   * Idempotent; a retried recovery/rollup only ever overwrites with the same or
+   * a later reasoned verdict.
+   */
+  public setCellTerminalReason(
+    slotId: string,
+    targetId: string,
+    code: string,
+    message: string
+  ): void {
+    this.db
+      .prepare(
+        `UPDATE schedule_slot_items
+         SET terminal_reason_code = @code, terminal_reason_message = @message,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE slot_id = @slotId AND target_id = @targetId`
+      )
+      .run({ slotId, targetId, code: code.slice(0, 64), message: message.slice(0, 400) });
+  }
+
+  /**
    * Transition a cell with FSM validation. Never downgrades a confirmed cell;
    * an illegal transition throws rather than silently corrupting state.
    */
@@ -535,6 +587,8 @@ export class SlotRepository extends BaseRepository {
       heartbeatAt: row.heartbeat_at ?? null,
       manualRequestId: row.manual_request_id ?? null,
       correlationId: row.correlation_id ?? null,
+      recoveryRequestId: row.recovery_request_id ?? null,
+      recoveryMode: row.recovery_mode ?? null,
     };
   }
 
@@ -549,6 +603,8 @@ export class SlotRepository extends BaseRepository {
       attemptCount: row.attempt_count,
       fallback_stage: Number(row.fallback_stage ?? 0),
       lastError: row.last_error,
+      terminalReasonCode: row.terminal_reason_code ?? null,
+      terminalReasonMessage: row.terminal_reason_message ?? null,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
       completedAt: row.completed_at,

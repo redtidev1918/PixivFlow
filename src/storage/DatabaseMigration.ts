@@ -105,6 +105,11 @@ export class DatabaseMigration {
             -- the terminal outcome can be reported back to the requester
             -- without this service learning anything about the review.
             correlation_id TEXT,
+            -- Manual recovery request UUID + policy preset ("重试一次/放宽条件重试").
+            -- A recovery slot re-runs the failed target(s) under a per-occurrence
+            -- policy and reports through the schedule-outcome channel.
+            recovery_request_id TEXT,
+            recovery_mode TEXT,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             started_at DATETIME,
             completed_at DATETIME,
@@ -123,6 +128,10 @@ export class DatabaseMigration {
             attempt_count INTEGER NOT NULL DEFAULT 0,
             fallback_stage INTEGER NOT NULL DEFAULT 0,
             last_error TEXT,
+            -- Normalized terminal failure reason (§terminal-reason): stable reason
+            -- code plus a user-facing business message, durable across restarts.
+            terminal_reason_code TEXT,
+            terminal_reason_message TEXT,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             completed_at DATETIME,
@@ -238,6 +247,8 @@ export class DatabaseMigration {
         heartbeat_at: 'ALTER TABLE schedule_slots ADD COLUMN heartbeat_at INTEGER',
         manual_request_id: 'ALTER TABLE schedule_slots ADD COLUMN manual_request_id TEXT',
         correlation_id: 'ALTER TABLE schedule_slots ADD COLUMN correlation_id TEXT',
+        recovery_request_id: 'ALTER TABLE schedule_slots ADD COLUMN recovery_request_id TEXT',
+        recovery_mode: 'ALTER TABLE schedule_slots ADD COLUMN recovery_mode TEXT',
       };
       const columnAlters: string[] = [];
       for (const [col, sql] of Object.entries(slotColumnMigrations)) {
@@ -246,6 +257,12 @@ export class DatabaseMigration {
       const itemCols = (this.db.prepare(`PRAGMA table_info(schedule_slot_items)`).all() as Array<{ name: string }>).map((c) => c.name);
       if (!itemCols.includes('fallback_stage')) {
         columnAlters.push(`ALTER TABLE schedule_slot_items ADD COLUMN fallback_stage INTEGER NOT NULL DEFAULT 0`);
+      }
+      if (!itemCols.includes('terminal_reason_code')) {
+        columnAlters.push(`ALTER TABLE schedule_slot_items ADD COLUMN terminal_reason_code TEXT`);
+      }
+      if (!itemCols.includes('terminal_reason_message')) {
+        columnAlters.push(`ALTER TABLE schedule_slot_items ADD COLUMN terminal_reason_message TEXT`);
       }
 
       // Create indexes for better query performance

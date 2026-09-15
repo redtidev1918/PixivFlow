@@ -91,7 +91,16 @@ export class NotificationPolicy {
   sendSlotSummary(
     slot: SlotContext,
     schedule: ScheduleConfig,
-    rows: Array<{ targetId: string; label: string; workType: string; status: string; workId: string | null; error: string | null }>
+    rows: Array<{
+      targetId: string;
+      label: string;
+      workType: string;
+      status: string;
+      workId: string | null;
+      error: string | null;
+      terminal_reason_code?: string | null;
+      reason?: string | null;
+    }>
   ): void {
     if (slot.manualRequestId || rows.length === 0 || rows.some((r) =>
       !['submitted', 'no_candidate', 'duplicate', 'failed'].includes(r.status)
@@ -107,7 +116,13 @@ export class NotificationPolicy {
       (r.workId ? ` #${r.workId}` : '') +
       (r.status === 'delivery_pending' ? ' 投递中' : '') +
       (r.status === 'no_candidate' ? ' 无候选' : '') +
-      (r.status === 'failed' && r.error ? ` ${r.error.slice(0, 120)}` : '')
+      // First-level cause, business language only: the durable normalized
+      // reason replaces any raw error text (§terminal-reason).
+      ((r.status === 'failed' || r.status === 'no_candidate' || r.status === 'duplicate') && r.reason
+        ? ` ${r.reason.slice(0, 80)}`
+        : r.status === 'failed' && r.error
+          ? ` ${r.error.slice(0, 80)}`
+          : '')
     );
     const submitted = rows.filter((r) => r.status === 'submitted').length;
     const text = [
@@ -130,11 +145,22 @@ export class NotificationPolicy {
           scheduleId: schedule.id,
           slotId: slot.slotId,
           status: outcomeStatus,
+          ...(slot.recoveryRequestId
+            ? {
+                recovery: {
+                  mode: slot.recoveryMode ?? 'normal',
+                  requestId: slot.recoveryRequestId,
+                } as const,
+              }
+            : {}),
           targets: rows.map((r) => ({
             targetId: r.targetId,
             workType: r.workType,
             status: r.status,
             workId: r.workId,
+            error: r.error,
+            terminal_reason_code: r.terminal_reason_code ?? null,
+            reason: r.reason ?? null,
           })),
         }
       );

@@ -14,6 +14,7 @@ import {
   JobTelemetry,
   Scheduler,
 } from './Scheduler';
+import { ResourceAdmission, pixivAccountResourceKey } from './ResourceAdmission';
 import { describeSchedule, resolveSchedules } from './schedules';
 import { ResolvedOccurrence, ScheduleRunOptions, TriggerSource, resolveOccurrence } from './OccurrenceResolver';
 import { SlotContext } from './SlotCoordinator';
@@ -64,62 +65,26 @@ function asTriggerSource(value: string | null): TriggerSource {
     : 'catchup';
 }
 
-class SerialJobAdmission implements JobAdmissionController {
-  private active = false;
-  private readonly pendingIds = new Set<string>();
-  private readonly queue: Array<{ scheduleId: string; resolve: (lease: JobLease | null) => void }> = [];
-
-  constructor(private queueLimit: number) {}
-
-  public setQueueLimit(queueLimit: number): void {
-    this.queueLimit = Math.max(0, queueLimit);
-  }
-
-  public acquire(scheduleId: string): Promise<JobLease | null> {
-    if (!this.active) {
-      this.active = true;
-      return Promise.resolve(this.createLease());
-    }
-
-    // A slow task may span multiple cron ticks. Retain at most one pending run
-    // for each plan so a temporary outage cannot create an unbounded backlog.
-    if (this.pendingIds.has(scheduleId) || this.queue.length >= this.queueLimit) {
-      return Promise.resolve(null);
-    }
-
-    this.pendingIds.add(scheduleId);
-    return new Promise((resolve) => {
-      this.queue.push({ scheduleId, resolve });
-    });
-  }
-
-  private createLease(): JobLease {
-    let released = false;
-    return {
-      release: () => {
-        if (released) return;
-        released = true;
-        this.releaseNext();
-      },
-    };
-  }
-
-  private releaseNext(): void {
-    const next = this.queue.shift();
-    if (!next) {
-      this.active = false;
-      return;
-    }
-
-    this.pendingIds.delete(next.scheduleId);
-    next.resolve(this.createLease());
-  }
+/**
+ * Capacity resolver for one resource key, from the configuration's
+ * resource-governance block (§resource-governance). Unknown resources default
+ * to capacity 1. The key encodes the resource identity (`pixiv-account:<id>`),
+ * so two different accounts get two independent capacities.
+ */
+function capacityOfResourceKey(config: StandaloneConfig | undefined, key: string): number {
+  const prefix = 'pixiv-account:';
+  if (!key.startsWith(prefix)) return 1;
+  const accountId = key.slice(prefix.length);
+  const profile = config?.schedulerRuntime?.resourceGovernance?.pixivAccounts?.[accountId];
+  return Math.max(1, profile?.maxConcurrency ?? 1);
 }
 
 /**
  * Hosts many cron plans in one process. A validated config snapshot replaces
  * the complete cron table at once; invalid updates leave the previous table
- * running. All jobs share one bounded serial admission queue by default.
+ * running. All jobs that consume the same constrained resource (today: the
+ * shared Pixiv account) pass through ONE bounded resource admission; work for
+ * different resource identities runs concurrently.
  */
 export class MultiScheduleManager {
   private schedulers = new Map<string, Scheduler>();
@@ -128,9 +93,31 @@ export class MultiScheduleManager {
   private reloadTimer: NodeJS.Timeout | null = null;
   private recoveryTimer: NodeJS.Timeout | null = null;
   private watching = false;
-  private readonly admission = new SerialJobAdmission(8);
+  private readonly admission: ResourceAdmission;
 
-  constructor(private readonly options: MultiScheduleManagerOptions) {}
+  constructor(private readonly options: MultiScheduleManagerOptions) {
+    // Capacity is read lazily from the current config snapshot so a hot
+    // reload that changes `resourceGovernance` applies immediately.
+    this.admission = new ResourceAdmission(
+      (key) => capacityOfResourceKey(this.activeConfig, key),
+      8
+    );
+  }
+
+  /**
+   * Deduplicated, log-safe observable: how many work items are parked waiting
+   * for any resource. Used by the idle lifecycle — waiting work is unfinished
+   * work and must prevent premature shutdown (§waiting-is-not-idle).
+   */
+  public waitingWorkCount(): number {
+    return this.admission.waitingTotal();
+  }
+
+  /** The resource key a plan's work consumes (resource identity, never a bot/
+   *  schedule/target name). All Pixiv-consuming work shares the account id. */
+  private resourceKeyForPlan(): string {
+    return pixivAccountResourceKey(this.activeConfig?.pixiv?.accountId);
+  }
 
   public start(initialConfig?: StandaloneConfig): ConfigReloadResult {
     const config = initialConfig ?? this.options.loadConfig();
@@ -229,6 +216,13 @@ export class MultiScheduleManager {
         slotDate: slot.slotDate || slot.occurrenceDate,
         manualRequestId: slot.manualRequestId ?? undefined,
         correlationId: slot.correlationId ?? undefined,
+        // A crashed manual recovery resumes with the SAME occurrence-scoped
+        // policy, never a re-resolution that would lose the override.
+        recoveryRequestId: slot.recoveryRequestId ?? undefined,
+        recoveryMode:
+          slot.recoveryMode === 'relaxed' || slot.recoveryMode === 'normal'
+            ? slot.recoveryMode
+            : undefined,
       };
 
       const admitted = this.triggerSchedule(slot.scheduleId, {
@@ -330,7 +324,10 @@ export class MultiScheduleManager {
     this.activeConfig = config;
     this.generation++;
     const generation = this.generation;
-    this.admission.setQueueLimit(queueLimit);
+    // Bounded wait queue across ALL resources (mirrors the legacy queueLimit
+    // guard against an unbounded backlog); capacity itself is per resource key.
+    this.admission.setMaxWaiting(queueLimit);
+    const resourceKey = this.resourceKeyForPlan();
 
     for (const plan of enabledPlans) {
       // Watchdog: schedules without an explicit timeout still get a cap so a
@@ -344,7 +341,8 @@ export class MultiScheduleManager {
         plan.id,
         this.admission,
         (failure) => this.options.onFailure?.(config, plan, failure),
-        (abandoned) => this.options.onAbandoned?.(config, plan, abandoned)
+        (abandoned) => this.options.onAbandoned?.(config, plan, abandoned),
+        resourceKey
       );
       scheduler[registerCron ? 'start' : 'init'](async (options?: ScheduleRunOptions) => {
         // The closure keeps the exact validated snapshot for an in-flight run.
@@ -365,6 +363,7 @@ export class MultiScheduleManager {
         targets: plan.targetIds?.length ?? 'all',
       })),
       queueLimit,
+      resourceKey,
     });
 
     return { ok: true, generation, schedules: scheduleIds };

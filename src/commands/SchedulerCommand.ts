@@ -274,6 +274,9 @@ export class SchedulerCommand extends BaseCommand {
               // attempts are exhausted, which does not block exit), so this
               // cannot hold the machine open indefinitely.
               pendingOutbox: outbox.pending,
+              // Second belt: never exit underneath an in-flight slot execution
+              // even if a durable row ever looks a beat early (§idle-inflight).
+              activeExecutions: runtime.activeExecutionCount(),
             };
           },
           idleGraceMs: scheduling.idleGraceMs,

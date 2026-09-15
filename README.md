@@ -22,10 +22,9 @@ npm install -g pixivflow
 pixivflow --help
 ```
 
-服务器部署推荐 Docker Compose，见 [DOCKER.md](docs/DOCKER.md)；
-PixivFlow + TelePost 联合部署套件（含可选代理）：
-[redtidev1918/pixivflow-telepost-deploy](https://github.com/redtidev1918/pixivflow-telepost-deploy)
-—— 一套配置，支持国内/海外、有/无公网 IP、VPS/Fly.io 任意场景。
+服务器部署见 [DOCKER.md](docs/DOCKER.md)。需要把 PixivFlow 与 TelePost 组合运行时，再使用
+[pixivflow-telepost-deploy](https://github.com/redtidev1918/pixivflow-telepost-deploy)；
+它是可选的部署与运维套件。
 从源码构建：
 
 ```bash
@@ -111,7 +110,9 @@ pixivflow scheduler             # 按 cron 配置长期挂机自动收集
 - **`cache`**：下载后投给一个「交付目标」（比如投稿机器人），对方确认收到后才删本地文件，省磁盘。
 
 「交付目标」就是一段配置：告诉 PixivFlow 把文件 POST 到哪个地址、带哪些字段。
-它不绑定具体服务，可指向任何 HTTP 投稿接口（TelePost、telepress 等）。示例：
+它不绑定具体服务，可指向任意兼容的 HTTP 接口；
+[TelePost](https://github.com/redtidev1918/TelePost) 与
+[telepress](https://github.com/redtidev1918/telepress) 只是示例下游。示例：
 
 ```json
 {

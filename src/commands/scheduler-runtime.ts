@@ -24,6 +24,7 @@ import {
   SlotCoordinator,
 } from '../scheduler/SlotCoordinator';
 import { TargetOutcome } from '../scheduler/TargetOutcome';
+import { applyAcquisitionPolicy } from '../scheduler/RecoveryPolicy';
 import { DeliveryService } from '../delivery/DeliveryService';
 import { createDeliveryLedgerPort } from '../delivery/DeliveryLedgerPort';
 import { OutboxWorker } from '../delivery/OutboxWorker';
@@ -388,6 +389,21 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
     if (onlyTarget) {
       // "重抓/换一张" 只重跑产生该审核的那一个 target。
       targets = targets.filter((t) => t.id === onlyTarget);
+    }
+
+    // Occurrence-scoped acquisition policy (§recovery-policy). A manual recovery
+    // slot carries a server-defined preset; `relaxed` widens only SOFT criteria
+    // (search range / candidate count / language window) for THIS occurrence.
+    // The global config is never written, so future schedules are unaffected.
+    const recoveryMode = providedSlot?.recoveryMode;
+    if (recoveryMode && recoveryMode !== 'normal') {
+      targets = targets.map((target) => applyAcquisitionPolicy(target, recoveryMode));
+      logger.info('Manual recovery policy applied to this occurrence', {
+        scheduleId: schedule.id,
+        slot: providedSlot?.slotId,
+        recoveryMode,
+        targets: targets.map((t) => t.id),
+      });
     }
 
     if (targets.length === 0) {
@@ -778,6 +794,8 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
               status: c.status,
               workId: c.workId,
               error: c.error ?? null,
+              terminal_reason_code: c.terminalReasonCode ?? null,
+              reason: c.terminalReasonMessage ?? null,
             };
           })
         );

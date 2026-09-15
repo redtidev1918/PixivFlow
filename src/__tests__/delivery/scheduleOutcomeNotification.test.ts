@@ -60,7 +60,7 @@ function cfg(statusOverrides?: Record<string, unknown>): any {
   };
 }
 
-type Row = { targetId: string; label: string; workType: string; status: string; workId: string | null; error: string | null };
+type Row = { targetId: string; label: string; workType: string; status: string; workId: string | null; error: string | null; terminal_reason_code?: string | null; reason?: string | null };
 
 const r = (targetId: string, workType: string, status: string, workId: string | null = null): Row => ({
   targetId, label: targetId, workType, status, workId, error: null,
@@ -118,8 +118,8 @@ describe('schedule outcome notification', () => {
       ]);
       expect(payloadJson(db).scheduleOutcome.status).toBe('partial');
       expect(payloadJson(db).scheduleOutcome.targets).toEqual([
-        { targetId: 'bot1-illust', workType: 'illustration', status: 'submitted', workId: '29118637' },
-        { targetId: 'bot1-novel', workType: 'novel', status: 'no_candidate', workId: null },
+        { targetId: 'bot1-illust', workType: 'illustration', status: 'submitted', workId: '29118637', error: null, terminal_reason_code: null, reason: null },
+        { targetId: 'bot1-novel', workType: 'novel', status: 'no_candidate', workId: null, error: null, terminal_reason_code: null, reason: null },
       ]);
     });
   });

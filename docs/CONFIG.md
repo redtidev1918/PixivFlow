@@ -50,6 +50,7 @@ pixivflow setup
 | `deviceToken` | 固定填 `"pixiv"` |
 | `refreshToken` | 登录核心凭据,由 `login` / `refresh` 写入 |
 | `userAgent` | API 请求 UA,保持默认即可 |
+| `accountId` | 可选。该凭据 profile 的**稳定内部标识**（默认 `"default"`），是资源治理的 Resource Identity（`pixiv-account:<accountId>`）。绝不使用 bot/schedule/target 名；凭据本身永不参与 key。多账户部署时为每个账户给不同 `accountId`，容量互相独立。 |
 
 不要手工编造或粘贴别人的 refreshToken;获取方式见 [LOGIN](LOGIN.md)。
 
@@ -386,6 +387,7 @@ dead row 用 `pixivflow outbox retry <id>` 或 `retry --dead` 正式重放，幂
 | `watchConfig` | true | 监听当前配置文件并自动热重载 |
 | `reloadDebounceMs` | 500 | 文件替换后的去抖时间，最小 100ms |
 | `queueLimit` | 8 | 全局待执行计划上限；同一计划仍只保留一项 |
+| `resourceGovernance.pixivAccounts` | `{ "<accountId>": { "maxConcurrency": 1 } }` | 每个 Pixiv 账户 profile 的**资源容量**（并发准入上限）。并发按真实受限资源治理，不是按 bot/schedule/target：共用同一账户的所有工作（定时、fallback、manual refetch、手动恢复）共享同一个 capacity。当前生产建议 `maxConcurrency: 1`；未来若真实数据证明安全可升为 2，无需改调度架构。等待容量是正常排队状态，不是失败。 |
 | `trigger.enabled` | false | 是否挂载受认证 HTTP 触发服务。`external` 模式**总是**挂载（外部时钟依赖它）；`internal` 模式下置 `true` 可额外开放手动/运维触发。HTTP 触发与“谁拥有时钟”是两件正交的事。 |
 | `trigger.port` / `trigger.host` | 8090 / `0.0.0.0` | 触发服务监听地址。Fly 注入 `PORT` 时优先用 `PORT`。 |
 | `trigger.token` | env | Bearer 令牌；缺省读 `SCHEDULER_TRIGGER_TOKEN` 环境变量。两者都没有则触发端点**拒绝一切请求（fail-closed）**。令牌不进日志/响应。 |
@@ -412,6 +414,27 @@ Authorization: Bearer <PIXIVFLOW_REFETCH_TOKEN>
 `PIXIVFLOW_REFETCH_TOKEN` 缺失时端点拒绝请求。请求只选一个已启用 schedule 中的 target，且该 target 必须配置 `refetchOutcomeUrl` 与精确的 `refetch_request_id: "{{refetchRequestId}}"` 投递字段。`requestId` 是重试幂等键，重复请求复用同一个 `manual-` Slot；`correlationId`（通常是审核链 id）随 Slot 持久化，只用于恢复后的结果关联，本服务不解释其内容。服务端先持久化再返回 `202 accepted`（`{status:"accepted", slotId, disposition}`），执行和投递在后台进行；手动 Slot 与定时 occurrence 分离，不会把定时任务标为完成。手动 Slot 的请求 UUID 同时写入 `schedule_slots.manual_request_id`，因此**休眠机器恢复该 Slot 后仍知道它是人工替换**：投递负载携带 `refetch_request_id`（定时执行为空串）；无候选、重复或最终失败时，通过 `refetchOutcomeUrl` 的 durable outbox 回报 `no_alternative` / `failed`。成功替换由投稿本身携带 UUID 关联。`run-once` CLI 仍是无 Slot 的 ad-hoc 命令。
 
 请求方可用同一 token 只读核对 durable 状态：`GET /internal/targets/{targetId}/refetch/{requestId}`。存在时返回 `{requestId, slotId, state, slotStatus}`；`state` 为 cell 状态（`pending`、`selected`、`artifact_ready`、`delivery_pending`、`submitted`、`no_candidate`、`duplicate`、`failed`），请求或 target 不匹配返回 404。`submitted` 只表示下游投稿 ACK，最终审核替换仍以 TelePost 的 review/attempt 状态为准。dead-letter 的 outcome 可在确认目标配置已修复后用 `pixivflow outbox retry <id>` 按 exact row 审计重试。
+
+### 手动恢复（§manual-recovery）
+
+失败 target 的「再试一次 / 放宽条件重试」使用独立端点（同一 `PIXIVFLOW_REFETCH_TOKEN`）：
+
+```text
+POST /internal/targets/{targetId}/recover
+Authorization: Bearer <PIXIVFLOW_REFETCH_TOKEN>
+{ "requestId": "<UUID>", "retryMode": "normal" | "relaxed" }
+```
+
+- **只接受命名 preset**（`normal` / `relaxed`，缺省 `normal`）；绝不接受客户端原始
+  acquisition 参数。`relaxed` 只放宽 soft 项（lookbackDays / candidateScanLimit /
+  languageCandidateLimit，含上限），hard 约束绝不放宽。
+- override 是 occurrence-scoped：写在 `schedule_slots.recovery_mode` 上，crash-resume
+  沿用同一 preset；**绝不写全局 config，绝不影响未来 schedule**。
+- 只重跑失败 target（`onlyTarget`）；outcome 走 schedule-outcome 通道并以 `recovery`
+  标记渲染「已恢复」，自动执行历史不改写。
+- 与 refetch 一样先 durable 再返回 `202`；resource 忙时排队（`disposition: "queued"`），
+  不是失败。同一 request UUID 幂等；`GET /internal/targets/{targetId}/recover/{requestId}`
+  只读核对状态。
 
 **投递模板里的执行来源变量**（有 Slot 的定时和远程重抓运行时注入；`run-once` CLI 为空）：
 `{{scheduleId}}`、`{{executionId}}`（durable occurrence id）、`{{occurrenceAt}}`（ISO）、

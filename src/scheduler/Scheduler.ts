@@ -67,7 +67,12 @@ export interface JobAbandoned {
 
 /** Admission is acquired before timeout/accounting starts. */
 export interface JobAdmissionController {
-  acquire(scheduleId: string): Promise<JobLease | null>;
+  /**
+   * Acquire a lease on the work item's constrained RESOURCE. The key is a
+   * resource identity (`pixiv-account:<id>`), never a bot/schedule/target
+   * name. Resolves `null` only when the bounded wait queue is full.
+   */
+  acquire(resourceKey: string): Promise<JobLease | null>;
 }
 
 export class Scheduler {
@@ -89,7 +94,13 @@ export class Scheduler {
     private readonly scheduleId: string = 'default',
     private readonly admission?: JobAdmissionController,
     private readonly onFailure?: (failure: JobFailure) => Promise<void> | void,
-    private readonly onAbandoned?: (abandoned: JobAbandoned) => Promise<void> | void
+    private readonly onAbandoned?: (abandoned: JobAbandoned) => Promise<void> | void,
+    /**
+     * The constrained resource this schedule's work consumes (§resource-
+     * governance). All schedules whose targets share the same Pixiv account
+     * share the same key, so their runs queue under ONE capacity.
+     */
+    private readonly resourceKey?: string
   ) {}
 
   public start(job: (options?: ScheduleRunOptions) => Promise<void>) {
@@ -212,7 +223,7 @@ export class Scheduler {
     }
 
     this.pending = true;
-    const lease = this.admission ? await this.admission.acquire(this.scheduleId) : null;
+    const lease = this.admission ? await this.admission.acquire(this.resourceKey ?? this.scheduleId) : null;
     this.pending = false;
 
     if (this.stopped) {
@@ -220,8 +231,9 @@ export class Scheduler {
       return;
     }
     if (this.admission && !lease) {
-      logger.warn('Skipping scheduled job because the shared scheduler queue is full', {
+      logger.warn('Work not admitted: the resource wait queue is full; the durable ledger will retry it', {
         scheduleId: this.scheduleId,
+        resourceKey: this.resourceKey,
       });
       return;
     }

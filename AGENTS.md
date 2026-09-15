@@ -81,3 +81,59 @@ PixivFlow 负责 Pixiv 认证、候选发现/排序/去重、下载、审核链�
   retry same work**（`settlePendingDelivery` 拒绝重选）。
 - 恢复按 durable slot 恢复，不重新解析 cron occurrence；普通 schedule 的 occurrence
   resolver 绝不重复触发 manual refetch。
+
+## Resource-scoped execution（§resource-governance）
+
+```text
+Concurrency is scoped by the constrained resource,
+not by bot, schedule or target.
+
+All work consuming the same constrained resource participates
+in the same bounded-capacity admission mechanism.
+
+Queue waiting is unfinished work, not an execution failure.
+
+Manual refetch and manual recovery must not bypass normal resource admission.
+
+Different independent resource identities may execute concurrently.
+
+Waiting resource work must prevent premature idle shutdown.
+
+Generalization follows stable domain concepts and must not introduce
+speculative infrastructure.
+```
+
+- 资源身份 = `pixiv-account:<pixiv.accountId>`（稳定内部 profile id；**禁止**用
+  bot1/bot2、schedule/target 名、token/cookie 当 key，也绝不把凭据写日志）。
+- 容量来自 `schedulerRuntime.resourceGovernance.pixivAccounts[<accountId>].maxConcurrency`
+  （默认 1 即当前生产建议）；不要为 bot/schedule/target 写并发特判。
+- 唯一 admission 机制是 `src/scheduler/ResourceAdmission.ts`（FIFO、per-key capacity）；
+  schedule、fallback、manual refetch、manual normal/relaxed recovery 全部经它准入。
+  `schedulerRuntime.queueLimit` 只限制全局等待队列长度，不代表资源容量。
+- **waiting work = unfinished work**：`SchedulerIdleLifecycle` 的 idle 判定包含
+  `waitingForResource`，排队中的运行绝不允许触发 autosleep/退出；也不得把
+  `waiting_for_resource` 记成执行失败。
+- 生产拓扑 = 单进程单机器（split-worker），in-process semaphore 足够；只有同一资源真的
+  会被多进程消费时才允许引入 durable/distributed lease。
+
+## Terminal reason（§terminal-reason）
+
+- 每个 terminal cell 持久化 `terminal_reason_code` + `terminal_reason_message`
+  （`schedule_slot_items` 两列），并经 schedule-outcome payload 原样传给下游；
+  管理员消息直接看到一级原因。
+- **Recovery exhaustion 不是根因**：候选全部重复 → `duplicate_exhausted`；空池 →
+  `no_candidate`；候选存在但全被过滤 → `filter_exhausted`。绝不显示 raw error /
+  stack trace / 路径 / SQL / token。
+- 其余必要类型见 `TargetOutcome.terminalReasonFor`（下载超时/失败、429、auth、5xx、
+  delivery/telegram、network、执行超时、配置、internal）。不造巨大 taxonomy。
+
+## Recovery policy（§recovery-policy）
+
+- Acquisition 读取 effective policy：`normal`（identity）与 `relaxed`（服务端预定义
+  preset，只放宽 soft 项：lookbackDays / candidateScanLimit / languageCandidateLimit，
+  有上限）；hard 约束（excludeAI、work type、topic、delivery、数据完整性等）绝不放宽。
+- 手动恢复使用 `POST /internal/targets/:id/recover`（同一 refetch token），body 只接受
+  `retryMode: normal|relaxed`，**绝不接受客户端原始参数**；override 只作用于当前
+  occurrence（slot 上持久化 `recovery_mode`），**绝不写全局 config、绝不影响未来 schedule**。
+- 手动恢复只重跑失败 target（`onlyTarget`）；成功 target 与自动执行历史不改写；outcome
+  走 schedule-outcome 通道并以 recovery 标记渲染「已恢复」。

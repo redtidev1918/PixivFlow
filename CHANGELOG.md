@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.20.5](https://github.com/redtidev1918/PixivFlow/compare/v2.20.4...v2.20.5) (2026-09-15)
+
+
+### Bug Fixes
+
+* idle lifecycle second belt + first-class manual refetch resume guarantees ([#86](https://github.com/redtidev1918/PixivFlow/issues/86)) ([352c021](https://github.com/redtidev1918/PixivFlow/commit/352c02103d19a9aec98d6b450880f9809e8725c0))
+
 ## [2.20.4](https://github.com/redtidev1918/PixivFlow/compare/v2.20.3...v2.20.4) (2026-09-14)
 
 

@@ -124,11 +124,26 @@ export interface DeliveryNotificationRequest {
     scheduleId: string;
     slotId: string;
     status: 'success' | 'partial' | 'failed';
+    /**
+     * Present when this terminal outcome belongs to a MANUAL RECOVERY run
+     * (§manual-recovery): the request id and the policy preset used. Lets the
+     * receiving service render "已恢复" instead of the daily summary.
+     */
+    recovery?: {
+      mode: 'normal' | 'relaxed';
+      requestId: string;
+    };
     targets?: Array<{
       targetId: string;
       workType: string;
       status: string;
       workId?: string | null;
+      /** Raw cell error (request-level observability; NOT user-safe text). */
+      error?: string | null;
+      /** Normalized terminal failure code (§terminal-reason). */
+      terminal_reason_code?: string | null;
+      /** User-facing business reason message for the failure. */
+      reason?: string | null;
     }>;
   };
 }

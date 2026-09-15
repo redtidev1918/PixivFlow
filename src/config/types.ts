@@ -283,6 +283,24 @@ export interface PixivCredentialConfig {
   deviceToken: string;
   refreshToken: string;
   userAgent: string;
+  /**
+   * Stable internal identity of this credential profile (§resource-governance).
+   * It is the RESOURCE identity used for admission keys (`pixiv-account:<id>`),
+   * never a token/cookie and never a bot/schedule/target name. Default 'default'.
+   */
+  accountId?: string;
+}
+
+/**
+ * Operator-level resource capacity configuration (§resource-governance).
+ * Concurrency is scoped by the real constrained resource, not by bot/schedule/
+ * target. Current production resource: the single Pixiv account profile, with
+ * `maxConcurrency: 1` recommended. This is deployment config — never exposed
+ * to ordinary manager UI.
+ */
+export interface ResourceGovernanceConfig {
+  /** Per-Pixiv-account-profile capacity. Keyed by `pixiv.accountId`. */
+  pixivAccounts?: Record<string, { maxConcurrency?: number }>;
 }
 
 export interface NetworkConfig {
@@ -495,6 +513,13 @@ export interface SchedulerRuntimeConfig {
    * resumes from the same durable Slot/outbox rows. Default: 10800000ms (3h).
    */
   maxLifetimeMs?: number;
+  /**
+   * Operator-level resource capacity (§resource-governance). Concurrency is
+   * scoped by the real constrained resource (e.g. the shared Pixiv account),
+   * never by bot/schedule/target. Waiting for capacity is a normal state, not
+   * an execution failure. Not exposed to ordinary manager UI.
+   */
+  resourceGovernance?: ResourceGovernanceConfig;
   /**
    * External-mode HTTP trigger settings. Ignored in internal mode.
    */

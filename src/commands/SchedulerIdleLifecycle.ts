@@ -54,6 +54,14 @@ export interface IdleSnapshot {
    * durable slot/outbox rows.
    */
   activeExecutions: number;
+  /**
+   * Work items parked in the resource admission queue (§resource-governance).
+   * Waiting for capacity is UNFINISHED work, not idleness: a queued run has a
+   * durable slot row (counted above) but may not have reached `claimRunLease`
+   * yet in internal mode, so this explicit belt prevents the worker from
+   * shutting down while a run is still waiting to start.
+   */
+  waitingForResource: number;
 }
 
 /** True only when the worker has no work of any kind left. */
@@ -62,7 +70,8 @@ export function isIdle(snapshot: IdleSnapshot): boolean {
     snapshot.activeSlots === 0 &&
     snapshot.processingOutbox === 0 &&
     snapshot.pendingOutbox === 0 &&
-    snapshot.activeExecutions === 0
+    snapshot.activeExecutions === 0 &&
+    snapshot.waitingForResource === 0
   );
 }
 

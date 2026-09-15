@@ -164,6 +164,19 @@ export interface TriggerHandlers {
     correlationId?: string
   ): Promise<{ slotId: string; disposition: string }>;
   refetchStatus?(targetId: string, requestId: string): { requestId: string; slotId: string; state: string; slotStatus: string } | null;
+  /**
+   * Admit one manual RECOVERY of a failed target (§manual-recovery). `retryMode`
+   * selects a SERVER-DEFINED acquisition policy preset ('normal' | 'relaxed');
+   * callers never supply raw acquisition parameters. The run is
+   * occurrence-scoped: it never changes the global config or future schedules.
+   */
+  recover?(
+    targetId: string,
+    requestId: string,
+    retryMode: 'normal' | 'relaxed',
+    correlationId?: string
+  ): Promise<{ slotId: string; disposition: string }>;
+  recoverStatus?(targetId: string, requestId: string): { requestId: string; slotId: string; state: string; slotStatus: string } | null;
 }
 
 export class ScheduleTriggerServer {
@@ -303,6 +316,64 @@ export class ScheduleTriggerServer {
       const status = this.handlers.refetchStatus?.(targetId, requestId);
       if (!status) {
         res.status(404).json({ status: 'error', error: 'manual refetch not found' });
+        return;
+      }
+      res.json(status);
+    });
+
+    // Manual RECOVERY of a failed schedule target (§manual-recovery). Same
+    // authenticated manual-work family as refetch (PIXIVFLOW_REFETCH_TOKEN) but
+    // a DIFFERENT business intent: it re-runs the failed target(s) under a
+    // server-defined acquisition policy preset and reports through the
+    // schedule-outcome channel, so the daily summary is never rewritten.
+    // Admitting is all this endpoint does; if the resource is busy the run is
+    // queued (202 + disposition 'queued'), never failed.
+    app.post('/internal/targets/:targetId/recover', this.refetchAuth, async (req: Request, res: Response) => {
+      const requestId = req.body?.requestId;
+      if (typeof requestId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestId)) {
+        res.status(400).json({ status: 'error', error: 'requestId must be a UUID' });
+        return;
+      }
+      // Only a NAMED preset is accepted — never raw acquisition parameters.
+      const rawMode = req.body?.retryMode;
+      const retryMode = rawMode === undefined || rawMode === null || rawMode === '' ? 'normal' : rawMode;
+      if (retryMode !== 'normal' && retryMode !== 'relaxed') {
+        res.status(400).json({ status: 'error', error: 'retryMode must be "normal" or "relaxed"' });
+        return;
+      }
+      const correlationId = req.body?.correlationId;
+      if (correlationId !== undefined && (typeof correlationId !== 'string' || correlationId.length > 200)) {
+        res.status(400).json({ status: 'error', error: 'correlationId must be a string of at most 200 chars' });
+        return;
+      }
+      if (!this.handlers.recover) {
+        res.status(503).json({ status: 'error', error: 'manual recovery is unavailable' });
+        return;
+      }
+      try {
+        const result = await this.handlers.recover(
+          req.params.targetId, requestId, retryMode, correlationId ?? undefined
+        );
+        res.status(202).json({ status: 'accepted', retryMode, ...result });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        const status = message === 'unknown target' ? 404 : message === 'ambiguous target' ? 409 : 500;
+        logger.warn('Manual recovery rejected', {
+          targetId: req.params.targetId, requestId, retryMode, status, error: message,
+        });
+        res.status(status).json({ status: 'error', error: status === 500 ? 'recovery admission failed' : message });
+      }
+    });
+
+    app.get('/internal/targets/:targetId/recover/:requestId', this.refetchAuth, (req: Request, res: Response) => {
+      const { targetId, requestId } = req.params;
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestId)) {
+        res.status(400).json({ status: 'error', error: 'requestId must be a UUID' });
+        return;
+      }
+      const status = this.handlers.recoverStatus?.(targetId, requestId);
+      if (!status) {
+        res.status(404).json({ status: 'error', error: 'manual recovery not found' });
         return;
       }
       res.json(status);

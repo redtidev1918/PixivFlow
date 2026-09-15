@@ -407,3 +407,157 @@ export function classifyJobLevelOutage(error: unknown): JobLevelOutage | null {
   const failure = classifyCandidateFailure(error, '');
   return failure.scope === 'job' ? failure.outage : null;
 }
+
+/**
+ * Normalized terminal failure taxonomy (§terminal-reason).
+ *
+ * These codes are what operators actually see: the FIRST-LEVEL cause of a
+ * terminal cell. Recovery exhaustion is an execution state, never a root
+ * cause — a cell that exhausted its fallback stages because every candidate
+ * was a duplicate reports `duplicate_exhausted`, not `recovery_exhausted`.
+ * Queue waiting is not a terminal reason at all.
+ *
+ * Codes are kept deliberately small (no giant taxonomy): each maps to one
+ * real failure path in this codebase.
+ */
+export type TerminalReasonCode =
+  /** The candidate scan was empty — nothing was found in the day's ranked pool. */
+  | 'no_candidate'
+  /** Every candidate the scan saw was already delivered/pending for this target. */
+  | 'duplicate_exhausted'
+  /** Candidates existed but none passed the target's own filters. */
+  | 'filter_exhausted'
+  | 'download_timeout'
+  | 'download_failed'
+  | 'rate_limited'
+  | 'auth_failed'
+  | 'remote_http_error'
+  | 'delivery_failed'
+  | 'telegram_failed'
+  | 'network_error'
+  | 'execution_timeout'
+  | 'configuration_error'
+  | 'internal_error';
+
+export interface TerminalReason {
+  code: TerminalReasonCode;
+  /** Business-language message an operator/reviewer reads directly. */
+  message: string;
+}
+
+/** User-facing business messages — never stack traces, paths, SQL or tokens. */
+export const TERMINAL_REASON_MESSAGES: Record<TerminalReasonCode, string> = {
+  no_candidate: '没有找到合适的新作品',
+  duplicate_exhausted: '候选作品均已投稿过',
+  filter_exhausted: '没有符合筛选条件的新作品',
+  download_timeout: '图片下载超时',
+  download_failed: '图片下载失败',
+  rate_limited: 'Pixiv 请求频率受限',
+  auth_failed: 'Pixiv 登录已失效，需要重新登录',
+  remote_http_error: 'Pixiv 服务器返回错误',
+  delivery_failed: '投稿投递失败',
+  telegram_failed: 'Telegram 发送失败',
+  network_error: '网络异常',
+  execution_timeout: '执行超时',
+  configuration_error: '配置错误',
+  internal_error: '内部错误',
+};
+
+/**
+ * Map a typed terminal TargetOutcome onto the normalized reason. Returns null
+ * for non-terminal outcomes (they have no terminal reason yet).
+ */
+export function terminalReasonFor(outcome: TargetOutcome): TerminalReason | null {
+  switch (outcome.kind) {
+    case 'submitted':
+    case 'stored':
+    case 'delivery_pending':
+      return null;
+    case 'no_candidate':
+      return reasonForNoCandidate(outcome);
+    case 'duplicate':
+      return {
+        code: 'duplicate_exhausted',
+        message: TERMINAL_REASON_MESSAGES.duplicate_exhausted,
+      };
+    case 'failed':
+      return classifyFailedReason(outcome.error, outcome.scan);
+  }
+}
+
+/**
+ * Root cause for a `no_candidate` target, read from the scan's skip codes
+ * rather than from exhaustion bookkeeping: all duplicates ⇒
+ * `duplicate_exhausted`; otherwise the candidates were present but unusable
+ * (filter/deleted/denied/wrong media) ⇒ `filter_exhausted`; a scan that saw
+ * nothing at all ⇒ `no_candidate`.
+ */
+function reasonForNoCandidate(outcome: Extract<TargetOutcome, { kind: 'no_candidate' }>): TerminalReason {
+  const skipped = outcome.scan?.skipped ?? [];
+  if (skipped.length > 0) {
+    const duplicates = skipped.filter((s) => s.code === 'duplicate').length;
+    if (duplicates === skipped.length) {
+      return { code: 'duplicate_exhausted', message: TERMINAL_REASON_MESSAGES.duplicate_exhausted };
+    }
+    if (duplicates >= skipped.length / 2 || skipped.every((s) => s.code !== 'unavailable')) {
+      // Predominantly duplicates, or every skip was a hard work-level verdict:
+      // the pool contained works but none were usable for this target.
+      return { code: 'filter_exhausted', message: TERMINAL_REASON_MESSAGES.filter_exhausted };
+    }
+  }
+  return { code: 'no_candidate', message: TERMINAL_REASON_MESSAGES.no_candidate };
+}
+
+/**
+ * Classify a terminal `failed` reason from the error text + scan bookkeeping.
+ * Job-level outages from the scan win first (they describe the whole run), then
+ * message-shape heuristics; anything unclassifiable becomes `internal_error`
+ * rather than leaking raw error text to the review group.
+ */
+function classifyFailedReason(message: string, scan?: CandidateScanSummary): TerminalReason {
+  const outage = scan?.outages?.[0];
+  if (outage === 'pixiv_auth_failure') {
+    return { code: 'auth_failed', message: TERMINAL_REASON_MESSAGES.auth_failed };
+  }
+  if (outage === 'delivery_unavailable') {
+    return { code: 'delivery_failed', message: TERMINAL_REASON_MESSAGES.delivery_failed };
+  }
+  if (outage === 'network_outage' || outage === 'database_unavailable') {
+    return { code: 'network_error', message: TERMINAL_REASON_MESSAGES.network_error };
+  }
+
+  const text = String(message ?? '').slice(0, 600);
+  if (/\b429\b|rate ?limit/i.test(text)) {
+    return { code: 'rate_limited', message: TERMINAL_REASON_MESSAGES.rate_limited };
+  }
+  if (/\b401\b|unauthorized|invalid grant|invalid refresh token|authentication failed|登录/i.test(text)) {
+    return { code: 'auth_failed', message: TERMINAL_REASON_MESSAGES.auth_failed };
+  }
+  if (/timeout|timed ?out|timedout/i.test(text)) {
+    return /download|image|url|fetch/i.test(text)
+      ? { code: 'download_timeout', message: TERMINAL_REASON_MESSAGES.download_timeout }
+      : { code: 'execution_timeout', message: TERMINAL_REASON_MESSAGES.execution_timeout };
+  }
+  if (/502|503|504|bad gateway|service unavailable|server error|5\d\d/i.test(text)) {
+    return { code: 'remote_http_error', message: TERMINAL_REASON_MESSAGES.remote_http_error };
+  }
+  if (/telegram/i.test(text)) {
+    return { code: 'telegram_failed', message: TERMINAL_REASON_MESSAGES.telegram_failed };
+  }
+  // Configuration faults are reported as such even when they surface inside a
+  // delivery/submission path ("delivery target not configured"): the operator
+  // fixes configuration, not the upstream.
+  if (/not configured|missing (?:config|configuration|setting)|invalid config/i.test(text)) {
+    return { code: 'configuration_error', message: TERMINAL_REASON_MESSAGES.configuration_error };
+  }
+  if (/delivery|submit(?:t?ed)?|publish|post|outbox/i.test(text)) {
+    return { code: 'delivery_failed', message: TERMINAL_REASON_MESSAGES.delivery_failed };
+  }
+  if (/econnrefused|econnreset|enotfound|etimedout|ehostunreach|enetunreach|socket hang up|network is unreachable|getaddrinfo/i.test(text)) {
+    return { code: 'network_error', message: TERMINAL_REASON_MESSAGES.network_error };
+  }
+  if (/config|missing|invalid/i.test(text)) {
+    return { code: 'configuration_error', message: TERMINAL_REASON_MESSAGES.configuration_error };
+  }
+  return { code: 'internal_error', message: TERMINAL_REASON_MESSAGES.internal_error };
+}

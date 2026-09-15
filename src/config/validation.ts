@@ -486,6 +486,26 @@ export function validateConfig(config: Partial<StandaloneConfig>, location: stri
         errors.push('schedulerRuntime.trigger.graceMinutes: Must be a positive integer (minutes)');
       }
     }
+    const rg = rt.resourceGovernance;
+    if (rg) {
+      if (rg.pixivAccounts !== undefined && (typeof rg.pixivAccounts !== 'object' || rg.pixivAccounts === null || Array.isArray(rg.pixivAccounts))) {
+        errors.push('schedulerRuntime.resourceGovernance.pixivAccounts: Must be an object keyed by pixiv account id');
+      } else if (rg.pixivAccounts) {
+        for (const [accountId, profile] of Object.entries(rg.pixivAccounts)) {
+          if (!accountId.trim()) {
+            errors.push('schedulerRuntime.resourceGovernance.pixivAccounts: account ids must be non-empty');
+          }
+          if (profile === null || typeof profile !== 'object' || Array.isArray(profile)) {
+            errors.push(`schedulerRuntime.resourceGovernance.pixivAccounts.${accountId}: Must be an object`);
+            continue;
+          }
+          const max = (profile as { maxConcurrency?: unknown }).maxConcurrency;
+          if (max !== undefined && (!Number.isInteger(max) || (max as number) < 1 || (max as number) > 16)) {
+            errors.push(`schedulerRuntime.resourceGovernance.pixivAccounts.${accountId}.maxConcurrency: Must be an integer between 1 and 16`);
+          }
+        }
+      }
+    }
   }
 
   // Validate download config

@@ -220,6 +220,64 @@ export class SchedulerCommand extends BaseCommand {
                 ? { requestId, slotId: slot.id, state: cell.status, slotStatus: slot.status }
                 : null;
             },
+            /**
+             * Manual recovery of a FAILED target (§manual-recovery). Distinct
+             * from refetch: there is no review chain to replace and no
+             * replacement payload — the target is simply re-acquired under a
+             * server-defined policy preset, and its outcome is reported through
+             * the ordinary schedule-outcome channel so the automatic history is
+             * never rewritten.
+             */
+            recover: async (targetId, requestId, retryMode, correlationId) => {
+              const cfg = resolveConfig();
+              const plans = (cfg.schedules ?? []).filter((plan) =>
+                plan.enabled !== false && selectScheduleTargets(cfg.targets, plan).some((target) => target.id === targetId)
+              );
+              if (plans.length === 0) throw new Error('unknown target');
+              if (plans.length !== 1) throw new Error('ambiguous target');
+              const plan = plans[0];
+              const target = selectScheduleTargets(cfg.targets, plan).find((item) => item.id === targetId)!;
+              const deliveryName = target.delivery?.target;
+              const delivery = deliveryName ? cfg.delivery?.targets?.[deliveryName] : undefined;
+              if (delivery?.type !== 'httpMultipart' || !delivery.scheduleOutcomeUrl?.trim()) {
+                throw new Error('schedule outcome endpoint not configured');
+              }
+              const now = new Date();
+              const date = new Intl.DateTimeFormat('en-CA', {
+                timeZone: plan.timezone ?? 'UTC', year: 'numeric', month: '2-digit', day: '2-digit',
+              }).format(now);
+              const slot = {
+                slotId: `${plan.id}@recover-${requestId.toLowerCase()}`,
+                scheduleId: plan.id,
+                occurrenceAt: now.getTime(),
+                occurrenceDate: date,
+                occurrenceLabel: 'manual',
+                timezone: plan.timezone ?? 'UTC',
+                triggerSource: 'manual' as const,
+                slotName: retryMode === 'relaxed' ? '手动恢复（放宽条件重试）' : '手动恢复（再试一次）',
+                slotDate: date,
+                recoveryRequestId: requestId,
+                recoveryMode: retryMode,
+                correlationId: correlationId || undefined,
+              };
+              const existing = runtime.database.slots.getSlot(slot.slotId);
+              if (existing && (existing.scheduleId !== plan.id || existing.targetIds.length !== 1 || existing.targetIds[0] !== targetId)) {
+                throw new Error('ambiguous target');
+              }
+              const prepared = coordinator.prepare(slot, plan, [target]);
+              if (prepared.alreadyCompleted) return { slotId: slot.slotId, disposition: 'already_completed' };
+              // Same resource admission as every other Pixiv-consuming work
+              // item: a busy account queues this run, it does not fail it.
+              const started = manager.triggerSchedule(plan.id, { slot, onlyTarget: targetId, triggerSource: 'manual' });
+              return { slotId: slot.slotId, disposition: started ? 'accepted' : 'queued' };
+            },
+            recoverStatus: (targetId, requestId) => {
+              const slot = runtime.database.slots.findRecoverySlot(requestId, targetId);
+              const cell = slot && runtime.database.slots.getCell(slot.id, targetId);
+              return slot && cell
+                ? { requestId, slotId: slot.id, state: cell.status, slotStatus: slot.status }
+                : null;
+            },
             status: (scheduleId) => {
               const cfg = resolveConfig();
               const plan = findPlan(cfg, scheduleId);
@@ -277,6 +335,10 @@ export class SchedulerCommand extends BaseCommand {
               // Second belt: never exit underneath an in-flight slot execution
               // even if a durable row ever looks a beat early (§idle-inflight).
               activeExecutions: runtime.activeExecutionCount(),
+              // Third belt: work parked waiting for resource capacity is
+              // unfinished work (§resource-governance) — a queued run must not
+              // let the machine stop before it runs.
+              waitingForResource: manager.waitingWorkCount(),
             };
           },
           idleGraceMs: scheduling.idleGraceMs,

@@ -324,6 +324,95 @@ describe('trigger endpoint auth + dispatch (live ephemeral express)', () => {
   });
 });
 
+describe('manual recovery endpoint (§manual-recovery)', () => {
+  it('admits a recovery with a named policy preset and reports the mode', async () => {
+    const requestId = '6eb50329-20f2-4ea7-b95b-e4676b50d9f1';
+    const recover = jest.fn(async () => ({ slotId: 'recover-slot', disposition: 'accepted' }));
+    const { base, close } = await boot('schedule-token', handlers({ recover }), 'refetch-token');
+    try {
+      const relaxed = await fetch(`${base}/internal/targets/target-a/recover`, {
+        method: 'POST',
+        headers: { Authorization: 'Bearer refetch-token', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requestId, retryMode: 'relaxed', correlationId: 'schedule-x' }),
+      });
+      expect(relaxed.status).toBe(202);
+      const body = (await relaxed.json()) as { status?: string; retryMode?: string };
+      expect(body.status).toBe('accepted');
+      expect(body.retryMode).toBe('relaxed');
+      expect(recover).toHaveBeenCalledWith('target-a', requestId, 'relaxed', 'schedule-x');
+
+      // No retryMode => the server defaults to the 'normal' preset.
+      const normal = await fetch(`${base}/internal/targets/target-a/recover`, {
+        method: 'POST',
+        headers: { Authorization: 'Bearer refetch-token', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requestId: '7eb50329-20f2-4ea7-b95b-e4676b50d9f1' }),
+      });
+      expect(normal.status).toBe(202);
+      expect(recover).toHaveBeenLastCalledWith(
+        'target-a', '7eb50329-20f2-4ea7-b95b-e4676b50d9f1', 'normal', undefined
+      );
+    } finally {
+      close();
+    }
+  });
+
+  it('rejects raw acquisition parameters and bad request ids before admission', async () => {
+    const recover = jest.fn(async () => ({ slotId: 's', disposition: 'accepted' }));
+    const { base, close } = await boot('schedule-token', handlers({ recover }), 'refetch-token');
+    try {
+      const badMode = await fetch(`${base}/internal/targets/target-a/recover`, {
+        method: 'POST',
+        headers: { Authorization: 'Bearer refetch-token', 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          requestId: '6eb50329-20f2-4ea7-b95b-e4676b50d9f1',
+          retryMode: 'lookbackDays=30&scanCap=500', // client-supplied tuning attempt
+        }),
+      });
+      expect(badMode.status).toBe(400);
+
+      const badId = await fetch(`${base}/internal/targets/target-a/recover`, {
+        method: 'POST',
+        headers: { Authorization: 'Bearer refetch-token', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ retryMode: 'relaxed', requestId: 'not-a-uuid' }),
+      });
+      expect(badId.status).toBe(400);
+      expect(recover).not.toHaveBeenCalled();
+    } finally {
+      close();
+    }
+  });
+
+  it('serves recovery status only with the manual-work token', async () => {
+    const requestId = '6eb50329-20f2-4ea7-b95b-e4676b50d9f1';
+    const recoverStatus = jest.fn((targetId: string, id: string) =>
+      targetId === 'target-a' && id === requestId
+        ? { requestId: id, slotId: 'recover-slot', state: 'submitted', slotStatus: 'success' }
+        : null
+    );
+    const { base, close } = await boot('schedule-token', handlers({ recoverStatus }), 'refetch-token');
+    try {
+      const ok = await fetch(`${base}/internal/targets/target-a/recover/${requestId}`, {
+        headers: { Authorization: 'Bearer refetch-token' },
+      });
+      expect(ok.status).toBe(200);
+      const body = (await ok.json()) as { state?: string };
+      expect(body.state).toBe('submitted');
+
+      const wrongToken = await fetch(`${base}/internal/targets/target-a/recover/${requestId}`, {
+        headers: { Authorization: 'Bearer schedule-token' },
+      });
+      expect(wrongToken.status).toBe(401);
+
+      const unknown = await fetch(`${base}/internal/targets/target-a/recover/7eb50329-20f2-4ea7-b95b-e4676b50d9f1`, {
+        headers: { Authorization: 'Bearer refetch-token' },
+      });
+      expect(unknown.status).toBe(404);
+    } finally {
+      close();
+    }
+  });
+});
+
 /**
  * Admission observability: every request outcome must leave exactly one
  * structured line, and the HTTP status the clock sees must match the `event` an

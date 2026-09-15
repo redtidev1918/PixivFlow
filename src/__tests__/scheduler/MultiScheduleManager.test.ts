@@ -103,4 +103,44 @@ describe('multi schedule configuration', () => {
     manager.stop();
     broken.stop();
   });
+
+  it('applies ONE resource capacity to every schedule sharing the same account (§resource-governance)', async () => {
+    const config = makeConfig({
+      pixiv: { ...makeConfig().pixiv, accountId: 'default' },
+      schedulerRuntime: {
+        watchConfig: false,
+        queueLimit: 8,
+        resourceGovernance: { pixivAccounts: { default: { maxConcurrency: 1 } } },
+      },
+    });
+    const gate: Array<() => void> = [];
+    const started: string[] = [];
+    const execute = jest.fn(async (_cfg: StandaloneConfig, schedule: { id: string }) => {
+      started.push(schedule.id);
+      await new Promise<void>((resolve) => gate.push(resolve));
+    });
+    const manager = new MultiScheduleManager({
+      configPath: '/tmp/not-watched.json',
+      loadConfig: () => config,
+      execute,
+    });
+    manager.start(config);
+
+    // bot1 and bot2 fire "at the same time"; they are different schedules but
+    // consume the SAME Pixiv account, so capacity 1 must serialize them.
+    expect(manager.triggerSchedule('bot1', { triggerSource: 'http' })).toBe(true);
+    expect(manager.triggerSchedule('bot2', { triggerSource: 'http' })).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(started).toEqual(['bot1']);
+    expect(manager.waitingWorkCount()).toBe(1);
+
+    gate[0]();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(started).toEqual(['bot1', 'bot2']);
+    expect(manager.waitingWorkCount()).toBe(0);
+
+    gate[1]();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    manager.stop();
+  });
 });

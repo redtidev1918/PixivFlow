@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.21.0](https://github.com/redtidev1918/PixivFlow/compare/v2.20.5...v2.21.0) (2026-09-15)
+
+
+### Features
+
+* **resource-governance:** resource-scoped admission, terminal reasons, manual recovery ([#90](https://github.com/redtidev1918/PixivFlow/issues/90)) ([184a735](https://github.com/redtidev1918/PixivFlow/commit/184a735a75d5340f3681618efa7cd23913b1ac93))
+
+
+### Bug Fixes
+
+* postRelease deploy-docs dispatches on default branch (Pages needs branch ref) ([e2fd564](https://github.com/redtidev1918/PixivFlow/commit/e2fd564818b03b314cfca9bb43980968fdb8e5ae))
+* workflow_dispatch inputs must not carry description (GitHub dispatch 422) ([e295c6d](https://github.com/redtidev1918/PixivFlow/commit/e295c6d6cda6506154cf41688599b0f9ffcc7b09))
+
 ## [2.20.5](https://github.com/redtidev1918/PixivFlow/compare/v2.20.4...v2.20.5) (2026-09-15)
 
 

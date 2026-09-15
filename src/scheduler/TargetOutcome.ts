@@ -429,10 +429,12 @@ export type TerminalReasonCode =
   | 'filter_exhausted'
   | 'download_timeout'
   | 'download_failed'
+  | 'metadata_failed'
   | 'rate_limited'
   | 'auth_failed'
   | 'remote_http_error'
   | 'delivery_failed'
+  | 'telepost_rejected'
   | 'telegram_failed'
   | 'network_error'
   | 'execution_timeout'
@@ -452,10 +454,12 @@ export const TERMINAL_REASON_MESSAGES: Record<TerminalReasonCode, string> = {
   filter_exhausted: '没有符合筛选条件的新作品',
   download_timeout: '图片下载超时',
   download_failed: '图片下载失败',
+  metadata_failed: '作品信息获取失败',
   rate_limited: 'Pixiv 请求频率受限',
   auth_failed: 'Pixiv 登录已失效，需要重新登录',
   remote_http_error: 'Pixiv 服务器返回错误',
   delivery_failed: '投稿投递失败',
+  telepost_rejected: '投稿被接收端拒绝',
   telegram_failed: 'Telegram 发送失败',
   network_error: '网络异常',
   execution_timeout: '执行超时',
@@ -549,6 +553,18 @@ function classifyFailedReason(message: string, scan?: CandidateScanSummary): Ter
   // fixes configuration, not the upstream.
   if (/not configured|missing (?:config|configuration|setting)|invalid config/i.test(text)) {
     return { code: 'configuration_error', message: TERMINAL_REASON_MESSAGES.configuration_error };
+  }
+  // A candidate's metadata could not be gathered/parsed: this is its own root
+  // cause (config is fine; the upstream work was unreadable), so it must not
+  // fall through to internal_error or configuration_error.
+  if (/\bmetadata\b.{0,60}\b(?:fail|error|unable|invalid|parse|serialize|gather)\b|failed to (?:gather|parse|fetch|load|save)\b.{0,40}\bmetadata\b/i.test(text)) {
+    return { code: 'metadata_failed', message: TERMINAL_REASON_MESSAGES.metadata_failed };
+  }
+  // TelePost (or any theme/review submission endpoint) explicitly rejected the
+  // work with a client-side / payload verdict. This is not a delivery outage
+  // (5xx/unreachable — handled above) nor a generic delivery failure.
+  if (/\btele[ _-]?post\b[^.\n]{0,60}\b(?:reject|invalid|4\d\d)\b/i.test(text)) {
+    return { code: 'telepost_rejected', message: TERMINAL_REASON_MESSAGES.telepost_rejected };
   }
   if (/delivery|submit(?:t?ed)?|publish|post|outbox/i.test(text)) {
     return { code: 'delivery_failed', message: TERMINAL_REASON_MESSAGES.delivery_failed };

@@ -18,6 +18,7 @@ permissions:
   contents: write
   pull-requests: write
   packages: write
+  actions: write # post-release actions dispatch workflow_dispatch
   id-token: write
   # releasegraph's reusable workflow (v1, "provider reconciliation") labels the
   # release PR while reconciling provider state. A called workflow can never
@@ -27,7 +28,7 @@ permissions:
 
 jobs:
   release:
-    uses: redtidev1918/releasegraph/.github/workflows/reusable-release.yml@d6d0bbec4e37bec025ab13de1783d4af96d6f925 # ReleaseGraph v1.4.8
+    uses: redtidev1918/releasegraph/.github/workflows/reusable-release.yml@4e2fde5ed6398ef34c5469c16fe66e44d61c51f5 # ReleaseGraph v1.5.2
     with:
       version: ${{ inputs.version || '' }}
       dry_run: ${{ github.event_name == 'pull_request' || inputs.dry_run || false }}

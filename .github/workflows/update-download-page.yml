@@ -1,18 +1,49 @@
 # docsite-managed-file: update-download-page.yml
-# docsite-managed-version: 1
+# docsite-managed-version: 2
 # docsite: managed file, run `python3 docsite.py update` to refresh.
-# 每次发版后刷新下载页：docs/download.md（中）与 docs/en/download.md（英）。
 #
-# 不写死分支：检出仓库默认分支，保证 Release 事件下也把提交落到主干。
+# 刷新下载页（docs/download.md 与语言镜像），并显式重建 Pages 文档站。
+#
+# 触发方式（按优先级）：
+#   1. workflow_call / workflow_dispatch：传入精确 tag（ReleaseGraph post-release action 的入口）
+#   2. release: published：手工发布或使用 PAT/App 创建的 Release 的兜底（exact tag 取自事件）
+#      —— GITHUB_TOKEN 创建的 Release 不会触发该事件；那种情况必须走入口 1。
+#   3. 不传 tag 时生成器回落到最新 stable Release，并在日志中明确说明。
+#
+# 注意：本 workflow 的 commit 由 GITHUB_TOKEN 推送，push 事件不会再次触发 Pages 部署，
+# 因此提交成功后会显式 dispatch 文档站 workflow（默认 docs.yml，可在
+# .github/scripts/download-page.json 的 docsWorkflow 覆盖）。
 name: Update download page
 
 on:
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        required: false
+        description: Exact release tag to render (default: latest stable)
+      deploy-docs:
+        type: boolean
+        required: false
+        default: true
+        description: Also dispatch the Pages workflow after the commit. ReleaseGraph post-release actions set this to false and deploy docs as their own action.
+  workflow_dispatch:
+    inputs:
+      tag:
+        type: string
+        required: false
+        description: Exact release tag to render (default: latest stable)
+      deploy-docs:
+        type: boolean
+        required: false
+        default: true
+        description: Also dispatch the Pages workflow after the commit
   release:
     types: [published]
-  workflow_dispatch:
 
 permissions:
   contents: write
+  actions: write # 显式 dispatch 文档站 workflow（GITHUB_TOKEN 的 push 不会触发 push 型 workflow）
 
 concurrency:
   group: update-download-page
@@ -21,24 +52,60 @@ concurrency:
 jobs:
   update:
     runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.commit.outputs.changed }}
+      tag: ${{ steps.render.outputs.tag }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.repository.default_branch }}
 
+      - name: Resolve exact tag
+        id: resolve
+        run: |
+          EXACT="${{ inputs.tag || github.event.release.tag_name }}"
+          if [ -n "$EXACT" ]; then
+            echo "tag=$EXACT" >> "$GITHUB_OUTPUT"
+            echo "source=explicit"
+          else
+            echo "source=latest-stable"
+          fi
+
       - name: Regenerate download pages
+        id: render
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python3 .github/scripts/update_download_page.py "${{ github.repository }}"
+        run: |
+          TAG="${{ steps.resolve.outputs.tag }}"
+          ARGS=""
+          if [ -n "$TAG" ]; then
+            ARGS="--tag $TAG"
+          fi
+          python3 .github/scripts/update_download_page.py "${{ github.repository }}" $ARGS
+          echo "tag=${TAG:-latest}" >> "$GITHUB_OUTPUT"
 
       - name: Commit if changed
+        id: commit
         run: |
           if [ -z "$(git status --porcelain)" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
             echo "download page already up to date"
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/download.md docs/en/download.md
-          git commit -m "docs: refresh download page (${{ github.event.release.tag_name || 'manual' }})"
+          git add docs/
+          git commit -m "docs: refresh download page (${{ steps.render.outputs.tag }})"
           git push
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Rebuild docs site (explicit dispatch)
+        if: steps.commit.outputs.changed == 'true' && inputs.deploy-docs != false
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          WORKFLOW="docs.yml"
+          if [ -f .github/scripts/download-page.json ]; then
+            WORKFLOW="$(python3 -c 'import json,sys;print(json.load(open(".github/scripts/download-page.json")).get("docsWorkflow","docs.yml"))' 2>/dev/null || echo docs.yml)"
+          fi
+          gh workflow run "$WORKFLOW" --ref "${{ github.event.repository.default_branch }}"

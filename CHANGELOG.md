@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.22.0](https://github.com/redtidev1918/PixivFlow/compare/v2.21.0...v2.22.0) (2026-09-15)
+
+
+### Features
+
+* **scheduler:** add metadata_failed and telepost_rejected terminal reasons ([#92](https://github.com/redtidev1918/PixivFlow/issues/92)) ([2063328](https://github.com/redtidev1918/PixivFlow/commit/206332808b94e6dfad9efdff64f1af385a111bb5))
+
 ## [2.21.0](https://github.com/redtidev1918/PixivFlow/compare/v2.20.5...v2.21.0) (2026-09-15)
 
 

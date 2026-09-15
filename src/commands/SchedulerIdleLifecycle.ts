@@ -45,6 +45,15 @@ export interface IdleSnapshot {
   processingOutbox: number;
   /** Undelivered outbox rows (pending, or waiting on a bounded retry backoff). */
   pendingOutbox: number;
+  /**
+   * In-process slot executions currently awaiting async work (candidate scan,
+   * download, delivery). This is a SECOND belt behind the durable ledger: even
+   * if a DB row is an instant ahead of its awaiting Promise (or a mis-write
+   * ever terminalized a row early), the idle detector must not exit underneath
+   * a live execution. In-memory only — a process crash still resumes from the
+   * durable slot/outbox rows.
+   */
+  activeExecutions: number;
 }
 
 /** True only when the worker has no work of any kind left. */
@@ -52,7 +61,8 @@ export function isIdle(snapshot: IdleSnapshot): boolean {
   return (
     snapshot.activeSlots === 0 &&
     snapshot.processingOutbox === 0 &&
-    snapshot.pendingOutbox === 0
+    snapshot.pendingOutbox === 0 &&
+    snapshot.activeExecutions === 0
   );
 }
 

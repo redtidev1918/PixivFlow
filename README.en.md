@@ -22,7 +22,9 @@ pixivflow --help
 ```
 
 For servers, prefer the Docker Compose setup described in
-[DOCKER.md](docs/DOCKER.md). To build from source:
+[DOCKER.md](docs/DOCKER.md). To compose PixivFlow with TelePost, use the optional
+[pixivflow-telepost-deploy](https://github.com/redtidev1918/pixivflow-telepost-deploy)
+deployment and operations kit. To build from source:
 
 ```bash
 git clone https://github.com/redtidev1918/PixivFlow.git
@@ -92,8 +94,10 @@ conflict.
 
 Each target can use `storageMode: "persistent"` (the default, keep files) or
 `storageMode: "cache"` (send files to a named delivery target and delete them
-only after success). The delivery layer is service-independent; this example
-merely translates an HTTP multipart submission API into configuration:
+only after success). The delivery layer is service-independent;
+[TelePost](https://github.com/redtidev1918/TelePost) and
+[telepress](https://github.com/redtidev1918/telepress) are example downstreams,
+not dependencies. This example merely translates an HTTP multipart submission API into configuration:
 
 ```json
 {

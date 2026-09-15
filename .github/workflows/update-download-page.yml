@@ -5,7 +5,7 @@
 # 刷新下载页（docs/download.md 与语言镜像），并显式重建 Pages 文档站。
 #
 # 触发方式（按优先级）：
-#   1. workflow_dispatch：传入精确 tag（ReleaseGraph post-release action 的入口）
+#   1. workflow_call / workflow_dispatch：传入精确 tag（ReleaseGraph post-release action 的入口）
 #   2. release: published：手工发布或使用 PAT/App 创建的 Release 的兜底（exact tag 取自事件）
 #      —— GITHUB_TOKEN 创建的 Release 不会触发该事件；那种情况必须走入口 1。
 #   3. 不传 tag 时生成器回落到最新 stable Release，并在日志中明确说明。
@@ -16,17 +16,24 @@
 name: Update download page
 
 on:
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        required: false
+      deploy-docs:
+        type: boolean
+        required: false
+        default: true
   workflow_dispatch:
     inputs:
       tag:
         type: string
         required: false
-        description: Exact release tag to render (default: latest stable)
       deploy-docs:
         type: boolean
         required: false
         default: true
-        description: Also dispatch the Pages workflow after the commit
   release:
     types: [published]
 

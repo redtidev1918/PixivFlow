@@ -33,7 +33,27 @@
     }
   },
   "release": {
-    "post_publish": "python3 .github/scripts/update_download_page.py && git config user.name github-actions[bot] && git config user.email 41898282+github-actions[bot]@users.noreply.github.com && git add docs/download.md docs/en/download.md && (git diff --cached --quiet || (git commit -m 'docs: update release download page' && git push))"
+    "postRelease": [
+      {
+        "id": "refresh-download-page",
+        "type": "github-workflow",
+        "required": true,
+        "workflow": "update-download-page.yml",
+        "inputs": {
+          "tag": "{{tag}}",
+          "deploy-docs": "false"
+        }
+      },
+      {
+        "id": "deploy-docs",
+        "type": "github-workflow",
+        "required": true,
+        "workflow": "static.yml",
+        "inputs": {
+          "tag": "{{tag}}"
+        }
+      }
+    ]
   },
   "retention": {
     "stable": 1,

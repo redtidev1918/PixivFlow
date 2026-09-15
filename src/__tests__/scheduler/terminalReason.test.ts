@@ -20,6 +20,11 @@ const SCAN = (skipped: Array<'duplicate' | 'deleted' | 'filtered' | 'access_deni
 });
 
 describe('terminalReasonFor', () => {
+  it('exposes metadata_failed and telepost_rejected in the taxonomy', () => {
+    expect(TERMINAL_REASON_MESSAGES).toHaveProperty('metadata_failed');
+    expect(TERMINAL_REASON_MESSAGES).toHaveProperty('telepost_rejected');
+  });
+
   it('has no terminal reason for successful or pending outcomes', () => {
     expect(terminalReasonFor({ kind: 'submitted', workId: '1', workType: 'illustration' })).toBeNull();
     expect(terminalReasonFor({ kind: 'stored', workId: '1', workType: 'novel' })).toBeNull();
@@ -71,6 +76,10 @@ describe('terminalReasonFor', () => {
     ['ECONNRESET while reading response', 'network_error'],
     ['missing configuration: delivery target not configured', 'configuration_error'],
     ['something entirely unexpected happened', 'internal_error'],
+    ['failed to parse metadata for work 42: unexpected JSON structure', 'metadata_failed'],
+    ['metadata gather failed for work 1234: no image urls', 'metadata_failed'],
+    ['TelePost rejected the work: invalid payload (HTTP 400)', 'telepost_rejected'],
+    ['TelePost returned 403: submission rejected', 'telepost_rejected'],
   ])('classifies %s as %s', (error, expected) => {
     const outcome: TargetOutcome = { kind: 'failed', retryable: false, error };
     expect(terminalReasonFor(outcome)?.code).toBe(expected);

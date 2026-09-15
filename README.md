@@ -2,41 +2,46 @@
 
 **语言 / Language:** 中文 · [English](README.en.md)
 
-Pixiv 批量下载与定时收集工具。支持插画和小说的批量下载、标签搜索、
-多维度筛选和 Cron 定时任务，提供命令行与 WebUI 两种使用方式。
-基于 TypeScript 和 Node.js，可在 Windows、macOS、Linux 及 Docker 中运行。
+**Pixiv 下载、筛选与自动收集工具。**
+
+可以直接下载单个 Pixiv 作品（插画、小说、动图），也可以按标签、热度、日期和收藏数
+批量筛选，并通过 scheduler 定时自动收集。结果既能永久保存在本地，也能按需通过 HTTP
+可靠交付给其他服务——下游是可选的，PixivFlow 自己就能跑完「发现 → 筛选 → 下载 → 保存」
+的完整链路。
 
 [![Version](https://img.shields.io/npm/v/pixivflow?style=flat-square)](https://www.npmjs.com/package/pixivflow)
 [![Node](https://img.shields.io/badge/Node.js-22.13%2B_LTS-green.svg?style=flat-square&logo=node.js)](https://nodejs.org/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](LICENSE)
 [![Documentation](https://img.shields.io/badge/Docs-redtidev1918.github.io-6366f1?style=flat-square)](https://redtidev1918.github.io/PixivFlow/)
 
-## 安装
+## 典型场景
+
+**1. 下载一个链接。** 直接粘贴任意 Pixiv 链接——插画、小说、系列、用户主页都能识别：
+
+```bash
+pixivflow download --url https://www.pixiv.net/artworks/123456789
+```
+
+**2. 按条件批量下载。** 在配置里定义要收集什么（标签、榜单、发布日期、收藏数下限），
+一次跑完；已下载的作品由 SQLite 记录并自动跳过，重复运行不会重复拉取。
+见[筛选与下载目标](#筛选与下载目标)。
+
+**3. 定时自动收集并交付。** 用 cron 长期挂机：定时发现、下载，再按需把内容投递给
+其他服务——对方确认收到后才删除本地副本。
+
+```text
+Pixiv ──► PixivFlow ──┬──► 本地永久保存（persistent）
+                      └──► HTTP 交付（cache）──► TelePost / 其他兼容服务
+```
+
+## 快速开始
 
 需要 Node.js 22.13 或更高版本；生产环境请使用仍受支持的 LTS。
-下载 Pixiv 动图（ugoira）还需要 `python3` 和 `ffmpeg`：程序按逐帧延迟合成循环 GIF，
-可直接交给 TelePost 作为动画发送。官方 Docker 镜像已包含两者，详见 [配置说明](docs/CONFIG.md#pixiv-动图ugoira)。
 
 ```bash
 npm install -g pixivflow
 pixivflow --help
 ```
-
-服务器部署见 [DOCKER.md](docs/DOCKER.md)。需要把 PixivFlow 与 TelePost 组合运行时，再使用
-[pixivflow-telepost-deploy](https://github.com/redtidev1918/pixivflow-telepost-deploy)；
-它是可选的部署与运维套件。
-从源码构建：
-
-```bash
-git clone https://github.com/redtidev1918/PixivFlow.git
-cd PixivFlow
-npm install
-npm run build
-```
-
-Termux / Android 环境见 [TERMUX_INSTALL.md](docs/TERMUX_INSTALL.md)。
-
-## 快速上手
 
 登录 Pixiv 账号（生成 OAuth 凭据，只需一次）：
 
@@ -58,14 +63,114 @@ pixivflow download
 pixivflow scheduler             # 按 cron 配置长期挂机自动收集
 ```
 
+不想手写配置？运行交互式向导 `pixivflow setup` 一步步生成。图形界面用
+`pixivflow webui`（前端见 [pixivflow-webui](https://github.com/redtidev1918/pixivflow-webui)）。
+
+下载 Pixiv 动图（ugoira）还需要 `python3` 和 `ffmpeg`：程序按逐帧延迟合成循环 GIF，
+可直接作为动画交付给下游。官方 Docker 镜像已包含两者，详见
+[配置说明](docs/CONFIG.md#pixiv-动图ugoira)。
+
+从源码构建：
+
+```bash
+git clone https://github.com/redtidev1918/PixivFlow.git
+cd PixivFlow
+npm install
+npm run build
+```
+
+Termux / Android 环境见 [TERMUX_INSTALL.md](docs/TERMUX_INSTALL.md)。
+
+## 筛选与下载目标
+
+在配置文件的 `targets` 中定义要收集的内容，多个条件可以组合：
+
+| 字段 | 说明 | 示例 |
+| --- | --- | --- |
+| `type` | 内容类型：`illustration` 或 `novel` | `illustration` |
+| `tag` | 搜索标签，支持多标签 OR | `"風景"` / `["水彩","厚涂"]` |
+| `limit` | 单次下载数量上限 | `20` |
+| `minBookmarks` | 最低收藏数 | `500` |
+| `startDate` / `endDate` | 发布日期范围 | `"2025-01-01"` |
+
+已下载的作品由 SQLite 数据库记录并自动跳过；文件存在但缺少记录时会自动补齐，
+两者互不冲突。`mode: "topic"` 的插画任务会保留一个有界热度候选池：同一发布日期
+重复执行时若第一名已经下载，会按热度自动递补下一部未下载作品，而不是空跑。
+
+## 本地留存与缓存交付
+
+每个 target（一个 tag / 计划）有两种保存方式：
+
+- **`persistent`（默认）**：下载后永久留在本地。
+- **`cache`**：下载后投给一个「交付目标」（比如投稿机器人），对方确认收到后才删本地文件，省磁盘。
+
+「交付目标」就是一段配置：告诉 PixivFlow 把文件 POST 到哪个地址、带哪些字段。
+它不绑定具体服务，可指向任意兼容的 HTTP 接口；
+[TelePost](https://github.com/redtidev1918/TelePost) 与
+[telepress](https://github.com/redtidev1918/telepress) 只是示例下游。示例：
+
+```json
+{
+  "delivery": {
+    "outboxRetryBaseMs": 300000,
+    "outboxRetryMaxMs": 21600000,
+    "targets": {
+      "sharing-api": {
+        "type": "httpMultipart",
+        "url": "https://your-domain.example/api/bot1/v1/submissions",
+        "readinessUrl": "https://your-domain.example/ready",
+        "notificationUrl": "https://your-domain.example/api/bot1/v1/notifications",
+        "headers": { "Authorization": "Bearer ${SHARING_TOKEN}" },
+        "fileField": "files",
+        "fields": { "title": "{{title}}" },
+        "success": { "statuses": [201], "jsonPath": "ok", "equals": true },
+        "arrayFormat": "comma",
+        "maxAttempts": 3,
+        "retryDelayMs": 2000
+      }
+    },
+    "deleteAfterDelivery": true
+  },
+  "targets": [
+    { "type": "illustration", "tag": "收藏", "storageMode": "persistent" },
+    {
+      "type": "illustration",
+      "tag": "更新",
+      "storageMode": "cache",
+      "delivery": {
+        "target": "sharing-api",
+        "fields": { "tags": ["公告", "更新"], "anonymous": false }
+      }
+    }
+  ]
+}
+```
+
+`headers`、`url` 和 `readinessUrl` 里可用 `${环境变量名}` 引用环境变量（Token 别写死进配置）。
+插画 cache 投递会在 multipart 的 `previews` 字段携带 Pixiv 的低分辨率预览（与 `files`
+一一对应），原图仍是权威素材；通用接收端可以忽略该可选字段。
+
+运维通知可直接把 `notificationUrl` 指向 [Apprise API](docs/APPRISE.md)，由 Apprise 统一发送
+Email、Telegram、Discord、ntfy 等渠道；PixivFlow 不实现这些通知协议。
+
+- 上面的 `url` 指向任意兼容的 HTTP 投稿接口；示例里用的是 TelePost 的
+  `/api/botN/v1/submissions`（把 `/gen_token` 得到的 `tp_...` 放进 `SHARING_TOKEN` 即可，
+  这是示例服务自己的鉴权方式）。
+- 同一目标也可指向 [telepress](https://github.com/redtidev1918/telepress) 的 `/publish/gallery`，
+  把插画自动发布成 Telegra.ph 相册，见 [CONFIG.md](docs/CONFIG.md) 的
+  「Telegraph（telegra.ph）相册上传」。
+
+## 自动化与可靠性
+
 ### 单进程多计划与配置热重载
 
 `schedules[]` 可以为不同 target 组设置各自的 Cron。所有计划由一个 Node
 进程托管，共享 Pixiv 客户端、SQLite 与文件服务；执行阶段使用有界串行队列，
 适合 512 MiB 小内存机器（实测：`topic` 发现/采集/下载全程在 256 MB cgroup 限制下
-稳定运行，峰值 RSS ≈ 106 MB、heapUsed ≈ 33 MB，无 OOM，见 [DOCKER.md](docs/DOCKER.md)）。配置文件默认被监听，SSH/同步工具替换文件后会先完整
-校验，再一次性替换全部调度项；无效 JSON、错误 Cron 或未知 target id 不会破坏
-当前运行中的计划。正在执行的任务继续使用旧快照，下一次任务使用新快照。
+稳定运行，峰值 RSS ≈ 106 MB、heapUsed ≈ 33 MB，无 OOM，见 [DOCKER.md](docs/DOCKER.md)）。
+配置文件默认被监听，SSH/同步工具替换文件后会先完整校验，再一次性替换全部调度项；
+无效 JSON、错误 Cron 或未知 target id 不会破坏当前运行中的计划。正在执行的任务
+继续使用旧快照，下一次任务使用新快照。
 
 ```json
 {
@@ -86,74 +191,7 @@ pixivflow scheduler             # 按 cron 配置长期挂机自动收集
 热重载。完整双 Bot 缓存投递模板见
 [`config/fly-two-bots.example.json`](config/fly-two-bots.example.json)。
 
-## 下载目标
-
-在配置文件的 `targets` 中定义要收集的内容，多个条件可以组合：
-
-| 字段 | 说明 | 示例 |
-| --- | --- | --- |
-| `type` | 内容类型：`illustration` 或 `novel` | `illustration` |
-| `tag` | 搜索标签，支持多标签 OR | `"風景"` / `["水彩","厚涂"]` |
-| `limit` | 单次下载数量上限 | `20` |
-| `minBookmarks` | 最低收藏数 | `500` |
-| `startDate` / `endDate` | 发布日期范围 | `"2025-01-01"` |
-
-已下载的作品由 SQLite 数据库记录并自动跳过；文件存在但缺少记录时会自动补齐，
-两者互不冲突。`mode: "topic"` 的插画任务会保留一个有界热度候选池：同一发布日期
-重复执行时若第一名已经下载，会按热度自动递补下一部未下载作品，而不是空跑。
-
-### 本地留存与缓存交付
-
-每个 target（一个 tag / 计划）有两种保存方式：
-
-- **`persistent`（默认）**：下载后永久留在本地。
-- **`cache`**：下载后投给一个「交付目标」（比如投稿机器人），对方确认收到后才删本地文件，省磁盘。
-
-「交付目标」就是一段配置：告诉 PixivFlow 把文件 POST 到哪个地址、带哪些字段。
-它不绑定具体服务，可指向任意兼容的 HTTP 接口；
-[TelePost](https://github.com/redtidev1918/TelePost) 与
-[telepress](https://github.com/redtidev1918/telepress) 只是示例下游。示例：
-
-```json
-{
-  "delivery": {
-    "outboxRetryBaseMs": 300000,
-    "outboxRetryMaxMs": 21600000,
-    "targets": {
-      "tg-example": {
-        "type": "httpMultipart",
-        "url": "https://your-domain.example/api/bot1/v1/submissions",
-        "readinessUrl": "https://your-domain.example/ready",
-        "notificationUrl": "https://your-domain.example/api/bot1/v1/notifications",
-        "headers": { "Authorization": "Bearer ${TG_SUBMIT_TOKEN}" },
-        "fileField": "files",
-        "fields": { "title": "{{title}}" },
-        "success": { "statuses": [201], "jsonPath": "ok", "equals": true },
-        "arrayFormat": "comma",
-        "maxAttempts": 3,
-        "retryDelayMs": 2000
-      }
-    },
-    "deleteAfterDelivery": true
-  },
-  "targets": [
-    { "type": "illustration", "tag": "收藏", "storageMode": "persistent" },
-    {
-      "type": "illustration",
-      "tag": "更新",
-      "storageMode": "cache",
-      "delivery": {
-        "target": "tg-example",
-        "fields": { "tags": ["公告", "更新"], "anonymous": false }
-      }
-    }
-  ]
-}
-```
-
-`headers`、`url` 和 `readinessUrl` 里可用 `${环境变量名}` 引用环境变量（Token 别写死进配置）。
-插画 cache 投递会在 multipart 的 `previews` 字段携带 Pixiv 的低分辨率预览（与 `files`
-一一对应），原图仍是权威素材；通用接收端可以忽略该可选字段。
+### 投递事务发件箱
 
 投递是**事务发件箱（SQLite outbox）**式的，at-least-once 执行、effectively-once
 可见效果：每个外部副作用（一次内容投递、一条通知）在 `outbox` 表落一行，带幂等键和
@@ -177,15 +215,9 @@ pixivflow outbox cancel <id>  # 只取消尚未执行的 row
 ```
 
 `run-once` 会重新执行下载计划，不等价于 outbox replay；不要手改 SQLite 的
-`next_attempt_at`。
-
-运维通知可直接把 `notificationUrl` 指向 [Apprise API](docs/APPRISE.md)，由 Apprise 统一发送
-Email、Telegram、Discord、ntfy 等渠道；PixivFlow 不实现这些通知协议。
-
-- 上面的示例是投稿给一个 HTTP 接口：把 `/gen_token` 得到的 `tp_...` 放进 `TG_SUBMIT_TOKEN` 即可（这是示例服务自己的鉴权方式）。
-- 同一目标也可指向 [telepress](https://github.com/redtidev1918/telepress) 的 `/publish/gallery`，把插画自动发布成 Telegra.ph 相册，见 [CONFIG.md](docs/CONFIG.md) 的「Telegraph（telegra.ph）相册上传」。
-
-不想手写配置？运行交互式向导 `pixivflow setup` 一步步生成。
+`next_attempt_at`。长期运行环境的体检与收敛用 `pixivflow doctor`（卡住的 slot/outbox
+租约、pending 投递、dead 行，`--repair` 收敛）与 `pixivflow reconcile`（把下游已确认的
+历史重复登记进投递账本，默认 dry-run）。
 
 ## 常用命令
 
@@ -195,6 +227,7 @@ Email、Telegram、Discord、ntfy 等渠道；PixivFlow 不实现这些通知协
 | `pixivflow download --url <url>` | 通过 URL 直接下载 |
 | `pixivflow random` | 随机下载热门作品 |
 | `pixivflow scheduler` | 启动定时任务 |
+| `pixivflow webui` | 启动 WebUI |
 | `pixivflow config` | 配置管理（查看 / 编辑 / 备份 / 恢复） |
 | `pixivflow status` | 下载统计与最近记录 |
 | `pixivflow health` | 健康检查：配置、目录可写性、连通性 |
@@ -209,6 +242,15 @@ Email、Telegram、Discord、ntfy 等渠道；PixivFlow 不实现这些通知协
 `tags discover` 会调用 Pixiv 标签联想接口，并抽样最近插画 / 小说统计共同出现的标签，结果缓存 7 天；它**不会**改动任何下载计划。确认候选后用 `tags apply` 显式选择，应用前会整份校验配置、自动备份并原子替换，运行中的 scheduler 经配置热重载生效。
 
 其他用法见 [USAGE.md](docs/USAGE.md)；从 v1 升级到 v2 见 [迁移指南](docs/MIGRATION.md)。
+
+## 部署
+
+- **Docker / 服务器长期挂机**：见 [DOCKER.md](docs/DOCKER.md)。
+- **Android / Termux**：见 [TERMUX_INSTALL.md](docs/TERMUX_INSTALL.md)。
+- **与 TelePost 组合部署**：PixivFlow 与 TelePost 都可以独立使用；只有当你希望把两者
+  组合成一套完整工作流时，才需要
+  [pixivflow-telepost-deploy](https://github.com/redtidev1918/pixivflow-telepost-deploy)
+  这个部署与运维套件。
 
 ## 文档
 
@@ -229,6 +271,17 @@ Email、Telegram、Discord、ntfy 等渠道；PixivFlow 不实现这些通知协
 | [ACKNOWLEDGMENTS](docs/ACKNOWLEDGMENTS.md) | 参考与致谢:灵感来源、核心依赖与规范声明 |
 
 English version: [README.en.md](README.en.md).
+
+## 相关项目
+
+PixivFlow 可以完全独立使用。下面是同一作者生态里与它相关的项目，以及各自负责什么：
+
+| 项目 | 是什么 | 什么时候需要 |
+| --- | --- | --- |
+| [TelePost](https://github.com/redtidev1918/TelePost) | Telegram 频道投稿、审核与自动化发布平台 | 想把下载结果投进 Telegram 频道、先人工审核再发布时，把它配成 delivery 下游即可。这只是可选组合，PixivFlow 不依赖它 |
+| [pixivflow-telepost-deploy](https://github.com/redtidev1918/pixivflow-telepost-deploy) | PixivFlow + TelePost 的部署与运维套件（Docker / VPS / 云平台） | 想一次性把上面两个项目部署并运维起来时。只跑 PixivFlow 不需要它 |
+| [pixivflow-webui](https://github.com/redtidev1918/pixivflow-webui) | PixivFlow 的 WebUI 前端 | 想用图形界面管理下载与计划 |
+| [pixiv-token-getter](https://github.com/redtidev1918/pixiv-token-getter) | PKCE OAuth 登录库与 CLI（`ptg`） | PixivFlow 的登录依赖；也可以单独用于获取 Pixiv token |
 
 ## 问题反馈
 

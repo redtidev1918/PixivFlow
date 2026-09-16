@@ -293,14 +293,13 @@ export class OutboxWorker {
       return 'done';
     } catch (error) {
       const message = redactError(error).slice(0, 1000);
-      const { errorClass } = classifyError(error);
+      const { errorClass, retryable } = classifyError(error);
 
-      // A local configuration error is deterministic: every attempt re-reads the
-      // same config, so retrying only parks the row in `retry_wait` until its
-      // attempt budget runs out. Dead-letter it now so it is visible instead.
-      if (errorClass === 'configuration_error') {
+      // Deterministic failures cannot improve under the same idempotent intent.
+      // Retrying them only leaves the owning Slot running until the budget expires.
+      if (!retryable) {
         this.database.outbox.markDead(row.id, message);
-        this.deadLetter(row, `${message} (configuration error)`, errorClass);
+        this.deadLetter(row, message, errorClass);
         return 'dead';
       }
 
@@ -375,8 +374,7 @@ export class OutboxWorker {
         this.onDeliveryTerminal?.(row.deliveryId, ack, payload);
         break;
       case 'permanent_failure':
-        // Deterministic rejection: still retry a couple times to survive a
-        // misconfigured blip, the outbox max-attempts then dead-letters it.
+        // Deterministic rejection: the same idempotent intent cannot recover.
         throw new Error(`permanent delivery failure: ${ack.error}`);
       case 'retryable_failure':
         throw new Error(`retryable delivery failure: ${ack.error}`);

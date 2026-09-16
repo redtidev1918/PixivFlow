@@ -47,6 +47,8 @@ PixivFlow 负责 Pixiv 认证、候选发现/排序/去重、下载、审核链�
 
 - business terminal > HTTP success：HTTP 2xx 但 remote 记录终态失败时，ledger
   记 failed，cell 终态 failed，绝不报 end-to-end success。
+- 接收端明确拒绝、无效 payload、重复冲突等 non-retryable ACK 必须首轮 dead-letter 并
+  收敛 owning cell；不得把确定性失败留在 `retry_wait`，拖住 Slot 与 idle shutdown。
 - 候选/去重/排序复用现有 topic resolver / scan / ranking / duplicate history，
   禁止写第二套搜索器；禁止突破 content policy、work type、topic 边界。
 

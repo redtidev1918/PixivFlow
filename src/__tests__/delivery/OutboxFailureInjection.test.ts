@@ -178,7 +178,7 @@ describe('OutboxWorker failure injection', () => {
     });
   });
 
-  it('permanent rejection retries up to maxAttempts then dead-letters and records failure', async () => {
+  it('permanent rejection dead-letters immediately and records failure', async () => {
     await withDb(async (db) => {
       const dispatcher = new FakeDispatcher(
         Array.from({ length: 3 }, () => async () => ({
@@ -198,15 +198,13 @@ describe('OutboxWorker failure injection', () => {
         deliveryId: delivery.id, payload: { files: [], context: { idempotencyKey: 'k-dead' } },
         maxAttempts: 3,
       });
-      // Each drain round processes the row once; retryBaseMs=0 keeps it due.
-      let deadCount = 0;
-      for (let i = 0; i < 3 && deadCount === 0; i++) {
-        deadCount = (await worker.drainOnce()).dead;
-      }
-      expect(deadCount).toBe(1);
+      const result = await worker.drainOnce();
+      expect(result).toMatchObject({ processed: 1, retried: 0, dead: 1 });
       expect(db.outbox.getByKey('delivery', 'k-dead')!.status).toBe('dead');
+      expect(db.outbox.getByKey('delivery', 'k-dead')!.attempts).toBe(1);
       expect(db.deliveries.getById('d-4')!.status).toBe('failed');
       expect(dead).toHaveLength(1);
+      expect(dispatcher.deliverCalls).toBe(1);
     });
   });
 

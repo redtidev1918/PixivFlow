@@ -7,6 +7,19 @@ endpoints. System failures (pixiv API, network, download, processing,
 delivery) are a separate set and must be monotone — it is illegal for a
 business no-content verdict to transition into `internal_error`.
 
+## Two dimensions — never conflate
+
+```text
+slot.status      = execution lifecycle (pending / running / success / partial / failed)
+business_status  = business result    (success / partial_success / no_candidate / duplicate_only / failed)
+```
+
+Rule (documented contract):
+
+> **禁止使用 `business_status` 驱动 scheduler 状态转换。**
+> `slot.status` 描述执行是否结束；`business_status` 描述业务结果。
+> 把 `duplicate_only` 当作失败去驱动调度/重试，会把正常空结果变成事故。
+
 ## Derived business status
 
 `classifySlotBusinessStatus` projects the durable terminal cell ledger into one
@@ -59,11 +72,27 @@ misleading `OperationCancelledError`/`internal_error`. See
 Admin still sees full stack / trace_id / pixiv_id / stage / retryable in logs and
 `system_errors`.
 
+## 告警规则（alertable）
+
+`alertable` 只在 `business_status === 'failed'` 为 true。监控只对 `failed`
+报警；`success / partial_success / duplicate_only / no_candidate` 都不是故障。
+
+| business_status | alertable | 说明 |
+| --- | --- | --- |
+| success | false | 正常 |
+| partial_success | false | 部分投递成功，其余为无内容（不报警） |
+| duplicate_only | false | 无新内容，业务正常 |
+| no_candidate | false | 无新内容，业务正常 |
+| failed | true | 含 pixiv/network/download/processing/delivery 失败 |
+
 ## Events
 
 - `candidate_exhaustion` (INFO): structured business event emitted when a
   scheduled target terminates `no_candidate`:
   `{stage, result, reason, searched, duplicates, filtered, attempted, slot_ids}`.
-- `schedule.outcome` adds `business_status` derived verdict.
+- `schedule.outcome` adds:
+  - `outcome_version: 1`（taxonomy version; bump when new business codes are added）
+  - `business_status` derived verdict
+  - `alertable: boolean`（only `failed` = system failure）
 - `system_errors` is reserved for SYSTEM failures; `duplicate_exhausted` /
   `no_candidate` are never recorded there as ERROR.

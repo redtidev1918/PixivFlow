@@ -23,6 +23,8 @@ export interface SlotBusinessCounts {
   submitted: number;
   no_match: number;
   duplicate: number;
+  /** Count of no_candidate cells whose terminal reason is duplicate_exhausted. */
+  duplicate_exhausted?: number;
   executor_failed: number;
   delivery_failed: number;
 }
@@ -31,13 +33,16 @@ export interface SlotBusinessCounts {
 export function classifySlotBusinessStatus(counts: SlotBusinessCounts): SlotBusinessStatus {
   const nonSubmitted = counts.total - counts.submitted;
   const systemFailed = counts.executor_failed > 0 || counts.delivery_failed > 0;
+  const allNoContentAsDuplicate =
+    counts.duplicate + (counts.duplicate_exhausted ?? 0) === nonSubmitted;
 
   if (counts.submitted > 0 && nonSubmitted === 0) return 'success';
   if (counts.submitted > 0) return 'partial_success';
   if (nonSubmitted === 0) return 'success'; // defensive: 0 targets / all submitted
   if (!systemFailed) {
-    // Every non-submitted cell was a business no-content verdict.
-    if (counts.duplicate === nonSubmitted) return 'duplicate_only';
+    // Every non-submitted cell was a BUSINESS no-content verdict; all of them
+    // came from already-delivered candidates => duplicate_only.
+    if (allNoContentAsDuplicate) return 'duplicate_only';
     return 'no_candidate';
   }
   return 'failed';
@@ -54,9 +59,9 @@ export function userMessageForSlotBusinessStatus(status: SlotBusinessStatus): st
     case 'partial_success':
       return '任务部分完成，部分内容已发布。';
     case 'no_candidate':
-      return '本轮没有找到符合条件的新作品，任务已正常结束。';
+      return '本轮没有发现新的可发布作品。任务已正常完成。';
     case 'duplicate_only':
-      return '本轮没有找到新的作品：搜索结果中的候选均已发布过。任务已正常结束。';
+      return '本轮没有发现新的可发布作品。任务已正常完成。';
     case 'failed':
       return '本轮任务遇到系统异常，请稍后重试或检查日志。';
   }

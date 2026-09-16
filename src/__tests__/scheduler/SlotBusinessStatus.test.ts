@@ -39,6 +39,6 @@ describe('SlotBusinessStatus taxonomy', () => {
   it('keeps internal error names out of user-facing copy', () => {
     const msg = userMessageForSlotBusinessStatus('duplicate_only');
     expect(msg).not.toMatch(/internal_error|OperationCancelledError|error/i);
-    expect(userMessageForSlotBusinessStatus('no_candidate')).toContain('任务已正常结束');
+    expect(userMessageForSlotBusinessStatus('no_candidate')).toContain('任务已正常完成');
   });
 });

@@ -6,7 +6,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { notifyScheduleFailure, runWithTimeout } from '../../commands/scheduler-runtime';
+import { isDuplicateOnlyDeadEnd, notifyScheduleFailure, runWithTimeout } from '../../commands/scheduler-runtime';
 import { Database } from '../../storage/Database';
 import { DeliveryDispatcher } from '../../delivery/DeliveryDispatcher';
 import { OutboxWorker } from '../../delivery/OutboxWorker';
@@ -100,4 +100,38 @@ it('notifies only the delivery targets assigned to the failed schedule', async (
     db.close();
     await rm(directory, { recursive: true, force: true });
   }
+});
+describe('isDuplicateOnlyDeadEnd', () => {
+  it('flags a scan that attempted nothing and only hit duplicates', () => {
+    expect(isDuplicateOnlyDeadEnd({
+      kind: 'no_candidate',
+      reason: 'all duplicates',
+      scan: {
+        bound: 0,
+        attempted: 0,
+        outages: [],
+        skipped: [
+          { code: 'duplicate', workId: '149654619', reason: 'already delivered' },
+          { code: 'duplicate', workId: '149638093', reason: 'already delivered' },
+        ],
+      },
+    })).toBe(true);
+  });
+
+  it('does not flag a scan that attempted candidates or hit a real skip', () => {
+    expect(isDuplicateOnlyDeadEnd({
+      kind: 'no_candidate',
+      reason: 'attempted',
+      scan: { bound: 1, attempted: 1, outages: [], skipped: [] },
+    })).toBe(false);
+    expect(isDuplicateOnlyDeadEnd({
+      kind: 'no_candidate',
+      reason: 'filtered',
+      scan: { bound: 2, attempted: 0, outages: [], skipped: [
+        { code: 'duplicate', workId: '1', reason: 'dup' },
+        { code: 'filtered', workId: '2', reason: 'lang' },
+      ] },
+    })).toBe(false);
+    expect(isDuplicateOnlyDeadEnd({ kind: 'failed', retryable: true, error: 'x' })).toBe(false);
+  });
 });

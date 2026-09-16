@@ -15,6 +15,7 @@ import {
   scheduleTimezone,
 } from './OccurrenceResolver';
 import { TERMINAL_REASON_MESSAGES, TargetOutcome, terminalReasonFor } from './TargetOutcome';
+import { SlotBusinessStatus, classifySlotBusinessStatus } from './SlotBusinessStatus';
 import { TargetExecutionContext, WorkBinding, isSingleWorkCell } from './WorkIdentity';
 
 /**
@@ -133,11 +134,17 @@ export interface ScheduleOutcomeCells {
  */
 export interface ScheduleOutcomeRecord {
   event: 'schedule.outcome';
+  /** Outcome taxonomy version; bump when business_status/reason gains codes. */
+  outcome_version: 1;
   schedule_id: string;
   slot_id: string;
   occurrence_at: string | undefined;
   occurrence_date: string;
   status: ScheduleOutcomeStatus;
+  /** Derived business verdict: success / partial_success / no_candidate / duplicate_only / failed. */
+  business_status: SlotBusinessStatus;
+  /** Monitoring gate: true only for system failures (business_status === 'failed'). */
+  alertable: boolean;
   /** From the slot row's own started_at/completed_at columns, when both exist. */
   duration_ms: number | undefined;
   cells: ScheduleOutcomeCells;
@@ -697,13 +704,26 @@ export class SlotCoordinator {
 
     const occurrenceAt = slotRec?.occurrenceAt ?? slot.occurrenceAt;
 
+    const businessStatus = classifySlotBusinessStatus({
+      total: cellRows.length,
+      submitted,
+      no_match,
+      duplicate,
+      duplicate_exhausted: targetsDetail.filter((t) => t.terminal_reason_code === 'duplicate_exhausted').length,
+      executor_failed,
+      delivery_failed,
+    });
+
     return {
       event: 'schedule.outcome',
+      outcome_version: 1,
       schedule_id: slotRec?.scheduleId ?? slot.scheduleId,
       slot_id: slot.slotId,
       occurrence_at: isoUtcOrUndefined(occurrenceAt),
       occurrence_date: slotRec?.occurrenceDate ?? slot.occurrenceDate,
       status: status as ScheduleOutcomeStatus,
+      business_status: businessStatus,
+      alertable: businessStatus === 'failed',
       duration_ms,
       cells: {
         total: cellRows.length,

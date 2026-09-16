@@ -389,6 +389,38 @@ describe('scheduler candidate scan: duplicate -> next candidate, never a complet
     }
   });
 
+  it('E2E: all-duplicate scheduled replays the 9/16 bot1 accident as duplicate_only, never internal_error', async () => {
+    const h = buildHarness({ candidates: [100, 101, 102], withSlot: true });
+    try {
+      h.markSubmitted('100', 'delivered');
+      h.markSubmitted('101', 'delivered');
+      h.markSubmitted('102', 'delivered');
+
+      const outcome = await h.handler.handle(h.target);
+      expect(outcome.kind).toBe('no_candidate');
+      expect(outcome.scan?.attempted).toBe(0);
+      expect(outcome.scan?.skipped.every((s) => s.code === 'duplicate')).toBe(true);
+      // No download entered the middle of the chain.
+      expect(h.downloader.downloadIllustration).not.toHaveBeenCalled();
+
+      h.applyOutcomeToSlot(outcome);
+      const summary = h.finishSlot();
+      expect(summary.cells[0].status).toBe('no_candidate');
+      expect(summary.cells[0].error).toMatch(/duplicate/);
+
+      // Durable schedule.outcome must project duplicate_only, never failed.
+      const ev = h.db.outbox.listEvents().find((e) => e.event === 'execution.summary');
+      expect(ev).toBeTruthy();
+      const detail = JSON.parse(ev!.detail ?? '{}') as { outcome?: { business_status?: string; alertable?: boolean; outcome_version?: number } };
+      expect(detail.outcome?.business_status).toBe('duplicate_only');
+      expect(detail.outcome?.business_status).not.toBe('failed');
+      expect(detail.outcome?.alertable).toBe(false);
+      expect(detail.outcome?.outcome_version).toBe(1);
+    } finally {
+      h.close();
+    }
+  });
+
   it('all candidates duplicates discovered post-download -> bounded scan, explicit outcome', async () => {
     const h = buildHarness({ candidates: [100, 101, 102], blindPlanner: true });
     try {

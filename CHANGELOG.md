@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.22.1](https://github.com/redtidev1918/PixivFlow/compare/v2.22.0...v2.22.1) (2026-09-16)
+
+
+### Bug Fixes
+
+* **delivery:** settle permanent rejections immediately ([#94](https://github.com/redtidev1918/PixivFlow/issues/94)) ([da6d199](https://github.com/redtidev1918/PixivFlow/commit/da6d19901e163fc27da7a51b7c87fbb25d87026b))
+
 ## [2.22.0](https://github.com/redtidev1918/PixivFlow/compare/v2.21.0...v2.22.0) (2026-09-15)
 
 

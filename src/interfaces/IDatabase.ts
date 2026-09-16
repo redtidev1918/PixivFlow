@@ -157,5 +157,15 @@ export interface IDatabase {
     oldPath: string,
     newPath: string
   ): number;
+
+  /**
+   * Durable system-error ledger (observability; never throws).
+   */
+  readonly systemErrors: {
+    record(input: import('../observability/types').SystemErrorInput): void;
+    list(opts?: Record<string, unknown>): import('../observability/types').SystemErrorRow[];
+    markResolved(id: number): { changes: number };
+    countSince(botId: string | null, hours: number): number;
+  };
 }
 

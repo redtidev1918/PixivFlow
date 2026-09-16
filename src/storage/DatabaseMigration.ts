@@ -219,6 +219,27 @@ export class DatabaseMigration {
             state TEXT NOT NULL,
             updated_at INTEGER NOT NULL
           )`,
+        // Durable error event ledger for observability (structured error
+        // taxonomy; populated by download/system handlers and shown in the
+        // admin API). Append-only until an operator marks a row resolved.
+        `CREATE TABLE IF NOT EXISTS system_errors (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            service TEXT NOT NULL DEFAULT 'pixivflow',
+            component TEXT,
+            bot_id TEXT,
+            schedule_id TEXT,
+            slot_id TEXT,
+            pixiv_id TEXT,
+            stage TEXT,
+            error_type TEXT NOT NULL,
+            message TEXT,
+            http_status INTEGER,
+            retryable INTEGER NOT NULL DEFAULT 0,
+            trace_id TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            resolved_at DATETIME
+          )`,
+        `CREATE INDEX IF NOT EXISTS idx_system_errors_bot_created ON system_errors(bot_id, created_at)`,
       ];
 
       // Phase 1: create tables (idempotent). Must run before any PRAGMA-based

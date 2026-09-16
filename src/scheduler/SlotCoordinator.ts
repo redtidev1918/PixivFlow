@@ -15,6 +15,7 @@ import {
   scheduleTimezone,
 } from './OccurrenceResolver';
 import { TERMINAL_REASON_MESSAGES, TargetOutcome, terminalReasonFor } from './TargetOutcome';
+import { SlotBusinessStatus, classifySlotBusinessStatus } from './SlotBusinessStatus';
 import { TargetExecutionContext, WorkBinding, isSingleWorkCell } from './WorkIdentity';
 
 /**
@@ -138,6 +139,8 @@ export interface ScheduleOutcomeRecord {
   occurrence_at: string | undefined;
   occurrence_date: string;
   status: ScheduleOutcomeStatus;
+  /** Derived business verdict: success / partial_success / no_candidate / duplicate_only / failed. */
+  business_status: SlotBusinessStatus;
   /** From the slot row's own started_at/completed_at columns, when both exist. */
   duration_ms: number | undefined;
   cells: ScheduleOutcomeCells;
@@ -697,6 +700,15 @@ export class SlotCoordinator {
 
     const occurrenceAt = slotRec?.occurrenceAt ?? slot.occurrenceAt;
 
+    const businessStatus = classifySlotBusinessStatus({
+      total: cellRows.length,
+      submitted,
+      no_match,
+      duplicate,
+      executor_failed,
+      delivery_failed,
+    });
+
     return {
       event: 'schedule.outcome',
       schedule_id: slotRec?.scheduleId ?? slot.scheduleId,
@@ -704,6 +716,7 @@ export class SlotCoordinator {
       occurrence_at: isoUtcOrUndefined(occurrenceAt),
       occurrence_date: slotRec?.occurrenceDate ?? slot.occurrenceDate,
       status: status as ScheduleOutcomeStatus,
+      business_status: businessStatus,
       duration_ms,
       cells: {
         total: cellRows.length,

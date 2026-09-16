@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.23.0](https://github.com/redtidev1918/PixivFlow/compare/v2.22.1...v2.23.0) (2026-09-16)
+
+
+### Features
+
+* **observability:** structured logs + error taxonomy + admin log/error API ([#97](https://github.com/redtidev1918/PixivFlow/issues/97)) ([1b98936](https://github.com/redtidev1918/PixivFlow/commit/1b989363f06515ae2afe4372104635a5113cde3b))
+
+
+### Bug Fixes
+
+* **scheduler:** terminalize duplicate-only no-candidate instead of burning fallback budget (bot1 9/16 RCA) ([#98](https://github.com/redtidev1918/PixivFlow/issues/98)) ([a3f10fd](https://github.com/redtidev1918/PixivFlow/commit/a3f10fd89549c5bdb80c90d5c42390d58d2d3eb2))
+
 ## [2.22.1](https://github.com/redtidev1918/PixivFlow/compare/v2.22.0...v2.22.1) (2026-09-16)
 
 

@@ -6,7 +6,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { isDuplicateOnlyDeadEnd, notifyScheduleFailure, runWithTimeout } from '../../commands/scheduler-runtime';
+import { candidateExhaustionDiagnostic, isDuplicateOnlyDeadEnd, notifyScheduleFailure, runWithTimeout } from '../../commands/scheduler-runtime';
 import { Database } from '../../storage/Database';
 import { DeliveryDispatcher } from '../../delivery/DeliveryDispatcher';
 import { OutboxWorker } from '../../delivery/OutboxWorker';
@@ -133,5 +133,51 @@ describe('isDuplicateOnlyDeadEnd', () => {
       ] },
     })).toBe(false);
     expect(isDuplicateOnlyDeadEnd({ kind: 'failed', retryable: true, error: 'x' })).toBe(false);
+  });
+});
+
+describe('candidateExhaustionDiagnostic', () => {
+  it('reports duplicate_exhausted with duplicate counts for a dead-end scan', () => {
+    const diag = candidateExhaustionDiagnostic({
+      kind: 'no_candidate',
+      reason: 'all duplicates',
+      scan: {
+        bound: 3,
+        attempted: 0,
+        outages: [],
+        skipped: [
+          { code: 'duplicate', workId: 'a', reason: 'dup' },
+          { code: 'duplicate', workId: 'b', reason: 'dup' },
+          { code: 'duplicate', workId: 'c', reason: 'dup' },
+        ],
+      },
+    });
+    expect(diag).toEqual({
+      stage: 'candidate_selection',
+      result: 'no_candidate',
+      reason: 'duplicate_exhausted',
+      searched: 3,
+      duplicates: 3,
+      filtered: 0,
+      attempted: 0,
+    });
+  });
+
+  it('reports filter_exhausted when non-duplicate skips dominate the interest', () => {
+    const diag = candidateExhaustionDiagnostic({
+      kind: 'no_candidate',
+      reason: 'filtered',
+      scan: {
+        bound: 2,
+        attempted: 0,
+        outages: [],
+        skipped: [
+          { code: 'duplicate', workId: 'a', reason: 'dup' },
+          { code: 'filtered', workId: 'b', reason: 'language filter' },
+        ],
+      },
+    });
+    expect(diag?.reason).toBe('filter_exhausted');
+    expect(diag?.filtered).toBe(1);
   });
 });

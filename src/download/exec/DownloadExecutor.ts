@@ -61,29 +61,38 @@ export class DownloadExecutor {
             ...(contextProvider?.(item, index) ?? {}),
           };
 
+          const itemId = (item as any)?.id ?? (item as any)?.pixivId ?? String(item);
+          logger.info('download_started', { pixiv_id: itemId, attempt, stage: 'download' });
           try {
             const res = await task(item, index);
+            logger.info('download_completed', { pixiv_id: itemId, attempt, stage: 'download' });
             results[index] = res;
             break;
           } catch (error) {
             onError?.(error, item, index, attempt);
             const decision = recovery.decide(error, effectiveContext);
             onDecision?.(decision, { item, index, attempt, error });
+            const status = (error as { status?: number })?.status;
+            const errMsg = error instanceof Error ? error.message : String(error);
             if (decision.action === 'skip') {
-              logger.warn(`Skipping item at index ${index} after attempt ${attempt}${decision.reason ? `: ${decision.reason}` : ''}`);
+              logger.warn(status ? `download_http_failed` : `download_failed`, {
+                pixiv_id: itemId, attempt, stage: 'download', http_status: status ?? null, error: errMsg,
+              });
               break;
             }
             if (decision.action === 'fail') {
+              logger.error(`download_failed`, { pixiv_id: itemId, attempt, stage: 'download', http_status: status ?? null, error: errMsg });
               throw error instanceof Error ? error : new Error(String(error));
             }
             // retry/backoff
             const delayMs = decision.delayMs ?? 0;
+            logger.warn(`download_retry`, { pixiv_id: itemId, attempt, stage: 'download', http_status: status ?? null, retry_delay_ms: delayMs, error: errMsg });
             if (delayMs > 0) {
               await new Promise((resolve) => setTimeout(resolve, delayMs));
             }
             attempt += 1;
             if (attempt > (decision.maxAttempts ?? maxAttempts)) {
-              logger.error(`Max attempts reached for item at index ${index}; failing`);
+              logger.error(`download_failed`, { pixiv_id: itemId, attempt, stage: 'download', http_status: status ?? null, error: errMsg });
               throw error instanceof Error ? error : new Error(String(error));
             }
           }

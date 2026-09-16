@@ -14,6 +14,7 @@ import { DeliveryRepository } from './repositories/DeliveryRepository';
 import { OutboxRepository } from './repositories/OutboxRepository';
 import { MetadataRepository } from './repositories/MetadataRepository';
 import { SQLiteRateLimitStateStore } from './repositories/RateLimitStateRepository';
+import { SystemErrorRepository } from './repositories/SystemErrorRepository';
 import { NodeSqliteDriver } from './drivers/NodeSqliteDriver';
 import type { SqliteDriver } from './drivers/SqliteDriver';
 
@@ -62,6 +63,7 @@ export class Database implements IDatabase {
   private outboxRepo: OutboxRepository;
   private metadataRepo: MetadataRepository;
   private rateLimitStateStore!: SQLiteRateLimitStateStore;
+  private systemErrorRepo!: SystemErrorRepository;
 
   constructor(private readonly databasePath: string) {
     try {
@@ -90,6 +92,7 @@ export class Database implements IDatabase {
       this.outboxRepo = new OutboxRepository(this.db);
       this.metadataRepo = new MetadataRepository(this.db);
       this.rateLimitStateStore = new SQLiteRateLimitStateStore(this.db);
+      this.systemErrorRepo = new SystemErrorRepository(this.db);
     } catch (error) {
       throw new DatabaseError(
         `Failed to initialize database at ${this.databasePath}`,
@@ -133,6 +136,11 @@ export class Database implements IDatabase {
   /** Persistent 429 gate state adapter for @redtidev/pixiv-client. */
   public get rateLimitState(): SQLiteRateLimitStateStore {
     return this.rateLimitStateStore;
+  }
+
+  /** Durable system-error ledger (observability; never throws). */
+  public get systemErrors(): SystemErrorRepository {
+    return this.systemErrorRepo;
   }
 
   /** Raw transactional boundary for atomic multi-table intents. */

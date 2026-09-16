@@ -176,7 +176,16 @@ export interface TriggerHandlers {
     retryMode: 'normal' | 'relaxed',
     correlationId?: string
   ): Promise<{ slotId: string; disposition: string }>;
-  recoverStatus?(targetId: string, requestId: string): { requestId: string; slotId: string; state: string; slotStatus: string } | null;
+  recoverStatus?(targetId: string, requestId: string): {
+    requestId: string;
+    slotId: string;
+    state: string;
+    slotStatus: string;
+    /** Recovery business outcome (recovery_success / no_candidate / duplicate_only / failed / running / pending). */
+    business_state?: string;
+    /** User-facing copy; never leaks internal error names. */
+    message?: string;
+  } | null;
 }
 
 export class ScheduleTriggerServer {

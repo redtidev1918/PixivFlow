@@ -290,6 +290,67 @@ function buildProxyUrl(network: StandaloneConfig['network']): string | undefined
 }
 
 /**
+ * A `no_candidate` scan that attempted nothing and whose only candidate skips
+ * are `duplicate` is a TRUE dead-end: every candidate the scan surfaced was
+ * already delivered, and nothing was attempted to be widened. Advancing the
+ * fallback stage for this would re-fetch the SAME stale duplicate pool with a
+ * wider bound and burn the whole scheduler budget again (the production bug
+ * that turned an empty day on bot1 into a 30-minute OperationCancelledError).
+ * Terminalise it immediately instead of entering the fallback re-run loop.
+ */
+export interface CandidateExhaustionDiagnostic {
+  stage: 'candidate_selection';
+  result: 'no_candidate';
+  reason: 'duplicate_exhausted' | 'filter_exhausted' | 'no_candidate';
+  searched: number;
+  duplicates: number;
+  filtered: number;
+  attempted: number;
+}
+
+/**
+ * Structured diagnostic for a terminal `no_candidate`: what the scan surfaced
+ * (`searched`), how many were already-delivered duplicates, how many were
+ * filtered by the run's own rules, and how many were actually attempted.
+ * Emitted as a JSON log so a Mini App can show "当天候选均已投稿" instead of
+ * treating the slot as a system failure.
+ */
+export function candidateExhaustionDiagnostic(
+  outcome: Extract<TargetOutcome, { kind: 'no_candidate' }>
+): CandidateExhaustionDiagnostic | null {
+  const scan = outcome.scan;
+  if (!scan) return null;
+  const skipped = scan.skipped;
+  const duplicates = skipped.filter((s) => s.code === 'duplicate').length;
+  const filtered = skipped.filter((s) => s.code !== 'duplicate' && s.code !== 'unavailable').length;
+  const reason: CandidateExhaustionDiagnostic['reason'] = isDuplicateOnlyDeadEnd(outcome)
+    ? 'duplicate_exhausted'
+    : filtered > 0
+      ? 'filter_exhausted'
+      : 'no_candidate';
+  return {
+    stage: 'candidate_selection',
+    result: 'no_candidate',
+    reason,
+    searched: skipped.length,
+    duplicates,
+    filtered,
+    attempted: scan.attempted,
+  };
+}
+
+export function isDuplicateOnlyDeadEnd(outcome: TargetOutcome): boolean {
+  if (outcome.kind !== 'no_candidate' || !outcome.scan) return false;
+  const s = outcome.scan;
+  return (
+    s.attempted === 0 &&
+    s.outages.length === 0 &&
+    s.skipped.length > 0 &&
+    s.skipped.every((skip) => skip.code === 'duplicate')
+  );
+}
+
+/**
  * Expanded, still-bounded candidate scan bound for one fallback stage
  * (§schedule-recovery). Stage 0 is the primary pass; stage N scans
  * `base * (N + 1)` candidates, hard-capped so a fallback can never become an
@@ -661,7 +722,8 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
       // "target did not complete".
       if (
         !scheduleSlot.manualRequestId &&
-        (outcome.kind === 'no_candidate' || outcome.kind === 'duplicate') &&
+        (outcome.kind === 'duplicate' ||
+          (outcome.kind === 'no_candidate' && !isDuplicateOnlyDeadEnd(outcome))) &&
         coordinator.cellFallbackStage(scheduleSlot.slotId, target.id) < maxFallbackStages - 1
       ) {
         coordinator.advanceFallback(
@@ -673,6 +735,18 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
           maxFallbackStages
         );
         return;
+      }
+      if (outcome.kind === 'no_candidate') {
+        const diag = candidateExhaustionDiagnostic(outcome);
+        if (diag) {
+          logger.info('candidate_exhaustion', {
+            schedule_id: scheduleSlot.scheduleId,
+            slot_id: scheduleSlot.slotId,
+            bot_id: scheduleSlot.scheduleId?.split('-')[0],
+            target_id: target.id,
+            ...diag,
+          });
+        }
       }
       coordinator.applyOutcome(scheduleSlot.slotId, target.id, outcome);
       notificationPolicy.noteOutcome(scheduleSlot.slotId, scheduleSlot, schedule, target, outcome);

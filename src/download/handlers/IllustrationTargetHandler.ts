@@ -25,6 +25,8 @@ import { TargetExecutionContext, isSingleWorkCell } from '../../scheduler/WorkId
 import type { DownloadedArtifact } from '../../delivery/types';
 import type { TopicPipelineFactory } from '../../topic/createTopicPipeline';
 import { getTargetLabel } from '../../utils/target-label';
+import { recordSystemError, classifySystemError } from '../../observability';
+import { targetErrorContext } from '../../observability/context';
 import { resolveCandidateScanLimit } from '../plan/DownloadPlanner';
 import { deliveryContextFields } from './deliveryContext';
 
@@ -184,6 +186,13 @@ export class IllustrationTargetHandler {
   private classifyError(error: unknown, displayTag: string, mode: string, target: TargetConfig): TargetOutcome {
     const message = error instanceof Error ? error.message : String(error);
     const scan = this.scan ?? undefined;
+    const cls = classifySystemError(error, (error as { status?: number }).status, 'pixiv_download');
+    recordSystemError(this.database, targetErrorContext(target, this.execution, {
+      message,
+      stage: 'pixiv_download',
+      ...cls,
+      trace_id: this.execution?.slotId,
+    }), cls);
     // A hard job-level outage is named as such and is never recorded as a
     // no-candidate business outcome, whatever its message happens to look like.
     const outage = classifyJobLevelOutage(error);
@@ -191,6 +200,8 @@ export class IllustrationTargetHandler {
     logger.error(`Illustration ${mode === 'ranking' ? 'ranking' : 'tag'} ${displayTag} failed`, {
       error: message,
       errorType: error instanceof Error ? error.constructor.name : typeof error,
+      error_type: cls.error_type,
+      retryable: cls.retryable,
       ...(outage ? { jobLevelOutage: outage } : {}),
     });
     if (outage) {
@@ -625,9 +636,17 @@ export class IllustrationTargetHandler {
       errorMessage = `${errorMessage} [URL: ${endpoint}]`;
     }
 
+    const cls = classifySystemError(error, (error as { status?: number }).status, 'pixiv_download');
+    recordSystemError(this.database, targetErrorContext(
+      { type: 'illustration' } as TargetConfig,
+      this.execution,
+      { message: errorMessage, stage: 'pixiv_download', ...cls, trace_id: this.execution?.slotId }
+    ), cls);
     logger.error(message, {
       error: errorMessage,
       errorType: error instanceof Error ? error.constructor.name : typeof error,
+      error_type: cls.error_type,
+      retryable: cls.retryable,
       stack: error instanceof Error ? error.stack : undefined,
     });
   }

@@ -11,6 +11,7 @@ import { ScheduleTriggerServer, TriggerRunResult } from '../scheduler/ScheduleTr
 import { SlotCoordinator } from '../scheduler/SlotCoordinator';
 import { selectScheduleTargets } from '../scheduler/schedules';
 import { createSchedulerRuntime } from './scheduler-runtime';
+import { recoveryOutcomeFor, recoveryUserMessage } from '../scheduler/RecoveryOutcome';
 import { SchedulerIdleLifecycle } from './SchedulerIdleLifecycle';
 
 /**
@@ -274,9 +275,16 @@ export class SchedulerCommand extends BaseCommand {
             recoverStatus: (targetId, requestId) => {
               const slot = runtime.database.slots.findRecoverySlot(requestId, targetId);
               const cell = slot && runtime.database.slots.getCell(slot.id, targetId);
-              return slot && cell
-                ? { requestId, slotId: slot.id, state: cell.status, slotStatus: slot.status }
-                : null;
+              if (!slot || !cell) return null;
+              const businessState = recoveryOutcomeFor(cell);
+              return {
+                requestId,
+                slotId: slot.id,
+                state: cell.status,
+                slotStatus: slot.status,
+                business_state: businessState,
+                message: recoveryUserMessage(businessState),
+              };
             },
             status: (scheduleId) => {
               const cfg = resolveConfig();

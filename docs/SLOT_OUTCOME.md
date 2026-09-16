@@ -96,3 +96,27 @@ Admin still sees full stack / trace_id / pixiv_id / stage / retryable in logs an
   - `alertable: boolean`（only `failed` = system failure）
 - `system_errors` is reserved for SYSTEM failures; `duplicate_exhausted` /
   `no_candidate` are never recorded there as ERROR.
+
+## Manual recovery outcome (「放宽条件重试」)
+
+A manual recovery (`POST /internal/targets/:targetId/recover`) opens a dedicated
+`<schedule>@recover-<requestId>` slot and reports through the normal
+`schedule-outcome` channel. The recovery business verdict is NOT the raw cell
+status — the UI (Mini App / Telegram card) must translate via
+`RecoveryOutcome.recoveryOutcomeFor`:
+
+| recovery_state | raw cell evidence | user copy |
+| --- | --- | --- |
+| `recovery_pending` | no cell yet | 正在等待恢复任务... |
+| `recovery_running` | pending/selected/artifact_ready/delivery_pending | 正在尝试扩大搜索范围... |
+| `recovery_success` | submitted | 恢复成功，已找到并发布新作品。 |
+| `recovery_no_candidate` | no_candidate (other) | 扩大搜索范围后，仍未找到符合条件的新作品。任务已正常结束。 |
+| `recovery_duplicate_only` | no_candidate/duplicate with duplicate_exhausted | 扩大搜索范围后，找到的作品均已发布过。没有新的内容可发布。 |
+| `recovery_failed` | failed | 恢复任务执行失败。请查看日志或稍后重试。 |
+
+Idempotency: the slot id is deterministically derived from `requestId`
+(`<scheduleId>@recover-<requestId.lower>`); a repeated click with the SAME
+`requestId` converges to the same slot and returns `already_completed` when it
+already terminated — it never opens a second task, so a double tap cannot
+double-publish. A DIFFERENT `requestId` is a distinct new business request by
+design.

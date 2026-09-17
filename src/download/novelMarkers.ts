@@ -3,6 +3,7 @@ import type {
   PixivNovelUploadedImage,
   PixivNovelIllustRef,
 } from '@redtidev/pixiv-client';
+import { basename } from 'node:path';
 
 /**
  * Single-pass novel text tokenizer, ported from PixEz
@@ -144,4 +145,26 @@ export function demo(): void {
   ]) {
     assert(Array.isArray(scanNovelMarkers(s)) && scanNovelMarkers(s).length > 0, 'markers parsed');
   }
+}
+
+/**
+ * Rich-media Markdown sidecar (RFC 1 Phase 2). Rebuilds the novel body with
+ * each downloaded inline resource as a relative `![](images/xxx.jpg)` reference
+ * (the `.txt` file remains the authoritative/compat format and its path is
+ * unchanged). Markers whose asset is `unavailable`/`failed` are left in the
+ * original text so nothing is silently dropped (partial success).
+ */
+export function renderNovelMarkdown(source: string, assets: NovelAsset[]): string {
+  const downloaded = new Map(
+    assets
+      .filter((a): a is NovelAsset & { localPath: string } => a.status === 'downloaded' && Boolean(a.localPath))
+      .map((a) => [a.marker, a] as const)
+  );
+  return scanNovelMarkers(source)
+    .map((marker) => {
+      if (marker.type === 'text') return marker.value;
+      const asset = downloaded.get(marker.raw);
+      return asset ? `![](images/${basename(asset.localPath)})` : marker.raw;
+    })
+    .join('');
 }

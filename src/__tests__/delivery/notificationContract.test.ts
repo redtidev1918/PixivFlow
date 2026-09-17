@@ -21,6 +21,8 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Database } from '../../storage/Database';
+import { logger } from '../../logger';
+import { DeliveryService } from '../../delivery/DeliveryService';
 import { NotificationPolicy } from '../../notification/NotificationPolicy';
 import { OutboxWorker } from '../../delivery/OutboxWorker';
 import { ConfigError } from '../../utils/errors';
@@ -65,6 +67,118 @@ function withDb<T>(fn: (db: Database) => T): T {
     rmSync(dir, { recursive: true, force: true });
   }
 }
+
+
+describe('Phase A: silent notification paths become traceable', () => {
+  it('logs a debug skip when the target has no delivery target name', () => {
+    withDb((db) => {
+      const debugSpy = jest.spyOn(logger, 'debug').mockImplementation(() => {});
+      try {
+        const policy = new NotificationPolicy(db, config({}));
+        policy.noteOutcome(
+          slot.slotId,
+          slot,
+          schedule,
+          { ...submissionTarget, delivery: {} } as any,
+          failedOutcome
+        );
+        expect(debugSpy).toHaveBeenCalledWith(
+          expect.stringContaining('target has no delivery target name'),
+          expect.any(Object)
+        );
+        expect(db.outbox.list()).toHaveLength(0);
+      } finally {
+        debugSpy.mockRestore();
+      }
+    });
+  });
+
+  it('logs a debug skip when the delivery target is not notifiable', () => {
+    withDb((db) => {
+      const debugSpy = jest.spyOn(logger, 'debug').mockImplementation(() => {});
+      try {
+        const policy = new NotificationPolicy(
+          db,
+          config({ 'bot1-submit': { type: 'httpMultipart', url: 'https://telepost.example/submit' } })
+        );
+        policy.noteOutcome(slot.slotId, slot, schedule, submissionTarget, failedOutcome);
+        expect(debugSpy).toHaveBeenCalledWith(
+          expect.stringContaining('no notifiable endpoint configured'),
+          expect.any(Object)
+        );
+        expect(db.outbox.list()).toHaveLength(0);
+      } finally {
+        debugSpy.mockRestore();
+      }
+    });
+  });
+
+  it('logs a warn and skips the whole summary when a row status is not summarizable', () => {
+    withDb((db) => {
+      const warnSpy = jest.spyOn(logger, 'warn').mockImplementation(() => {});
+      try {
+        const policy = new NotificationPolicy(
+          db,
+          config({
+            'bot1-submit': {
+              type: 'httpMultipart',
+              url: 'https://telepost.example/submit',
+              notificationUrl: 'https://telepost.example/notify',
+            },
+          })
+        );
+        policy.sendSlotSummary(slot, schedule, [
+          {
+            targetId: 'bot1-illust-botefuku',
+            label: 'bot1-illust-botefuku',
+            workType: 'illustration',
+            status: 'delivery_pending',
+            workId: '2',
+            error: null,
+          },
+        ]);
+        expect(warnSpy).toHaveBeenCalledWith(
+          expect.stringContaining('non-summarizable status'),
+          expect.objectContaining({ slotId: slot.slotId })
+        );
+        expect(db.outbox.list()).toHaveLength(0);
+      } finally {
+        warnSpy.mockRestore();
+      }
+    });
+  });
+
+  it('routes a durable enqueue failure through logger.warn, not console.warn', () => {
+    withDb((db) => {
+      const loggerWarnSpy = jest.spyOn(logger, 'warn').mockImplementation(() => {});
+      const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      const original = DeliveryService.prototype.enqueueNotification;
+      DeliveryService.prototype.enqueueNotification = () => { throw new Error('db locked'); };
+      try {
+        const policy = new NotificationPolicy(
+          db,
+          config({
+            'bot1-submit': {
+              type: 'httpMultipart',
+              url: 'https://telepost.example/submit',
+              notificationUrl: 'https://telepost.example/notify',
+            },
+          })
+        );
+        policy.noteOutcome(slot.slotId, slot, schedule, submissionTarget, failedOutcome);
+        expect(loggerWarnSpy).toHaveBeenCalledWith(
+          expect.stringContaining('notification enqueue failed'),
+          expect.any(Object)
+        );
+        expect(consoleWarnSpy).not.toHaveBeenCalled();
+      } finally {
+        DeliveryService.prototype.enqueueNotification = original;
+        loggerWarnSpy.mockRestore();
+        consoleWarnSpy.mockRestore();
+      }
+    });
+  });
+});
 
 describe('notifications only target endpoints that can receive them', () => {
   it('does not enqueue for a submission target without notificationUrl', () => {

@@ -1,0 +1,149 @@
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { randomUUID } from 'node:crypto';
+import type { DownloadedArtifact } from './types';
+import { logger } from '../logger';
+import { redactUrl } from '../utils/redact';
+
+export interface RichNovelPreviewResult {
+  /** Telegraph "read online" URL for the published page. */
+  url: string;
+  /** Per-asset diagnostic returned by TelePress ({local, remote, status}). */
+  assets?: Array<{ local: string; remote?: string | null; status: string }>;
+}
+
+export interface RichNovelPublishOptions {
+  url: string;
+  headers?: Record<string, string>;
+  timeoutMs?: number;
+}
+
+/**
+ * Locate the rich-markdown sidecar and its inline image directory for a novel
+ * artifact. Pure-text novels (no images dir / no sidecar) return undefined so
+ * the caller can skip enrichment with zero behaviour change.
+ */
+export function interpolateEnv(value: string): string {
+  return value.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (_match, name: string) => {
+    const resolved = process.env[name];
+    if (resolved === undefined) {
+      throw new Error(`Required TelePress environment variable is not set: ${name}`);
+    }
+    return resolved;
+  });
+}
+
+export function findRichNovelSources(
+  artifact: DownloadedArtifact
+): { txtPath: string; mdPath: string; imagePaths: string[] } | undefined {
+  if (artifact.type !== 'novel') return undefined;
+  const txtPath = artifact.files.find((f) => /\.txt$/i.test(f));
+  if (!txtPath) return undefined;
+  const mdPath = txtPath.replace(/\.txt$/i, '.md');
+  if (!fs.existsSync(mdPath)) return undefined;
+  const imagesDir = path.join(path.dirname(txtPath), 'images');
+  let imagePaths: string[] = [];
+  if (fs.existsSync(imagesDir)) {
+    imagePaths = fs
+      .readdirSync(imagesDir)
+      .filter((name) => /\.(jpe?g|png|gif|webp|bmp)$/i.test(name))
+      .map((name) => path.join(imagesDir, name))
+      .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  }
+  return { txtPath, mdPath, imagePaths };
+}
+
+/**
+ * Publish a rich novel (markdown + inline images) to TelePress and return the
+ * Telegraph URL. Client-side only — TelePress owns rendering/Catbox/Telegraph.
+ * 
+ * Failures classify as retryable when the endpoint was reached but answered
+ * non-2xx (Transient), and non-retryable when local input is unusable.
+ */
+export async function publishRichNovelPreview(
+  artifact: DownloadedArtifact,
+  options: RichNovelPublishOptions
+): Promise<{ url: string; retryable: boolean; operatorHint?: string }> {
+  const sources = findRichNovelSources(artifact);
+  if (!sources) return { url: '', retryable: false, operatorHint: 'no_rich_novel_assets' };
+  if (sources.imagePaths.length === 0) {
+    return { url: '', retryable: false, operatorHint: 'no_rich_novel_assets' };
+  }
+
+  const mdName = path.basename(sources.mdPath);
+  const boundary = `telepress-${randomUUID()}`;
+  const fields: Buffer[] = [];
+
+  // Text part for the markdown file.
+  fields.push(Buffer.from(
+    `--${boundary}\r\n` +
+      `Content-Disposition: form-data; name="md"; filename="${escape(mdName)}"\r\n` +
+      `Content-Type: text/markdown\r\n\r\n`
+  ));
+  fields.push(await fs.promises.readFile(sources.mdPath));
+  fields.push(Buffer.from('\r\n'));
+
+  // File parts for each inline image, named with the `images/` prefix so the
+  // relative markdown refs resolve on the receiving side.
+  for (const imagePath of sources.imagePaths) {
+    const name = `images/${path.basename(imagePath)}`;
+    const stat = await fs.promises.stat(imagePath);
+    if (stat.size <= 0) continue;
+    const header = Buffer.from(
+      `--${boundary}\r\n` +
+        `Content-Disposition: form-data; name="images"; filename="${escape(name)}"\r\n` +
+        `Content-Type: application/octet-stream\r\n\r\n`
+    );
+    const data = await fs.promises.readFile(imagePath);
+    fields.push(header, data, Buffer.from('\r\n'));
+  }
+  fields.push(Buffer.from(`--${boundary}--\r\n`));
+
+  const timeoutMs = options.timeoutMs ?? 60_000;
+  const headers: Record<string, string> = {
+    'Content-Type': `multipart/form-data; boundary=${boundary}`,
+    'Content-Length': String(fields.reduce((n, b) => n + b.length, 0)),
+    ...options.headers,
+  };
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  timer.unref?.();
+  try {
+    const response = await fetch(options.url, { method: 'POST', headers, body: Buffer.concat(fields), signal: controller.signal });
+    const text = await response.text();
+    let body: unknown = text;
+    try { body = JSON.parse(text); } catch { /* plain text */ }
+    if (!response.ok) {
+      logger.warn('TelePress rich novel publish returned an error status', {
+        url: redactUrl(options.url),
+        status: response.status,
+        body: String(body).slice(0, 300),
+      });
+      return { url: '', retryable: response.status >= 500 || response.status === 408 || response.status === 429, operatorHint: `telepress_http_${response.status}` };
+    }
+    const data = (body && typeof body === 'object' ? (body as { url?: unknown }) : undefined);
+    const url = typeof data?.url === 'string' ? data.url : '';
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      return { url: '', retryable: true, operatorHint: 'telepress_invalid_response' };
+    }
+    logger.info('TelePress rich novel publish succeeded', {
+      url: redactUrl(url),
+      images: sources.imagePaths.length,
+    });
+    return { url, retryable: false };
+  } catch (error) {
+    const aborted = (error as { name?: string })?.name === 'AbortError';
+    logger.warn('TelePress rich novel publish failed', {
+      url: redactUrl(options.url),
+      retryable: !aborted,
+      reason: aborted ? 'timeout' : String(error),
+    });
+    return { url: '', retryable: !aborted, operatorHint: aborted ? 'telepress_timeout' : 'telepress_network_error' };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function escape(value: string): string {
+  return value.replace(/[\r\n]/g, ' ').replace(/"/g, '%22');
+}

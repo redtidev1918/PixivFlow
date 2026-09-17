@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.26.0](https://github.com/redtidev1918/PixivFlow/compare/v2.25.0...v2.26.0) (2026-09-17)
+
+
+### Features
+
+* **novel:** rich-media zip archive download (RFC Phase 3) ([#106](https://github.com/redtidev1918/PixivFlow/issues/106)) ([23db8fd](https://github.com/redtidev1918/PixivFlow/commit/23db8fde3bd75fda6f9888ea08a7dd6ce17b01db))
+
 ## [2.25.0](https://github.com/redtidev1918/PixivFlow/compare/v2.24.0...v2.25.0) (2026-09-17)
 
 

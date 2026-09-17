@@ -36,6 +36,16 @@ export interface PixivMetadata {
     name: string; // Language name
     is_chinese: boolean;
   };
+  // Inline image assets (Phase 1 novel rich-media; additive only).
+  assets?: Array<{
+    marker: string;
+    kind: 'uploadedimage' | 'pixivimage';
+    sourceId: string;
+    url?: string;
+    localPath?: string;
+    status: 'pending' | 'downloaded' | 'failed' | 'unavailable';
+    failureReason?: string;
+  }>;
 }
 
 export class FileService implements IFileService {
@@ -60,6 +70,17 @@ export class FileService implements IFileService {
     const organizationMode = this.storage.illustrationOrganization ?? 'flat';
     const targetDirectory = this.getOrganizedDirectory(baseDirectory, organizationMode, metadata, 'illustration');
     const uniquePath = await this.findUniquePath(targetDirectory, fileName);
+    await fs.writeFile(uniquePath, Buffer.from(buffer));
+    return uniquePath;
+  }
+
+  public async saveBinary(
+    buffer: ArrayBuffer,
+    fileName: string,
+    directory: string
+  ): Promise<string> {
+    await ensureDir(directory);
+    const uniquePath = await this.findUniquePath(directory, fileName);
     await fs.writeFile(uniquePath, Buffer.from(buffer));
     return uniquePath;
   }

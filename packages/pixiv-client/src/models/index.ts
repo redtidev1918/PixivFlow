@@ -85,11 +85,41 @@ export interface PixivNovel {
 
 export interface PixivNovelTextResponse {
   novel_text: string;
-  /**
-   * Marker/next-url style fields are endpoint-specific; the webview fallback
-   * parses only the text. Hosts should not rely on other fields.
-   */
+  /** Cover thumbnail URL (webview v2 novel: block). */
+  coverUrl?: string;
+  /** Previous/next series navigation (webview v2 novel: block). */
+  seriesNavigation?: { nextNovel?: NovelSeriesNavItem; prevNovel?: NovelSeriesNavItem };
+  /** Uploaded inline images, keyed by `[uploadedimage:KEY]` marker id. */
+  images?: Record<string, PixivNovelUploadedImage>;
+  /** Referenced published illusts, keyed by `[pixivimage:KEY]` marker id; null = deleted/no permission. */
+  illusts?: Record<string, PixivNovelIllustRef | null>;
+  /** Other endpoint-specific fields (v1/webaudio fallbacks); hosts must not depend on them. */
   [key: string]: unknown;
+}
+
+/** Author-uploaded inline image in the webview v2 novel: block. */
+export interface PixivNovelUploadedImage {
+  novelImageId?: string;
+  urls: {
+    the128X128?: string;
+    the240Mw?: string;
+    the480Mw?: string;
+    the1200X1200?: string;
+    original?: string;
+    [k: string]: string | undefined;
+  };
+}
+
+/** Referenced published illust (webview v2 novel: block). */
+export interface PixivNovelIllustRef {
+  illust: { images: { small?: string; medium?: string; original?: string } };
+}
+
+export interface NovelSeriesNavItem {
+  id: number;
+  viewable: boolean;
+  title?: string;
+  coverUrl?: string;
 }
 
 export interface UgoiraFrame {

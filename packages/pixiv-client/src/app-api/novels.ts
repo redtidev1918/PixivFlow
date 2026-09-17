@@ -6,6 +6,18 @@ import type { NovelRankingMode, NovelSearchOptions, OnePageResult, RankingOption
 const BROWSER_UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36';
 
+type WebviewNovelJson = {
+  text?: unknown;
+  coverUrl?: unknown;
+  seriesNavigation?: unknown;
+  images?: unknown;
+  illusts?: unknown;
+};
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
 /** Novel endpoints of the Pixiv public App API (+ required webview fallback). */
 export class NovelsApi {
   constructor(private readonly transport: Transport) {}
@@ -201,9 +213,23 @@ export class NovelsApi {
         const from = start + marker.length;
         const end = html.indexOf(',\n', from);
         if (end !== -1) {
-          const parsed = JSON.parse(html.slice(from, end)) as { text?: unknown };
+          const parsed = JSON.parse(html.slice(from, end)) as WebviewNovelJson;
           const text = this.nonEmptyText(parsed?.text);
-          if (text) return { novel_text: text };
+          if (text) {
+            return {
+              novel_text: text,
+              coverUrl: typeof parsed.coverUrl === 'string' ? parsed.coverUrl : undefined,
+              seriesNavigation: isRecord(parsed.seriesNavigation)
+                ? parsed.seriesNavigation as PixivNovelTextResponse['seriesNavigation']
+                : undefined,
+              images: isRecord(parsed.images)
+                ? parsed.images as PixivNovelTextResponse['images']
+                : undefined,
+              illusts: isRecord(parsed.illusts)
+                ? parsed.illusts as PixivNovelTextResponse['illusts']
+                : undefined,
+            };
+          }
         }
       }
       failures.push('webview returned no non-empty novel text');

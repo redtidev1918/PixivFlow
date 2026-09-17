@@ -29,6 +29,11 @@ export interface IFileService {
   ): Promise<string>;
 
   /**
+   * Save a binary asset into an explicit directory (e.g. novel inline images).
+   */
+  saveBinary(buffer: ArrayBuffer, fileName: string, directory: string): Promise<string>;
+
+  /**
    * Sanitize file name
    */
   sanitizeFileName(name: string): string;

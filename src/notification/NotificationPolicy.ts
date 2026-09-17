@@ -1,7 +1,7 @@
 import { Database } from '../storage/Database';
 import { DeliveryService, RefetchOutcomePayload } from '../delivery/DeliveryService';
 import { ScheduleConfig, StandaloneConfig, TargetConfig } from '../config';
-import { TargetOutcome } from '../scheduler/TargetOutcome';
+import { operationalReasonForCode, TargetOutcome } from '../scheduler/TargetOutcome';
 import { SlotContext, SlotCoordinator } from '../scheduler/SlotCoordinator';
 import { logger } from '../logger';
 
@@ -169,15 +169,22 @@ export class NotificationPolicy {
                 } as const,
               }
             : {}),
-          targets: rows.map((r) => ({
-            targetId: r.targetId,
-            workType: r.workType,
-            status: r.status,
-            workId: r.workId,
-            error: r.error,
-            terminal_reason_code: r.terminal_reason_code ?? null,
-            reason: r.reason ?? null,
-          })),
+          targets: rows.map((r) => {
+            const code = r.terminal_reason_code;
+            const operational = code ? operationalReasonForCode(code, r.reason) : null;
+            return {
+              targetId: r.targetId,
+              workType: r.workType,
+              status: r.status,
+              workId: r.workId,
+              error: r.error,
+              terminal_reason_code: code ?? null,
+              reason: operational?.message ?? r.reason ?? null,
+              stage: operational?.stage ?? null,
+              retryable: operational?.retryable ?? null,
+              operator_hint: operational?.operatorHint ?? null,
+            };
+          }),
         }
       );
     }
@@ -219,6 +226,8 @@ export class NotificationPolicy {
         ...cell, label: cell.targetId,
         workType: targets.find((target) => target.id === cell.targetId)?.type ?? 'unknown',
         error: cell.error ?? null,
+        terminal_reason_code: cell.terminalReasonCode ?? null,
+        reason: cell.terminalReasonMessage ?? null,
       })));
     }
   }

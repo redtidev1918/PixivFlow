@@ -12,7 +12,7 @@ import { Database } from '../../storage/Database';
 import { NotificationPolicy } from '../../notification/NotificationPolicy';
 import { DeliveryDispatcher } from '../../delivery/DeliveryDispatcher';
 import { OutboxWorker } from '../../delivery/OutboxWorker';
-import { SlotContext } from '../../scheduler/SlotCoordinator';
+import { SlotContext, SlotCoordinator } from '../../scheduler/SlotCoordinator';
 import { validateConfig } from '../../config/validation';
 import { configValidator } from '../../utils/config-validator-unified';
 
@@ -118,8 +118,8 @@ describe('schedule outcome notification', () => {
       ]);
       expect(payloadJson(db).scheduleOutcome.status).toBe('partial');
       expect(payloadJson(db).scheduleOutcome.targets).toEqual([
-        { targetId: 'bot1-illust', workType: 'illustration', status: 'submitted', workId: '29118637', error: null, terminal_reason_code: null, reason: null },
-        { targetId: 'bot1-novel', workType: 'novel', status: 'no_candidate', workId: null, error: null, terminal_reason_code: null, reason: null },
+        { targetId: 'bot1-illust', workType: 'illustration', status: 'submitted', workId: '29118637', error: null, terminal_reason_code: null, reason: null, stage: null, retryable: null, operator_hint: null },
+        { targetId: 'bot1-novel', workType: 'novel', status: 'no_candidate', workId: null, error: null, terminal_reason_code: null, reason: null, stage: null, retryable: null, operator_hint: null },
       ]);
     });
   });
@@ -163,6 +163,39 @@ describe('schedule outcome notification', () => {
     });
   });
 
+  it('isolates a bot1 failure from a concurrent bot2 success', () => {
+    withDb((db) => {
+      const config = cfg();
+      config.targets.push({ id: 'bot2-illust', type: 'illustration', delivery: { target: 'bot2-submit' } });
+      config.delivery.targets['bot2-submit'] = {
+        type: 'httpMultipart',
+        url: 'https://telepost.example/bot2/submit',
+        scheduleOutcomeUrl: 'https://telepost.example/bot2/outcome',
+      };
+      const policy = new NotificationPolicy(db, config);
+      policy.sendSlotSummary(slot, schedule, [{
+        ...r('bot1-illust', 'illustration', 'failed'),
+        terminal_reason_code: 'download_failed', reason: '图片下载失败',
+      }]);
+      policy.sendSlotSummary(
+        { ...slot, slotId: 'bot2-daily@2026-09-14T2210', scheduleId: 'bot2' },
+        { id: 'bot2', name: 'Bot2' } as any,
+        [r('bot2-illust', 'illustration', 'submitted', '42')]
+      );
+      const notifications = enqueued(db).map((row: any) => ({
+        target: row.deliveryTarget,
+        outcome: JSON.parse(row.payloadJson).scheduleOutcome,
+      }));
+      expect(notifications).toHaveLength(2);
+      expect(notifications.find((n) => n.target === 'bot1-submit')?.outcome).toMatchObject({
+        status: 'failed', targets: [{ targetId: 'bot1-illust' }],
+      });
+      expect(notifications.find((n) => n.target === 'bot2-submit')?.outcome).toMatchObject({
+        status: 'success', targets: [{ targetId: 'bot2-illust' }],
+      });
+    });
+  });
+
   it('recovers a summary after crash or late delivery ACK through the outbox pump', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'pixivflow-outcome-restart-'));
     const path = join(dir, 'test.db');
@@ -196,6 +229,26 @@ describe('schedule outcome notification', () => {
       db.close();
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  it('reconciles the durable terminal reason into the operational contract', () => {
+    withDb((db) => {
+      db.slots.getOrCreateSlot(slot.slotId, { ...slot, targetIds: ['bot1-illust'] });
+      db.slots.materializeCells(slot.slotId, ['bot1-illust'], () => 'illustration');
+      const coordinator = new SlotCoordinator(db);
+      coordinator.applyOutcome(slot.slotId, 'bot1-illust', {
+        kind: 'failed', retryable: false, error: 'download failed while fetching controlled fixture',
+      });
+      new NotificationPolicy(db, cfg()).reconcileScheduleSummaries();
+      expect(payloadJson(db).scheduleOutcome.targets[0]).toMatchObject({
+        targetId: 'bot1-illust',
+        terminal_reason_code: 'download_failed',
+        reason: '图片下载失败',
+        stage: 'download',
+        retryable: true,
+      });
+      expect(payloadJson(db).scheduleOutcome.targets[0].operator_hint).toContain('重试');
+    });
   });
 
   it('stays silent only when NO delivery target declares scheduleOutcomeUrl', () => {
@@ -234,10 +287,40 @@ describe('schedule outcome delivery to TelePost', () => {
         slot_id: slot.slotId,
         status: 'partial',
         targets: [
-          { target_id: 'bot1-illust', work_type: 'illustration', status: 'submitted', work_id: '29118637' },
-          { target_id: 'bot1-novel', work_type: 'novel', status: 'no_candidate', work_id: null },
+          { target_id: 'bot1-illust', work_type: 'illustration', status: 'submitted', work_id: '29118637', terminal_reason_code: null, reason: null, stage: null, retryable: null, operator_hint: null },
+          { target_id: 'bot1-novel', work_type: 'novel', status: 'no_candidate', work_id: null, terminal_reason_code: null, reason: null, stage: null, retryable: null, operator_hint: null },
         ],
       });
+    } finally {
+      global.fetch = originalFetch;
+      db.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('preserves operational failure fields across the HTTP boundary', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'pixivflow-operational-result-'));
+    const db = new Database(join(dir, 'test.db'));
+    db.migrate();
+    const originalFetch = global.fetch;
+    const send = jest.fn().mockResolvedValue(new Response('{"ok":true}', { status: 200 }));
+    global.fetch = send as typeof fetch;
+    try {
+      const config = cfg();
+      new NotificationPolicy(db, config).sendSlotSummary(slot, schedule, [{
+        ...r('bot1-illust', 'illustration', 'failed'),
+        terminal_reason_code: 'download_failed',
+        reason: '图片下载失败',
+      }]);
+      await new OutboxWorker(db, new DeliveryDispatcher(config.delivery)).drainOnce();
+      const body = JSON.parse(String((send.mock.calls[0] as [string, RequestInit])[1].body));
+      expect(body.targets[0]).toMatchObject({
+        terminal_reason_code: 'download_failed',
+        reason: '图片下载失败',
+        stage: 'download',
+        retryable: true,
+      });
+      expect(body.targets[0].operator_hint).toContain('重试');
     } finally {
       global.fetch = originalFetch;
       db.close();

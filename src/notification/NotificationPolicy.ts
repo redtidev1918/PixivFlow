@@ -61,10 +61,18 @@ export class NotificationPolicy {
     outcome: TargetOutcome
   ): void {
     const name = this.targetName(target);
-    if (!name) return;
+    if (!name) {
+      logger.debug('Notification skipped: target has no delivery target name', {
+        targetId: target.id ?? target.filterTag ?? target.tag ?? target.type,
+      });
+      return;
+    }
     // No notifiable endpoint configured: drop the notification instead of
     // enqueuing it against a submission target that will reject it forever.
-    if (!this.notifiableTargets().has(name)) return;
+    if (!this.notifiableTargets().has(name)) {
+      logger.debug(`Notification skipped for ${name}: no notifiable endpoint configured`, { targetName: name });
+      return;
+    }
     const label = target.id || target.filterTag || target.tag || target.type;
 
     if (outcome.kind === 'no_candidate' && target.noMatchPolicy?.notify === true) {
@@ -102,9 +110,17 @@ export class NotificationPolicy {
       reason?: string | null;
     }>
   ): void {
-    if (slot.manualRequestId || rows.length === 0 || rows.some((r) =>
+    if (slot.manualRequestId || rows.length === 0) return;
+    const nonSummaryRows = rows.filter((r) =>
       !['submitted', 'no_candidate', 'duplicate', 'failed'].includes(r.status)
-    )) return;
+    );
+    if (nonSummaryRows.length) {
+      logger.warn(`Slot summary skipped: ${nonSummaryRows.length} row(s) with non-summarizable status`, {
+        slotId: slot.slotId,
+        targets: nonSummaryRows.map((r) => ({ targetId: r.targetId, status: r.status })),
+      });
+      return;
+    }
     const memberIds = new Set(rows.map((r) => r.targetId));
     const targets = this.targetsWithUrl('scheduleOutcomeUrl', memberIds);
     if (targets.size === 0) return;
@@ -212,8 +228,7 @@ export class NotificationPolicy {
       new DeliveryService(this.database).enqueueNotification(targetName, text, key);
     } catch (error) {
       // Durable enqueue failure must not unwind the content run.
-      // eslint-disable-next-line no-console
-      console.warn('notification enqueue failed', { targetName, key, error: (error as Error).message });
+      logger.warn('notification enqueue failed', { targetName, key, error: (error as Error).message });
     }
   }
 

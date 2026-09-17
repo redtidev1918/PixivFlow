@@ -67,6 +67,7 @@ describe('terminalReasonFor', () => {
   it.each([
     ['download timeout while fetching the image', 'download_timeout'],
     ['Download timeout for https://i.pximg.net/x.jpg', 'download_timeout'],
+    ['download failed while fetching controlled fixture', 'download_failed'],
     ['execution timeout after 1800000ms', 'execution_timeout'],
     ['429 Too Many Requests: rate limit exceeded', 'rate_limited'],
     ['401 unauthorized: invalid refresh token', 'auth_failed'],

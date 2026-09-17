@@ -144,6 +144,10 @@ export interface DeliveryNotificationRequest {
       terminal_reason_code?: string | null;
       /** User-facing business reason message for the failure. */
       reason?: string | null;
+      stage?: string | null;
+      /** Whether a later/manual attempt may succeed; terminal does not mean auto-retry pending. */
+      retryable?: boolean | null;
+      operator_hint?: string | null;
     }>;
   };
 }

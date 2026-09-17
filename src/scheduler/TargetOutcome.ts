@@ -447,6 +447,48 @@ export interface TerminalReason {
   message: string;
 }
 
+/** Operator-facing recovery semantics derived from the stable reason code.
+ *
+ * These fields are deliberately derived instead of persisted as a second
+ * failure record.  The durable SSOT remains the cell's terminal reason code;
+ * wording and policy can evolve without rewriting historical slot rows.
+ */
+export interface OperationalReason extends TerminalReason {
+  stage: 'acquisition' | 'download' | 'delivery' | 'execution' | 'configuration';
+  /** A later/manual attempt may succeed; this does not mean auto-retry is pending. */
+  retryable: boolean;
+  operatorHint: string;
+}
+
+const OPERATIONAL_REASON_POLICY: Record<TerminalReasonCode, Omit<OperationalReason, 'code' | 'message'>> = {
+  no_candidate: { stage: 'acquisition', retryable: true, operatorHint: '可等待下次任务，或使用“放宽条件重试”。' },
+  duplicate_exhausted: { stage: 'acquisition', retryable: true, operatorHint: '候选均已处理，可等待新作品或放宽条件重试。' },
+  filter_exhausted: { stage: 'acquisition', retryable: true, operatorHint: '检查筛选条件，或使用“放宽条件重试”。' },
+  download_timeout: { stage: 'download', retryable: true, operatorHint: '可稍后重试；若持续发生，请检查 Pixiv 连接。' },
+  download_failed: { stage: 'download', retryable: true, operatorHint: '可稍后重试；若持续发生，请检查网络与存储空间。' },
+  metadata_failed: { stage: 'acquisition', retryable: true, operatorHint: '可稍后重试；若只影响单个作品，请检查作品是否已删除或转为私密。' },
+  rate_limited: { stage: 'acquisition', retryable: true, operatorHint: '等待限流窗口结束后再重试。' },
+  auth_failed: { stage: 'acquisition', retryable: false, operatorHint: '检查并刷新对应 Pixiv 账号的认证状态。' },
+  remote_http_error: { stage: 'acquisition', retryable: true, operatorHint: '可稍后重试；若持续发生，请检查 Pixiv 服务状态。' },
+  delivery_failed: { stage: 'delivery', retryable: true, operatorHint: '检查 TelePost 可达性与投稿接口状态后重试。' },
+  telepost_rejected: { stage: 'delivery', retryable: false, operatorHint: '检查投稿内容和 TelePost 接口契约。' },
+  telegram_failed: { stage: 'delivery', retryable: true, operatorHint: '检查 Telegram 可达性与 Bot 权限后重试。' },
+  network_error: { stage: 'execution', retryable: true, operatorHint: '检查执行端网络；恢复后可重试。' },
+  execution_timeout: { stage: 'execution', retryable: true, operatorHint: '检查执行耗时和资源使用后重试。' },
+  configuration_error: { stage: 'configuration', retryable: false, operatorHint: '修正配置并完成校验后再重试。' },
+  internal_error: { stage: 'execution', retryable: false, operatorHint: '查看对应执行记录；若重复发生，请提交诊断信息。' },
+};
+
+export function operationalReasonForCode(code: string, message?: string | null): OperationalReason | null {
+  if (!(code in OPERATIONAL_REASON_POLICY)) return null;
+  const knownCode = code as TerminalReasonCode;
+  return {
+    code: knownCode,
+    message: message?.trim() || TERMINAL_REASON_MESSAGES[knownCode],
+    ...OPERATIONAL_REASON_POLICY[knownCode],
+  };
+}
+
 /** User-facing business messages — never stack traces, paths, SQL or tokens. */
 export const TERMINAL_REASON_MESSAGES: Record<TerminalReasonCode, string> = {
   no_candidate: '没有找到合适的新作品',
@@ -541,6 +583,9 @@ function classifyFailedReason(message: string, scan?: CandidateScanSummary): Ter
     return /download|image|url|fetch/i.test(text)
       ? { code: 'download_timeout', message: TERMINAL_REASON_MESSAGES.download_timeout }
       : { code: 'execution_timeout', message: TERMINAL_REASON_MESSAGES.execution_timeout };
+  }
+  if (/\b(?:download|image fetch|image write)\b.{0,80}\b(?:fail|failed|error|unable)\b|\b(?:failed|unable)\b.{0,40}\b(?:download|fetch image|write image)\b/i.test(text)) {
+    return { code: 'download_failed', message: TERMINAL_REASON_MESSAGES.download_failed };
   }
   if (/502|503|504|bad gateway|service unavailable|server error|5\d\d/i.test(text)) {
     return { code: 'remote_http_error', message: TERMINAL_REASON_MESSAGES.remote_http_error };

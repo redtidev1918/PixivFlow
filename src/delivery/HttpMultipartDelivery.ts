@@ -146,6 +146,11 @@ export class HttpMultipartDelivery implements DeliveryProvider {
               work_type: t.workType,
               status: t.status,
               work_id: t.workId ?? null,
+              terminal_reason_code: t.terminal_reason_code ?? null,
+              reason: t.reason ?? null,
+              stage: t.stage ?? null,
+              retryable: t.retryable ?? null,
+              operator_hint: t.operator_hint ?? null,
             })),
           }
         : { text: request.text, idempotency_key: request.idempotencyKey };

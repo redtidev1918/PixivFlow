@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.28.0](https://github.com/redtidev1918/PixivFlow/compare/v2.27.1...v2.28.0) (2026-09-17)
+
+
+### Features
+
+* **recovery:** surface operator-facing recovery semantics in outcome notifications ([#112](https://github.com/redtidev1918/PixivFlow/issues/112)) ([77893d1](https://github.com/redtidev1918/PixivFlow/commit/77893d106fbb842706437993da33905bedaaa485))
+
 ## [2.27.0](https://github.com/redtidev1918/PixivFlow/compare/v2.26.0...v2.27.0) (2026-09-17)
 
 

@@ -133,6 +133,11 @@ describe('NovelDownloader rich media', () => {
       '/tmp/novels/images'
     );
     const metadata = fileService.saveMetadata.mock.calls[0][1];
+    const mdCall = fileService.saveText.mock.calls.find(([, name]) => String(name).endsWith('.md'));
+    expect(mdCall![1]).toBe('456_Rich novel.md');
+    expect(mdCall![0]).toContain('![](images/11.jpg)');
+    expect(mdCall![0]).toContain('intro');
+
     expect(metadata.assets).toEqual([
       {
         marker: '[uploadedimage:11]',

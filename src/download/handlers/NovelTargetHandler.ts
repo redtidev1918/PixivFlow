@@ -29,6 +29,7 @@ import { recordSystemError, classifySystemError } from '../../observability';
 import { targetErrorContext } from '../../observability/context';
 import { resolveCandidateScanLimit } from '../plan/DownloadPlanner';
 import { deliveryContextFields } from './deliveryContext';
+import { findRichNovelSources, interpolateEnv, publishRichNovelPreview } from '../../delivery/TelePressRichNovel';
 
 export class NovelTargetHandler {
   private outcomes: TargetOutcome[] = [];
@@ -835,7 +836,7 @@ export class NovelTargetHandler {
     // candidate and the scan could never advance — the whole point of this
     // change. `releaseCellWork` itself refuses once the cell moved on
     // (delivery_pending/submitted), so a committed identity stays stable.
-    const attempt = this.recordArtifactOutcome(artifact, target);
+    const attempt = await this.recordArtifactOutcome(artifact, target);
     if (attempt.kind === 'skipped' && execution && !recovering) {
       execution.release(workId);
     }
@@ -850,10 +851,10 @@ export class NovelTargetHandler {
    * slot as a `duplicate`. The delivery idempotency ledger is what makes the
    * second concurrent worker lose this race instead of double-submitting.
    */
-  private recordArtifactOutcome(
+  private async recordArtifactOutcome(
     artifact: DownloadedArtifact,
     target: TargetConfig
-  ): CandidateAttempt {
+  ): Promise<CandidateAttempt> {
     const isDelivery = target.storageMode === 'cache' && target.delivery?.target?.trim();
     if (!isDelivery || !this.deliveryService) {
       this.outcomes.push({ kind: 'stored', workId: artifact.pixivId, workType: artifact.type });
@@ -871,9 +872,10 @@ export class NovelTargetHandler {
         },
       };
     }
+    const fields = await this.enrichRichNovelPreview(artifact, target);
     const res = this.deliveryService.enqueue(artifact, target, {
       slotId,
-      fields: target.delivery?.fields as Record<string, unknown> | undefined,
+      fields: fields ?? (target.delivery?.fields as Record<string, unknown> | undefined),
       extraContext: deliveryContextFields(target),
     });
     if (res.duplicate) {
@@ -893,5 +895,47 @@ export class NovelTargetHandler {
       deliveryId: res.deliveryId,
     });
     return { kind: 'selected', workId: artifact.pixivId, workType: artifact.type };
+  }
+
+  /**
+   * Optional rich-novel preview enrichment (TelePress /publish/rich-novel).
+   * Non-fatal by design: a preview failure never blocks the TXT/ZIP
+   * submission, but it is surfaced with the operational result contract.
+   */
+  private async enrichRichNovelPreview(
+    artifact: DownloadedArtifact,
+    target: TargetConfig
+  ): Promise<Record<string, unknown> | undefined> {
+    const delivery = target.delivery;
+    if (!delivery?.richNovelPreview?.url) return undefined;
+    if (!findRichNovelSources(artifact)) return undefined;
+
+    const cfg = delivery.richNovelPreview;
+    const headers: Record<string, string> = {};
+    for (const [key, value] of Object.entries(cfg.headers ?? {})) {
+      headers[key] = interpolateEnv(String(value));
+    }
+    const result = await publishRichNovelPreview(artifact, {
+      url: interpolateEnv(cfg.url),
+      headers,
+      timeoutMs: cfg.timeoutMs,
+    });
+    const field = cfg.field ?? 'novel_preview_url';
+    if (result.url) {
+      logger.info('Rich novel preview URL ready', {
+        pixivId: artifact.pixivId,
+        field,
+        url: result.url.slice(0, 120),
+      });
+      return { ...((target.delivery?.fields as Record<string, unknown>) ?? {}), [field]: result.url };
+    }
+    logger.warn('Rich novel preview skipped', {
+      code: 'NOVEL_PUBLISH_FAILED',
+      stage: 'telepress_publish',
+      retryable: result.retryable,
+      operator_hint: result.operatorHint ?? 'unknown',
+      pixivId: artifact.pixivId,
+    });
+    return undefined;
   }
 }

@@ -288,8 +288,43 @@ telepress-server --host 0.0.0.0 --port 8000
 `link` 生成指向原作品的来源链接；R-18 作品（`{{spoiler}}` 为 `true`）会在
 首页附加成人内容提示。telepress 对单张图片自动压缩到 5 MiB 以内、按 100 张
 一页自动分页，返回 `{"ok": true, "url": "...", "files": N}`，因此
-`success` 判定 `ok == true`。注意 telepress 相册要求图片文件，小说正文请走
-TelePost 等其他渠道。
+`success` 判定 `ok == true`。注意 telepress 相册目标只接受图片文件；
+小说（novel）不投这个相册目标，走下面的富媒体小说链路。
+
+#### 富媒体小说（Novel）→ TelePress `/publish/rich-novel`
+
+Pixiv Novel 现在会生成**结构化 artifact**，不再是单个 TXT：`novel.txt`（权威正文）、
+`novel.md`（markdown sidecar，内嵌插图引用）、`images/`（正文插图）以及 `novel.zip`
+（打包归档）。交付强调"富媒体可在线阅读"，不要把它描述成"只下载 txt"。
+
+在 novel 目标的 `delivery.richNovelPreview` 配置里指向 TelePress 的富媒体发布端点；
+PixivFlow 会上传 `md` + `images` 文件，TelePress 负责 Catbox 上传、Markdown 渲染与
+Telegraph 页面生成，最终把 Telegra.ph 阅读链接写进提交字段（默认
+`novel_preview_url`）：
+
+```json
+{
+  "delivery": {
+    "target": "telepost",
+    "fields": { "title": "{{title}}", "tags": "{{workTags}}" },
+    "richNovelPreview": {
+      "url": "http://127.0.0.1:8000/publish/rich-novel",
+      "headers": { "Authorization": "Bearer ${TELEPRESS_API_KEY}" },
+      "timeoutMs": 60000,
+      "field": "novel_preview_url"
+    }
+  }
+}
+```
+
+行为要点（`src/delivery/TelePressRichNovel.ts`）：
+
+- 纯文本小说（没有 `.md` sidecar 或没有 `images/`）不会触发富媒体发布，返回
+  `no_rich_novel_assets`，行为与旧链路完全一致。
+- 若 TelePress 返回 4xx 且内容不可用，按 `operatorHint`（如 `telepress_http_401`）
+  记录并可诊断；网络错误/超时/5xx 标记 `retryable=true`，后续由 outbox 重试。
+- 成功后把 Telegraph `url` 注入字段（默认 `novel_preview_url`），随正常投稿/通知
+  一起提交给 TelePost 等接收端；失败绝不删除已下载的正文 artifact。
 
 交付前会把任务写入 SQLite `outbox` 表。作品投递失败不会删除下载文件；无候选通知也先
 写入该 outbox，不需要依赖当前进程的内存状态。独立 worker 在进程启动后持续消费；

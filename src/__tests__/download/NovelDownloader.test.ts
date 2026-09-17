@@ -9,6 +9,14 @@ jest.mock('../../utils/directory-info', () => ({
   displayDownloadPath: jest.fn(),
 }));
 
+jest.mock('../../utils/zip', () => ({
+  createZipArchive: jest.fn(async (dest: string) => dest),
+}));
+
+import { createZipArchive } from '../../utils/zip';
+
+const createZipArchiveMock = createZipArchive as jest.MockedFunction<typeof createZipArchive>;
+
 describe('NovelDownloader', () => {
   const novel = {
     id: 123,
@@ -57,6 +65,7 @@ describe('NovelDownloader', () => {
     expect(written).toContain('Actual novel body');
     expect(written).not.toContain('[object Object]');
     expect(database.insertDownload).toHaveBeenCalledTimes(1);
+    expect(createZipArchiveMock).not.toHaveBeenCalled();
     expect(artifact).toMatchObject({
       pixivId: '123',
       type: 'novel',
@@ -137,6 +146,19 @@ describe('NovelDownloader rich media', () => {
     expect(mdCall![1]).toBe('456_Rich novel.md');
     expect(mdCall![0]).toContain('![](images/11.jpg)');
     expect(mdCall![0]).toContain('intro');
+
+    // Phase 3: zip archive bundles txt + md + metadata + images and is shipped.
+    expect(createZipArchiveMock).toHaveBeenCalledTimes(1);
+    const [zipDest, zipEntries] = createZipArchiveMock.mock.calls[0];
+    expect(zipDest).toBe('/tmp/novels/456_Rich novel.zip');
+    const entryNames = zipEntries.map((e: { name: string }) => e.name);
+    expect(entryNames).toEqual([
+      '456_Rich novel.txt',
+      '456_Rich novel.md',
+      '456_Rich novel.txt.json',
+      'images/11.jpg',
+    ]);
+    expect(artifact!.files).toEqual(['/tmp/novels/456_Rich novel.txt', '/tmp/novels/456_Rich novel.zip']);
 
     expect(metadata.assets).toEqual([
       {

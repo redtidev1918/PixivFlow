@@ -5,10 +5,11 @@ import { IDatabase } from '../interfaces/IDatabase';
 import { FileMetadata, PixivMetadata } from './FileService';
 import { IFileService } from '../interfaces/IFileService';
 import { PixivNovel } from '@redtidev/pixiv-client';
-import { dirname, join } from 'node:path';
+import { dirname, join, basename } from 'node:path';
 import { detectLanguage } from '../utils/language-detection';
 import { DownloadedArtifact } from '../delivery/types';
 import { extractNovelAssets, NovelAsset, renderNovelMarkdown } from './novelMarkers';
+import { createZipArchive } from '../utils/zip';
 import type { Database } from '../storage/Database';
 
 const LANGUAGE_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -181,6 +182,7 @@ export class NovelDownloader {
     // Rich-media markdown sidecar (RFC 1 Phase 2): same path as the .txt
     // (compat format stays), inline images become relative ![](images/x.jpg)
     // refs so a later TelePress/TelePost phase can render the Telegraph page.
+    let richMediaPath: string | undefined;
     if (assets.some((a) => a.status === 'downloaded')) {
       try {
         const mdPath = await this.fileService.saveText(
@@ -188,6 +190,7 @@ export class NovelDownloader {
           fileName.replace(/\.txt$/, '.md'),
           metadata
         );
+        richMediaPath = mdPath;
         logger.info(`Saved novel ${detail.id} rich-media markdown sidecar`, { filePath: mdPath });
       } catch (error) {
         logger.warn(
@@ -245,6 +248,31 @@ export class NovelDownloader {
       );
     }
 
+    // Rich-media ZIP archive (Phase 3): a save-only download package carrying
+    // txt + md + metadata + images. The md stays an internal render input, never
+    // a user-facing attachment; txt remains the authoritative/compat file.
+    let archivePath: string | undefined;
+    if (assets.some((a) => a.status === 'downloaded')) {
+      const zipName = this.fileService.sanitizeFileName(`${detail.id}_${detail.title}.zip`);
+      const dest = join(dirname(filePath), zipName);
+      const entries = [
+        { name: fileName, sourcePath: filePath },
+      ];
+      if (richMediaPath) entries.push({ name: `${fileName.replace(/\.txt$/, '.md')}`, sourcePath: richMediaPath });
+      if (metadataPath) entries.push({ name: `${fileName}.json`, sourcePath: metadataPath });
+      for (const a of assets) {
+        if (a.status === 'downloaded' && a.localPath) {
+          entries.push({ name: `images/${basename(a.localPath)}`, sourcePath: a.localPath });
+        }
+      }
+      try {
+        archivePath = await createZipArchive(dest, entries);
+        logger.info(`Saved novel ${detail.id} zip archive`, { filePath: archivePath });
+      } catch (error) {
+        logger.warn(`Failed to save zip archive for novel ${detail.id}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+
     this.database.insertDownload({
       pixivId: String(detail.id),
       type: 'novel',
@@ -268,7 +296,7 @@ export class NovelDownloader {
       type: 'novel',
       title: detail.title,
       tags: tags.map((item) => item.name).filter(Boolean),
-      files: [filePath],
+      files: archivePath ? [filePath, archivePath] : [filePath],
       cleanupFiles: metadataPath ? [metadataPath] : [],
       spoiler: (detail.x_restrict ?? 0) > 0,
       xRestrict: detail.x_restrict,

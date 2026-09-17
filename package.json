@@ -1,7 +1,7 @@
 {
   "name": "pixivflow",
   "version": "2.25.0",
-  "description": "\ud83c\udfa8 Pixiv \u4e0b\u8f7d\u3001\u7b5b\u9009\u4e0e\u81ea\u52a8\u6536\u96c6\u5de5\u5177 - \u6279\u91cf\u4e0b\u8f7d\u63d2\u753b\u548c\u5c0f\u8bf4\u3001\u6309\u6807\u7b7e/\u70ed\u5ea6/\u65e5\u671f\u7b5b\u9009\u3001\u5b9a\u65f6\u4efb\u52a1\u4e0e\u53ef\u9760 HTTP \u4ea4\u4ed8 | Pixiv downloader and automation toolkit with filtering, scheduling and reliable HTTP delivery",
+  "description": "🎨 Pixiv 下载、筛选与自动收集工具 - 批量下载插画和小说、按标签/热度/日期筛选、定时任务与可靠 HTTP 交付 | Pixiv downloader and automation toolkit with filtering, scheduling and reliable HTTP delivery",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/redtidev1918/PixivFlow.git"
@@ -116,6 +116,7 @@
   },
   "dependencies": {
     "@redtidev/pixiv-client": "0.1.0",
+    "archiver": "^7.0.1",
     "axios": "^1.20.0",
     "cors": "^2.8.6",
     "cron-parser": "^4.9.0",

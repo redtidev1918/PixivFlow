@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.27.0](https://github.com/redtidev1918/PixivFlow/compare/v2.26.0...v2.27.0) (2026-09-17)
+
+
+### Features
+
+* **delivery:** rich novel Telegram preview via TelePress ([d82d227](https://github.com/redtidev1918/PixivFlow/commit/d82d227535bfa06c343414abcf9a794c75ad70e6))
+
 ## [2.26.0](https://github.com/redtidev1918/PixivFlow/compare/v2.25.0...v2.26.0) (2026-09-17)
 
 

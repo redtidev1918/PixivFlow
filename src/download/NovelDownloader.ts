@@ -8,7 +8,7 @@ import { PixivNovel } from '@redtidev/pixiv-client';
 import { dirname, join } from 'node:path';
 import { detectLanguage } from '../utils/language-detection';
 import { DownloadedArtifact } from '../delivery/types';
-import { extractNovelAssets, NovelAsset } from './novelMarkers';
+import { extractNovelAssets, NovelAsset, renderNovelMarkdown } from './novelMarkers';
 import type { Database } from '../storage/Database';
 
 const LANGUAGE_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -175,6 +175,24 @@ export class NovelDownloader {
       }
       if (hadImages) {
         logger.info(`Novel ${detail.id} inline images: ${assets.filter((a) => a.status === 'downloaded').length}/${assets.length} downloaded`, { novelId: detail.id });
+      }
+    }
+
+    // Rich-media markdown sidecar (RFC 1 Phase 2): same path as the .txt
+    // (compat format stays), inline images become relative ![](images/x.jpg)
+    // refs so a later TelePress/TelePost phase can render the Telegraph page.
+    if (assets.some((a) => a.status === 'downloaded')) {
+      try {
+        const mdPath = await this.fileService.saveText(
+          `${header}\n${renderNovelMarkdown(text, assets)}`,
+          fileName.replace(/\.txt$/, '.md'),
+          metadata
+        );
+        logger.info(`Saved novel ${detail.id} rich-media markdown sidecar`, { filePath: mdPath });
+      } catch (error) {
+        logger.warn(
+          `Failed to save rich-media markdown sidecar for novel ${detail.id}: ${error instanceof Error ? error.message : String(error)}`
+        );
       }
     }
 

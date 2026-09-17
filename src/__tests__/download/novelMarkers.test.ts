@@ -1,4 +1,4 @@
-import { scanNovelMarkers, extractNovelAssets } from '../../download/novelMarkers';
+import { scanNovelMarkers, extractNovelAssets, renderNovelMarkdown } from '../../download/novelMarkers';
 
 describe('novelMarkers', () => {
   it('scans simple markers and plain text', () => {
@@ -36,5 +36,23 @@ describe('novelMarkers', () => {
     expect(assets[0].kind).toBe('pixivimage');
     expect(assets[0].status).toBe('unavailable');
     expect(assets[0].url).toBeUndefined();
+  });
+});
+
+
+describe('renderNovelMarkdown (RFC 1 Phase 2)', () => {
+  it('replaces downloaded markers with relative images/ references', () => {
+    const md = renderNovelMarkdown('a [uploadedimage:11] b [pixivimage:9-1] c', [
+      { marker: '[uploadedimage:11]', kind: 'uploadedimage', sourceId: '11', url: 'x', localPath: '/tmp/novels/images/11.jpg', status: 'downloaded' },
+      { marker: '[pixivimage:9-1]', kind: 'pixivimage', sourceId: '9-1', url: 'y', localPath: '/tmp/novels/images/9.jpg', status: 'downloaded' },
+    ]);
+    expect(md).toBe('a ![](images/11.jpg) b ![](images/9.jpg) c');
+  });
+
+  it('keeps markers whose asset was not downloaded (partial success)', () => {
+    const md = renderNovelMarkdown('x [uploadedimage:22] y', [
+      { marker: '[uploadedimage:22]', kind: 'uploadedimage', sourceId: '22', url: undefined, status: 'unavailable' },
+    ]);
+    expect(md).toBe('x [uploadedimage:22] y');
   });
 });

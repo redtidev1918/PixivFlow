@@ -49,6 +49,8 @@ export interface TargetDeliveryConfig {
   target: string;
   /** 覆盖该交付目标的表单字段，支持 {{title}} 等模板变量 */
   fields?: Record<string, DeliveryFieldValue>;
+  /** Optional rich-novel preview enrichment before the submission. */
+  richNovelPreview?: RichNovelPreviewConfig;
   /**
    * Schedule slot provenance injected at runtime for scheduled/external runs
    * (not authored in config). Rendered as {{slotId}}/{{slotName}}/{{slotDate}}.
@@ -560,6 +562,25 @@ export interface HttpMultipartSuccessConfig {
   jsonPath?: string;
   /** jsonPath 对应的期望值 */
   equals?: string | number | boolean | null;
+}
+
+
+/**
+ * Optional rich-novel preview publish step performed BEFORE the multipart
+ * submission is enqueued. Widget is TelePress (/publish/rich-novel): the novel
+ * markdown sidecar + inline images are posted there and the returned Telegraph
+ * URL is injected into the submission's `fields` under `field`. It is an
+ * enrichment — a failure never fails the submission; TXT/ZIP stay authoritative.
+ */
+export interface RichNovelPreviewConfig {
+  /** TelePress `/publish/rich-novel` endpoint (http(s), supports ${ENV_NAME}). */
+  url: string;
+  /** Request headers (e.g. Authorization: Bearer ${TELEPRESS_API_KEY}). */
+  headers?: Record<string, string>;
+  /** Per-request timeout in milliseconds (default 60000). */
+  timeoutMs?: number;
+  /** Submission field receiving the Telegraph URL (default novel_preview_url). */
+  field?: string;
 }
 
 export interface HttpMultipartDeliveryConfig {

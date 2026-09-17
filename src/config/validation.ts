@@ -282,6 +282,18 @@ export function validateConfig(config: Partial<StandaloneConfig>, location: stri
           errors.push(`targets[${index}].delivery.target: Unknown delivery target "${deliveryTarget}"`);
         }
       }
+      if (target.delivery?.richNovelPreview) {
+        if (!target.delivery.richNovelPreview.url?.trim()) {
+          errors.push(`targets[${index}].delivery.richNovelPreview.url: Required field is missing or empty`);
+        } else {
+          try {
+            const url = new URL(target.delivery.richNovelPreview.url);
+            if (!['http:', 'https:'].includes(url.protocol)) throw new Error('unsupported protocol');
+          } catch {
+            errors.push(`targets[${index}].delivery.richNovelPreview.url: Must be a valid HTTP or HTTPS URL`);
+          }
+        }
+      }
     });
   }
 

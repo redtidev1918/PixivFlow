@@ -168,7 +168,14 @@
       "limit": 1,
       "storageMode": "cache",
       "delivery": {
-        "target": "telepost-bot1"
+        "target": "telepost-bot1",
+        "richNovelPreview": {
+          "url": "http://127.0.0.1:8000/publish/rich-novel",
+          "headers": {
+            "Authorization": "Bearer ${TELEPRESS_API_KEY}"
+          },
+          "field": "novel_preview_url"
+        }
       }
     },
     {

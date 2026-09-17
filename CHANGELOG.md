@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.24.0](https://github.com/redtidev1918/PixivFlow/compare/v2.23.0...v2.24.0) (2026-09-17)
+
+
+### Features
+
+* **novel:** capture and download inline novel images (rich-media Phase 1) ([#101](https://github.com/redtidev1918/PixivFlow/issues/101)) ([bc410c5](https://github.com/redtidev1918/PixivFlow/commit/bc410c50bd3849c2d25560e585b4f96c4164393c))
+* **observability:** make silent notification skips traceable (RFC 2 Phase A) ([#102](https://github.com/redtidev1918/PixivFlow/issues/102)) ([1b5dec1](https://github.com/redtidev1918/PixivFlow/commit/1b5dec10598504c85ee58049583f8b2677d21644))
+
 ## [2.23.0](https://github.com/redtidev1918/PixivFlow/compare/v2.22.1...v2.23.0) (2026-09-16)
 
 

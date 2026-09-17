@@ -5,8 +5,10 @@ import { IDatabase } from '../interfaces/IDatabase';
 import { FileMetadata, PixivMetadata } from './FileService';
 import { IFileService } from '../interfaces/IFileService';
 import { PixivNovel } from '@redtidev/pixiv-client';
+import { dirname, join } from 'node:path';
 import { detectLanguage } from '../utils/language-detection';
 import { DownloadedArtifact } from '../delivery/types';
+import { extractNovelAssets, NovelAsset } from './novelMarkers';
 import type { Database } from '../storage/Database';
 
 const LANGUAGE_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -149,6 +151,33 @@ export class NovelDownloader {
 
     const filePath = await this.fileService.saveText(content, fileName, metadata);
 
+    const assets = typeof textResponse === 'string'
+      ? []
+      : extractNovelAssets(text, textResponse);
+    const hadImages = assets.length > 0;
+    const pendingAssets = assets.filter((a): a is NovelAsset & { url: string } => Boolean(a.url));
+    if (pendingAssets.length) {
+      const imagesDir = join(dirname(filePath), 'images');
+      for (const asset of pendingAssets) {
+        try {
+          const buffer = await this.client.downloadImage(asset.url);
+          asset.localPath = await this.fileService.saveBinary(buffer, novelAssetFileName(asset), imagesDir);
+          asset.status = 'downloaded';
+        } catch (error) {
+          asset.status = 'failed';
+          asset.failureReason = error instanceof Error ? error.message : String(error);
+          logger.warn(`Failed to download novel inline image ${asset.sourceId} for novel ${detail.id}`, {
+            novelId: detail.id,
+            sourceId: asset.sourceId,
+            reason: asset.failureReason,
+          });
+        }
+      }
+      if (hadImages) {
+        logger.info(`Novel ${detail.id} inline images: ${assets.filter((a) => a.status === 'downloaded').length}/${assets.length} downloaded`, { novelId: detail.id });
+      }
+    }
+
     const pixivMetadata: PixivMetadata = {
       pixiv_id: detail.id,
       title: detail.title,
@@ -172,6 +201,19 @@ export class NovelDownloader {
               name: detectedLang.name,
               is_chinese: detectedLang.isChinese,
             },
+          }
+        : {}),
+      ...(assets.length
+        ? {
+            assets: assets.map((a) => ({
+              marker: a.marker,
+              kind: a.kind,
+              sourceId: a.sourceId,
+              url: a.url,
+              localPath: a.localPath,
+              status: a.status,
+              failureReason: a.failureReason,
+            })),
           }
         : {}),
     };
@@ -218,4 +260,16 @@ export class NovelDownloader {
       language: detectedLang ? `${detectedLang.name} (${detectedLang.code})` : undefined,
     };
   }
+}
+function novelAssetFileName(asset: NovelAsset & { url: string }): string {
+  let ext = '';
+  try {
+    const pathname = new URL(asset.url).pathname;
+    const last = pathname.split('/').pop() || '';
+    const dot = last.lastIndexOf('.');
+    if (dot >= 0) ext = last.slice(dot);
+  } catch {
+    // fall through: no extension
+  }
+  return `${asset.sourceId}${ext}` || asset.sourceId;
 }

@@ -96,3 +96,81 @@ describe('NovelDownloader', () => {
     expect(database.insertDownload).not.toHaveBeenCalled();
   });
 });
+
+describe('NovelDownloader rich media', () => {
+  const novel = {
+    id: 456,
+    title: 'Rich novel',
+    user: { id: '42', name: 'Author' },
+    create_date: '2026-08-29T00:00:00+00:00',
+  } as PixivNovel;
+
+  it('downloads inline images and records assets in metadata', async () => {
+    const text = 'intro [uploadedimage:11] outro';
+    const client = {
+      getNovelDetailWithTags: jest.fn().mockResolvedValue({ novel, tags: [] }),
+      getNovelText: jest.fn().mockResolvedValue({
+        novel_text: text,
+        images: { '11': { urls: { original: 'https://i.pximg.net/img/original/u/11.jpg' } } },
+      }),
+      downloadImage: jest.fn().mockResolvedValue(new ArrayBuffer(4)),
+    } as unknown as jest.Mocked<IPixivClient>;
+    const database = { insertDownload: jest.fn() } as unknown as jest.Mocked<IDatabase>;
+    const fileService = {
+      sanitizeFileName: jest.fn((name: string) => name),
+      saveText: jest.fn().mockResolvedValue('/tmp/novels/456_Rich novel.txt'),
+      saveMetadata: jest.fn().mockResolvedValue('/tmp/456_Rich novel.txt.json'),
+      saveBinary: jest.fn().mockResolvedValue('/tmp/novels/images/11.jpg'),
+    } as unknown as jest.Mocked<IFileService>;
+    const downloader = new NovelDownloader(client, database, fileService);
+
+    const artifact = await downloader.download(novel, 'bg', { type: 'novel', detectLanguage: false } as TargetConfig);
+
+    expect(client.downloadImage).toHaveBeenCalledWith('https://i.pximg.net/img/original/u/11.jpg');
+    expect(fileService.saveBinary).toHaveBeenCalledWith(
+      expect.anything(),
+      '11.jpg',
+      '/tmp/novels/images'
+    );
+    const metadata = fileService.saveMetadata.mock.calls[0][1];
+    expect(metadata.assets).toEqual([
+      {
+        marker: '[uploadedimage:11]',
+        kind: 'uploadedimage',
+        sourceId: '11',
+        url: 'https://i.pximg.net/img/original/u/11.jpg',
+        localPath: '/tmp/novels/images/11.jpg',
+        status: 'downloaded',
+      },
+    ]);
+    expect(artifact).toBeDefined();
+  });
+
+  it('txt still succeeds when an inline image download fails (partial success)', async () => {
+    const text = 'a [uploadedimage:22] b';
+    const client = {
+      getNovelDetailWithTags: jest.fn().mockResolvedValue({ novel, tags: [] }),
+      getNovelText: jest.fn().mockResolvedValue({
+        novel_text: text,
+        images: { '22': { urls: { original: 'https://i.pximg.net/22.jpg' } } },
+      }),
+      downloadImage: jest.fn().mockRejectedValue(new Error('404')),
+    } as unknown as jest.Mocked<IPixivClient>;
+    const database = { insertDownload: jest.fn() } as unknown as jest.Mocked<IDatabase>;
+    const fileService = {
+      sanitizeFileName: jest.fn((name: string) => name),
+      saveText: jest.fn().mockResolvedValue('/tmp/novels/456_Rich novel.txt'),
+      saveMetadata: jest.fn().mockResolvedValue('/tmp/456_Rich novel.txt.json'),
+      saveBinary: jest.fn(),
+    } as unknown as jest.Mocked<IFileService>;
+    const downloader = new NovelDownloader(client, database, fileService);
+
+    const artifact = await downloader.download(novel, 'bg', { type: 'novel', detectLanguage: false } as TargetConfig);
+
+    expect(artifact).toBeDefined();
+    expect(fileService.saveMetadata.mock.calls[0]![1].assets![0]).toMatchObject({
+      status: 'failed',
+      failureReason: '404',
+    });
+  });
+});

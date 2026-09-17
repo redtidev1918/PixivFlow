@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.25.0](https://github.com/redtidev1918/PixivFlow/compare/v2.24.0...v2.25.0) (2026-09-17)
+
+
+### Features
+
+* **novel:** rich-media markdown sidecar (RFC 1 Phase 2) ([#104](https://github.com/redtidev1918/PixivFlow/issues/104)) ([5346aa5](https://github.com/redtidev1918/PixivFlow/commit/5346aa59779abfb4d220a54d482e13ad907a8ca8))
+
 ## [2.24.0](https://github.com/redtidev1918/PixivFlow/compare/v2.23.0...v2.24.0) (2026-09-17)
 
 

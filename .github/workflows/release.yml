@@ -28,7 +28,7 @@ permissions:
 
 jobs:
   release:
-    uses: redtidev1918/releasegraph/.github/workflows/reusable-release.yml@20ac922821e2c11d1a6f8360b3ceafb434a7c9d6 # ReleaseGraph 20ac922 (actions:write + tag-drift recovery)
+    uses: redtidev1918/releasegraph/.github/workflows/reusable-release.yml@164413cb765a9cd404e73b2203cf7165717ca5a8 # ReleaseGraph 164413c (id-token write added for npm provenance)
     with:
       version: ${{ inputs.version || '' }}
       dry_run: ${{ github.event_name == 'pull_request' || inputs.dry_run || false }}

@@ -108,7 +108,7 @@ export class WebUIServer {
     setupRoutes(this.app);
 
     // Setup static file serving
-    setupStaticFiles(this.app, options.staticPath);
+    setupStaticFiles(this.app, options.staticPath, this.basicAuthEnabled);
 
     // Error handler (must be last)
     this.app.use(errorHandler);

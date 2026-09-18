@@ -111,3 +111,34 @@ pixivflow web
 - 在线编辑 config / secret 管理
 - 用户 / 审核 / 发布管理（属于 TelePost 业务面）
 - 实时 websocket 推送（先轮询即可；websocket 等用量证明再上）
+
+---
+
+## 实施状态（持续同步）
+
+### Phase 1 — Dashboard + Scheduler 只读
+
+- [x] 后端 `GET /api/scheduler` 已上线（PixivFlow **v2.34.0**，随 npm 发布）：
+      只读 Slot Ledger 投影，返回最近 slot + 逐 target cell
+      （status / terminal_reason_code / reason），limit ≤ 50。
+- [ ] 前端 Scheduler / Dashboard 页面：未对接（前端静态包 `webui-frontend/dist`
+      在仓库仅含构建产物；需在 pixivflow-webui / frontend 源在 `pixivflow web`
+      中接 `/api/scheduler`）。
+
+### Phase 2 — Recovery 查看 + Retry
+
+- [ ] 未开始（复用已有 recovery handler，先做只读 + 动作网关）。
+
+### Phase 3 — Execution 日志与 Artifact 浏览
+
+- [ ] 未开始。
+
+### Phase 4 — Configuration 只读 + 校验
+
+- [ ] 未开始（服务端 `validateConfig` 已有；页面与脱敏未接）。
+
+### 验证记录
+
+- `pixivflow@2.34.0` 从 registry 安装 → `pixivflow web` 真实启动 →
+  `GET /api/scheduler` 返回 `{"data":{"slots":[]}}`（空库）→ 服务端 auth-disabled
+  banner / static 均正常。

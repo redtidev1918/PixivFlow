@@ -121,17 +121,26 @@ pixivflow web
 - [x] 后端 `GET /api/scheduler` 已上线（PixivFlow **v2.34.0**，随 npm 发布）：
       只读 Slot Ledger 投影，返回最近 slot + 逐 target cell
       （status / terminal_reason_code / reason），limit ≤ 50。
-- [ ] 前端 Scheduler / Dashboard 页面：未对接（前端静态包 `webui-frontend/dist`
-      在仓库仅含构建产物；需在 pixivflow-webui / frontend 源在 `pixivflow web`
-      中接 `/api/scheduler`）。
+- [x] 前端 Scheduler 面板已上线（pixivflow-webui `feat/scheduler-control-panel`，
+      PixivFlow **v2.35.0**）：页面通过 `/api/scheduler` 展示最近 slot 与展开的
+      target cells，含 recovered slot 的 `recoveryMode` 标签。
 
 ### Phase 2 — Recovery 查看 + Retry
 
-- [ ] 未开始（复用已有 recovery handler，先做只读 + 动作网关）。
+- [x] 查看：Scheduler 展开行展示每个终态 cell 的 status / terminal_reason_code / reason。
+- [x] Retry（PixivFlow **v2.36.0**）：前端对 terminal `failed` / `no_candidate` /
+      `duplicate` cell 提供单个「重试此目标」按钮；后端
+      `POST /api/scheduler/targets/:targetId/recover`（只读时 `GET .../recover/:requestId`）
+      作为服务端代理转发到既有调度器 `POST /internal/targets/:targetId/recover`
+      （保留既有 UUID requestId / retryMode / correlationId 校验）。
+- [x] 安全约束：浏览器永不接触 `SCHEDULER_TRIGGER_TOKEN`；未配置
+      `SCHEDULER_TRIGGER_URL`（或 `PIXIVFLOW_TRIGGER_BASE_URL`）与
+      `SCHEDULER_TRIGGER_TOKEN` 时后端返回明确 503，前端提示
+      recoveryUnavailable，不做写入。
 
 ### Phase 3 — Execution 日志与 Artifact 浏览
 
-- [ ] 未开始。
+- [ ] 未开始（前端已有 Logs / Files 页；待深度整合 slot 与 artifact 关联）。
 
 ### Phase 4 — Configuration 只读 + 校验
 
@@ -142,3 +151,7 @@ pixivflow web
 - `pixivflow@2.34.0` 从 registry 安装 → `pixivflow web` 真实启动 →
   `GET /api/scheduler` 返回 `{"data":{"slots":[]}}`（空库）→ 服务端 auth-disabled
   banner / static 均正常。
+- `pixivflow@2.35.0`（WebUI Scheduler 控制面板）已发布并部署；线上执行端
+  PIXIVFLOW_REF=209644eb，`pixivflow-webui` 构建产物随包发布。
+- v2.36.0：Recovery 代理与前端重试按钮本地验证（WebUI handler 单元测试 +
+  PixivFlow 全量 Jest）、novel rich-text 类型镜修复；尚未部署。

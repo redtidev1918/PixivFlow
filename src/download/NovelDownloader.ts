@@ -154,7 +154,7 @@ export class NovelDownloader {
 
     const assets = typeof textResponse === 'string'
       ? []
-      : extractNovelAssets(text, textResponse);
+      : extractNovelAssets(text, textResponse as Parameters<typeof extractNovelAssets>[1]);
     const hadImages = assets.length > 0;
     const pendingAssets = assets.filter((a): a is NovelAsset & { url: string } => Boolean(a.url));
     if (pendingAssets.length) {

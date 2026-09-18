@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.37.0](https://github.com/redtidev1918/PixivFlow/compare/v2.36.0...v2.37.0) (2026-09-18)
+
+
+### Features
+
+* **webui:** add Execution and correlated slot-log API under Scheduler Control Panel ([1885fe8](https://github.com/redtidev1918/PixivFlow/commit/1885fe8124f57acd222fa86839c737bf1059004d))
+
 ## [2.36.0](https://github.com/redtidev1918/PixivFlow/compare/v2.35.0...v2.36.0) (2026-09-18)
 
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.33.0](https://github.com/redtidev1918/PixivFlow/compare/v2.32.0...v2.33.0) (2026-09-18)
+
+
+### Features
+
+* **web:** fail closed when binding WebUI publicly without auth ([#132](https://github.com/redtidev1918/PixivFlow/issues/132)) ([c1807d1](https://github.com/redtidev1918/PixivFlow/commit/c1807d11dca1a59d291f8a73e1e53649c9c0d2f5))
+
 ## [2.32.0](https://github.com/redtidev1918/PixivFlow/compare/v2.31.0...v2.32.0) (2026-09-18)
 
 

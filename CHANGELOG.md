@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.36.0](https://github.com/redtidev1918/PixivFlow/compare/v2.35.0...v2.36.0) (2026-09-18)
+
+
+### Features
+
+* **webui:** Recovery retry actions and novel rich-text type drift ([#142](https://github.com/redtidev1918/PixivFlow/issues/142)) ([05e9bd6](https://github.com/redtidev1918/PixivFlow/commit/05e9bd6094f393926846244ed9a602fadd527df1))
+
 ## [2.35.0](https://github.com/redtidev1918/PixivFlow/compare/v2.34.0...v2.35.0) (2026-09-18)
 
 

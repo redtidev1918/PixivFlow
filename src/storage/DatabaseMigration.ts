@@ -132,6 +132,7 @@ export class DatabaseMigration {
             -- code plus a user-facing business message, durable across restarts.
             terminal_reason_code TEXT,
             terminal_reason_message TEXT,
+            candidate_report TEXT,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             completed_at DATETIME,
@@ -284,6 +285,9 @@ export class DatabaseMigration {
       }
       if (!itemCols.includes('terminal_reason_message')) {
         columnAlters.push(`ALTER TABLE schedule_slot_items ADD COLUMN terminal_reason_message TEXT`);
+      }
+      if (!itemCols.includes('candidate_report')) {
+        columnAlters.push(`ALTER TABLE schedule_slot_items ADD COLUMN candidate_report TEXT`);
       }
 
       // Create indexes for better query performance

@@ -189,15 +189,24 @@ Production Verification 必须验证：
 
 ### Phase 1 — Candidate Report
 
-- [ ] 未开始
+- [x] `CandidateSupplyReport`（fetched / selected / rejected / reasons）接入
+      `TargetOutcome.CandidateScanSummary.supply`；
+- [x] Topic 漏斗（`duplicate_removed` / `ai_excluded` / `metadata_filtered` /
+      `language_filter`）随 lookback 聚合；
+- [x] `candidate_report` 持久化在 `schedule_slot_items`（同一 Slot Ledger，非新库）；
+- [x] 经 schedule-outcome HTTP 传到 TelePost。
 
 ### Phase 2 — Empty Result Classification
 
-- [ ] 未开始
+- [x] 保留既有 terminal codes（`no_candidate` / `duplicate_exhausted` 不变）；
+- [x] TelePost 渲染端 projection：`no_content_today` / `policy_too_narrow` /
+      `candidate_supply_low`（由 candidate_report + terminal reason 推导，不落库）。
 
 ### Phase 3 — Telegram UX Improvement
 
-- [ ] 未开始
+- [x] 审核群消息增加候选漏斗与判断行；
+- [x] 按钮改为 `重试·插画` / `放宽·插画` 等带目标名的短标签；
+- [x] callback 仍为 `sched_recover|<target_id>|normal|relaxed`，协议不变。
 
 ### Phase 4 — Topic Profile
 

@@ -870,6 +870,7 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
               error: c.error ?? null,
               terminal_reason_code: c.terminalReasonCode ?? null,
               reason: c.terminalReasonMessage ?? null,
+              candidateReport: c.candidateReport ?? null,
             };
           })
         );

@@ -82,6 +82,8 @@ export interface SlotCellSummary {
   terminalReasonCode?: string | null;
   /** User-facing business reason message (§terminal-reason). */
   terminalReasonMessage?: string | null;
+  /** Phase 1 Candidate Supply Report attached to the durable cell. */
+  candidateReport?: Record<string, unknown> | null;
 }
 
 export interface SlotRunSummary {
@@ -100,6 +102,8 @@ export interface ScheduleOutcomeTarget {
   status: CellStatus;
   work_id: string | null;
   error: string | null;
+  /** Phase 1 Candidate Supply Report ({fetched, selected, rejected, reasons}). */
+  candidate_report: Record<string, unknown> | null;
 }
 
 /**
@@ -426,6 +430,7 @@ export class SlotCoordinator {
     switch (outcome.kind) {
       case 'submitted':
         this.database.slots.lockCellWork(slotId, targetId, outcome.workId, outcome.workType);
+        this.persistCandidateReport(slotId, targetId, outcome);
         this.safeTransition(slotId, targetId, 'submitted');
         return;
       case 'stored':
@@ -433,22 +438,26 @@ export class SlotCoordinator {
         // cell, but labelled via the ledger-free 'submitted' aggregate state so
         // download-only schedules do not rerun forever.
         this.database.slots.lockCellWork(slotId, targetId, outcome.workId, outcome.workType);
+        this.persistCandidateReport(slotId, targetId, outcome);
         this.safeTransition(slotId, targetId, 'submitted');
         return;
       case 'delivery_pending':
         this.database.slots.lockCellWork(slotId, targetId, outcome.workId, outcome.workType);
+        this.persistCandidateReport(slotId, targetId, outcome);
         this.safeTransition(slotId, targetId, 'delivery_pending');
         return;
       case 'no_candidate':
         // Only terminal if the cell never locked a work; a locked work whose
         // delivery is still pending must not be collapsed to no_candidate.
         if (!cell.workId) {
+          this.persistCandidateReport(slotId, targetId, outcome);
           this.safeTransition(slotId, targetId, 'no_candidate', outcome.reason);
           this.persistTerminalReason(slotId, targetId, outcome);
         }
         return;
       case 'duplicate':
         this.database.slots.lockCellWork(slotId, targetId, outcome.workId, cell.workType ?? 'unknown');
+        this.persistCandidateReport(slotId, targetId, outcome);
         this.safeTransition(slotId, targetId, 'duplicate', outcome.reason);
         this.persistTerminalReason(slotId, targetId, outcome);
         return;
@@ -457,11 +466,28 @@ export class SlotCoordinator {
           // Leave non-terminal (selected/delivery_pending) so a later trigger
           // resumes the SAME work. Record the error without a terminal state.
           this.database.slots.setCellError?.(slotId, targetId, outcome.error);
+          this.persistCandidateReport(slotId, targetId, outcome);
           return;
         }
+        this.persistCandidateReport(slotId, targetId, outcome);
         this.safeTransition(slotId, targetId, 'failed', outcome.error);
         this.persistTerminalReason(slotId, targetId, outcome);
         return;
+    }
+  }
+
+  /** Persist the Phase 1 candidate-report funnel for a target cell. */
+  private persistCandidateReport(slotId: string, targetId: string, outcome: TargetOutcome): void {
+    const report = outcome.scan?.supply;
+    if (!report) return;
+    try {
+      this.database.slots.setCellCandidateReport(slotId, targetId, report as unknown as Record<string, unknown>);
+    } catch (error) {
+      logger.debug('Failed to persist candidate report', {
+        slot: slotId,
+        target: targetId,
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 
@@ -629,6 +655,7 @@ export class SlotCoordinator {
       error: c.lastError,
       terminalReasonCode: c.terminalReasonCode,
       terminalReasonMessage: c.terminalReasonMessage,
+      candidateReport: c.candidateReport as Record<string, unknown> | null,
     }));
 
     // Rolled up AFTER the slot row carries its terminal status/completed_at, so
@@ -687,6 +714,7 @@ export class SlotCoordinator {
         error: cell.lastError,
         terminal_reason_code: cell.terminalReasonCode,
         terminal_reason_message: cell.terminalReasonMessage,
+        candidate_report: cell.candidateReport as Record<string, unknown> | null,
       };
     });
 
@@ -816,6 +844,7 @@ export class SlotCoordinator {
       status: c.status,
       workId: c.workId,
       error: c.lastError,
+      candidateReport: c.candidateReport as Record<string, unknown> | null,
     }));
     const slotRec = this.database.slots.getSlot(slotId);
     return {

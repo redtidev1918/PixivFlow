@@ -13,14 +13,19 @@ import { DeliveryService } from '../../delivery/DeliveryService';
 import {
   CandidateAttempt,
   CandidateScanSummary,
+  CandidateSupplyReport,
   TargetOutcome,
   classifyCandidateFailure,
   classifyJobLevelOutage,
+  emptyCandidateSupplyReport,
   hasTransientFailure,
+  mergeCandidateSupplyReports,
   mergeScanSummaries,
   noEligibleCandidateText,
   skipCandidateWithoutRetry,
+  withScanSkips,
 } from '../../scheduler/TargetOutcome';
+import type { TopicSelection } from '../../topic/TopicPipeline';
 import { TargetExecutionContext, isSingleWorkCell } from '../../scheduler/WorkIdentity';
 import type { DownloadedArtifact } from '../../delivery/types';
 import type { TopicPipelineFactory } from '../../topic/createTopicPipeline';
@@ -41,6 +46,11 @@ export class NovelTargetHandler {
    * explicit verdict instead of an ambiguous "completed".
    */
   private scan: CandidateScanSummary | null = null;
+
+  /**
+   * Upstream topic-supply funnel accumulated across a lookback scan.
+   */
+  private supplyRep: CandidateSupplyReport | null = null;
 
   /**
    * Global candidate-scan bound (`download.candidateScanLimit`), supplied by
@@ -86,6 +96,7 @@ export class NovelTargetHandler {
   async handle(target: TargetConfig, execution?: TargetExecutionContext): Promise<TargetOutcome> {
     this.outcomes = [];
     this.scan = null;
+    this.supplyRep = null;
     this.execution = execution && isSingleWorkCell(target) ? execution : null;
 
     // A cell that already owns a work is in RECOVERY, not in a new selection.
@@ -155,6 +166,9 @@ export class NovelTargetHandler {
    * single-work RECOVERY path, whose cell identity is fixed.
    */
   private summarize(): TargetOutcome {
+    if (this.scan && this.supplyRep) {
+      this.scan = { ...this.scan, supply: withScanSkips(this.supplyRep, this.scan) };
+    }
     const scan = this.scan ?? undefined;
     const submitted = this.outcomes.find((o) => o.kind === 'submitted');
     if (submitted) return scan ? { ...submitted, scan } : submitted;
@@ -228,7 +242,8 @@ export class NovelTargetHandler {
 
   private async fetchNovels(target: TargetConfig, mode: string): Promise<PixivNovel[]> {
     if (mode === 'topic') {
-      return this.fetchTopicNovels(target);
+      const { works } = await this.fetchTopicNovels(target);
+      return works;
     }
     if (mode === 'ranking') {
       return this.fetchRankingNovels(target);
@@ -237,7 +252,9 @@ export class NovelTargetHandler {
     }
   }
 
-  private async fetchTopicNovels(target: TargetConfig): Promise<PixivNovel[]> {
+  private async fetchTopicNovels(
+    target: TargetConfig
+  ): Promise<{ works: PixivNovel[]; selection: TopicSelection }> {
     const topic = (target.topic ?? '').trim();
     const day = this.resolveTopicDay(target);
     const limit = target.limit || 1;
@@ -259,7 +276,16 @@ export class NovelTargetHandler {
       target.candidateCollection ?? {}
     );
     logger.info(`Topic "${topic}" novel: tags=${selection.resolvedTagCount} raw=${selection.rawCount} deduped=${selection.dedupedCount} accepted=${selection.acceptedCount} candidates=${works.length} target=${limit}`);
-    return works;
+    const report = emptyCandidateSupplyReport();
+    report.fetched = selection.rawCount;
+    report.selected = selection.acceptedCount;
+    report.rejected = Math.max(0, selection.rawCount - selection.acceptedCount);
+    report.reasons = [
+      { code: 'duplicate', count: selection.duplicateRemovedCount },
+      { code: 'metadata_filtered', count: Math.max(0, selection.dedupedCount - selection.acceptedCount) },
+    ].filter((r) => r.count > 0);
+    this.supplyRep = mergeCandidateSupplyReports(this.supplyRep ?? undefined, report);
+    return { works, selection };
   }
 
   private async handleTopicWithLookback(target: TargetConfig, displayTag: string): Promise<void> {
@@ -291,7 +317,7 @@ export class NovelTargetHandler {
           fallbackOffset: offset,
         });
       }
-      const novels = await this.fetchTopicNovels(attemptTarget);
+      const { works: novels } = await this.fetchTopicNovels(attemptTarget);
       totalFound += novels.length;
       const result = await this.pipeline.run(
         novels,

@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.32.0](https://github.com/redtidev1918/PixivFlow/compare/v2.31.0...v2.32.0) (2026-09-18)
+
+
+### Features
+
+* **web:** show auth-disabled security reminder banner in WebUI ([#129](https://github.com/redtidev1918/PixivFlow/issues/129)) ([932c5f7](https://github.com/redtidev1918/PixivFlow/commit/932c5f740e569e3eb144fe293e98716e8600d53f))
+
 ## [2.31.0](https://github.com/redtidev1918/PixivFlow/compare/v2.30.0...v2.31.0) (2026-09-18)
 
 

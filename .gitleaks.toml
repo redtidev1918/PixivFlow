@@ -138,3 +138,15 @@ description = "Vendored minified WebUI bundle: minified KeyboardEvent handler co
 regexes = [
   '''b\.key,N=b\.shiftKey;''',
 ]
+
+# ---------------------------------------------------------------------------
+# 6. Same vendored minified KeyboardEvent handler false positive surfaced by the
+# older gitleaks 8.24.3 action on Config-UjgCA3Jq.js: `at=function(b){var F=b.key,N=
+# b.shiftKey;Y.current=!0,...` is minified event handling (key + shiftKey), not an
+# API key. Exact code shape only; cannot exempt a real key-shaped value.
+# ---------------------------------------------------------------------------
+[[allowlists]]
+description = "Vendored minified WebUI bundle: KeyboardEvent handler (key + shiftKey) exact code shape (8.24.3)"
+regexes = [
+  '''at=function\(b\)\{var F=b\.key,N=b\.shiftKey;''',
+]

@@ -32,6 +32,38 @@ export interface CandidateCollectionConfig {
   minMetadataScore?: number;
 }
 
+/** Phase 4: topic-supply strategy (per-target, optional, default off). */
+export interface TopicProfileStrategyConfig {
+  /** Relative weight for publishing fresher works first (0..1, default 0.4). */
+  freshnessWeight?: number;
+  /** Relative weight for publishing higher-popularity works first (0..1, default 0.3). */
+  popularityWeight?: number;
+}
+
+/** Phase 5: durable candidate inventory ("待发池") for a target. */
+export interface CandidateInventoryConfig {
+  /** Master switch. Default false: no collection, no fallback, no new columns read. */
+  enabled?: boolean;
+  /** Max age (days) a pending candidate may stay usable for fallback. Default 30. */
+  maxAgeDays?: number;
+  /** Max pending rows retained per (topic,target). Default 20. */
+  reserveSize?: number;
+  /** When the fresh/lookback scan is empty, publish oldest pending inventory. Default true. */
+  fallback?: boolean;
+}
+
+/** Phase 4: TopicProfile (seed + related tags + supply strategy). */
+export interface TopicProfileConfig {
+  /** Primary seed tag(s); first item is the canonical topic when topic is unset. */
+  primary?: string[];
+  /** Related tags that strengthen topic membership evidence. */
+  related?: string[];
+  /** Ranking strategy knobs (Phase 4; wired after CandidateInventory). */
+  strategy?: TopicProfileStrategyConfig;
+  /** CandidateInventory policy (Phase 5). */
+  inventory?: CandidateInventoryConfig;
+}
+
 /** Behaviour when a target cannot produce the requested number of works. */
 export interface NoMatchPolicyConfig {
   /**
@@ -181,6 +213,8 @@ export interface TargetConfig {
   candidateCollection?: CandidateCollectionConfig;
   /** Bounded fallback and notification policy for an empty result. */
   noMatchPolicy?: NoMatchPolicyConfig;
+  /** Phase 4/5: topic supply profile + candidate inventory policy (all optional). */
+  topicProfile?: TopicProfileConfig;
   /**
    * Ranking mode (only used when mode='ranking')
    * - 'day': Daily ranking

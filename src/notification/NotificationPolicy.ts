@@ -108,6 +108,7 @@ export class NotificationPolicy {
       error: string | null;
       terminal_reason_code?: string | null;
       reason?: string | null;
+      candidateReport?: Record<string, unknown> | null;
     }>
   ): void {
     if (slot.manualRequestId || rows.length === 0) return;
@@ -183,6 +184,7 @@ export class NotificationPolicy {
               stage: operational?.stage ?? null,
               retryable: operational?.retryable ?? null,
               operator_hint: operational?.operatorHint ?? null,
+              candidate_report: r.candidateReport ?? null,
             };
           }),
         }

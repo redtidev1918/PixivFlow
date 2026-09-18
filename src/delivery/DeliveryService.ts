@@ -57,6 +57,7 @@ export interface ScheduleOutcomePayload {
     workType: string;
     status: string;
     workId?: string | null;
+    candidateReport?: Record<string, unknown> | null;
   }>;
 }
 

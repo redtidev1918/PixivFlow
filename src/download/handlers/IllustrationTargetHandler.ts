@@ -13,14 +13,19 @@ import { DeliveryService } from '../../delivery/DeliveryService';
 import {
   CandidateAttempt,
   CandidateScanSummary,
+  CandidateSupplyReport,
   TargetOutcome,
   classifyCandidateFailure,
   classifyJobLevelOutage,
+  emptyCandidateSupplyReport,
   hasTransientFailure,
+  mergeCandidateSupplyReports,
   mergeScanSummaries,
   noEligibleCandidateText,
   skipCandidateWithoutRetry,
+  withScanSkips,
 } from '../../scheduler/TargetOutcome';
+import type { TopicSelection } from '../../topic/TopicPipeline';
 import { TargetExecutionContext, isSingleWorkCell } from '../../scheduler/WorkIdentity';
 import type { DownloadedArtifact } from '../../delivery/types';
 import type { TopicPipelineFactory } from '../../topic/createTopicPipeline';
@@ -41,6 +46,12 @@ export class IllustrationTargetHandler {
    * explicit verdict instead of an ambiguous "completed".
    */
   private scan: CandidateScanSummary | null = null;
+
+  /**
+   * Upstream topic-supply funnel accumulated across a lookback scan (Phase 1
+   * Candidate Report: fetched/selected/rejected + reasons).
+   */
+  private supplyRep: CandidateSupplyReport | null = null;
 
   /**
    * Global candidate-scan bound (`download.candidateScanLimit`), supplied by
@@ -86,6 +97,7 @@ export class IllustrationTargetHandler {
   async handle(target: TargetConfig, execution?: TargetExecutionContext): Promise<TargetOutcome> {
     this.outcomes = [];
     this.scan = null;
+    this.supplyRep = null;
     this.execution = execution && isSingleWorkCell(target) ? execution : null;
 
     // A cell that already owns a work is in RECOVERY, not in a new selection.
@@ -141,6 +153,9 @@ export class IllustrationTargetHandler {
    * scheduled slot report success after submitting nothing.
    */
   private summarize(target: TargetConfig): TargetOutcome {
+    if (this.scan && this.supplyRep) {
+      this.scan = { ...this.scan, supply: withScanSkips(this.supplyRep, this.scan) };
+    }
     const scan = this.scan ?? undefined;
     const submitted = this.outcomes.find((o) => o.kind === 'submitted');
     if (submitted) return scan ? { ...submitted, scan } : submitted;
@@ -225,7 +240,8 @@ export class IllustrationTargetHandler {
 
   private async fetchIllustrations(target: TargetConfig, mode: string): Promise<PixivIllust[]> {
     if (mode === 'topic') {
-      return this.fetchTopicIllustrations(target);
+      const { works } = await this.fetchTopicIllustrations(target);
+      return works;
     }
     if (mode === 'ranking') {
       return this.fetchRankingIllustrations(target);
@@ -234,7 +250,9 @@ export class IllustrationTargetHandler {
     }
   }
 
-  private async fetchTopicIllustrations(target: TargetConfig): Promise<PixivIllust[]> {
+  private async fetchTopicIllustrations(
+    target: TargetConfig
+  ): Promise<{ works: PixivIllust[]; selection: TopicSelection }> {
     const topic = (target.topic ?? '').trim();
     const day = this.resolveTopicDay(target);
     const limit = target.limit || 1;
@@ -258,7 +276,19 @@ export class IllustrationTargetHandler {
       target.candidateCollection ?? {}
     );
     logger.info(`Topic "${topic}" illustration: tags=${selection.resolvedTagCount} raw=${selection.rawCount} deduped=${selection.dedupedCount} aiExcluded=${selection.aiExcludedCount} accepted=${selection.acceptedCount} candidates=${works.length} target=${limit}`);
-    return works;
+    // Candidate Supply Observability: fold this lookback day's upstream funnel
+    // into the target's accumulated Candidate Report.
+    const report = emptyCandidateSupplyReport();
+    report.fetched = selection.rawCount;
+    report.selected = selection.acceptedCount;
+    report.rejected = Math.max(0, selection.rawCount - selection.acceptedCount);
+    report.reasons = [
+      { code: 'duplicate', count: selection.duplicateRemovedCount },
+      { code: 'ai_filtered', count: selection.aiExcludedCount },
+      { code: 'metadata_filtered', count: Math.max(0, selection.dedupedCount - selection.acceptedCount) },
+    ].filter((r) => r.count > 0);
+    this.supplyRep = mergeCandidateSupplyReports(this.supplyRep ?? undefined, report);
+    return { works, selection };
   }
 
   private async handleTopicWithLookback(target: TargetConfig, displayTag: string): Promise<void> {
@@ -278,7 +308,7 @@ export class IllustrationTargetHandler {
           fallbackOffset: offset,
         });
       }
-      const illusts = await this.fetchTopicIllustrations(attemptTarget);
+      const { works: illusts } = await this.fetchTopicIllustrations(attemptTarget);
       const result = await this.pipeline.run(
         illusts,
         attemptTarget,

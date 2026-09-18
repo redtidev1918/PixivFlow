@@ -18,6 +18,7 @@ function cell(over: Partial<SlotItemRecord>): SlotItemRecord {
     lastError: null,
     terminalReasonCode: null,
     terminalReasonMessage: null,
+    candidateReport: null,
     createdAt: 'x',
     updatedAt: 'x',
     completedAt: null,

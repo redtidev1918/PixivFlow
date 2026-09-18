@@ -74,6 +74,11 @@ export interface SlotItemRecord {
   terminalReasonCode: string | null;
   /** User-facing business message for the terminal reason. */
   terminalReasonMessage: string | null;
+  /**
+   * Candidate Supply Report (Phase 1), persisted as JSON on the same cell so
+   * the durable outcome and the review-group message can never disagree.
+   */
+  candidateReport: Record<string, unknown> | null;
   createdAt: string;
   updatedAt: string;
   completedAt: string | null;
@@ -412,6 +417,29 @@ export class SlotRepository extends BaseRepository {
   }
 
   /**
+   * Persist the Phase 1 candidate-supply funnel for a cell (JSON). Idempotent;
+   * recovery re-rolls overwrite with the newer observed funnel. A malformed
+   * payload must never block the terminal transition, so it is sanitised here.
+   */
+  public setCellCandidateReport(
+    slotId: string,
+    targetId: string,
+    report: Record<string, unknown> | null
+  ): void {
+    const json = report == null ? null : JSON.stringify(report);
+    if (json != null && json.length > 4000) {
+      throw new Error('candidate_report exceeds 4000 chars');
+    }
+    this.db
+      .prepare(
+        `UPDATE schedule_slot_items
+         SET candidate_report = @report, updated_at = CURRENT_TIMESTAMP
+         WHERE slot_id = @slotId AND target_id = @targetId`
+      )
+      .run({ slotId, targetId, report: json });
+  }
+
+  /**
    * Transition a cell with FSM validation. Never downgrades a confirmed cell;
    * an illegal transition throws rather than silently corrupting state.
    */
@@ -605,6 +633,7 @@ export class SlotRepository extends BaseRepository {
       lastError: row.last_error,
       terminalReasonCode: row.terminal_reason_code ?? null,
       terminalReasonMessage: row.terminal_reason_message ?? null,
+      candidateReport: row.candidate_report ? JSON.parse(row.candidate_report) : null,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
       completedAt: row.completed_at,

@@ -95,6 +95,93 @@ export type CandidateAttempt =
   | { kind: 'skipped'; skip: CandidateSkip };
 
 /**
+ * Upstream candidate-supply funnel for one target run (topic pipeline).
+ *
+ * Deliberately an open `reasons` bucket, NOT a fixed list of columns:
+ * illustration and novel filter chains differ, and future TopicProfile /
+ * CandidateInventory phases must be able to extend the taxonomy without a
+ * breaking schema change.
+ */
+export interface CandidateSupplyReason {
+  /** Stable machine-readable reason code, e.g. `duplicate`, `ai_filtered`. */
+  code: string;
+  count: number;
+}
+
+/** Candidate-supply observability snapshot (Phase 1 Candidate Report). */
+export interface CandidateSupplyReport {
+  /** Total works surfaced by the topic search before any filtering. */
+  fetched: number;
+  /** Candidates that survived upload selection (the pool handed to the scan). */
+  selected: number;
+  /** Count rejected by all filters (fetched - selected is a stable invariant). */
+  rejected: number;
+  /** Why candidates were rejected, by reason code (extensible). */
+  reasons: CandidateSupplyReason[];
+}
+
+/**
+ * A freshly-harvested upstream funnel with no candidates selected yet.
+ */
+export function emptyCandidateSupplyReport(): CandidateSupplyReport {
+  return { fetched: 0, selected: 0, rejected: 0, reasons: [] };
+}
+
+/**
+ * Fold two supply snapshots of the SAME logical target together, so a
+ * multi-day lookback scan reports the whole funnel rather than only its last
+ * day. Reasons are summed by code.
+ */
+export function mergeCandidateSupplyReports(
+  first: CandidateSupplyReport | undefined,
+  second: CandidateSupplyReport
+): CandidateSupplyReport {
+  if (!first) return second;
+  const byCode = new Map<string, number>();
+  for (const r of [...first.reasons, ...second.reasons]) {
+    byCode.set(r.code, (byCode.get(r.code) ?? 0) + r.count);
+  }
+  const reasons = [...byCode.entries()]
+    .map(([code, count]) => ({ code, count }))
+    .filter((r) => r.count > 0)
+    .sort((a, b) => b.count - a.count);
+  return {
+    fetched: first.fetched + second.fetched,
+    selected: first.selected + second.selected,
+    rejected: Math.max(0, first.fetched + second.fetched - (first.selected + second.selected)),
+    reasons,
+  };
+}
+
+/**
+ * Fold the scan-level (download-time) candidate skips into the upstream
+ * candidate report. `selected` is reduced by every usable candidate actually
+ * offered to the scan, and the skip reasons join the upstream reasons.
+ */
+export function withScanSkips(
+  report: CandidateSupplyReport | undefined,
+  scan: CandidateScanSummary | undefined
+): CandidateSupplyReport | undefined {
+  if (!scan || scan.skipped.length === 0) return report;
+  const base = report ?? emptyCandidateSupplyReport();
+  const byCode = new Map(base.reasons.map((r) => [r.code, r.count]));
+  for (const skip of scan.skipped) {
+    byCode.set(skip.code, (byCode.get(skip.code) ?? 0) + 1);
+  }
+  const reasons = [...byCode.entries()]
+    .map(([code, count]) => ({ code, count }))
+    .filter((r) => r.count > 0)
+    .sort((a, b) => b.count - a.count);
+  const selected = Math.max(0, base.selected - scan.skipped.length);
+  return {
+    fetched: base.fetched,
+    selected,
+    rejected: Math.max(0, base.fetched - selected),
+    reasons,
+  };
+}
+
+/**
  * Bookkeeping for a target's bounded candidate scan. Attached to the terminal
  * target outcome so the run can state exactly one of:
  *
@@ -120,6 +207,12 @@ export interface CandidateScanSummary {
   skipped: CandidateSkip[];
   /** Job-level outages observed while scanning (never a candidate verdict). */
   outages: JobLevelOutage[];
+  /**
+   * Upstream candidate-supply funnel that produced this scan, when the target
+   * ran through the topic pipeline (illustration or novel). Optional so ranking
+   * / search targets without a topic funnel keep working unchanged.
+   */
+  supply?: CandidateSupplyReport;
 }
 
 /**
@@ -300,6 +393,9 @@ export function mergeScanSummaries(
     attempted: first.attempted + second.attempted,
     skipped: [...first.skipped, ...second.skipped],
     outages: [...new Set([...first.outages, ...second.outages])],
+    supply: second.supply
+      ? mergeCandidateSupplyReports(first.supply, second.supply)
+      : first.supply,
   };
 }
 

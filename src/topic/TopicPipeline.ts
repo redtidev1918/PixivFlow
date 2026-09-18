@@ -33,6 +33,8 @@ export interface TopicSelection {
   dedupedCount: number;
   acceptedCount: number;
   aiExcludedCount: number;
+  /** Works seen more than once across the topic tag space (recorded, dropped). */
+  duplicateRemovedCount: number;
 }
 
 /**
@@ -76,6 +78,7 @@ export class TopicPipeline {
     const byId = new Map<number, { work: T; candidate: TopicCandidate }>();
     let rawCount = 0;
     let aiExcludedCount = 0;
+    let duplicateRemovedCount = 0;
     const tagNames = space.tags.map((t) => t.name);
 
     for (let i = 0; i < tagNames.length; i++) {
@@ -91,7 +94,10 @@ export class TopicPipeline {
           aiExcludedCount += 1;
           continue;
         }
-        if (byId.has(work.id)) continue;
+        if (byId.has(work.id)) {
+          duplicateRemovedCount += 1;
+          continue;
+        }
         byId.set(work.id, { work, candidate: this.toCandidate(work, contentType) });
         if (byId.size >= maxCandidates) break;
       }
@@ -133,6 +139,7 @@ export class TopicPipeline {
         dedupedCount,
         acceptedCount: accepted.length,
         aiExcludedCount,
+        duplicateRemovedCount,
       },
     };
   }

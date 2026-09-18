@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.35.0](https://github.com/redtidev1918/PixivFlow/compare/v2.34.0...v2.35.0) (2026-09-18)
+
+
+### Features
+
+* **webui:** Scheduler control panel (Control Center Phase 1) ([b4a18bb](https://github.com/redtidev1918/PixivFlow/commit/b4a18bbd5d32904430213b9a61b0544f768660dd))
+* **webui:** ship Scheduler control panel from pixivflow-webui (Control Center Phase 1) ([2bbfc6a](https://github.com/redtidev1918/PixivFlow/commit/2bbfc6aba0a5e36ba847eec76ecbe0fb8d5f19e9))
+
 ## [2.34.0](https://github.com/redtidev1918/PixivFlow/compare/v2.33.0...v2.34.0) (2026-09-18)
 
 

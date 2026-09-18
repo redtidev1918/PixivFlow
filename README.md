@@ -4,10 +4,7 @@
 
 **Pixiv 下载、筛选与自动收集工具。**
 
-可以直接下载单个 Pixiv 作品（插画、小说、动图），也可以按标签、热度、日期和收藏数
-批量筛选，并通过 scheduler 定时自动收集。结果既能永久保存在本地，也能按需通过 HTTP
-可靠交付给其他服务——下游是可选的，PixivFlow 自己就能跑完「发现 → 筛选 → 下载 → 保存」
-的完整链路。
+可以直接下载单个 Pixiv 作品（插画、小说、动图），也可以按标签、热度、日期和收藏数等条件批量筛选，并通过 scheduler 定时自动收集。结果既能永久保存在本地，也能按需通过 HTTP 可靠交付给其他服务——下游是可选的，PixivFlow 自己就能跑完「发现 → 筛选 → 下载 → 保存」的完整链路。
 
 [![Version](https://img.shields.io/npm/v/pixivflow?style=flat-square)](https://www.npmjs.com/package/pixivflow)
 [![Node](https://img.shields.io/badge/Node.js-22.13%2B_LTS-green.svg?style=flat-square&logo=node.js)](https://nodejs.org/)
@@ -191,33 +188,34 @@ Email、Telegram、Discord、ntfy 等渠道；PixivFlow 不实现这些通知协
 热重载。完整双 Bot 缓存投递模板见
 [`config/fly-two-bots.example.json`](config/fly-two-bots.example.json)。
 
-### 投递事务发件箱
+### 投递事务发件箱（Outbox）
 
-投递是**事务发件箱（SQLite outbox）**式的，at-least-once 执行、effectively-once
-可见效果：每个外部副作用（一次内容投递、一条通知）在 `outbox` 表落一行，带幂等键和
-行级租约，独立 worker 立即泵送、指数退避重试（默认 5 分钟起步、最长 6 小时），超过
-`maxAttempts` 进 dead 状态并在投递账记 `failed`。进程崩溃 / 机器挂起后重启，残留的
-`processing` 租约过期即被新进程接管，重试同一个幂等意图——下游按
-`idempotent_replay`（同键，ACK 丢失重试）或 `duplicate_existing`（历史重复）收敛，
-频道里仍然只有一条消息。旧版文件型 `delivery-outbox/*.json` 清单在启动时自动一次性
-迁移进 SQLite，迁移幂等。「今天没有可投稿内容」这类通知与内容投递走同一张表、独立泵送，
-审核端暂时挂掉不会互相阻塞。
+投递和通知都先写入 SQLite 发件箱（outbox），再由后台 worker 泵送：对外副作用
+（一次内容投递、一条通知）在 `outbox` 表各占一行，带幂等键和行级租约，保证
+至少一次执行、最终只产生一次可见效果。
 
-配置 `readinessUrl` 后，worker 每次认领都先检查依赖 `/ready`。非 2xx 只把 row 放回 pending，
-不增加 attempt；这与 `/live` 的“进程还活着”语义严格分开。dead letter 通过正式 CLI 恢复：
+- 失败会自动重试：指数退避（默认 5 分钟起步、最长 6 小时）。
+- 超过 `maxAttempts` 进入 `dead` 状态，可用 `pixivflow outbox` 查看和重试。
+- 进程崩溃/重启后，残留的 `processing` 租约过期后会被新进程接管，重复发送同一个
+  幂等意图；下游按幂等键收敛，不会在频道里出现重复消息。
+- 旧的文件型 `delivery-outbox/*.json` 会在启动时自动一次性迁移进 SQLite（迁移幂等）。
+- 「今天没有可投稿内容」这类通知与内容投递走同一张表、独立泵送，互不阻塞。
+
+配置 `readinessUrl` 后，worker 每次认领都会先检查依赖 `/ready`；非 2xx 只把 row
+放回 pending，不增加 attempt。dead letter 通过正式 CLI 管理：
 
 ```bash
 pixivflow outbox list --status dead
 pixivflow outbox inspect <id>
-pixivflow outbox retry <id>   # 只接受 dead row，保留 idempotency key
+pixivflow outbox retry <id>   # 只重试 dead row，保留幂等键
 pixivflow outbox retry --dead
 pixivflow outbox cancel <id>  # 只取消尚未执行的 row
 ```
 
-`run-once` 会重新执行下载计划，不等价于 outbox replay；不要手改 SQLite 的
-`next_attempt_at`。长期运行环境的体检与收敛用 `pixivflow doctor`（卡住的 slot/outbox
-租约、pending 投递、dead 行，`--repair` 收敛）与 `pixivflow reconcile`（把下游已确认的
-历史重复登记进投递账本，默认 dry-run）。
+`run-once` 会重新执行下载计划，不等价于 outbox replay，不要手动改 SQLite 的
+`next_attempt_at`。长期体检与收敛用 `pixivflow doctor`（卡住的 slot/outbox
+租约、pending 投递、dead 行，`--repair` 收敛）与 `pixivflow reconcile`
+（把下游已确认的历史重复登记进投递账本，默认 dry-run）。
 
 ## 常用命令
 

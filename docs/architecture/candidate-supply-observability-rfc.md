@@ -214,7 +214,16 @@ Production Verification 必须验证：
 
 ### Phase 5 — Candidate Inventory
 
-- [ ] RFC only（已记录方向，待展开设计）
+- [x] 已实现（PixivFlow v2.30.0 + TelePost v2.37.0）：Collector → Candidate Inventory →
+      Reserve → Publish 已上线，`bot1` / `bot2` 四个 target 启用；
+- [x] 空结果消息渲染 `待发池：N 条（预计可用到 YYYY-MM-DD）`，保留去重与 ACK 语义。
+
+### Phase 6 — Empty-Run UX Hardening（TelePost v2.38.0）
+
+- [x] 前置告知：空待发池时终态消息增加「前瞻：待发池为空，下一发布时点若仍无新作则无法按时更新」；
+- [x] Watchdog：独立周期任务，识别超过 26h 无终态通知的 schedule，直接向审核群发静默告警，
+      按 UTC 日期幂等，每天最多一条；
+- [x] `GET /api/v1/schedule/status`：只读返回每个 schedule 最近终态时间/状态，供状态页/置顶查询。
 
 ## Final Report 模板
 

@@ -99,6 +99,7 @@ temp/
 
 # Backend build output
 dist/
+!webui-frontend/dist/
 
 # Test coverage reports
 coverage/

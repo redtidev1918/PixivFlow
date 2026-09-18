@@ -69,7 +69,7 @@ pixivflow scheduler             # long-running cron collection
 ```
 
 Prefer not to hand-write config? The interactive wizard `pixivflow setup` generates it.
-For a GUI, run `pixivflow webui` (frontend:
+For a GUI, run `pixivflow web` (frontend:
 [pixivflow-webui](https://github.com/redtidev1918/pixivflow-webui)).
 
 Downloading Pixiv ugoira additionally needs `python3` and `ffmpeg`: frames are
@@ -249,7 +249,7 @@ ledger; dry-run by default).
 | `pixivflow download --url <url>` | Direct download via URL |
 | `pixivflow random` | Random popular artwork |
 | `pixivflow scheduler` | Start scheduled jobs |
-| `pixivflow webui` | Start the WebUI |
+| `pixivflow web` | Start the WebUI |
 | `pixivflow config` | Manage config (view / edit / backup / restore) |
 | `pixivflow status` | Download stats and recent records |
 | `pixivflow health` | Health check: config, directories, connectivity |

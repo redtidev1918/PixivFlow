@@ -138,28 +138,3 @@ description = "Vendored minified WebUI bundle: minified KeyboardEvent handler co
 regexes = [
   '''b\.key,N=b\.shiftKey;''',
 ]
-
-# ---------------------------------------------------------------------------
-# 6. Same vendored minified KeyboardEvent handler false positive surfaced by the
-# older gitleaks 8.24.3 action on Config-UjgCA3Jq.js: `at=function(b){var F=b.key,N=
-# b.shiftKey;Y.current=!0,...` is minified event handling (key + shiftKey), not an
-# API key. Exact code shape only; cannot exempt a real key-shaped value.
-# ---------------------------------------------------------------------------
-[[allowlists]]
-description = "Vendored minified WebUI bundle: KeyboardEvent handler (key + shiftKey) exact code shape (8.24.3)"
-regexes = [
-  '''at=function\(b\)\{var F=b\.key,N=b\.shiftKey;''',
-]
-
-# ---------------------------------------------------------------------------
-# 7. Exact detected secret `b.key` from the same minified KeyboardEvent handler
-# surfaced by gitleaks 8.24.3's generic-api-key rule. This is a JavaScript
-# identifier for `KeyboardEvent.key`, not a credential. Exact value only — a
-# real API key can never equal `b.key`.
-# ---------------------------------------------------------------------------
-[[allowlists]]
-description = "Minified WebUI bundle KeyboardEvent.key identifier (exact detected secret)"
-regexTarget = "secret"
-regexes = [
-  '''^b\.key$''',
-]

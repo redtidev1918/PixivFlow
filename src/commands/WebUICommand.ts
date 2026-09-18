@@ -15,9 +15,9 @@ import { spawn } from 'child_process';
  * WebUI command - Start WebUI server
  */
 export class WebUICommand extends BaseCommand {
-  readonly name = 'webui';
-  readonly description = 'Start WebUI server';
-  readonly aliases: string[] = ['w'];
+  readonly name = 'web';
+  readonly description = 'Start WebUI server (memory only when used)';
+  readonly aliases: string[] = ['w', 'webui'];
   readonly metadata = {
     category: CommandCategory.UTILITY,
     requiresAuth: false,
@@ -454,10 +454,12 @@ Auto-Build Feature:
   the command will automatically build the frontend before starting.
 
 Examples:
-  pixivflow webui                                    # Auto-build if in source directory
-  pixivflow webui --port 8080                        # Use custom port
-  pixivflow webui --host 0.0.0.0                     # Bind to all interfaces
-  pixivflow webui --static-path ./webui-frontend/dist # Use custom static path`;
+  pixivflow web                                      # Start WebUI (loads frontend only now)
+  pixivflow web --port 8080                          # Use custom port
+  pixivflow web --host 0.0.0.0                       # Bind to all interfaces
+  pixivflow web --static-path ./webui-frontend/dist  # Use custom static path
+
+Backward-compatible aliases: pixivflow webui, pixivflow w`;
   }
 }
 

@@ -61,18 +61,10 @@ export class NotificationPolicy {
     outcome: TargetOutcome
   ): void {
     const name = this.targetName(target);
-    if (!name) {
-      logger.debug('Notification skipped: target has no delivery target name', {
-        targetId: target.id ?? target.filterTag ?? target.tag ?? target.type,
-      });
-      return;
-    }
+    if (!name) return;
     // No notifiable endpoint configured: drop the notification instead of
     // enqueuing it against a submission target that will reject it forever.
-    if (!this.notifiableTargets().has(name)) {
-      logger.debug(`Notification skipped for ${name}: no notifiable endpoint configured`, { targetName: name });
-      return;
-    }
+    if (!this.notifiableTargets().has(name)) return;
     const label = target.id || target.filterTag || target.tag || target.type;
 
     if (outcome.kind === 'no_candidate' && target.noMatchPolicy?.notify === true) {
@@ -108,20 +100,11 @@ export class NotificationPolicy {
       error: string | null;
       terminal_reason_code?: string | null;
       reason?: string | null;
-      candidateReport?: Record<string, unknown> | null;
     }>
   ): void {
-    if (slot.manualRequestId || rows.length === 0) return;
-    const nonSummaryRows = rows.filter((r) =>
+    if (slot.manualRequestId || rows.length === 0 || rows.some((r) =>
       !['submitted', 'no_candidate', 'duplicate', 'failed'].includes(r.status)
-    );
-    if (nonSummaryRows.length) {
-      logger.warn(`Slot summary skipped: ${nonSummaryRows.length} row(s) with non-summarizable status`, {
-        slotId: slot.slotId,
-        targets: nonSummaryRows.map((r) => ({ targetId: r.targetId, status: r.status })),
-      });
-      return;
-    }
+    )) return;
     const memberIds = new Set(rows.map((r) => r.targetId));
     const targets = this.targetsWithUrl('scheduleOutcomeUrl', memberIds);
     if (targets.size === 0) return;
@@ -184,7 +167,6 @@ export class NotificationPolicy {
               stage: operational?.stage ?? null,
               retryable: operational?.retryable ?? null,
               operator_hint: operational?.operatorHint ?? null,
-              candidate_report: r.candidateReport ?? null,
             };
           }),
         }
@@ -239,7 +221,8 @@ export class NotificationPolicy {
       new DeliveryService(this.database).enqueueNotification(targetName, text, key);
     } catch (error) {
       // Durable enqueue failure must not unwind the content run.
-      logger.warn('notification enqueue failed', { targetName, key, error: (error as Error).message });
+      // eslint-disable-next-line no-console
+      console.warn('notification enqueue failed', { targetName, key, error: (error as Error).message });
     }
   }
 

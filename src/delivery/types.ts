@@ -148,8 +148,6 @@ export interface DeliveryNotificationRequest {
       /** Whether a later/manual attempt may succeed; terminal does not mean auto-retry pending. */
       retryable?: boolean | null;
       operator_hint?: string | null;
-      /** Phase 1 Candidate Supply Report ({fetched, selected, rejected, reasons}). */
-      candidate_report?: Record<string, unknown> | null;
     }>;
   };
 }

@@ -118,8 +118,8 @@ describe('schedule outcome notification', () => {
       ]);
       expect(payloadJson(db).scheduleOutcome.status).toBe('partial');
       expect(payloadJson(db).scheduleOutcome.targets).toEqual([
-        { targetId: 'bot1-illust', workType: 'illustration', status: 'submitted', workId: '29118637', error: null, terminal_reason_code: null, reason: null, stage: null, retryable: null, operator_hint: null, candidate_report: null },
-        { targetId: 'bot1-novel', workType: 'novel', status: 'no_candidate', workId: null, error: null, terminal_reason_code: null, reason: null, stage: null, retryable: null, operator_hint: null, candidate_report: null },
+        { targetId: 'bot1-illust', workType: 'illustration', status: 'submitted', workId: '29118637', error: null, terminal_reason_code: null, reason: null, stage: null, retryable: null, operator_hint: null },
+        { targetId: 'bot1-novel', workType: 'novel', status: 'no_candidate', workId: null, error: null, terminal_reason_code: null, reason: null, stage: null, retryable: null, operator_hint: null },
       ]);
     });
   });
@@ -287,8 +287,8 @@ describe('schedule outcome delivery to TelePost', () => {
         slot_id: slot.slotId,
         status: 'partial',
         targets: [
-          { target_id: 'bot1-illust', work_type: 'illustration', status: 'submitted', work_id: '29118637', terminal_reason_code: null, reason: null, stage: null, retryable: null, operator_hint: null, candidate_report: null },
-          { target_id: 'bot1-novel', work_type: 'novel', status: 'no_candidate', work_id: null, terminal_reason_code: null, reason: null, stage: null, retryable: null, operator_hint: null, candidate_report: null },
+          { target_id: 'bot1-illust', work_type: 'illustration', status: 'submitted', work_id: '29118637', terminal_reason_code: null, reason: null, stage: null, retryable: null, operator_hint: null },
+          { target_id: 'bot1-novel', work_type: 'novel', status: 'no_candidate', work_id: null, terminal_reason_code: null, reason: null, stage: null, retryable: null, operator_hint: null },
         ],
       });
     } finally {

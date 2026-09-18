@@ -12,7 +12,7 @@ PixivFlow 的一切下载行为都由「命令 + 配置」驱动。本章讲清�
 
 | 模式 | 用法 | 一句话说明 |
 | --- | --- | --- |
-| URL 直链 | `download --url <链接>` | 粘贴即下,自动识别作品类型 |
+| URL 直链 | `download --url <链接>` | 粘贴即下,自动识别品类型 |
 | 标签搜索 | targets 配置 `mode: "search"`(默认) | 按标签 + 筛选条件批量收集 |
 | 排行榜 | targets 配置 `mode: "ranking"` | 从日/周/月榜抓取再按条件过滤 |
 | 随机下载 | `random` 命令或 target `random: true` | 从结果中随机挑选,保持惊喜感 |
@@ -125,7 +125,7 @@ pixivflow scheduler
 ## WebUI
 
 ```bash
-pixivflow webui     # 监听 3000 端口,浏览器打开 http://localhost:3000
+pixivflow web     # 监听 3000 端口,浏览器打开 http://localhost:3000
 ```
 
 提供仪表盘统计、下载任务管理、URL 下载、文件浏览预览、历史记录、实时日志和配置编辑。REST 与 WebSocket 接口细节见 [API](API.md),前端源码在独立仓库 [pixivflow-webui](https://github.com/redtidev1918/pixivflow-webui)。Docker 场景直接启用 compose 中的 `pixivflow-webui` 服务即可。
@@ -184,7 +184,7 @@ pixivflow webui     # 监听 3000 端口,浏览器打开 http://localhost:3000
 | --- | --- |
 | `help [command]` | 总帮助或单命令帮助 |
 | `version` | 显示版本号 |
-| `webui` | 启动 WebUI 服务器 |
+| `web` | 启动 WebUI 服务器 |
 
 ---
 

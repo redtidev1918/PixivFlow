@@ -64,9 +64,28 @@ function getPackageVersion(): string {
 }
 
 /**
- * Setup static file serving for SPA frontend
+ * Inject a one-time dismissal security notice into the served SPA index.html
+ * when WebUI basic auth is NOT configured (WEBUI_USERNAME / WEBUI_PASSWORD).
+ * First local start needs no credentials; the banner only reminds operators
+ * to set them before exposing the server beyond localhost.
  */
-export function setupStaticFiles(app: Express, staticPath?: string): void {
+export function injectAuthBanner(indexHtml: string, basicAuthEnabled: boolean): string {
+  if (basicAuthEnabled || indexHtml.includes('pixivflow-auth-banner')) {
+    return indexHtml;
+  }
+  const banner = [
+    '<div id="pixivflow-auth-banner" style="position:sticky;top:0;z-index:9999;display:flex;align-items:center;gap:12px;padding:8px 16px;background:#fff7e0;border-bottom:1px solid #f0d99a;color:#6b5300;font:14px/1.5 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;">',
+    '  <span>⚠️ <strong>安全提醒 / Security:</strong> WebUI 认证未启用（WEBUI_USERNAME / WEBUI_PASSWORD 未设置）。首次本地使用无需设置；若需对外暴露，请先设置用户名密码并重启服务。</span>',
+    '  <button type="button" title="知道了 / Got it" style="margin-left:auto;border:0;background:transparent;color:#6b5300;cursor:pointer;font-size:18px;line-height:1;" onclick="this.parentElement.remove()">✕</button>',
+    '</div>',
+  ].join('\n');
+  return indexHtml.replace('</body>', banner + '\n</body>');
+}
+
+/**
+ * Setup static file serving for SPA frontend (injects auth-disabled notice when basic auth is off).
+ */
+export function setupStaticFiles(app: Express, staticPath?: string, basicAuthEnabled = false): void {
   if (!staticPath) {
     // Root path handler when static files are not configured
     app.get('/', (req: Request, res: Response) => {
@@ -90,6 +109,7 @@ export function setupStaticFiles(app: Express, staticPath?: string): void {
 
   const resolvedStaticPath = path.resolve(staticPath);
   const indexPath = path.join(resolvedStaticPath, 'index.html');
+  let servedIndexHtml: string | null = null;
 
   // Verify static path and index.html exist
   if (!fs.existsSync(resolvedStaticPath)) {
@@ -101,6 +121,7 @@ export function setupStaticFiles(app: Express, staticPath?: string): void {
     });
   } else {
     logger.info('Serving static files', { path: resolvedStaticPath });
+    servedIndexHtml = injectAuthBanner(fs.readFileSync(indexPath, 'utf8'), basicAuthEnabled);
   }
 
   // Serve static files (CSS, JS, images, etc.)
@@ -114,15 +135,7 @@ export function setupStaticFiles(app: Express, staticPath?: string): void {
   // Explicitly handle root path first
   app.get('/', (req: Request, res: Response, next: NextFunction) => {
     if (fs.existsSync(indexPath)) {
-      res.sendFile(indexPath, (err) => {
-        if (err) {
-          logger.error('Failed to send index.html for root path', {
-            error: err.message,
-            path: indexPath,
-          });
-          next(err);
-        }
-      });
+      res.type('html').send(servedIndexHtml);
     } else {
       logger.warn('index.html not found, cannot serve frontend', {
         path: indexPath,
@@ -143,16 +156,7 @@ export function setupStaticFiles(app: Express, staticPath?: string): void {
     }
     // Send index.html for all other routes (SPA routing)
     if (fs.existsSync(indexPath)) {
-      res.sendFile(indexPath, (err) => {
-        if (err) {
-          logger.error('Failed to send index.html for SPA route', {
-            error: err.message,
-            path: indexPath,
-            requestedPath: req.path,
-          });
-          next(err);
-        }
-      });
+      res.type('html').send(servedIndexHtml);
     } else {
       next();
     }

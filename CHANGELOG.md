@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.29.0](https://github.com/redtidev1918/PixivFlow/compare/v2.28.1...v2.29.0) (2026-09-18)
+
+
+### Features
+
+* **observability:** candidate supply report + empty result projection + target-labeled recovery buttons ([#118](https://github.com/redtidev1918/PixivFlow/issues/118)) ([f3b2286](https://github.com/redtidev1918/PixivFlow/commit/f3b2286bcdc7743b4247ee988ce54ee4d0644bc6))
+
 ## [2.28.1](https://github.com/redtidev1918/PixivFlow/compare/v2.28.0...v2.28.1) (2026-09-18)
 
 

@@ -146,6 +146,9 @@ speculative infrastructure.
 - `pixivflow web` 是 **PixivFlow（执行平面）的浏览器控制入口**，不是第二系统：
   只读呈现 Slot Ledger / 状态 / 结果，运维动作只经已有 Recovery / Scheduler /
   Trigger 契约；**禁止**在 WebUI 层建新 DB、新状态机、第二个 scheduler。
+- 控制中心 Phase 1 前端已随 `webui-frontend/dist` 内置：**调度中心**页只读展示最近
+  slot（`/api/scheduler`），含逐 target 状态 / terminal reason；不产生写操作，
+  运维动作仍走已有 Recovery / Trigger 契约。
 - 已上线只读 API：`GET /api/scheduler`（v2.34.0）返回最近 slot + 逐 target cell
   （slot_id / status / terminal_reason_code / reason），上限 50 条；只读、不输出
   token / secret / path / SQL / stack。

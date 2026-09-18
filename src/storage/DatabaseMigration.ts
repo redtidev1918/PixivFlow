@@ -220,6 +220,25 @@ export class DatabaseMigration {
             state TEXT NOT NULL,
             updated_at INTEGER NOT NULL
           )`,
+        // Phase 5 CandidateInventory: durable 待发池 for sparse topics. Same
+        // database and transaction world as the Slot Ledger; never a second
+        // state authority. Only populated when target.topicProfile.inventory.enabled.
+        `CREATE TABLE IF NOT EXISTS candidate_inventory (
+            pixiv_id TEXT NOT NULL,
+            work_type TEXT NOT NULL,
+            topic TEXT NOT NULL,
+            target_id TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending',
+            snapshot_json TEXT NOT NULL,
+            first_seen_date TEXT NOT NULL,
+            last_seen_date TEXT NOT NULL,
+            seen_count INTEGER NOT NULL DEFAULT 1,
+            attempt_count INTEGER NOT NULL DEFAULT 0,
+            expires_at TEXT NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (pixiv_id, work_type, topic, target_id)
+          )`,
         // Durable error event ledger for observability (structured error
         // taxonomy; populated by download/system handlers and shown in the
         // admin API). Append-only until an operator marks a row resolved.
@@ -241,6 +260,7 @@ export class DatabaseMigration {
             resolved_at DATETIME
           )`,
         `CREATE INDEX IF NOT EXISTS idx_system_errors_bot_created ON system_errors(bot_id, created_at)`,
+        `CREATE INDEX IF NOT EXISTS idx_cinventory_pending ON candidate_inventory(status, first_seen_date, expires_at)`,
       ];
 
       // Phase 1: create tables (idempotent). Must run before any PRAGMA-based

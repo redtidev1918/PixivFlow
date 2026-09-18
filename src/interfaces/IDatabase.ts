@@ -1,4 +1,5 @@
 import { AccessTokenStore, DownloadRecordInput, ExecutionStatus, SchedulerExecutionRecord } from '../storage/Database';
+import { CandidateInventoryRepository } from '../storage/repositories/CandidateInventoryRepository';
 
 /**
  * Interface for database operations
@@ -167,5 +168,8 @@ export interface IDatabase {
     markResolved(id: number): { changes: number };
     countSince(botId: string | null, hours: number): number;
   };
+
+  /** Phase 5 durable CandidateInventory (待发池). */
+  readonly candidateInventory: CandidateInventoryRepository;
 }
 

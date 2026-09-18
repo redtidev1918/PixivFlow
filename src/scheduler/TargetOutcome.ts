@@ -108,6 +108,18 @@ export interface CandidateSupplyReason {
   count: number;
 }
 
+/** Phase 5: durable 待发池 snapshot for sparse topics (only when enabled). */
+export interface CandidateInventoryReport {
+  /** Rows still usable for fallback at report time. */
+  pendingCount: number;
+  /** Target's configured max retained rows. */
+  reserveSize: number;
+  /** Max age in days before a pending candidate expires. */
+  maxAgeDays: number;
+  /** Earliest still-pending first-seen date (YYYY-MM-DD), null when empty. */
+  oldestSeenDate: string | null;
+}
+
 /** Candidate-supply observability snapshot (Phase 1 Candidate Report). */
 export interface CandidateSupplyReport {
   /** Total works surfaced by the topic search before any filtering. */
@@ -118,13 +130,15 @@ export interface CandidateSupplyReport {
   rejected: number;
   /** Why candidates were rejected, by reason code (extensible). */
   reasons: CandidateSupplyReason[];
+  /** Phase 5: durable 待发池 reserve (optional, present only when enabled). */
+  inventory?: CandidateInventoryReport;
 }
 
 /**
  * A freshly-harvested upstream funnel with no candidates selected yet.
  */
 export function emptyCandidateSupplyReport(): CandidateSupplyReport {
-  return { fetched: 0, selected: 0, rejected: 0, reasons: [] };
+  return { fetched: 0, selected: 0, rejected: 0, reasons: [], inventory: undefined };
 }
 
 /**
@@ -150,6 +164,7 @@ export function mergeCandidateSupplyReports(
     selected: first.selected + second.selected,
     rejected: Math.max(0, first.fetched + second.fetched - (first.selected + second.selected)),
     reasons,
+    inventory: second.inventory ?? first.inventory,
   };
 }
 
@@ -178,6 +193,7 @@ export function withScanSkips(
     selected,
     rejected: Math.max(0, base.fetched - selected),
     reasons,
+    inventory: base.inventory,
   };
 }
 

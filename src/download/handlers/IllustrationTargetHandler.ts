@@ -34,6 +34,14 @@ import { recordSystemError, classifySystemError } from '../../observability';
 import { targetErrorContext } from '../../observability/context';
 import { resolveCandidateScanLimit } from '../plan/DownloadPlanner';
 import { deliveryContextFields } from './deliveryContext';
+import {
+  attachInventoryReport,
+  inventoryPolicy,
+  inventoryTargetId,
+  inventoryTopic,
+  markInventoryAttempt,
+  recordInventoryCandidates,
+} from '../inventory';
 
 export class IllustrationTargetHandler {
   /** Outcomes produced during this handle() call (deliveries + terminal non-matches). */
@@ -276,6 +284,9 @@ export class IllustrationTargetHandler {
       target.candidateCollection ?? {}
     );
     logger.info(`Topic "${topic}" illustration: tags=${selection.resolvedTagCount} raw=${selection.rawCount} deduped=${selection.dedupedCount} aiExcluded=${selection.aiExcludedCount} accepted=${selection.acceptedCount} candidates=${works.length} target=${limit}`);
+    // Phase 5: harvest the accepted-but-not-yet-delivered works into the
+    // durable 待发池 (idempotent; only when the target opts in).
+    recordInventoryCandidates(this.database, target, topic, day, works, 'illustration');
     // Candidate Supply Observability: fold this lookback day's upstream funnel
     // into the target's accumulated Candidate Report.
     const report = emptyCandidateSupplyReport();
@@ -320,6 +331,7 @@ export class IllustrationTargetHandler {
       this.scan = mergeScanSummaries(this.scan, result.scan);
       if (result.downloaded > 0) {
         this.handleDownloadResult(result, target, 'topic', illusts.length);
+        this.markInventorySubmittedFromOutcomes(target, inventoryTopic(target), 'illustration');
         return;
       }
       if (this.scan && this.scan.outages.length > 0) {
@@ -327,6 +339,17 @@ export class IllustrationTargetHandler {
         // illustration": stop looking back and let the job fail/retry.
         return;
       }
+    }
+
+    // Phase 5: when the fresh + lookback scan produced nothing, and the target
+    // opted into CandidateInventory, publish oldest pending reserve candidates.
+    const topic = inventoryTopic(target);
+    if (await this.tryInventoryFallback(target, topic, 'illustration')) {
+      return;
+    }
+    // Report how much reserve remains so the empty result is not a dead end.
+    if (this.supplyRep) {
+      this.supplyRep = attachInventoryReport(this.database, target, topic, this.supplyRep);
     }
 
     const scan = this.scan;
@@ -347,6 +370,77 @@ export class IllustrationTargetHandler {
       reason: message,
       ...(scan ? { scan } : {}),
     });
+  }
+
+
+  /**
+   * Phase 5 fallback: claim oldest pending candidate(s) from the durable
+   * 待发池 and try to publish them exactly like a normal day's pipeline run.
+   * Returns true when at least one work reached a delivery/stored outcome.
+   */
+  private async tryInventoryFallback(
+    target: TargetConfig,
+    topic: string,
+    workType: 'illustration' | 'novel'
+  ): Promise<boolean> {
+    const policy = inventoryPolicy(target);
+    if (!policy.enabled || policy.fallback === false) return false;
+    const targetId = inventoryTargetId(target);
+    const repo = this.database.candidateInventory;
+    while (true) {
+      const row = repo.claimNext({ topic, targetId, reserveSize: policy.reserveSize, date: getTodayDate() });
+      if (!row) break;
+      const id = Number(row.pixivId);
+      if (!Number.isFinite(id)) {
+        repo.markFiltered(row.pixivId, row.workType, topic, targetId);
+        continue;
+      }
+      let detail: PixivIllust;
+      try {
+        detail = await this.client.getIllustration(id);
+      } catch (error) {
+        this.logError(error, `Inventory candidate illustration ${id} could not be fetched`);
+        repo.markSelectedBackToPending(row.pixivId, row.workType, topic, targetId);
+        continue;
+      }
+      const attemptTarget = { ...target };
+      const result = await this.pipeline.run(
+        [detail],
+        attemptTarget,
+        'illustration',
+        (illust, tag) => this.downloadAndDeliver(illust, tag, attemptTarget)
+      );
+      this.scan = mergeScanSummaries(this.scan, result.scan);
+      if (result.downloaded > 0) {
+        this.handleDownloadResult(result, attemptTarget, 'topic', 1);
+        markInventoryAttempt(this.database, target, topic, row.pixivId, 'illustration', 'submitted');
+        return true;
+      }
+      if (this.scan && this.scan.outages.length > 0) {
+        // A dead token / dead network is not "no candidate": retry the same
+        // row on the next run instead of discarding it.
+        markInventoryAttempt(this.database, target, topic, row.pixivId, 'illustration', 'pending');
+        return false;
+      }
+      // The claimed work is no longer usable (deleted/private/duplicate): drop
+      // it permanently and try the next pending row.
+      markInventoryAttempt(this.database, target, topic, row.pixivId, 'illustration', 'filtered');
+    }
+    return false;
+  }
+
+  /** Mark inventory rows whose work reached a delivery/stored outcome. */
+  private markInventorySubmittedFromOutcomes(
+    target: TargetConfig,
+    topic: string,
+    workType: 'illustration' | 'novel'
+  ): void {
+    if (!inventoryPolicy(target).enabled) return;
+    for (const outcome of this.outcomes) {
+      if (outcome.kind === 'delivery_pending' || outcome.kind === 'submitted' || outcome.kind === 'stored') {
+        markInventoryAttempt(this.database, target, topic, outcome.workId, workType, 'submitted');
+      }
+    }
   }
 
   private resolveTopicDay(target: TargetConfig): string {

@@ -34,6 +34,14 @@ import { recordSystemError, classifySystemError } from '../../observability';
 import { targetErrorContext } from '../../observability/context';
 import { resolveCandidateScanLimit } from '../plan/DownloadPlanner';
 import { deliveryContextFields } from './deliveryContext';
+import {
+  attachInventoryReport,
+  inventoryPolicy,
+  inventoryTargetId,
+  inventoryTopic,
+  markInventoryAttempt,
+  recordInventoryCandidates,
+} from '../inventory';
 import { findRichNovelSources, interpolateEnv, publishRichNovelPreview } from '../../delivery/TelePressRichNovel';
 
 export class NovelTargetHandler {
@@ -276,6 +284,7 @@ export class NovelTargetHandler {
       target.candidateCollection ?? {}
     );
     logger.info(`Topic "${topic}" novel: tags=${selection.resolvedTagCount} raw=${selection.rawCount} deduped=${selection.dedupedCount} accepted=${selection.acceptedCount} candidates=${works.length} target=${limit}`);
+    recordInventoryCandidates(this.database, target, topic, day, works, 'novel');
     const report = emptyCandidateSupplyReport();
     report.fetched = selection.rawCount;
     report.selected = selection.acceptedCount;
@@ -332,11 +341,21 @@ export class NovelTargetHandler {
       aggregate.skipped += result.skipped;
       aggregate.alreadyDownloaded += result.alreadyDownloaded;
       aggregate.filteredOut += result.filteredOut;
+      if (result.downloaded > 0) {
+        this.markInventorySubmittedFromOutcomes(target, inventoryTopic(target), 'novel');
+      }
       if (aggregate.scan.outages.length > 0) {
         // A dead token / dead database / dead network is not "no matching
         // novel": stop looking back and let the job fail/retry.
         break;
       }
+    }
+
+    const topic = inventoryTopic(target);
+    await this.tryInventoryFallback(target, topic, aggregate);
+
+    if (this.supplyRep) {
+      this.supplyRep = attachInventoryReport(this.database, target, topic, this.supplyRep);
     }
 
     this.scan = aggregate.scan;
@@ -348,6 +367,77 @@ export class NovelTargetHandler {
       totalFound,
       checkedDays
     );
+  }
+
+
+  /**
+   * Phase 5 fallback: claim pending novel candidates and publish them into the
+   * existing aggregate day-scan (same idempotent pipeline as a normal day).
+   */
+  private async tryInventoryFallback(
+    target: TargetConfig,
+    topic: string,
+    aggregate: DownloadPipelineResult
+  ): Promise<void> {
+    const policy = inventoryPolicy(target);
+    if (!policy.enabled || policy.fallback === false) return;
+    // Only a fully-empty fresh/lookback window may draw from the reserve; a
+    // partial day stays on fresh supply rather than padding beyond the limit.
+    if (aggregate.downloaded > 0) return;
+    const targetId = inventoryTargetId(target);
+    const repo = this.database.candidateInventory;
+    while (aggregate.downloaded < (target.limit || 1)) {
+      const row = repo.claimNext({ topic, targetId, reserveSize: policy.reserveSize, date: getTodayDate() });
+      if (!row) break;
+      const id = Number(row.pixivId);
+      if (!Number.isFinite(id)) {
+        repo.markFiltered(row.pixivId, row.workType, topic, targetId);
+        continue;
+      }
+      let detail: PixivNovel;
+      try {
+        detail = await this.client.getNovelDetail(id);
+      } catch (error) {
+        this.logError(error, `Inventory candidate novel ${id} could not be fetched`);
+        repo.markSelectedBackToPending(row.pixivId, row.workType, topic, targetId);
+        continue;
+      }
+      const attemptTarget: TargetConfig = {
+        ...target,
+        limit: (target.limit || 1) - aggregate.downloaded,
+      };
+      const result = await this.pipeline.run(
+        [detail],
+        attemptTarget,
+        'novel',
+        (novel, tag) => this.downloadAndDeliver(novel, tag, attemptTarget)
+      );
+      aggregate.scan = mergeScanSummaries(aggregate.scan, result.scan);
+      aggregate.downloaded += result.downloaded;
+      aggregate.skipped += result.skipped;
+      aggregate.alreadyDownloaded += result.alreadyDownloaded;
+      aggregate.filteredOut += result.filteredOut;
+      if (result.downloaded > 0) {
+        markInventoryAttempt(this.database, target, topic, row.pixivId, 'novel', 'submitted');
+        continue;
+      }
+      if (aggregate.scan.outages.length > 0) return;
+      markInventoryAttempt(this.database, target, topic, row.pixivId, 'novel', 'filtered');
+    }
+  }
+
+  /** Mark inventory rows whose work reached a delivery/stored outcome. */
+  private markInventorySubmittedFromOutcomes(
+    target: TargetConfig,
+    topic: string,
+    workType: 'illustration' | 'novel'
+  ): void {
+    if (!inventoryPolicy(target).enabled) return;
+    for (const outcome of this.outcomes) {
+      if (outcome.kind === 'delivery_pending' || outcome.kind === 'submitted' || outcome.kind === 'stored') {
+        markInventoryAttempt(this.database, target, topic, outcome.workId, workType, 'submitted');
+      }
+    }
   }
 
   private resolveTopicDay(target: TargetConfig): string {

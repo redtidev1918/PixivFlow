@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.30.0](https://github.com/redtidev1918/PixivFlow/compare/v2.29.0...v2.30.0) (2026-09-18)
+
+
+### Features
+
+* **candidate-inventory:** topic profile + durable 待发池 fallback ([935d6ca](https://github.com/redtidev1918/PixivFlow/commit/935d6ca4a17369058a52b42d8a2ed864563a2190))
+* **candidate-inventory:** topic profile + durable 待发池 fallback ([684ee28](https://github.com/redtidev1918/PixivFlow/commit/684ee28bdd11272c6b33af7e30342088e57b0c87))
+
 ## [2.29.0](https://github.com/redtidev1918/PixivFlow/compare/v2.28.1...v2.29.0) (2026-09-18)
 
 

@@ -164,16 +164,16 @@ Production Verification：
 ## 实施状态
 
 ### Phase 4 — TopicProfile
-- [ ] 配置类型 + schema 校验 + 文档
-- [ ] 默认关闭 / 每 target 可选
+- [x] 配置类型 + schema 校验 + 文档
+- [x] 默认关闭 / 每 target 可选（生产已为 bot1/bot2 开启）
 
 ### Phase 5 — CandidateInventory
-- [ ] 迁移：`candidate_inventory` 表 + 索引
-- [ ] `CandidateInventoryRepository`（upsert / claimNext / markSubmitted / count / evict）
-- [ ] Illustration / Novel 的 topic 扫描写入 pending inventory
-- [ ] 空窗 fallback：`claimNext` → 按 target 再跑 `pipeline.run`
-- [ ] `CandidateSupplyReport.inventory` 字段 + 持久化
-- [ ] TelePost 空结果消息渲染 `待发池：N 条`
+- [x] 迁移：`candidate_inventory` 表 + 索引
+- [x] `CandidateInventoryRepository`（upsert / claimNext / markSubmitted / count / evict）
+- [x] Illustration / Novel 的 topic 扫描写入 pending inventory
+- [x] 空窗 fallback：`claimNext` → 按 target 再跑 `pipeline.run`
+- [x] `CandidateSupplyReport.inventory` 字段 + 持久化
+- [x] TelePost 空结果消息渲染 `待发池：N 条`
 
 ## Final Report 模板
 

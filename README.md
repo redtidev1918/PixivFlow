@@ -64,7 +64,7 @@ pixivflow scheduler             # 按 cron 配置长期挂机自动收集
 ```
 
 不想手写配置？运行交互式向导 `pixivflow setup` 一步步生成。图形界面用
-`pixivflow webui`（前端见 [pixivflow-webui](https://github.com/redtidev1918/pixivflow-webui)）。
+`pixivflow web`（前端见 [pixivflow-webui](https://github.com/redtidev1918/pixivflow-webui)）。
 
 下载 Pixiv 动图（ugoira）还需要 `python3` 和 `ffmpeg`：程序按逐帧延迟合成循环 GIF，
 可直接作为动画交付给下游。官方 Docker 镜像已包含两者，详见
@@ -227,7 +227,7 @@ pixivflow outbox cancel <id>  # 只取消尚未执行的 row
 | `pixivflow download --url <url>` | 通过 URL 直接下载 |
 | `pixivflow random` | 随机下载热门作品 |
 | `pixivflow scheduler` | 启动定时任务 |
-| `pixivflow webui` | 启动 WebUI |
+| `pixivflow web` | 启动 WebUI |
 | `pixivflow config` | 配置管理（查看 / 编辑 / 备份 / 恢复） |
 | `pixivflow status` | 下载统计与最近记录 |
 | `pixivflow health` | 健康检查：配置、目录可写性、连通性 |

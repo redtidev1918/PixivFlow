@@ -113,3 +113,28 @@ regexes = [
   # exempt, which re-opens the exact hole the comment above describes.
   '''^lsACyCD94FhDUtGTXi3QzcFE2uU1hqtDaKeqrdwj$''',
 ]
+
+# ---------------------------------------------------------------------------
+# 4. False positive in vendored minified WebUI bundle (rc-input-number's
+# `onKeyDown` handler): `key` field of a keydown event plus `b.shiftKey`.
+# Not a credential: `shiftKey` is a standard KeyboardEvent property. Pinned to
+# the exact generated secret value so no real key-shaped value is exempted.
+# ---------------------------------------------------------------------------
+[[allowlists]]
+description = "Vendored minified WebUI bundle: KeyboardEvent.shiftKey false positive (exact value)"
+regexTarget = "secret"
+regexes = [
+  '''^N=b\.shiftKey$''',
+]
+
+# ---------------------------------------------------------------------------
+# 5. Same vendored minified WebUI bundle false positive matched at the literal
+# code string level (NO regexTarget): `b.key,N=b.shiftKey;` is minified
+# KeyboardEvent handling (key + shiftKey), not an API key. Exact code shape
+# only — it cannot exempt a real key-shaped value.
+# ---------------------------------------------------------------------------
+[[allowlists]]
+description = "Vendored minified WebUI bundle: minified KeyboardEvent handler code shape (key + shiftKey)"
+regexes = [
+  '''b\.key,N=b\.shiftKey;''',
+]

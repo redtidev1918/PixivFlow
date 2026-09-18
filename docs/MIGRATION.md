@@ -6,7 +6,7 @@
 > mapping table, how to run the config path migration command, and answers
 > to common upgrade questions.
 
-本文档面向从 v1(shell 脚本工作流)升级到 v2 的用户。读完即可在 v2 下完成登录、下载与配置管理,不需要了解内部实现。
+本文档面向从 v1(shell 脚本工流)升级到 v2 的用户。读完即可在 v2 下完成登录、下载与配置管理,不需要了解内部实现。
 
 ---
 
@@ -65,7 +65,7 @@ v1 统一使用仓库内 `config/standalone.config.json`。v2 按运行场景解
 | 手工数文件 | `pixivflow dirs`(别名 `paths`) | 列出下载/数据库等目录信息,`--verbose` 更详细 |
 | `node dist/index.js --version` | `pixivflow version`(别名 `v`) | 版本信息 |
 
-其余新增能力:`pixivflow normalize`(整理已下载文件)与 `pixivflow webui`(启动 WebUI 服务器,别名 `w`,支持 `--port/--host`)。v1 没有 WebUI 服务入口,此前由前端独立管理。
+其余新增能力:`pixivflow normalize`(整理已下载文件)与 `pixivflow web`(启动 WebUI 服务器,别名 `w`,支持 `--port/--host`)。v1 没有 WebUI 服务入口,此前由前端独立管理。
 
 ---
 
@@ -112,7 +112,7 @@ A: engines 字段限定 Node ^18.14.0 / ^20 / ^22,npm >=9。
 A: `pixivflow dirs` 显示全部存储路径及其是否存在;若不是预期位置,回到上文优先级表检查是否有别的配置被选中。
 
 **Q: WebUI 怎么启动?**
-A: `pixivflow webui`(或 npm 场景 `npm run webui:start`)。前端静态资源缺失时它会尝试定位 npm 全局安装路径内打包的前端,无法找到时会给出构建指引。
+A: `pixivflow web`(或 npm 场景 `npm run webui:start`)。前端静态资源缺失时它会尝试定位 npm 全局安装路径内打包的前端,无法找到时会给出构建指引。
 
 **Q: 原 v1 的 cron 表达式还认吗?**
 A: 认。调度器仍读取 `scheduler.cron` 与 `scheduler.timezone`,字段含义见 CONFIG.md。

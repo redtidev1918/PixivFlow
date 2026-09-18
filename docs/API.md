@@ -6,7 +6,7 @@
 
 ## 启动与基础信息
 
-- 本地启动:`pixivflow webui`(别名 `pixivflow w`);**生产默认端口 3000**(`src/webui/ports.ts` 中 `PORTS.PROD_API = 3000`,开发后端同为 3000)。可用选项与等价环境变量:
+- 本地启动:`pixivflow web`(别名 `pixivflow w`);**生产默认端口 3000**(`src/webui/ports.ts` 中 `PORTS.PROD_API = 3000`,开发后端同为 3000)。可用选项与等价环境变量:
 
 | 来源 | 说明 |
 | --- | --- |
@@ -31,7 +31,7 @@ curl http://localhost:3000/api/health
 
 ## 鉴权说明
 
-**REST API 默认没有鉴权**:路由组未挂载任何登录态、API Key 或 JWT 中间件,凡是能访问到端口的客户端都可以调用。`/api/auth/*` 一组管理的是 **Pixiv 账号的 OAuth 令牌**(刷新令牌的获取/验证/清除),与保护本 API 无关。部署时请依赖端口绑定(本地默认 `localhost`;Docker 镜像内为 `0.0.0.0`,由端口映射决定暴露范围)做访问控制,CORS 默认放开(`origin: '*'`)。
+**REST API 默认没有鉴权**:路由组未挂载任何登录态、API Key 或 JWT 中间件,凡是能访问到端口的客户端都可以调用。`/api/auth/*` 一组管理的是 **Pixiv 账号的 OAuth 令牌**(刷新令牌的获取/验证/清除),与保护本 API 无关。部署时请依赖端口绑定(本地默认 `localhost`;Docker 镜像内为 `0.0.0.0`,由端口映射决定暴露范围)访问控制,CORS 默认放开(`origin: '*'`)。
 
 **可选 Basic Auth(2.4.0 起)**:同时设置环境变量 `WEBUI_USERNAME` 与 `WEBUI_PASSWORD` 后,除 `/api/health`、`/health` 外的所有请求(含静态页与 Socket.IO 握手)都要求 HTTP Basic 认证。未设置则维持无鉴权行为。公网部署仍建议叠加反向代理与 TLS。
 

@@ -1,4 +1,6 @@
 import { Request, Response } from 'express';
+import { readFileSync, existsSync } from 'fs';
+import path from 'path';
 import { Database } from '../../../storage/Database';
 import { loadConfig, getConfigPath } from '../../../config';
 import { logger } from '../../../logger';
@@ -95,14 +97,8 @@ export async function listRecentSlots(req: Request, res: Response): Promise<void
       recoveryMode: slot.recoveryMode ?? null,
       startedAt: slot.startedAt,
       completedAt: slot.completedAt,
-      targets: database!.slots.getCells(slot.id).map((cell) => ({
-        targetId: cell.targetId,
-        workType: cell.workType,
-        status: cell.status,
-        workId: cell.workId,
-        terminalReasonCode: cell.terminalReasonCode,
-        reason: cell.terminalReasonMessage ?? null,
-      })),
+      lastError: slot.lastError,
+      targets: database!.slots.getCells(slot.id).map(cellProjection),
     }));
 
     database.close();
@@ -122,6 +118,196 @@ export async function listRecentSlots(req: Request, res: Response): Promise<void
     res.status(500).json({ errorCode: ErrorCode.SCHEDULER_LIST_FAILED });
   }
 }
+
+function parseCandidateReport(report: unknown): Record<string, unknown> | null {
+  return report && typeof report === 'object' ? (report as Record<string, unknown>) : null;
+}
+
+function cellProjection(cell: {
+  targetId: string;
+  workType: string | null;
+  status: string;
+  workId: string | null;
+  terminalReasonCode: string | null;
+  terminalReasonMessage: string | null;
+  candidateReport: Record<string, unknown> | null;
+  attemptCount: number;
+  fallback_stage: number;
+  completedAt: string | null;
+}) {
+  return {
+    targetId: cell.targetId,
+    workType: cell.workType,
+    status: cell.status,
+    workId: cell.workId,
+    terminalReasonCode: cell.terminalReasonCode,
+    reason: cell.terminalReasonMessage ?? null,
+    candidateReport: parseCandidateReport(cell.candidateReport),
+    attemptCount: cell.attemptCount,
+    fallbackStage: cell.fallback_stage,
+    completedAt: cell.completedAt,
+  };
+}
+
+/**
+ * Recovery admission projection (read-only). Retry semantics still live in the
+ * scheduler's own admission rules; this only labels what the WebUI may offer.
+ * - system `failed`    → retryable (normal / relaxed)
+ * - `no_candidate`/`duplicate` → normal business outcome; relaxed retry is the
+ *   only semantically useful action (soft-scope widening), never a blind retry
+ * - `submitted`/`pending`/`running` → not retryable
+ */
+export function recoveryAdmission(
+  status: string,
+  terminalReasonCode: string | null
+): { retryable: boolean; relaxedRetryAllowed: boolean; retryableReason: string } {
+  const t = (terminalReasonCode ?? '').toLowerCase();
+  if (status === 'failed') {
+    return { retryable: true, relaxedRetryAllowed: true, retryableReason: 'system failure' };
+  }
+  if (status === 'no_candidate' || status === 'duplicate') {
+    const noContent = t === 'duplicate_exhausted' || t === 'no_candidate' || t === 'duplicate';
+    return {
+      retryable: !noContent,
+      relaxedRetryAllowed: true,
+      retryableReason: noContent
+        ? 'non-retryable business outcome (no new content)'
+        : 'normal retry applies',
+    };
+  }
+  return { retryable: false, relaxedRetryAllowed: false, retryableReason: 'non-terminal or already-submitted' };
+}
+
+/**
+ * GET /api/scheduler/executions — read-only Execution projection over the
+ * durable Slot Ledger. Execution Truth stays in schedule_slots + items; this
+ * endpoint only shapes it for the WebUI (no new state source).
+ */
+export async function listExecutions(req: Request, res: Response): Promise<void> {
+  const limit = Math.min(Math.max(Number(req.query.limit ?? 20) || 20, 1), 100);
+  const targetFilter = typeof req.query.targetId === 'string' ? req.query.targetId.trim() : '';
+  const statusFilter = typeof req.query.status === 'string' ? req.query.status.trim().toLowerCase() : '';
+  let database: Database | null = null;
+  try {
+    const configPath = getConfigPath();
+    const config = loadConfig(configPath);
+    if (!config.storage?.databasePath) {
+      res.status(400).json({ errorCode: ErrorCode.SCHEDULER_LIST_FAILED, message: 'database not configured' });
+      return;
+    }
+    database = new Database(config.storage.databasePath);
+    database.migrate();
+    const slots = database.slots.getRecentSlots(Math.max(limit, 50));
+    const executions = slots
+      .flatMap((slot) =>
+        database!.slots.getCells(slot.id).map((cell) => {
+          const cellView = cellProjection(cell);
+          const admission = recoveryAdmission(cell.status, cell.terminalReasonCode);
+          return {
+            executionId: `${slot.id}:${cell.targetId}`,
+            slotId: slot.id,
+            scheduleId: slot.scheduleId,
+            targetId: cell.targetId,
+            workType: cell.workType,
+            status: cell.status,
+            terminalReasonCode: cell.terminalReasonCode,
+            message: cell.terminalReasonMessage,
+            startedAt: slot.startedAt,
+            endedAt: cell.completedAt ?? slot.completedAt,
+            triggerSource: slot.triggerSource,
+            recoveryRequestId: slot.recoveryRequestId ?? null,
+            recoveryMode: slot.recoveryMode ?? null,
+            occurrenceAt: slot.occurrenceAt,
+            candidateReport: cellView.candidateReport,
+            attemptCount: cell.attemptCount,
+            fallbackStage: cell.fallback_stage,
+            recovery: admission,
+            operatorHint: admission.retryable
+              ? '可重试'
+              : admission.relaxedRetryAllowed
+                ? '正常完成的无新内容结果，仅在人工判断后可放宽条件重试'
+                : '非终态或已成功，无需重试',
+          };
+        })
+      )
+      .filter((e) => {
+        if (targetFilter && e.targetId !== targetFilter) return false;
+        if (statusFilter && e.status.toLowerCase() !== statusFilter) return false;
+        return true;
+      })
+      .slice(0, limit);
+
+    database.close();
+    database = null;
+    res.json({ data: { executions } });
+  } catch (error) {
+    if (database) {
+      try { database.close(); } catch { /* ignore */ }
+    }
+    const message = error instanceof Error ? error.message : String(error);
+    logger.error('Failed to list scheduler executions', { error: { message } });
+    res.status(500).json({ errorCode: ErrorCode.SCHEDULER_LIST_FAILED });
+  }
+}
+
+/**
+ * GET /api/scheduler/slots/:slotId/logs
+ *
+ * Correlated log view: filters the process log file by the slot id and its
+ * target ids so operators can replay exactly the lines for one occurrence.
+ * Pure filtering of existing structured logger output, no new store.
+ */
+export async function getSlotLogs(req: Request, res: Response): Promise<void> {
+  const slotId = req.params.slotId;
+  if (!slotId || slotId.length > 200) {
+    res.status(400).json({ errorCode: ErrorCode.SCHEDULER_LIST_FAILED, message: 'invalid slotId' });
+    return;
+  }
+  let database: Database | null = null;
+  try {
+    const configPath = getConfigPath();
+    const config = loadConfig(configPath);
+    if (!config.storage?.databasePath) {
+      res.status(400).json({ errorCode: ErrorCode.SCHEDULER_LIST_FAILED, message: 'database not configured' });
+      return;
+    }
+    database = new Database(config.storage.databasePath);
+    database.migrate();
+    const slot = database.slots.getSlot(slotId);
+    const targets = slot ? database.slots.getCells(slotId).map((c) => c.targetId) : [];
+    database.close();
+    database = null;
+
+    let logFile = '';
+    const dataDir = path.dirname(config.storage.databasePath);
+    for (const candidate of [
+      path.join(dataDir, 'pixiv-downloader.log'),
+      path.resolve(process.cwd(), 'data', 'pixiv-downloader.log'),
+    ]) {
+      if (existsSync(candidate)) {
+        logFile = candidate;
+        break;
+      }
+    }
+    if (!logFile) {
+      res.json({ data: { logs: [], total: 0, slotId, targets } });
+      return;
+    }
+    const keywords = [slotId, ...targets];
+    const lines = readFileSync(logFile, 'utf-8')
+      .split('\n')
+      .filter((line) => line.trim() && keywords.some((k) => line.toLowerCase().includes(k.toLowerCase())));
+    res.json({ data: { logs: lines.slice(-500), total: lines.length, slotId, targets } });
+  } catch (error) {
+    if (database) {
+      try { database.close(); } catch { /* ignore */ }
+    }
+    const message = error instanceof Error ? error.message : String(error);
+    logger.error('Failed to read slot logs', { slotId, error: { message } });
+    res.status(500).json({ errorCode: ErrorCode.LOGS_GET_FAILED });
+  }
+}
+
 
 /**
  * POST /api/scheduler/targets/:targetId/recover

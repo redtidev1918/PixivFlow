@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { Database } from '../../storage/Database';
-import { listRecentSlots, recoverTarget } from '../../webui/routes/handlers/scheduler-handlers';
+import { listRecentSlots, listExecutions, getSlotLogs, recoverTarget } from '../../webui/routes/handlers/scheduler-handlers';
 
 const TEMP_DB = join(mkdtempSync(join(tmpdir(), 'webui-scheduler-')), 'test.db');
 
@@ -24,6 +24,7 @@ describe('WebUI scheduler read API', () => {
       occurrenceLabel: '10:00', timezone: 'Asia/Shanghai', targetIds: ['bot1-illust'],
     }).slot;
     db.slots.materializeCells(slot.id, ['bot1-illust'], () => 'illustration');
+    db.slots.setCellCandidateReport(slot.id, 'bot1-illust', { fetched: 12, rejected: 11, final: 1 });
     db.slots.markSlotStatus(slot.id, 'running');
     db.close();
 
@@ -37,6 +38,7 @@ describe('WebUI scheduler read API', () => {
       slotId: 'bot1-daily@2026-09-18T10:00', scheduleId: 'bot1-daily', status: 'running',
     });
     expect(payload.data.slots[0].targets[0].targetId).toBe('bot1-illust');
+    expect(payload.data.slots[0].targets[0].candidateReport).toMatchObject({ fetched: 12 });
     expect(JSON.stringify(payload)).not.toMatch(/token|secret|password/i);
   });
 
@@ -46,6 +48,49 @@ describe('WebUI scheduler read API', () => {
     const res: any = { json: (v: any) => { payload = v; }, status: (c: number) => { status = c; return res; } };
     await listRecentSlots({ query: { limit: 'abc' } } as any, res);
     expect(payload.data.slots.length).toBeLessThanOrEqual(14);
+  });
+});
+
+describe('WebUI scheduler execution + slot logs APIs', () => {
+  afterAll(() => {
+    rmSync(TEMP_DB, { recursive: true, force: true });
+  });
+
+  it('lists Slot Ledger cells as executions with recovery admission', async () => {
+    const db = new Database(TEMP_DB);
+    db.migrate();
+    const slot = db.slots.getOrCreateSlot('bot1-daily@2026-09-18T10:00', {
+      scheduleId: 'bot1-daily', occurrenceAt: Date.now(), occurrenceDate: '2026-09-18',
+      occurrenceLabel: '10:00', timezone: 'Asia/Shanghai', targetIds: ['bot1-illust'],
+    }).slot;
+    db.slots.materializeCells(slot.id, ['bot1-illust'], () => 'illustration');
+    db.slots.setCellStatus(slot.id, 'bot1-illust', 'failed', 'pixiv request failed');
+    db.slots.setCellTerminalReason(slot.id, 'bot1-illust', 'internal_error', 'pixiv request failed');
+    db.slots.setCellCandidateReport(slot.id, 'bot1-illust', { fetched: 12, rejected: 11, final: 1 });
+    db.close();
+
+    let payload: any = null;
+    const res: any = { json: (v: any) => { payload = v; }, status: (c: number) => { return res; } };
+    await listExecutions({ query: {} } as any, res);
+
+    expect(payload.data.executions).toHaveLength(1);
+    const ex = payload.data.executions[0];
+    expect(ex.slotId).toBe('bot1-daily@2026-09-18T10:00');
+    expect(ex.targetId).toBe('bot1-illust');
+    expect(ex.terminalReasonCode).toBe('internal_error');
+    expect(ex.recovery.retryable).toBe(true);
+    expect(ex.recovery.relaxedRetryAllowed).toBe(true);
+    expect(ex.candidateReport).toMatchObject({ fetched: 12 });
+    expect(JSON.stringify(payload)).not.toMatch(/token|secret|password/i);
+  });
+
+  it('rejects an invalid slotId for correlated logs', async () => {
+    let status = 0;
+    let payload: any = null;
+    const res: any = { json: (v: any) => { payload = v; }, status: (c: number) => { status = c; return res; } };
+    await getSlotLogs({ params: { slotId: '' } } as any, res);
+    expect(status).toBe(400);
+    expect(payload.message).toContain('invalid slotId');
   });
 });
 

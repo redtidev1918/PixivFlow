@@ -1,9 +1,17 @@
-import type {
-  PixivNovelTextResponse,
-  PixivNovelUploadedImage,
-  PixivNovelIllustRef,
-} from '@redtidev/pixiv-client';
 import { basename } from 'node:path';
+
+/**
+ * Structural shape used by the webview v2 rich-novel text payload. The shipped
+ * `@redtidev/pixiv-client` dist.d.ts lags the package source and does not
+ * declare these fields, so we keep a minimal local view instead of depending on
+ * a dist export that does not exist in published builds.
+ */
+export interface NovelUploadedImage {
+  urls: Record<string, string | undefined>;
+}
+export interface NovelIllustRef {
+  illust: { images: Record<string, string | undefined> };
+}
 
 /**
  * Single-pass novel text tokenizer, ported from PixEz
@@ -91,12 +99,12 @@ export function scanNovelMarkers(source: string): NovelMarker[] {
   return result;
 }
 
-function uploadedImageUrl(img?: PixivNovelUploadedImage): string | undefined {
+function uploadedImageUrl(img?: NovelUploadedImage): string | undefined {
   if (!img?.urls) return undefined;
   return img.urls.original ?? img.urls.the1200X1200 ?? img.urls.the480Mw ?? img.urls.the240Mw ?? img.urls.the128X128;
 }
 
-function illustImageUrl(ref?: PixivNovelIllustRef | null): string | undefined {
+function illustImageUrl(ref?: NovelIllustRef | null): string | undefined {
   if (!ref?.illust?.images) return undefined;
   return ref.illust.images.original ?? ref.illust.images.medium ?? ref.illust.images.small;
 }
@@ -108,7 +116,10 @@ function illustImageUrl(ref?: PixivNovelIllustRef | null): string | undefined {
  */
 export function extractNovelAssets(
   text: string,
-  response?: Pick<PixivNovelTextResponse, 'images' | 'illusts'>
+  response?: {
+    images?: Record<string, NovelUploadedImage | undefined>;
+    illusts?: Record<string, NovelIllustRef | null>;
+  }
 ): NovelAsset[] {
   const assets: NovelAsset[] = [];
   for (const marker of scanNovelMarkers(text)) {

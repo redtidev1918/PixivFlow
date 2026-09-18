@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.31.0](https://github.com/redtidev1918/PixivFlow/compare/v2.30.0...v2.31.0) (2026-09-18)
+
+
+### Features
+
+* **web:** enable pixivflow web for installed npm package ([#126](https://github.com/redtidev1918/PixivFlow/issues/126)) ([1b64147](https://github.com/redtidev1918/PixivFlow/commit/1b641478814c95173290aed8daff1a97495b6e62))
+
 ## [2.30.0](https://github.com/redtidev1918/PixivFlow/compare/v2.29.0...v2.30.0) (2026-09-18)
 
 

@@ -225,7 +225,8 @@ Production Verification 必须验证：
       按 UTC 日期幂等，每天最多一条；
 - [x] `GET /api/v1/schedule/status`：只读返回每个 schedule 最近终态时间/状态，供状态页/置顶查询；
 - [x] 公共纯文本状态页 `GET /status`（多 Bot 父路由）：汇总各 Bot 最近终态，
-      适合频道置顶/收藏。
+      适合频道置顶/收藏；
+- [x] Telegram 命令 `/status`（公开）与 `/pin_status`（仅 OWNER，置顶当前群/频道）：渠道置顶区落地。
 
 ## Final Report 模板
 

@@ -253,6 +253,41 @@ export function validateConfig(config: Partial<StandaloneConfig>, location: stri
       if (target.noMatchPolicy?.notify !== undefined && typeof target.noMatchPolicy.notify !== 'boolean') {
         errors.push(`targets[${index}].noMatchPolicy.notify: Must be a boolean`);
       }
+      if (target.topicProfile) {
+        const tp = target.topicProfile;
+        if (tp.primary !== undefined && (!Array.isArray(tp.primary) || tp.primary.length === 0 || tp.primary.some((x) => typeof x !== 'string' || !x.trim()))) {
+          errors.push(`targets[${index}].topicProfile.primary: Must be a non-empty string array`);
+        }
+        if (tp.related !== undefined && (!Array.isArray(tp.related) || tp.related.some((x) => typeof x !== 'string' || !x.trim()))) {
+          errors.push(`targets[${index}].topicProfile.related: Must be a string array`);
+        }
+        const st = tp.strategy;
+        if (st) {
+          for (const field of ['freshnessWeight', 'popularityWeight'] as const) {
+            const value = st[field];
+            if (value !== undefined && (typeof value !== 'number' || value < 0 || value > 1)) {
+              errors.push(`targets[${index}].topicProfile.strategy.${field}: Must be a number between 0 and 1`);
+            }
+          }
+        }
+        const inv = tp.inventory;
+        if (inv) {
+          if (inv.enabled !== undefined && typeof inv.enabled !== 'boolean') {
+            errors.push(`targets[${index}].topicProfile.inventory.enabled: Must be a boolean`);
+          }
+          const bound = (field: 'maxAgeDays' | 'reserveSize') => {
+            const value = inv[field];
+            if (value !== undefined && (typeof value !== 'number' || !Number.isInteger(value) || value < 1 || value > 365)) {
+              errors.push(`targets[${index}].topicProfile.inventory.${field}: Must be an integer between 1 and 365`);
+            }
+          };
+          bound('maxAgeDays');
+          bound('reserveSize');
+          if (inv.fallback !== undefined && typeof inv.fallback !== 'boolean') {
+            errors.push(`targets[${index}].topicProfile.inventory.fallback: Must be a boolean`);
+          }
+        }
+      }
       if (target.noMatchPolicy?.notify === true) {
         const deliveryTarget = target.delivery?.target?.trim();
         const notifyTarget = deliveryTarget ? config.delivery?.targets?.[deliveryTarget] : undefined;

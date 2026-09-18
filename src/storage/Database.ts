@@ -15,6 +15,7 @@ import { OutboxRepository } from './repositories/OutboxRepository';
 import { MetadataRepository } from './repositories/MetadataRepository';
 import { SQLiteRateLimitStateStore } from './repositories/RateLimitStateRepository';
 import { SystemErrorRepository } from './repositories/SystemErrorRepository';
+import { CandidateInventoryRepository } from './repositories/CandidateInventoryRepository';
 import { NodeSqliteDriver } from './drivers/NodeSqliteDriver';
 import type { SqliteDriver } from './drivers/SqliteDriver';
 
@@ -64,6 +65,7 @@ export class Database implements IDatabase {
   private metadataRepo: MetadataRepository;
   private rateLimitStateStore!: SQLiteRateLimitStateStore;
   private systemErrorRepo!: SystemErrorRepository;
+  private candidateInventoryRepo!: CandidateInventoryRepository;
 
   constructor(private readonly databasePath: string) {
     try {
@@ -93,6 +95,7 @@ export class Database implements IDatabase {
       this.metadataRepo = new MetadataRepository(this.db);
       this.rateLimitStateStore = new SQLiteRateLimitStateStore(this.db);
       this.systemErrorRepo = new SystemErrorRepository(this.db);
+      this.candidateInventoryRepo = new CandidateInventoryRepository(this.db);
     } catch (error) {
       throw new DatabaseError(
         `Failed to initialize database at ${this.databasePath}`,
@@ -141,6 +144,11 @@ export class Database implements IDatabase {
   /** Durable system-error ledger (observability; never throws). */
   public get systemErrors(): SystemErrorRepository {
     return this.systemErrorRepo;
+  }
+
+  /** Phase 5 CandidateInventory (待发池) for sparse topics. */
+  public get candidateInventory(): CandidateInventoryRepository {
+    return this.candidateInventoryRepo;
   }
 
   /** Raw transactional boundary for atomic multi-table intents. */

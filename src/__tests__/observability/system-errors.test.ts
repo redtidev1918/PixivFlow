@@ -58,3 +58,14 @@ describe('system_errors observability', () => {
     expect(parsed).toMatchObject({ level: 'info', message: 'download_started', bot_id: 'bot1', stage: 'download', pixiv_id: '123' });
   });
 });
+
+  it('classifies language-filter candidate skips as non-retryable, not INTERNAL_ERROR', () => {
+    expect(classifySystemError(new Error(
+      'Novel 29149419 skipped: language filter mismatch (cached: Japanese, required: chinese)'
+    ), null, 'pixiv_download')).toEqual({ error_type: 'CANDIDATE_SKIPPED', retryable: false });
+    expect(classifySystemError(new Error(
+      'Novel 123 skipped: language filter inconclusive (required: chinese)'
+    ), null, 'pixiv_download')).toEqual({ error_type: 'CANDIDATE_SKIPPED', retryable: false });
+    expect(classifySystemError(new Error('real write failure on disk'), null, 'download'))
+      .toEqual({ error_type: 'INTERNAL_ERROR', retryable: true });
+  });

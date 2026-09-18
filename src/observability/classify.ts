@@ -47,6 +47,11 @@ export function classifySystemError(
   if (/telegram|sendMessage|upload/i.test(message)) {
     return { error_type: 'TELEGRAM_UPLOAD_FAILED', retryable: false };
   }
+  if (/language filter|skipped:|inconclusive|filtered out|excluded by|excluded from/i.test(message)) {
+    // A candidate the target's own rules (language filter / explicit skip)
+    // rejected is NOT a system fault: do not count it as a retryable failure.
+    return { error_type: 'CANDIDATE_SKIPPED', retryable: false };
+  }
   if (typeof status === 'number' && status >= 500) {
     return { error_type: 'NETWORK_TIMEOUT', retryable: true };
   }

@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.28.1](https://github.com/redtidev1918/PixivFlow/compare/v2.28.0...v2.28.1) (2026-09-18)
+
+
+### Bug Fixes
+
+* **observability:** classify language-filter candidate skips as non-retryable, not INTERNAL_ERROR ([#116](https://github.com/redtidev1918/PixivFlow/issues/116)) ([d759f7d](https://github.com/redtidev1918/PixivFlow/commit/d759f7de2fd02ae0a893b22d868774e8c4e845c9))
+
 ## [2.28.0](https://github.com/redtidev1918/PixivFlow/compare/v2.27.1...v2.28.0) (2026-09-17)
 
 

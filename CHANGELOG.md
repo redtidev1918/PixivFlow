@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.34.0](https://github.com/redtidev1918/PixivFlow/compare/v2.33.0...v2.34.0) (2026-09-18)
+
+
+### Features
+
+* **webui:** read-only scheduler API for Control Center Phase 1 ([#137](https://github.com/redtidev1918/PixivFlow/issues/137)) ([54da9e8](https://github.com/redtidev1918/PixivFlow/commit/54da9e82c9336fbbede9ad0d13ed691025d3572f))
+
 ## [2.33.0](https://github.com/redtidev1918/PixivFlow/compare/v2.32.0...v2.33.0) (2026-09-18)
 
 

@@ -104,6 +104,24 @@ export class WebUIServer {
       );
     }
 
+    // Fail closed for accidental public exposure: a non-loopback bind without
+    // credentials would expose config secrets, downloaded files and arbitrary
+    // download/exec controls to anyone. Local bind (localhost/127.0.0.1/::1)
+    // remains credential-free. Operators who *really* want a public
+    // unauthenticated server must opt in explicitly.
+    const hostIsLoopback = (h: string): boolean =>
+      h === 'localhost' ||
+      h === '127.0.0.1' ||
+      h === '::1' ||
+      h.startsWith('127.');
+    if (!this.basicAuthEnabled && !hostIsLoopback(this.host) && process.env.WEBUI_ALLOW_PUBLIC_NO_AUTH !== 'true') {
+      throw new Error(
+        `Refusing to bind WebUI to non-loopback host "${this.host}" without authentication. ` +
+          `Set WEBUI_USERNAME and WEBUI_PASSWORD (recommended), or set ` +
+          `WEBUI_ALLOW_PUBLIC_NO_AUTH=true only if you fully understand the risk.`
+      );
+    }
+
     // Setup API routes
     setupRoutes(this.app);
 

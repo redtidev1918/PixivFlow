@@ -8,6 +8,7 @@ export type SystemErrorType =
   | 'IMAGE_PROCESS_FAILED'
   | 'TELEGRAM_UPLOAD_FAILED'
   | 'CONFIG_ERROR'
+  | 'CANDIDATE_SKIPPED'
   | 'INTERNAL_ERROR';
 
 export interface SystemErrorClassification {

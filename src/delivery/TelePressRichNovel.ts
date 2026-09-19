@@ -39,6 +39,10 @@ export interface RichNovelManifestEntry {
   local: string;
   /** Original Pixiv CDN source URL (``https://i.pximg.net/...``). */
   source: string;
+  /** Canonical MediaAsset id (new contract, optional for backward compat). */
+  assetId?: string;
+  /** Canonical source URL (new contract; same as ``source`` today). */
+  sourceUrl?: string;
 }
 
 export interface RichNovelSources {
@@ -101,7 +105,12 @@ function readNovelMediaAssets(artifact: DownloadedArtifact): { mediaAssets: Medi
         sourceUrl: source,
         artifactId: localPath,
       }));
-      manifest.push({ local: `images/${path.basename(localPath)}`, source });
+      manifest.push({
+        local: `images/${path.basename(localPath)}`,
+        source,
+        assetId: mediaAssets[mediaAssets.length - 1]?.id,
+        sourceUrl: source,
+      });
     }
     return { mediaAssets, manifest };
   } catch {

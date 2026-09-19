@@ -84,7 +84,12 @@ describe('TelePress rich-novel preview', () => {
     );
     const found = findRichNovelSources(artifact([txt], [metaFile]));
     expect(found!.manifest).toEqual([
-      { local: 'images/a.jpg', source: 'https://i.pximg.net/img-master/img/1_p0.jpg' },
+      {
+        local: 'images/a.jpg',
+        source: 'https://i.pximg.net/img-master/img/1_p0.jpg',
+        assetId: 'pixiv:123456:pixivimage:s',
+        sourceUrl: 'https://i.pximg.net/img-master/img/1_p0.jpg',
+      },
     ]);
     expect(found!.mediaAssets).toHaveLength(1);
     expect(found!.mediaAssets![0]).toMatchObject({

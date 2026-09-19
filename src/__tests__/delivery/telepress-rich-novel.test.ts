@@ -114,6 +114,58 @@ describe('TelePress rich-novel preview', () => {
     expect(body).toContain('"local":"images/a.jpg"');
   });
 
+  it('publishes on-demand pending references without local image files', async () => {
+    const txt = join(dir, 'n.txt');
+    const md = txt.replace(/\.txt$/i, '.md');
+    await fs.writeFile(txt, 'body');
+    await fs.writeFile(md, '![](images/11.jpg)');
+
+    const metaFile = join(dir, 'metadata', '123456_novel.json');
+    await fs.mkdir(join(dir, 'metadata'), { recursive: true });
+    await fs.writeFile(metaFile, JSON.stringify({
+      type: 'novel',
+      pixiv_id: 123456,
+      assets: [{
+        marker: 'x', kind: 'uploadedimage', sourceId: '11', status: 'pending',
+        url: 'https://i.pximg.net/img-master/img/2026/09/19/11.jpg',
+      }],
+    }));
+
+    const fetchMock = jest.fn().mockResolvedValue(
+      new Response(JSON.stringify({
+        status: 'success', url: 'https://telegra.ph/ondemand-123',
+        assets: [{ local: 'images/11.jpg', remote: 'https://media.example.com/pixiv/11.jpg', status: 'proxied' }],
+      }), { status: 200, headers: { 'content-type': 'application/json' } })
+    );
+    global.fetch = fetchMock as typeof fetch;
+
+    const found = findRichNovelSources(artifact([txt], [metaFile]));
+    expect(found).toBeDefined();
+    expect(found!.imagePaths).toHaveLength(0);
+    expect(found!.manifest).toEqual([
+      {
+        local: 'images/11.jpg',
+        source: 'https://i.pximg.net/img-master/img/2026/09/19/11.jpg',
+        assetId: 'pixiv:123456:uploadedimage:11',
+        sourceUrl: 'https://i.pximg.net/img-master/img/2026/09/19/11.jpg',
+      },
+    ]);
+    expect(found!.mediaAssets[0].artifactId).toBeUndefined();
+
+    const result = await publishRichNovelPreview(
+      artifact([txt], [metaFile]),
+      { url: 'https://telepress.example/publish/rich-novel' }
+    );
+    expect(result).toEqual({ url: 'https://telegra.ph/ondemand-123', retryable: false });
+
+    const body = String(fetchMock.mock.calls[0]?.[1]?.body);
+    expect(body).toContain('"local":"images/11.jpg"');
+    expect(body).toContain('https://i.pximg.net/img-master/img/2026/09/19/11.jpg');
+    // No multipart file part for the pending asset.
+    expect(body).not.toContain('filename="images/11.jpg"');
+  });
+
+
   it('posts md + images and returns the Telegraph url', async () => {
     const txt = join(dir, 'n.txt');
     const md = txt.replace(/\.txt$/i, '.md');

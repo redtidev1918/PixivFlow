@@ -179,3 +179,47 @@ export function renderNovelMarkdown(source: string, assets: NovelAsset[]): strin
     })
     .join('');
 }
+
+/**
+ * Stable relative filename for an inline novel media reference without a local
+ * download. Uses the sourceId plus the URL extension so the manifest can point
+ * at a proxy URL while the rendered Markdown still resolves to
+ * `images/<sourceId>.jpg`.
+ */
+export function novelReferenceFileName(url: string | undefined, sourceId: string): string {
+  let ext = '';
+  if (url) {
+    try {
+      const path = new URL(url).pathname;
+      const match = /\.(jpg|jpeg|png|gif|webp)$/i.exec(path);
+      if (match) ext = match[1].toLowerCase();
+    } catch {
+      // non-URL fall through to default ext
+    }
+  }
+  const safeId = sourceId.replace(/[^\w.-]+/g, '_');
+  return `images/${safeId}${ext ? `.${ext}` : '.jpg'}`;
+}
+
+/**
+ * Markdown sidecar for on-demand (non-downloading) previews. Renders
+ * `![](images/<ref>)` for every resolvable asset so the manifest can be
+ * rehydrated by TelePress via proxy; markers without a resolvable URL stay as
+ * their original text.
+ */
+export function renderNovelMarkdownReference(source: string, assets: NovelAsset[]): string {
+  return scanNovelMarkers(source)
+    .map((marker) => {
+      if (marker.type === 'text') return marker.value;
+      const asset = assets.find((a) => a.marker === marker.raw);
+      if (!asset) return marker.raw;
+      if (asset.status === 'downloaded' && asset.localPath) {
+        return `![](images/${basename(asset.localPath)})`;
+      }
+      if (asset.status === 'pending' && asset.url) {
+        return `![](${novelReferenceFileName(asset.url, asset.sourceId)})`;
+      }
+      return marker.raw;
+    })
+    .join('');
+}

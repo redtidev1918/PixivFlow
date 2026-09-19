@@ -13,7 +13,7 @@ import { toResolvedWork } from '../domain/media/Work';
 import { DEFAULT_MATERIALIZATION_POLICY, shouldMaterialize, type MaterializationPolicy } from '../domain/media/MaterializationPolicy';
 import { artifactId, type Artifact } from '../domain/media/Artifact';
 import { PixivMediaMaterializer, type MediaMaterializer } from './materialization/MediaMaterializer';
-import { extractNovelAssets, NovelAsset, renderNovelMarkdown } from './novelMarkers';
+import { extractNovelAssets, NovelAsset, renderNovelMarkdown, renderNovelMarkdownReference } from './novelMarkers';
 import { createZipArchive } from '../utils/zip';
 import type { Database } from '../storage/Database';
 
@@ -236,10 +236,17 @@ export class NovelDownloader {
     // (compat format stays), inline images become relative ![](images/x.jpg)
     // refs so a later TelePress/TelePost phase can render the Telegraph page.
     let richMediaPath: string | undefined;
-    if (assets.some((a) => a.status === 'downloaded')) {
+    const hasDownloadedImages = assets.some((a) => a.status === 'downloaded');
+    // On-demand mode (no local images) still emits a resolvable md sidecar from
+    // media references so TelePress can render via proxy without a download.
+    const hasResolvablePending = assets.some((a) => a.status === 'pending' && Boolean(a.url));
+    if (hasDownloadedImages || hasResolvablePending) {
       try {
+        const mdContent = hasDownloadedImages
+          ? renderNovelMarkdown(text, assets)
+          : renderNovelMarkdownReference(text, assets);
         const mdPath = await this.fileService.saveText(
-          `${header}\n${renderNovelMarkdown(text, assets)}`,
+          `${header}\n${mdContent}`,
           fileName.replace(/\.txt$/, '.md'),
           metadata
         );

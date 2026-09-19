@@ -227,6 +227,21 @@ describe('NovelDownloader rich media', () => {
       id: 'pixiv:456:uploadedimage:11',
       sourceUrl: 'https://i.pximg.net/11.jpg',
     });
+    // On-demand still emits a resolvable md sidecar (no local images).
+    expect(fileService.saveText).toHaveBeenCalledTimes(2);
+    expect(fileService.saveText.mock.calls[1][0]).toContain('![](images/11.jpg)');
+    const metadata = fileService.saveMetadata.mock.calls[0][1] as { assets?: unknown[] };
+    expect(metadata.assets).toEqual([
+      {
+        marker: '[uploadedimage:11]',
+        kind: 'uploadedimage',
+        sourceId: '11',
+        url: 'https://i.pximg.net/11.jpg',
+        localPath: undefined,
+        status: 'pending',
+        failureReason: undefined,
+      },
+    ]);
   });
 
   it('txt still succeeds when an inline image download fails (partial success)', async () => {

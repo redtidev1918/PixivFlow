@@ -1,4 +1,4 @@
-import { scanNovelMarkers, extractNovelAssets, renderNovelMarkdown } from '../../download/novelMarkers';
+import { scanNovelMarkers, extractNovelAssets, renderNovelMarkdown, renderNovelMarkdownReference } from '../../download/novelMarkers';
 
 describe('novelMarkers', () => {
   it('scans simple markers and plain text', () => {
@@ -54,5 +54,22 @@ describe('renderNovelMarkdown (RFC 1 Phase 2)', () => {
       { marker: '[uploadedimage:22]', kind: 'uploadedimage', sourceId: '22', url: undefined, status: 'unavailable' },
     ]);
     expect(md).toBe('x [uploadedimage:22] y');
+  });
+});
+
+describe('renderNovelMarkdownReference (on-demand previews)', () => {
+  it('renders pending assets as sourceId-based images/ refs', () => {
+    const md = renderNovelMarkdownReference('a [uploadedimage:11] b [pixivimage:9-1] c', [
+      { marker: '[uploadedimage:11]', kind: 'uploadedimage', sourceId: '11', url: 'https://i.pximg.net/11.jpg', status: 'pending' },
+      { marker: '[pixivimage:9-1]', kind: 'pixivimage', sourceId: '9-1', url: 'https://i.pximg.net/9-1.png', status: 'pending' },
+    ]);
+    expect(md).toBe('a ![](images/11.jpg) b ![](images/9-1.png) c');
+  });
+
+  it('still uses localPath basename for downloaded assets', () => {
+    const md = renderNovelMarkdownReference('x [uploadedimage:22] y', [
+      { marker: '[uploadedimage:22]', kind: 'uploadedimage', sourceId: '22', url: 'u', localPath: '/tmp/novels/images/original_name.jpg', status: 'downloaded' },
+    ]);
+    expect(md).toBe('x ![](images/original_name.jpg) y');
   });
 });

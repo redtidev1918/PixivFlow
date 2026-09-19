@@ -8,7 +8,8 @@ import { PixivNovel } from '@redtidev/pixiv-client';
 import { dirname, join, basename } from 'node:path';
 import { detectLanguage } from '../utils/language-detection';
 import { DownloadedArtifact } from '../delivery/types';
-import { buildMediaAsset, type MediaAsset } from '../domain/media/MediaAsset';
+import { type MediaAsset } from '../domain/media/MediaAsset';
+import { toResolvedWork } from '../domain/media/Work';
 import { artifactId, type Artifact } from '../domain/media/Artifact';
 import { PixivMediaMaterializer, type MediaMaterializer } from './materialization/MediaMaterializer';
 import { extractNovelAssets, NovelAsset, renderNovelMarkdown } from './novelMarkers';
@@ -164,31 +165,53 @@ export class NovelDownloader {
       ? []
       : extractNovelAssets(text, textResponse as Parameters<typeof extractNovelAssets>[1]);
     const hadImages = assets.length > 0;
-    const pendingAssets = assets.filter((a): a is NovelAsset & { url: string } => Boolean(a.url));
-    if (pendingAssets.length) {
+
+    // Step 6: resolve first (work + media facts), materialize second.
+    const resolved = toResolvedWork(
+      {
+        id: String(detail.id),
+        type: 'novel',
+        title: detail.title,
+        sourceUrl: `https://www.pixiv.net/novel/show.php?id=${detail.id}`,
+        tags: tags.map((item) => item.name).filter(Boolean),
+      },
+      assets
+        .filter((a): a is NovelAsset & { url: string } => Boolean(a.url))
+        .map((a) => ({
+          workId: String(detail.id),
+          kind: a.kind,
+          sourceId: a.sourceId,
+          marker: a.marker,
+          sourceUrl: a.url,
+        }))
+    );
+
+    if (resolved.mediaAssets.length) {
       const imagesDir = join(dirname(filePath), 'images');
-      for (const asset of pendingAssets) {
+      for (const mediaAsset of resolved.mediaAssets) {
         try {
-          const mediaAsset = buildMediaAsset({
-            workId: String(detail.id),
-            kind: asset.kind,
-            sourceId: asset.sourceId,
-            marker: asset.marker,
-            sourceUrl: asset.url,
-          });
           const artifact = await this.materializer.materialize(mediaAsset, {
             variant: 'original',
             destination: imagesDir,
           });
-          asset.localPath = artifact.path;
-          asset.status = 'downloaded';
+          const key = `${mediaAsset.sourceRef?.pixivKind}:${mediaAsset.sourceRef?.sourceId}`;
+          const asset = assets.find((a) => `${a.kind}:${a.sourceId}` === key);
+          if (asset) {
+            asset.localPath = artifact.path;
+            asset.status = 'downloaded';
+          }
         } catch (error) {
-          asset.status = 'failed';
-          asset.failureReason = error instanceof Error ? error.message : String(error);
-          logger.warn(`Failed to download novel inline image ${asset.sourceId} for novel ${detail.id}`, {
+          const key = `${mediaAsset.sourceRef?.pixivKind}:${mediaAsset.sourceRef?.sourceId}`;
+          const asset = assets.find((a) => `${a.kind}:${a.sourceId}` === key);
+          if (asset) {
+            asset.status = 'failed';
+            asset.failureReason = error instanceof Error ? error.message : String(error);
+          }
+          const assetId = mediaAsset.sourceRef?.sourceId ?? 'unknown';
+          logger.warn(`Failed to download novel inline image ${assetId} for novel ${detail.id}`, {
             novelId: detail.id,
-            sourceId: asset.sourceId,
-            reason: asset.failureReason,
+            sourceId: assetId,
+            reason: error instanceof Error ? error.message : String(error),
           });
         }
       }
@@ -196,6 +219,11 @@ export class NovelDownloader {
         logger.info(`Novel ${detail.id} inline images: ${assets.filter((a) => a.status === 'downloaded').length}/${assets.length} downloaded`, { novelId: detail.id });
       }
     }
+
+    const downloadByAssetKey = new Map<string, (typeof assets)[number]>(
+      assets.filter((a) => a.status === 'downloaded' && a.localPath)
+        .map((a) => [`${a.kind}:${a.sourceId}`, a] as const)
+    );
 
     // Rich-media markdown sidecar (RFC 1 Phase 2): same path as the .txt
     // (compat format stays), inline images become relative ![](images/x.jpg)
@@ -325,18 +353,11 @@ export class NovelDownloader {
     if (archivePath) {
       artifacts.push({ id: artifactId(workId, 'zip', basename(archivePath)), workId, variant: 'zip', path: archivePath });
     }
-    for (const a of assets) {
-      if (a.status !== 'downloaded' || !a.localPath || !a.url) continue;
+    for (const mediaAsset of resolved.mediaAssets) {
+      const a = downloadByAssetKey.get(`${mediaAsset.sourceRef?.pixivKind}:${mediaAsset.sourceRef?.sourceId}`);
+      if (!a?.localPath) continue;
       const imageArtifactId = artifactId(workId, 'original', basename(a.localPath));
-      const mediaAsset = buildMediaAsset({
-        workId,
-        kind: a.kind,
-        sourceId: a.sourceId,
-        marker: a.marker,
-        sourceUrl: a.url,
-        artifactId: imageArtifactId,
-      });
-      mediaAssets.push(mediaAsset);
+      mediaAssets.push(buildMediaAssetById(mediaAsset, imageArtifactId));
       artifacts.push({
         id: imageArtifactId,
         sourceAssetId: mediaAsset.id,
@@ -363,4 +384,9 @@ export class NovelDownloader {
       language: detectedLang ? `${detectedLang.name} (${detectedLang.code})` : undefined,
     };
   }
+}
+
+
+function buildMediaAssetById(mediaAsset: MediaAsset, artifactIdValue: string): MediaAsset {
+  return { ...mediaAsset, artifactId: artifactIdValue };
 }

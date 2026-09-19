@@ -139,3 +139,25 @@ speculative infrastructure.
   occurrence（slot 上持久化 `recovery_mode`），**绝不写全局 config、绝不影响未来 schedule**。
 - 手动恢复只重跑失败 target（`onlyTarget`）；成功 target 与自动执行历史不改写；outcome
   走 schedule-outcome 通道并以 recovery 标记渲染「已恢复」。
+
+
+## WebUI 控制面约束（§webui-control-plane）
+
+- `pixivflow web` 是 **PixivFlow（执行平面）的浏览器控制入口**，不是第二系统：
+  只读呈现 Slot Ledger / 状态 / 结果，运维动作只经已有 Recovery / Scheduler /
+  Trigger 契约；**禁止**在 WebUI 层建新 DB、新状态机、第二个 scheduler。
+- 已上线只读 API：`GET /api/scheduler`（v2.34.0）返回最近 slot + 逐 target cell
+  （slot_id / status / terminal_reason_code / reason），上限 50 条；只读、不输出
+  token / secret / path / SQL / stack。
+- 认证沿用 WebUI basic auth，fail-closed：`0.0.0.0/公网绑定` 无凭据时 refuse
+  startup（`WEBUI_ALLOW_PUBLIC_NO_AUTH` 是显式逃生舱，不是默认）。
+- 前端静态包 `webui-frontend/dist` 随 npm 发布；所有敏感字段必须服务端注入脱敏，
+  禁止把凭据放进浏览器 bundle。
+
+## Release / Deploy 链一致性（§release-chain）
+
+- 生产部署 pin = **release 提交**（scheduler 容器用 40 位 commit，不用 tag /
+  branch）；回到 `pixivflow-telepost-deploy` 改 pin → deploy → 用运行日志里的
+  `PIXIVFLOW_REVISION=2.34.0+<sha>` 复核代码=Release=Deploy=Runtime。
+- 每一个 WebUI / Scheduler 行为改动都要走 测试 → PR → merge → release → npm 发布 →
+  Deploy pin → runtime 验证，再宣称完成。

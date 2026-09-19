@@ -82,6 +82,19 @@ describe('TelePress rich-novel preview', () => {
         assets: [{ local: 'images/a.jpg', remote: 'https://media.example.com/pixiv/...', status: 'proxied' }],
       }), { status: 200, headers: { 'content-type': 'application/json' } })
     );
+    const found = findRichNovelSources(artifact([txt], [metaFile]));
+    expect(found!.manifest).toEqual([
+      { local: 'images/a.jpg', source: 'https://i.pximg.net/img-master/img/1_p0.jpg' },
+    ]);
+    expect(found!.mediaAssets).toHaveLength(1);
+    expect(found!.mediaAssets![0]).toMatchObject({
+      id: 'pixiv:123456:pixivimage:s',
+      source: 'pixiv',
+      kind: 'image',
+      sourceUrl: 'https://i.pximg.net/img-master/img/1_p0.jpg',
+      artifactId: join(imagesDir, 'a.jpg'),
+    });
+
     global.fetch = fetchMock as typeof fetch;
 
     const result = await publishRichNovelPreview(

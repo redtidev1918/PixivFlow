@@ -112,6 +112,10 @@ describe('NovelDownloader', () => {
 });
 
 describe('NovelDownloader rich media', () => {
+  beforeEach(() => {
+    createZipArchiveMock.mockClear();
+  });
+
   const novel = {
     id: 456,
     title: 'Rich novel',
@@ -191,6 +195,38 @@ describe('NovelDownloader rich media', () => {
       },
     ]);
     expect(artifact).toBeDefined();
+  });
+
+  it('on-demand policy keeps media references without materializing files', async () => {
+    const text = 'intro [uploadedimage:11] outro';
+    const client = {
+      getNovelDetailWithTags: jest.fn().mockResolvedValue({ novel, tags: [] }),
+      getNovelText: jest.fn().mockResolvedValue({
+        novel_text: text,
+        images: { '11': { urls: { original: 'https://i.pximg.net/11.jpg' } } },
+      }),
+      downloadImage: jest.fn().mockResolvedValue(new ArrayBuffer(4)),
+    } as unknown as jest.Mocked<IPixivClient>;
+    const database = { insertDownload: jest.fn() } as unknown as jest.Mocked<IDatabase>;
+    const fileService = {
+      sanitizeFileName: jest.fn((name: string) => name),
+      saveText: jest.fn().mockResolvedValue('/tmp/novels/456_Rich novel.txt'),
+      saveMetadata: jest.fn().mockResolvedValue('/tmp/456_Rich novel.txt.json'),
+      saveBinary: jest.fn().mockResolvedValue('/tmp/novels/images/11.jpg'),
+    } as unknown as jest.Mocked<IFileService>;
+    const downloader = new NovelDownloader(client, database, fileService, undefined, undefined, { mode: 'on-demand' });
+
+    const artifact = await downloader.download(novel, 'bg', { type: 'novel', detectLanguage: false } as TargetConfig);
+
+    expect(client.downloadImage).not.toHaveBeenCalled();
+    expect(fileService.saveBinary).not.toHaveBeenCalled();
+    expect(createZipArchiveMock).not.toHaveBeenCalled();
+    expect(artifact!.files).toEqual(['/tmp/novels/456_Rich novel.txt']);
+    expect(artifact!.mediaAssets).toHaveLength(1);
+    expect(artifact!.mediaAssets![0]).toMatchObject({
+      id: 'pixiv:456:uploadedimage:11',
+      sourceUrl: 'https://i.pximg.net/11.jpg',
+    });
   });
 
   it('txt still succeeds when an inline image download fails (partial success)', async () => {

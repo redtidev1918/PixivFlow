@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.40.0](https://github.com/redtidev1918/PixivFlow/compare/v2.39.0...v2.40.0) (2026-09-19)
+
+
+### Features
+
+* **rich-novel:** on-demand previews send media references without local images ([#154](https://github.com/redtidev1918/PixivFlow/issues/154)) ([3e2df03](https://github.com/redtidev1918/PixivFlow/commit/3e2df03af248610dc2ae53aeefa6516e07c100a9))
+
 ## [2.39.0](https://github.com/redtidev1918/PixivFlow/compare/v2.38.0...v2.39.0) (2026-09-19)
 
 

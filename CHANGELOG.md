@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.39.0](https://github.com/redtidev1918/PixivFlow/compare/v2.38.0...v2.39.0) (2026-09-19)
+
+
+### Features
+
+* **domain:** add Artifact type and evolve DownloadedArtifact additively ([#149](https://github.com/redtidev1918/PixivFlow/issues/149)) ([ec74b21](https://github.com/redtidev1918/PixivFlow/commit/ec74b21b8c9dfc475f542f49c22bbf92989ec059))
+* **domain:** add canonical MediaAsset and wire it into rich-novel manifest ([#147](https://github.com/redtidev1918/PixivFlow/issues/147)) ([08ec9d0](https://github.com/redtidev1918/PixivFlow/commit/08ec9d029e9a7c8c58785685a6ffe37c31ac7c3c))
+* **domain:** add MaterializationPolicy (eager default, on-demand supported) ([#152](https://github.com/redtidev1918/PixivFlow/issues/152)) ([ff736e9](https://github.com/redtidev1918/PixivFlow/commit/ff736e9a0d1f3c7cad6765b8f76773373c352605))
+* **domain:** add ResolvedWork and separate resolve from materialize ([#151](https://github.com/redtidev1918/PixivFlow/issues/151)) ([37bd9ca](https://github.com/redtidev1918/PixivFlow/commit/37bd9ca55c819c79453103bbb6767f39a27dde78))
+* **domain:** extract MediaMaterializer boundary behind existing downloader ([#150](https://github.com/redtidev1918/PixivFlow/issues/150)) ([eea6f7e](https://github.com/redtidev1918/PixivFlow/commit/eea6f7e85940c6ab6bb56cd9e97a925fb9500a20))
+* **rich-novel:** send canonical assetId/sourceUrl in TelePress manifest ([#153](https://github.com/redtidev1918/PixivFlow/issues/153)) ([f4cf18d](https://github.com/redtidev1918/PixivFlow/commit/f4cf18dfe9607d7832331f9b43f4546acbf1e05c))
+
 ## [2.38.0](https://github.com/redtidev1918/PixivFlow/compare/v2.37.0...v2.38.0) (2026-09-19)
 
 

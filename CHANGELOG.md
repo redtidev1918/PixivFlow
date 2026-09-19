@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.38.0](https://github.com/redtidev1918/PixivFlow/compare/v2.37.0...v2.38.0) (2026-09-19)
+
+
+### Features
+
+* **novel:** send Pixiv source manifest to TelePress rich-novel ([#145](https://github.com/redtidev1918/PixivFlow/issues/145)) ([8cb5cd4](https://github.com/redtidev1918/PixivFlow/commit/8cb5cd46aad765a43bcf539676b385120ee9aa7e))
+
 ## [2.37.0](https://github.com/redtidev1918/PixivFlow/compare/v2.36.0...v2.37.0) (2026-09-18)
 
 

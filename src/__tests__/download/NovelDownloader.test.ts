@@ -72,6 +72,11 @@ describe('NovelDownloader', () => {
       spoiler: true,
       tags: ['ボテ腹', 'R-18'],
     });
+    expect(artifact!.mediaAssets).toEqual([]);
+    expect(artifact!.artifacts).toEqual([
+      { id: 'pixiv:123:text:123_Test novel.txt', workId: '123', variant: 'text', path: '/tmp/123_Test novel.txt' },
+      { id: 'pixiv:123:metadata:123_Test novel.txt.json', workId: '123', variant: 'metadata', path: '/tmp/123_Test novel.txt.json' },
+    ]);
   });
 
   it('does not persist or deliver an empty-body novel', async () => {
@@ -159,6 +164,21 @@ describe('NovelDownloader rich media', () => {
       'images/11.jpg',
     ]);
     expect(artifact!.files).toEqual(['/tmp/novels/456_Rich novel.txt', '/tmp/novels/456_Rich novel.zip']);
+
+    expect(artifact!.mediaAssets).toHaveLength(1);
+    expect(artifact!.mediaAssets![0]).toMatchObject({
+      id: 'pixiv:456:uploadedimage:11',
+      source: 'pixiv',
+      kind: 'image',
+      sourceUrl: 'https://i.pximg.net/img/original/u/11.jpg',
+    });
+    expect(artifact!.artifacts).toEqual([
+      { id: 'pixiv:456:text:456_Rich novel.txt', workId: '456', variant: 'text', path: '/tmp/novels/456_Rich novel.txt' },
+      { id: 'pixiv:456:markdown:456_Rich novel.txt', workId: '456', variant: 'markdown', path: '/tmp/novels/456_Rich novel.txt' },
+      { id: 'pixiv:456:metadata:456_Rich novel.txt.json', workId: '456', variant: 'metadata', path: '/tmp/456_Rich novel.txt.json' },
+      { id: 'pixiv:456:zip:456_Rich novel.zip', workId: '456', variant: 'zip', path: '/tmp/novels/456_Rich novel.zip' },
+      { id: 'pixiv:456:original:11.jpg', workId: '456', variant: 'original', path: '/tmp/novels/images/11.jpg', sourceAssetId: 'pixiv:456:uploadedimage:11' },
+    ]);
 
     expect(metadata.assets).toEqual([
       {

@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { DownloadedArtifact } from './types';
-import { mediaAssetId, type MediaAsset, type PixivMediaKind } from '../domain/media/MediaAsset';
+import { buildMediaAsset, type MediaAsset, type PixivMediaKind } from '../domain/media/MediaAsset';
 import { logger } from '../logger';
 import { redactUrl } from '../utils/redact';
 
@@ -93,19 +93,14 @@ function readNovelMediaAssets(artifact: DownloadedArtifact): { mediaAssets: Medi
       const source = String(asset.url);
       const localPath = String(asset.localPath);
       if (!source || !localPath || !kind) continue;
-      mediaAssets.push({
-        id: mediaAssetId(workId, kind, asset.sourceId ? String(asset.sourceId) : undefined),
-        source: 'pixiv',
-        kind: 'image',
+      mediaAssets.push(buildMediaAsset({
+        workId,
+        kind,
+        sourceId: asset.sourceId ? String(asset.sourceId) : undefined,
+        marker: asset.marker ? String(asset.marker) : undefined,
         sourceUrl: source,
         artifactId: localPath,
-        sourceRef: {
-          workId,
-          sourceId: asset.sourceId ? String(asset.sourceId) : undefined,
-          marker: asset.marker ? String(asset.marker) : undefined,
-          pixivKind: kind,
-        },
-      });
+      }));
       manifest.push({ local: `images/${path.basename(localPath)}`, source });
     }
     return { mediaAssets, manifest };

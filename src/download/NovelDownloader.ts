@@ -8,6 +8,8 @@ import { PixivNovel } from '@redtidev/pixiv-client';
 import { dirname, join, basename } from 'node:path';
 import { detectLanguage } from '../utils/language-detection';
 import { DownloadedArtifact } from '../delivery/types';
+import { buildMediaAsset, type MediaAsset } from '../domain/media/MediaAsset';
+import { artifactId, type Artifact } from '../domain/media/Artifact';
 import { extractNovelAssets, NovelAsset, renderNovelMarkdown } from './novelMarkers';
 import { createZipArchive } from '../utils/zip';
 import type { Database } from '../storage/Database';
@@ -291,12 +293,51 @@ export class NovelDownloader {
       filePath,
       ...(detectedLang ? { language: detectedLang.name, isChinese: detectedLang.isChinese } : {}),
     });
+
+    const workId = String(detail.id);
+    const mediaAssets: MediaAsset[] = [];
+    const artifacts: Artifact[] = [];
+    if (filePath) {
+      artifacts.push({ id: artifactId(workId, 'text', basename(filePath)), workId, variant: 'text', path: filePath });
+    }
+    if (richMediaPath) {
+      artifacts.push({ id: artifactId(workId, 'markdown', basename(richMediaPath)), workId, variant: 'markdown', path: richMediaPath });
+    }
+    if (metadataPath) {
+      artifacts.push({ id: artifactId(workId, 'metadata', basename(metadataPath)), workId, variant: 'metadata', path: metadataPath });
+    }
+    if (archivePath) {
+      artifacts.push({ id: artifactId(workId, 'zip', basename(archivePath)), workId, variant: 'zip', path: archivePath });
+    }
+    for (const a of assets) {
+      if (a.status !== 'downloaded' || !a.localPath || !a.url) continue;
+      const imageArtifactId = artifactId(workId, 'original', basename(a.localPath));
+      const mediaAsset = buildMediaAsset({
+        workId,
+        kind: a.kind,
+        sourceId: a.sourceId,
+        marker: a.marker,
+        sourceUrl: a.url,
+        artifactId: imageArtifactId,
+      });
+      mediaAssets.push(mediaAsset);
+      artifacts.push({
+        id: imageArtifactId,
+        sourceAssetId: mediaAsset.id,
+        workId,
+        variant: 'original',
+        path: a.localPath,
+      });
+    }
+
     return {
-      pixivId: String(detail.id),
+      pixivId: workId,
       type: 'novel',
       title: detail.title,
       tags: tags.map((item) => item.name).filter(Boolean),
       files: archivePath ? [filePath, archivePath] : [filePath],
+      mediaAssets,
+      artifacts,
       cleanupFiles: metadataPath ? [metadataPath] : [],
       spoiler: (detail.x_restrict ?? 0) > 0,
       xRestrict: detail.x_restrict,

@@ -46,3 +46,29 @@ export function mediaAssetId(workId: string, pixivKind: PixivMediaKind, sourceId
   const cleanSource = sourceId ? String(sourceId).trim() : '';
   return `pixiv:${cleanWork}:${cleanKind}${cleanSource ? `:${cleanSource}` : ''}`;
 }
+
+export interface MediaAssetInput {
+  workId: string;
+  kind: PixivMediaKind;
+  sourceId?: string;
+  marker?: string;
+  sourceUrl: string;
+  artifactId?: string;
+}
+
+/** Build a canonical MediaAsset from a resolved Pixiv media reference. */
+export function buildMediaAsset(input: MediaAssetInput): MediaAsset {
+  return {
+    id: mediaAssetId(input.workId, input.kind, input.sourceId),
+    source: 'pixiv',
+    kind: 'image',
+    sourceUrl: input.sourceUrl,
+    artifactId: input.artifactId,
+    sourceRef: {
+      workId: input.workId,
+      sourceId: input.sourceId,
+      marker: input.marker,
+      pixivKind: input.kind,
+    },
+  };
+}

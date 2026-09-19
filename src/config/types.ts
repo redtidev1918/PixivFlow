@@ -804,6 +804,13 @@ export interface StandaloneConfig {
      * terminalises immediately). Default: 3.
      */
     maxFallbackStages?: number;
+    /**
+     * Novel media materialization policy. 'eager' downloads inline images for
+     * the preview path (legacy); 'on-demand' keeps MediaReference
+     * (assetId/sourceUrl) and defers local files to explicit ZIP/archive.
+     * Default: 'eager'
+     */
+    materializationPolicy?: 'eager' | 'on-demand';
   };
 }
 

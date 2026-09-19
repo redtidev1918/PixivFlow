@@ -7,6 +7,7 @@ import { IFileService } from '../interfaces/IFileService';
 import { RankingService } from './RankingService';
 import { IllustrationDownloader } from './IllustrationDownloader';
 import { NovelDownloader } from './NovelDownloader';
+import { DEFAULT_MATERIALIZATION_POLICY, type MaterializationPolicy } from '../domain/media/MaterializationPolicy';
 import { ProgressReporter } from './report/ProgressReporter';
 import { DownloadPlanner } from './plan/DownloadPlanner';
 import { DownloadExecutor } from './exec/DownloadExecutor';
@@ -157,11 +158,16 @@ export class DownloadManager implements IDownloadManager {
       downloadConcurrency,
       storagePath
     );
+    const materialization: MaterializationPolicy = config.download?.materializationPolicy
+      ? { mode: config.download?.materializationPolicy }
+      : DEFAULT_MATERIALIZATION_POLICY;
     this.novelDownloader = new NovelDownloader(
       client,
       database,
       fileService,
-      database as unknown as import('../storage/Database').Database
+      database as unknown as import('../storage/Database').Database,
+      undefined,
+      materialization
     );
     this.planner = new DownloadPlanner(database, {
       deliveredIds: (target, type, ids) =>

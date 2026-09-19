@@ -527,6 +527,7 @@ kill -HUP <pixivflow-pid>
 | `maxRetries` | 3 | 单文件最大重试次数 |
 | `retryDelay` | 2000 | 文件级重试间隔(ms) |
 | `timeout` | 60000 | 单文件下载超时(ms) |
+| `materializationPolicy` | `eager` | novel 预览媒体物化策略：`eager` 提前下载本地图片（旧行为）；`on-demand` 预览路径只保留 MediaReference（`assetId`/`sourceUrl`），ZIP/归档仍按需物化 |
 
 调大并发不一定会更快——Pixiv 服务端限流很敏感,遇到大量
 429 时优先增大 `requestDelay` 而不是堆并发。

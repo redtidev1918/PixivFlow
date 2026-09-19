@@ -10,6 +10,7 @@ import { detectLanguage } from '../utils/language-detection';
 import { DownloadedArtifact } from '../delivery/types';
 import { type MediaAsset } from '../domain/media/MediaAsset';
 import { toResolvedWork } from '../domain/media/Work';
+import { DEFAULT_MATERIALIZATION_POLICY, shouldMaterialize, type MaterializationPolicy } from '../domain/media/MaterializationPolicy';
 import { artifactId, type Artifact } from '../domain/media/Artifact';
 import { PixivMediaMaterializer, type MediaMaterializer } from './materialization/MediaMaterializer';
 import { extractNovelAssets, NovelAsset, renderNovelMarkdown } from './novelMarkers';
@@ -20,15 +21,18 @@ const LANGUAGE_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 export class NovelDownloader {
   private readonly materializer: MediaMaterializer;
+  private readonly materializationPolicy: MaterializationPolicy;
 
   constructor(
     private readonly client: IPixivClient,
     private readonly database: IDatabase,
     private readonly fileService: IFileService,
     private readonly metadataDb?: Database,
-    materializer?: MediaMaterializer
+    materializer?: MediaMaterializer,
+    materializationPolicy: MaterializationPolicy = DEFAULT_MATERIALIZATION_POLICY
   ) {
     this.materializer = materializer ?? new PixivMediaMaterializer(client, fileService);
+    this.materializationPolicy = materializationPolicy;
   }
 
   async download(novel: PixivNovel, tag: string, target: TargetConfig): Promise<DownloadedArtifact | undefined> {
@@ -189,6 +193,9 @@ export class NovelDownloader {
     if (resolved.mediaAssets.length) {
       const imagesDir = join(dirname(filePath), 'images');
       for (const mediaAsset of resolved.mediaAssets) {
+        if (!shouldMaterialize(this.materializationPolicy)) {
+          continue; // on-demand: keep the media reference, defer local file creation
+        }
         try {
           const artifact = await this.materializer.materialize(mediaAsset, {
             variant: 'original',
@@ -367,13 +374,16 @@ export class NovelDownloader {
       });
     }
 
+    // On-demand mode carries resolved references without local originals.
+    const returnedMediaAssets = mediaAssets.length ? mediaAssets : resolved.mediaAssets;
+
     return {
       pixivId: workId,
       type: 'novel',
       title: detail.title,
       tags: tags.map((item) => item.name).filter(Boolean),
       files: archivePath ? [filePath, archivePath] : [filePath],
-      mediaAssets,
+      mediaAssets: returnedMediaAssets,
       artifacts,
       cleanupFiles: metadataPath ? [metadataPath] : [],
       spoiler: (detail.x_restrict ?? 0) > 0,

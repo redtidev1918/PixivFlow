@@ -33,9 +33,47 @@ export function interpolateEnv(value: string): string {
   });
 }
 
+export interface RichNovelManifestEntry {
+  /** Markdown-relative path, e.g. ``images/001.jpg``. */
+  local: string;
+  /** Original Pixiv CDN source URL (``https://i.pximg.net/...``). */
+  source: string;
+}
+
+export interface RichNovelSources {
+  txtPath: string;
+  mdPath: string;
+  imagePaths: string[];
+  /** Optional Pixiv CDN source map derived from the novel metadata file. */
+  manifest: RichNovelManifestEntry[];
+}
+
+/** Read ``{local, source}`` entries from the novel's metadata sidecar. */
+function readNovelManifest(artifact: DownloadedArtifact): RichNovelManifestEntry[] {
+  const metadataFile = (artifact.cleanupFiles ?? []).find((f) => /\.json$/i.test(f));
+  if (!metadataFile || !fs.existsSync(metadataFile)) return [];
+  try {
+    const meta = JSON.parse(fs.readFileSync(metadataFile, 'utf8')) as {
+      assets?: Array<{ url?: unknown; localPath?: unknown; status?: unknown }>;
+    };
+    if (!Array.isArray(meta.assets)) return [];
+    const entries: RichNovelManifestEntry[] = [];
+    for (const asset of meta.assets) {
+      if (!asset || asset.status !== 'downloaded' || !asset.url || !asset.localPath) continue;
+      const source = String(asset.url);
+      const localPath = String(asset.localPath);
+      if (!source || !localPath) continue;
+      entries.push({ local: `images/${path.basename(localPath)}`, source });
+    }
+    return entries;
+  } catch {
+    return [];
+  }
+}
+
 export function findRichNovelSources(
   artifact: DownloadedArtifact
-): { txtPath: string; mdPath: string; imagePaths: string[] } | undefined {
+): RichNovelSources | undefined {
   if (artifact.type !== 'novel') return undefined;
   const txtPath = artifact.files.find((f) => /\.txt$/i.test(f));
   if (!txtPath) return undefined;
@@ -50,7 +88,12 @@ export function findRichNovelSources(
       .map((name) => path.join(imagesDir, name))
       .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
   }
-  return { txtPath, mdPath, imagePaths };
+  return {
+    txtPath,
+    mdPath,
+    imagePaths,
+    manifest: readNovelManifest(artifact),
+  };
 }
 
 /**
@@ -82,6 +125,18 @@ export async function publishRichNovelPreview(
   ));
   fields.push(await fs.promises.readFile(sources.mdPath));
   fields.push(Buffer.from('\r\n'));
+
+  // Optional manifest: lets TelePress rewrite Pixiv CDN sources to the media
+  // proxy instead of uploading local files to an image host.
+  if (sources.manifest.length) {
+    fields.push(Buffer.from(
+      `--${boundary}\r\n` +
+        `Content-Disposition: form-data; name="manifest"\r\n` +
+        `Content-Type: application/json\r\n\r\n`
+    ));
+    fields.push(Buffer.from(JSON.stringify(sources.manifest)));
+    fields.push(Buffer.from('\r\n'));
+  }
 
   // File parts for each inline image, named with the `images/` prefix so the
   // relative markdown refs resolve on the receiving side.

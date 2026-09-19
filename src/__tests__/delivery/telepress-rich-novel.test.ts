@@ -21,12 +21,13 @@ describe('TelePress rich-novel preview', () => {
     await fs.rm(dir, { recursive: true, force: true });
   });
 
-  function artifact(files: string[]): DownloadedArtifact {
+  function artifact(files: string[], cleanupFiles: string[] = []): DownloadedArtifact {
     return {
       pixivId: '123456',
       type: 'novel',
       title: '测试小说',
       files,
+      ...(cleanupFiles.length ? { cleanupFiles } : {}),
     };
   }
 
@@ -53,6 +54,46 @@ describe('TelePress rich-novel preview', () => {
     const txt = join(dir, 'plain.txt');
     await fs.writeFile(txt, 'body');
     expect(findRichNovelSources(artifact([txt]))).toBeUndefined();
+  });
+
+  it('includes a manifest mapping local images to Pixiv sources', async () => {
+    const txt = join(dir, 'n.txt');
+    const md = txt.replace(/\.txt$/i, '.md');
+    const imagesDir = join(dir, 'images');
+    await fs.writeFile(txt, 'body');
+    await fs.writeFile(md, '![a](images/a.jpg)');
+    await fs.mkdir(imagesDir);
+    await fs.writeFile(join(imagesDir, 'a.jpg'), 'img');
+
+    const metaFile = join(dir, 'metadata', '123456_novel.json');
+    await fs.mkdir(join(dir, 'metadata'), { recursive: true });
+    await fs.writeFile(metaFile, JSON.stringify({
+      type: 'novel',
+      assets: [{
+        marker: 'x', kind: 'pixivimage', sourceId: 's', status: 'downloaded',
+        url: 'https://i.pximg.net/img-master/img/1_p0.jpg',
+        localPath: join(imagesDir, 'a.jpg'),
+      }],
+    }));
+
+    const fetchMock = jest.fn().mockResolvedValue(
+      new Response(JSON.stringify({
+        status: 'success', url: 'https://telegra.ph/test-123',
+        assets: [{ local: 'images/a.jpg', remote: 'https://media.example.com/pixiv/...', status: 'proxied' }],
+      }), { status: 200, headers: { 'content-type': 'application/json' } })
+    );
+    global.fetch = fetchMock as typeof fetch;
+
+    const result = await publishRichNovelPreview(
+      artifact([txt], [metaFile]),
+      { url: 'https://telepress.example/publish/rich-novel' }
+    );
+    expect(result).toEqual({ url: 'https://telegra.ph/test-123', retryable: false });
+
+    const body = String(fetchMock.mock.calls[0]?.[1]?.body);
+    expect(body).toContain('Content-Disposition: form-data; name="manifest"');
+    expect(body).toContain('https://i.pximg.net/img-master/img/1_p0.jpg');
+    expect(body).toContain('"local":"images/a.jpg"');
   });
 
   it('posts md + images and returns the Telegraph url', async () => {

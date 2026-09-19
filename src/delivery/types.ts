@@ -1,4 +1,6 @@
 import { DeliveryFieldValue } from '../config';
+import type { MediaAsset } from '../domain/media/MediaAsset';
+import type { Artifact } from '../domain/media/Artifact';
 
 export type DeliveryItemType = 'illustration' | 'novel';
 
@@ -13,6 +15,10 @@ export interface DownloadedArtifact {
   files: string[];
   /** Optional per-file lightweight preview sources, aligned with ``files``. */
   previewFiles?: string[];
+  /** Canonical media facts for the work (remote source, stable id). */
+  mediaAssets?: MediaAsset[];
+  /** Canonical materialized file facts backing ``files``. */
+  artifacts?: Artifact[];
   /** Local sidecars deleted with cache files after successful delivery. */
   cleanupFiles?: string[];
   /** R-18 work (x_restrict > 0): delivery templates may open Telegram spoiler. */

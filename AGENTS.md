@@ -5,7 +5,7 @@
 * `pixivflow-telepost-deploy/AGENTS.md`（PixivFlow Ecosystem Agent Operating Contract）
 * `pixivflow-telepost-deploy/docs/architecture/ecosystem-platform.md`（长期架构）
 * `pixivflow-telepost-deploy/docs/operations/current-state.md`（当前生产状态）
-* `pixivflow-telepost-deploy/docs/CONTRACT.md`（PixivFlow ↔ TelePost 跨仓库契约）
+* `pixivflow-telepost-deploy/CONTRACT.md`（PixivFlow ↔ TelePost 跨仓库契约）
 
 本文件只保留本仓边界与特殊约束；与上面权威冲突时以上面为准，并顺手修正。
 

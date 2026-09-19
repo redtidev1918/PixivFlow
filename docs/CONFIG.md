@@ -321,6 +321,12 @@ Telegraph 页面生成，最终把 Telegra.ph 阅读链接写进提交字段（�
 
 - 纯文本小说（没有 `.md` sidecar 或没有 `images/`）不会触发富媒体发布，返回
   `no_rich_novel_assets`，行为与旧链路完全一致。
+- 自动从 novel metadata sidecar 读出每个已下载插图的 `url + localPath`，以
+  `manifest` 字段（`[{"local": "images/001.jpg", "source": "https://i.pximg.net/..."}]`）
+  随 multipart 一起交给 TelePress。TelePress 配置 `TELEPRESS_PIXIV_PROXY_BASE`
+  后会把匹配的 Pixiv CDN 源改写成 `<base>/pixiv/...` 并直接使用
+  （`status=proxied`）；没有 proxy / 不匹配时仍把本地图片上传到图床兜底。
+  V1 仍然同时发送图片文件，保证 fallback 不依赖代理链。
 - 若 TelePress 返回 4xx 且内容不可用，按 `operatorHint`（如 `telepress_http_401`）
   记录并可诊断；网络错误/超时/5xx 标记 `retryable=true`，后续由 outbox 重试。
 - 成功后把 Telegraph `url` 注入字段（默认 `novel_preview_url`），随正常投稿/通知

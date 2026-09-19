@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.41.0](https://github.com/redtidev1918/PixivFlow/compare/v2.40.0...v2.41.0) (2026-09-19)
+
+
+### Features
+
+* **config:** wire download.materializationPolicy into DownloadManager ([ed1bc14](https://github.com/redtidev1918/PixivFlow/commit/ed1bc14842754445534394c253c932ba79c00974))
+
 ## [2.40.0](https://github.com/redtidev1918/PixivFlow/compare/v2.39.0...v2.40.0) (2026-09-19)
 
 

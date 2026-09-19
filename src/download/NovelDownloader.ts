@@ -10,6 +10,7 @@ import { detectLanguage } from '../utils/language-detection';
 import { DownloadedArtifact } from '../delivery/types';
 import { buildMediaAsset, type MediaAsset } from '../domain/media/MediaAsset';
 import { artifactId, type Artifact } from '../domain/media/Artifact';
+import { PixivMediaMaterializer, type MediaMaterializer } from './materialization/MediaMaterializer';
 import { extractNovelAssets, NovelAsset, renderNovelMarkdown } from './novelMarkers';
 import { createZipArchive } from '../utils/zip';
 import type { Database } from '../storage/Database';
@@ -17,12 +18,17 @@ import type { Database } from '../storage/Database';
 const LANGUAGE_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 export class NovelDownloader {
+  private readonly materializer: MediaMaterializer;
+
   constructor(
     private readonly client: IPixivClient,
     private readonly database: IDatabase,
     private readonly fileService: IFileService,
-    private readonly metadataDb?: Database
-  ) {}
+    private readonly metadataDb?: Database,
+    materializer?: MediaMaterializer
+  ) {
+    this.materializer = materializer ?? new PixivMediaMaterializer(client, fileService);
+  }
 
   async download(novel: PixivNovel, tag: string, target: TargetConfig): Promise<DownloadedArtifact | undefined> {
     // Metadata cache: language filtering otherwise pulls FULL text per candidate
@@ -163,8 +169,18 @@ export class NovelDownloader {
       const imagesDir = join(dirname(filePath), 'images');
       for (const asset of pendingAssets) {
         try {
-          const buffer = await this.client.downloadImage(asset.url);
-          asset.localPath = await this.fileService.saveBinary(buffer, novelAssetFileName(asset), imagesDir);
+          const mediaAsset = buildMediaAsset({
+            workId: String(detail.id),
+            kind: asset.kind,
+            sourceId: asset.sourceId,
+            marker: asset.marker,
+            sourceUrl: asset.url,
+          });
+          const artifact = await this.materializer.materialize(mediaAsset, {
+            variant: 'original',
+            destination: imagesDir,
+          });
+          asset.localPath = artifact.path;
           asset.status = 'downloaded';
         } catch (error) {
           asset.status = 'failed';
@@ -347,16 +363,4 @@ export class NovelDownloader {
       language: detectedLang ? `${detectedLang.name} (${detectedLang.code})` : undefined,
     };
   }
-}
-function novelAssetFileName(asset: NovelAsset & { url: string }): string {
-  let ext = '';
-  try {
-    const pathname = new URL(asset.url).pathname;
-    const last = pathname.split('/').pop() || '';
-    const dot = last.lastIndexOf('.');
-    if (dot >= 0) ext = last.slice(dot);
-  } catch {
-    // fall through: no extension
-  }
-  return `${asset.sourceId}${ext}` || asset.sourceId;
 }

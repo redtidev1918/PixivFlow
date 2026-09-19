@@ -2,6 +2,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { DownloadedArtifact } from './types';
+import { mediaAssetId, type MediaAsset, type PixivMediaKind } from '../domain/media/MediaAsset';
 import { logger } from '../logger';
 import { redactUrl } from '../utils/redact';
 
@@ -44,30 +45,72 @@ export interface RichNovelSources {
   txtPath: string;
   mdPath: string;
   imagePaths: string[];
+  /** Canonical media references derived from the novel metadata file. */
+  mediaAssets: MediaAsset[];
   /** Optional Pixiv CDN source map derived from the novel metadata file. */
   manifest: RichNovelManifestEntry[];
 }
 
-/** Read ``{local, source}`` entries from the novel's metadata sidecar. */
-function readNovelManifest(artifact: DownloadedArtifact): RichNovelManifestEntry[] {
+interface NovelMetadataAsset {
+  marker?: unknown;
+  kind?: unknown;
+  sourceId?: unknown;
+  url?: unknown;
+  localPath?: unknown;
+  status?: unknown;
+}
+
+interface NovelMetadata {
+  pixiv_id?: unknown;
+  assets?: NovelMetadataAsset[];
+}
+
+function isDownloadedPixivAsset(asset: NovelMetadataAsset): asset is NovelMetadataAsset & { url: unknown; localPath: unknown } {
+  return Boolean(asset && asset.status === 'downloaded' && asset.url && asset.localPath);
+}
+
+/**
+ * Read the novel metadata sidecar into canonical `MediaAsset` values, plus the
+ * legacy `{local, source}` manifest projection (local is only a render hint for
+ * the markdown refs; source is the media fact).
+ */
+function readNovelMediaAssets(artifact: DownloadedArtifact): { mediaAssets: MediaAsset[]; manifest: RichNovelManifestEntry[] } {
   const metadataFile = (artifact.cleanupFiles ?? []).find((f) => /\.json$/i.test(f));
-  if (!metadataFile || !fs.existsSync(metadataFile)) return [];
+  if (!metadataFile || !fs.existsSync(metadataFile)) {
+    return { mediaAssets: [], manifest: [] };
+  }
   try {
-    const meta = JSON.parse(fs.readFileSync(metadataFile, 'utf8')) as {
-      assets?: Array<{ url?: unknown; localPath?: unknown; status?: unknown }>;
-    };
-    if (!Array.isArray(meta.assets)) return [];
-    const entries: RichNovelManifestEntry[] = [];
+    const meta = JSON.parse(fs.readFileSync(metadataFile, 'utf8')) as NovelMetadata;
+    if (!Array.isArray(meta.assets)) return { mediaAssets: [], manifest: [] };
+    const workId = meta.pixiv_id ? String(meta.pixiv_id) : artifact.pixivId;
+    const mediaAssets: MediaAsset[] = [];
+    const manifest: RichNovelManifestEntry[] = [];
     for (const asset of meta.assets) {
-      if (!asset || asset.status !== 'downloaded' || !asset.url || !asset.localPath) continue;
+      if (!isDownloadedPixivAsset(asset)) continue;
+      const kind = asset.kind === 'uploadedimage' || asset.kind === 'pixivimage'
+        ? asset.kind as PixivMediaKind
+        : undefined;
       const source = String(asset.url);
       const localPath = String(asset.localPath);
-      if (!source || !localPath) continue;
-      entries.push({ local: `images/${path.basename(localPath)}`, source });
+      if (!source || !localPath || !kind) continue;
+      mediaAssets.push({
+        id: mediaAssetId(workId, kind, asset.sourceId ? String(asset.sourceId) : undefined),
+        source: 'pixiv',
+        kind: 'image',
+        sourceUrl: source,
+        artifactId: localPath,
+        sourceRef: {
+          workId,
+          sourceId: asset.sourceId ? String(asset.sourceId) : undefined,
+          marker: asset.marker ? String(asset.marker) : undefined,
+          pixivKind: kind,
+        },
+      });
+      manifest.push({ local: `images/${path.basename(localPath)}`, source });
     }
-    return entries;
+    return { mediaAssets, manifest };
   } catch {
-    return [];
+    return { mediaAssets: [], manifest: [] };
   }
 }
 
@@ -88,11 +131,13 @@ export function findRichNovelSources(
       .map((name) => path.join(imagesDir, name))
       .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
   }
+  const { mediaAssets, manifest } = readNovelMediaAssets(artifact);
   return {
     txtPath,
     mdPath,
     imagePaths,
-    manifest: readNovelManifest(artifact),
+    mediaAssets,
+    manifest,
   };
 }
 

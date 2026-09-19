@@ -9,6 +9,7 @@ import logsRoutes from '../routes/logs';
 import adminLogsRoutes from '../routes/admin-logs';
 import systemErrorsRoutes from '../routes/system-errors';
 import filesRoutes from '../routes/files';
+import schedulerRoutes from '../routes/scheduler';
 
 /**
  * Setup API routes for Express app
@@ -34,67 +35,6 @@ export function setupRoutes(app: Express): void {
   app.use('/admin/logs', adminLogsRoutes);
   app.use('/admin/system-errors', systemErrorsRoutes);
   app.use('/api/files', filesRoutes);
+  // WebUI Control Center Phase 1: read-only scheduler projection.
+  app.use('/api/scheduler', schedulerRoutes);
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

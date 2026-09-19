@@ -3,6 +3,7 @@ import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { DownloadedArtifact } from './types';
 import { buildMediaAsset, type MediaAsset, type PixivMediaKind } from '../domain/media/MediaAsset';
+import { novelReferenceFileName } from '../download/novelMarkers';
 import { logger } from '../logger';
 import { redactUrl } from '../utils/redact';
 
@@ -73,6 +74,27 @@ function isDownloadedPixivAsset(asset: NovelMetadataAsset): asset is NovelMetada
   return Boolean(asset && asset.status === 'downloaded' && asset.url && asset.localPath);
 }
 
+function isPendingPixivAsset(asset: NovelMetadataAsset): asset is NovelMetadataAsset & { url: unknown; sourceId: unknown } {
+  return Boolean(asset && asset.status === 'pending' && asset.url && asset.sourceId && !asset.localPath);
+}
+
+/** Build a canonical MediaAsset without requiring a local file. */
+function mediaAssetFrom(asset: NovelMetadataAsset, workId: string, localPath?: string) {
+  const kind = asset.kind === 'uploadedimage' || asset.kind === 'pixivimage'
+    ? asset.kind as PixivMediaKind
+    : undefined;
+  const source = String(asset.url);
+  if (!source || !kind) return undefined;
+  return buildMediaAsset({
+    workId,
+    kind,
+    sourceId: asset.sourceId ? String(asset.sourceId) : undefined,
+    marker: asset.marker ? String(asset.marker) : undefined,
+    sourceUrl: source,
+    artifactId: localPath,
+  });
+}
+
 /**
  * Read the novel metadata sidecar into canonical `MediaAsset` values, plus the
  * legacy `{local, source}` manifest projection (local is only a render hint for
@@ -89,28 +111,37 @@ function readNovelMediaAssets(artifact: DownloadedArtifact): { mediaAssets: Medi
     const workId = meta.pixiv_id ? String(meta.pixiv_id) : artifact.pixivId;
     const mediaAssets: MediaAsset[] = [];
     const manifest: RichNovelManifestEntry[] = [];
-    for (const asset of meta.assets) {
-      if (!isDownloadedPixivAsset(asset)) continue;
-      const kind = asset.kind === 'uploadedimage' || asset.kind === 'pixivimage'
-        ? asset.kind as PixivMediaKind
-        : undefined;
+    const downloaded = meta.assets.filter(isDownloadedPixivAsset);
+    for (const asset of downloaded) {
       const source = String(asset.url);
       const localPath = String(asset.localPath);
-      if (!source || !localPath || !kind) continue;
-      mediaAssets.push(buildMediaAsset({
-        workId,
-        kind,
-        sourceId: asset.sourceId ? String(asset.sourceId) : undefined,
-        marker: asset.marker ? String(asset.marker) : undefined,
-        sourceUrl: source,
-        artifactId: localPath,
-      }));
+      const media = mediaAssetFrom(asset, workId, localPath);
+      if (!media) continue;
+      mediaAssets.push(media);
       manifest.push({
         local: `images/${path.basename(localPath)}`,
         source,
         assetId: mediaAssets[mediaAssets.length - 1]?.id,
         sourceUrl: source,
       });
+    }
+    // On-demand previews: no local downloads for this work, but the metadata
+    // carries resolvable Pixiv CDN sources. Pass those through as pending
+    // references (no artifactId) so TelePress can proxy them without files.
+    if (mediaAssets.length === 0) {
+      for (const asset of meta.assets.filter(isPendingPixivAsset)) {
+        const source = String(asset.url);
+        const refName = novelReferenceFileName(source, String(asset.sourceId));
+        const media = mediaAssetFrom(asset, workId);
+        if (!media) continue;
+        mediaAssets.push(media);
+        manifest.push({
+          local: refName,
+          source,
+          assetId: mediaAssets[mediaAssets.length - 1]?.id,
+          sourceUrl: source,
+        });
+      }
     }
     return { mediaAssets, manifest };
   } catch {
@@ -158,7 +189,7 @@ export async function publishRichNovelPreview(
 ): Promise<{ url: string; retryable: boolean; operatorHint?: string }> {
   const sources = findRichNovelSources(artifact);
   if (!sources) return { url: '', retryable: false, operatorHint: 'no_rich_novel_assets' };
-  if (sources.imagePaths.length === 0) {
+  if (sources.imagePaths.length === 0 && sources.manifest.length === 0) {
     return { url: '', retryable: false, operatorHint: 'no_rich_novel_assets' };
   }
 

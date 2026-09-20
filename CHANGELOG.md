@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.43.1](https://github.com/redtidev1918/PixivFlow/compare/v2.43.0...v2.43.1) (2026-09-20)
+
+
+### Bug Fixes
+
+* **delivery:** map media assets to TelePost wire contract before multipart send ([#161](https://github.com/redtidev1918/PixivFlow/issues/161)) ([a95d134](https://github.com/redtidev1918/PixivFlow/commit/a95d13454a3a2b441ab5e22603e6583674fa626c))
+
 ## [2.43.0](https://github.com/redtidev1918/PixivFlow/compare/v2.42.0...v2.43.0) (2026-09-20)
 
 

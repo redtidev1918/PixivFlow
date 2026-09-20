@@ -15,8 +15,17 @@
   - [架构说明](/ARCHITECTURE.md)
   - [Pixiv Client Kit](/PIXIV_CLIENT_KIT.md)
   - [WebUI API](/API.md)
+  - [可观测性](/OBSERVABILITY.md)
+  - [Slot 结果分类](/SLOT_OUTCOME.md)
   - [v1 → v2 迁移指南](/MIGRATION.md)
   - [发版流程](/RELEASING.md)
+- 架构设计
+  - [索引与治理](/architecture/README.md)
+  - [架构原则](/architecture/principles.md)
+  - [运行结果契约](/architecture/operational-result-contract.md)
+  - [候选供给 RFC](/architecture/candidate-supply-rfc.md)
+  - [候选供给可观测性 RFC](/architecture/candidate-supply-observability-rfc.md)
+  - [WebUI 控制中心 RFC](/architecture/webui-control-center-rfc.md)
 - 项目
   - [致谢](/ACKNOWLEDGMENTS.md)
   - [贡献指南（GitHub）](https://github.com/redtidev1918/PixivFlow/blob/master/CONTRIBUTING.md)

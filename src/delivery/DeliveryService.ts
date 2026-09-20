@@ -174,6 +174,7 @@ export class DeliveryService {
             payload: {
               files: artifact.files,
               previewFiles: artifact.previewFiles ?? [],
+              mediaAssets: artifact.mediaAssets,
               cleanupFiles: artifact.cleanupFiles ?? [],
               fields: context.fields ?? null,
               context: { ...this.contextFrom(artifact, target), idempotencyKey, ...(context.extraContext ?? {}) },
@@ -195,6 +196,7 @@ export class DeliveryService {
         payload: {
           files: artifact.files,
           previewFiles: artifact.previewFiles ?? [],
+          mediaAssets: artifact.mediaAssets,
           cleanupFiles: artifact.cleanupFiles ?? [],
           fields: context.fields ?? null,
           context: { ...this.contextFrom(artifact, target), idempotencyKey, ...(context.extraContext ?? {}) },

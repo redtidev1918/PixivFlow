@@ -180,6 +180,11 @@ export class HttpMultipartDelivery implements DeliveryProvider {
       { ...(this.config.fields ?? {}), ...(request.fields ?? {}) },
       request
     );
+    if (request.mediaAssets?.length) {
+      // TelePost's optional media-asset contract is provider-independent. The
+      // local files still lead; assets are advisory delivery-plan facts.
+      fields.media_assets = [JSON.stringify(request.mediaAssets)];
+    }
     const multipart = await this.createMultipartBody(
       request.files, fields, request.previewFiles
     );

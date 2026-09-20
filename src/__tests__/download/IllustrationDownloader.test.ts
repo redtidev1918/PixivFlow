@@ -49,6 +49,11 @@ describe('IllustrationDownloader', () => {
       ]);
       expect(result?.files).toEqual([originalPath]);
       expect(result?.previewFiles).toEqual([`${originalPath}.preview.jpg`]);
+      expect(result?.mediaAssets).toEqual([expect.objectContaining({
+        id: 'pixiv:123:illust:page-1',
+        kind: 'image',
+        sourceUrl: 'https://example.test/original.png',
+      })]);
       await expect(Promise.all([
         import('node:fs/promises').then((mod) => mod.readFile(originalPath, 'utf8')),
         import('node:fs/promises').then((mod) => mod.readFile(`${originalPath}.preview.jpg`, 'utf8')),

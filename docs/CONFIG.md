@@ -248,7 +248,7 @@ preview，并按 `previewFileField`（默认 `previews`）与 `fileField` 原图
 #### Telegraph（telegra.ph）相册上传
 
 把下载的插画自动发布到 [Telegra.ph](https://telegra.ph) 相册页时，可搭配
-[telepress](https://github.com/redtidev1918/telepress) 的 REST 服务：
+[telepress](https://github.com/redtidev1918/TelePress) 的 REST 服务：
 telepress 负责把收到的图片打包、上传并生成带「上一页/下一页」导航的相册页，
 PixivFlow 侧无需任何代码改动，只增加一个 `httpMultipart` 目标即可。
 

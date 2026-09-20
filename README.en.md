@@ -118,7 +118,7 @@ Each target (one tag / schedule) can use one of two storage modes:
 A "delivery target" is just configuration: which URL to POST to and which fields to
 send. It is not bound to any service and can point at any compatible HTTP endpoint;
 [TelePost](https://github.com/redtidev1918/TelePost) and
-[telepress](https://github.com/redtidev1918/telepress) are example downstreams. Example:
+[telepress](https://github.com/redtidev1918/TelePress) are example downstreams. Example:
 
 ```json
 {
@@ -169,7 +169,7 @@ ntfy and more; PixivFlow does not implement those notification protocols itself.
 - The `url` above is any compatible HTTP submission endpoint; the example uses
   TelePost's `/api/botN/v1/submissions` (put the `tp_...` from `/gen_token` into
   `SHARING_TOKEN` — that is the example service's own auth scheme).
-- The same target can point at [telepress](https://github.com/redtidev1918/telepress)'s
+- The same target can point at [telepress](https://github.com/redtidev1918/TelePress)'s
   `/publish/gallery` to publish illustrations as a Telegra.ph gallery, see the
   "Telegraph (telegra.ph) gallery upload" section of [CONFIG.md](docs/CONFIG.md).
 

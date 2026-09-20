@@ -284,7 +284,11 @@ describe('trigger endpoint auth + dispatch (live ephemeral express)', () => {
     try {
       const res = await fetch(`${base}/health`);
       expect(res.status).toBe(200);
-      expect(((await res.json()) as { status: string }).status).toBe('ok');
+      const body = (await res.json()) as { status: string; version: string; commit: string };
+      expect(body.status).toBe('ok');
+      expect(body.version).toMatch(/^\d+\.\d+\.\d+$/);
+      // Local checkout uses the generated 'dev' placeholder; the image build bakes GIT_COMMIT.
+      expect(body.commit.length).toBeGreaterThan(0);
     } finally {
       close();
     }

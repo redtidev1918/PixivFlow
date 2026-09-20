@@ -96,7 +96,11 @@ jobs:
           echo "changed=true" >> "$GITHUB_OUTPUT"
 
       - name: Rebuild docs site (explicit dispatch)
-        if: steps.commit.outputs.changed == 'true' && inputs.deploy-docs != false
+        # release 事件下 inputs 为空。GitHub 表达式比较不同类型时会各自转成数字，
+        # null 与 false 都变成 0，`inputs.deploy-docs != false` 会被判成假 →
+        # 这一整步被跳过，而"发版后没重建 Pages"正是 v2 要修的 bug。
+        # 改成按事件名短路，只依赖布尔真值与 event_name 比较，不依赖隐式转换。
+        if: steps.commit.outputs.changed == 'true' && (github.event_name == 'release' || inputs.deploy-docs)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

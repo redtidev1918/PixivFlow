@@ -93,6 +93,8 @@ export interface DeliveryRequest {
   /** Optional per-file preview sources, aligned with ``files``. */
   previewFiles?: string[];
   fields?: Record<string, DeliveryFieldValue>;
+  /** Optional canonical media facts sent to providers that understand them. */
+  mediaAssets?: MediaAsset[];
   context: DeliveryContext;
 }
 

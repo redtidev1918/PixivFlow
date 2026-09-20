@@ -10,6 +10,7 @@ import { join } from 'node:path';
 import { getErrorMessage } from '../utils/errors';
 import { detectAiFileMetadata } from '../utils/ai-detection';
 import { DownloadedArtifact } from '../delivery/types';
+import { buildMediaAsset, type MediaAsset } from '../domain/media/MediaAsset';
 import { convertUgoira } from './UgoiraConverter';
 
 function withTimeout<T>(task: Promise<T>, timeoutMs: number, message: string): Promise<T> {
@@ -84,6 +85,20 @@ export class IllustrationDownloader {
     }
     
     const pages = this.getIllustrationPages(detail);
+    // Resolve the media facts before materializing files. TelePost receives
+    // these alongside the local files so downstream can later make its own
+    // delivery-plan decision without re-parsing Pixiv metadata.
+    const mediaAssets: MediaAsset[] = pages.flatMap((page, index) => {
+      const sourceUrl = this.resolveImageUrl(page, detail);
+      return sourceUrl
+        ? [buildMediaAsset({
+            workId: String(detail.id),
+            kind: 'illust',
+            sourceId: `page-${index + 1}`,
+            sourceUrl,
+          })]
+        : [];
+    });
 
     // Safety cap for small machines: skip huge page counts entirely so the
     // download + album upload memory spike never happens.
@@ -274,6 +289,7 @@ export class IllustrationDownloader {
       tags: tags.map((item) => item.name).filter(Boolean),
       files,
       previewFiles: previewFiles.length === files.length ? previewFiles : undefined,
+      mediaAssets,
       cleanupFiles,
       spoiler: (detail.x_restrict ?? 0) > 0,
       xRestrict: detail.x_restrict,

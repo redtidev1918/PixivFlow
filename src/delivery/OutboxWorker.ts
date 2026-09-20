@@ -30,6 +30,7 @@ export interface OutboxWorkerOptions {
 export interface DeliveryPayload {
   files: string[];
   previewFiles?: string[];
+  mediaAssets?: import('../domain/media/MediaAsset').MediaAsset[];
   /** Sidecars + cached media removed after confirmed delivery (cache mode). */
   cleanupFiles?: string[];
   deleteAfterDelivery?: boolean;
@@ -267,6 +268,7 @@ export class OutboxWorker {
         const result = await this.dispatcher.deliver(row.deliveryTarget, {
           files: payload.files,
           previewFiles: payload.previewFiles,
+          mediaAssets: payload.mediaAssets,
           fields: payload.fields as DeliveryRequest['fields'],
           context: payload.context as unknown as DeliveryRequest['context'],
         });

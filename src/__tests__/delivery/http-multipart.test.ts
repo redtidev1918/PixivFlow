@@ -123,6 +123,27 @@ describe('HttpMultipartDelivery', () => {
     expect(multipart).toContain('name="previews"; filename="preview.jpg"');
   });
 
+  it('sends canonical media assets as the TelePost multipart contract', async () => {
+    const filePath = join(directory, 'page.jpg');
+    await fs.writeFile(filePath, 'image');
+    const fetchMock = jest.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 201 }));
+    global.fetch = fetchMock as typeof fetch;
+    const provider = new HttpMultipartDelivery({ type: 'httpMultipart', url: 'https://example.test/submissions' });
+
+    await provider.deliver({
+      files: [filePath],
+      mediaAssets: [{ id: 'pixiv:1:illust:page-1', source: 'pixiv', kind: 'image', sourceUrl: 'https://i.pximg.net/1.jpg' }],
+      context: { title: 'T', pixivId: '1', type: 'illustration' },
+    });
+
+    const options = fetchMock.mock.calls[0][1] as RequestInit;
+    const chunks: Buffer[] = [];
+    for await (const chunk of options.body as unknown as AsyncIterable<Buffer>) chunks.push(Buffer.from(chunk));
+    const multipart = Buffer.concat(chunks).toString('utf8');
+    expect(multipart).toContain('name="media_assets"');
+    expect(multipart).toContain('pixiv:1:illust:page-1');
+  });
+
   it('checks readiness independently of liveness', async () => {
     const fetchMock = jest.fn()
       .mockResolvedValueOnce(new Response('live', { status: 200 }))

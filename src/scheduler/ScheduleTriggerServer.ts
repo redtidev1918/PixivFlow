@@ -5,6 +5,7 @@ import { Server } from 'node:http';
 import { logger } from '../logger';
 import { SlotContext } from './SlotCoordinator';
 import { TriggerSource } from './OccurrenceResolver';
+import { BUILD } from '../version';
 
 /**
  * Authenticated HTTP schedule trigger — a DISPATCH endpoint, not a run endpoint.
@@ -209,7 +210,14 @@ export class ScheduleTriggerServer {
     app.use(this.correlate);
 
     app.get('/health', (_req: Request, res: Response) => {
-      res.json({ status: 'ok', service: 'pixivflow-scheduler-trigger' });
+      // Runtime provenance is part of health: an ok response that cannot say
+      // which code is running cannot support safe release verification.
+      res.json({
+        status: 'ok',
+        service: 'pixivflow-scheduler-trigger',
+        version: BUILD.version,
+        commit: BUILD.commit,
+      });
     });
 
     // Read-only: list enabled schedules + their current occurrence status.

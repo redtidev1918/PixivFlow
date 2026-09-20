@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.42.0](https://github.com/redtidev1918/PixivFlow/compare/v2.41.0...v2.42.0) (2026-09-20)
+
+
+### Features
+
+* **scheduler:** expose runtime version and commit from health ([#157](https://github.com/redtidev1918/PixivFlow/issues/157)) ([3217803](https://github.com/redtidev1918/PixivFlow/commit/3217803b6467c44781b1a7d436be9436ab9e5c63))
+
 ## [2.41.0](https://github.com/redtidev1918/PixivFlow/compare/v2.40.0...v2.41.0) (2026-09-19)
 
 

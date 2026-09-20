@@ -73,11 +73,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="${{ steps.resolve.outputs.tag }}"
-          ARGS=""
           if [ -n "$TAG" ]; then
-            ARGS="--tag $TAG"
+            python3 .github/scripts/update_download_page.py "${{ github.repository }}" --tag "$TAG"
+          else
+            python3 .github/scripts/update_download_page.py "${{ github.repository }}"
           fi
-          python3 .github/scripts/update_download_page.py "${{ github.repository }}" $ARGS
           echo "tag=${TAG:-latest}" >> "$GITHUB_OUTPUT"
 
       - name: Commit if changed

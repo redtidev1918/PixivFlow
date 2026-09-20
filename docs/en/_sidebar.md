@@ -4,3 +4,4 @@
   - [Quick Start](/en/QUICKSTART.md)
   - [Login Guide](/en/LOGIN.md)
   - [Pixiv Client Kit](/en/PIXIV_CLIENT_KIT.md)
+  - [中文](/)

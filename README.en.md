@@ -4,6 +4,8 @@
 
 **Pixiv downloader, filter and automatic collection tool.**
 
+📖 Full documentation: <https://redtidev1918.github.io/PixivFlow/>
+
 Download a single Pixiv artwork (illustration, novel, ugoira) directly, or batch-collect
 by tag, ranking, publish date and bookmark count, and let the scheduler keep collecting
 on a cron. Results stay on your disk, or get delivered reliably over HTTP to another

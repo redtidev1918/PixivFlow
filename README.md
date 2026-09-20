@@ -104,7 +104,7 @@ Termux / Android 环境见 [TERMUX_INSTALL.md](docs/TERMUX_INSTALL.md)。
 「交付目标」就是一段配置：告诉 PixivFlow 把文件 POST 到哪个地址、带哪些字段。
 它不绑定具体服务，可指向任意兼容的 HTTP 接口；
 [TelePost](https://github.com/redtidev1918/TelePost) 与
-[telepress](https://github.com/redtidev1918/telepress) 只是示例下游。示例：
+[telepress](https://github.com/redtidev1918/TelePress) 只是示例下游。示例：
 
 ```json
 {
@@ -153,7 +153,7 @@ Email、Telegram、Discord、ntfy 等渠道；PixivFlow 不实现这些通知协
 - 上面的 `url` 指向任意兼容的 HTTP 投稿接口；示例里用的是 TelePost 的
   `/api/botN/v1/submissions`（把 `/gen_token` 得到的 `tp_...` 放进 `SHARING_TOKEN` 即可，
   这是示例服务自己的鉴权方式）。
-- 同一目标也可指向 [telepress](https://github.com/redtidev1918/telepress) 的 `/publish/gallery`，
+- 同一目标也可指向 [telepress](https://github.com/redtidev1918/TelePress) 的 `/publish/gallery`，
   把插画自动发布成 Telegra.ph 相册，见 [CONFIG.md](docs/CONFIG.md) 的
   「Telegraph（telegra.ph）相册上传」。
 

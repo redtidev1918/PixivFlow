@@ -30,3 +30,5 @@
   - [致谢](/ACKNOWLEDGMENTS.md)
   - [贡献指南（GitHub）](https://github.com/redtidev1918/PixivFlow/blob/master/CONTRIBUTING.md)
   - [更新日志（GitHub）](https://github.com/redtidev1918/PixivFlow/blob/master/CHANGELOG.md)
+- English
+  - [English index](/en/)

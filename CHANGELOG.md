@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.43.0](https://github.com/redtidev1918/PixivFlow/compare/v2.42.0...v2.43.0) (2026-09-20)
+
+
+### Features
+
+* **delivery:** send illustration media assets to TelePost ([#159](https://github.com/redtidev1918/PixivFlow/issues/159)) ([95b5e4e](https://github.com/redtidev1918/PixivFlow/commit/95b5e4e3b1586813af6316d51b37de9cf9b6979b))
+
 ## [2.42.0](https://github.com/redtidev1918/PixivFlow/compare/v2.41.0...v2.42.0) (2026-09-20)
 
 

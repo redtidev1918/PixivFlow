@@ -1,6 +1,6 @@
 {
   "name": "pixivflow",
-  "version": "2.42.0",
+  "version": "2.43.0",
   "description": "🎨 Pixiv 下载、筛选与自动收集工具 - 批量下载插画和小说、按标签/热度/日期筛选、定时任务与可靠 HTTP 交付 | Pixiv downloader and automation toolkit with filtering, scheduling and reliable HTTP delivery",
   "repository": {
     "type": "git",

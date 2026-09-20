@@ -7,6 +7,7 @@ import { logger } from '../logger';
 import { DeliveryNotificationRequest, DeliveryProvider, DeliveryRequest, DeliveryResult } from './types';
 import { parseDeliveryAck } from './DeliveryAck';
 import { redactError, redactHeaders, redactUrl } from '../utils/redact';
+import type { MediaAsset } from '../domain/media/MediaAsset';
 
 export interface ReadinessProbeResult {
   ready: boolean;
@@ -38,6 +39,21 @@ function formatCount(value?: number): string {
 /** Hide URL userinfo and query secrets from operational logs. */
 // redactUrl lives in utils/redact.ts; re-exported for existing imports.
 export { redactUrl } from '../utils/redact';
+
+/**
+ * Serialize canonical MediaAssets to TelePost's minimal Delivery Asset
+ * Contract ({asset_id, kind, source_url, mime_type?}). TelePost deliberately
+ * rejects unknown domain fields, so the provider maps its own shape here
+ * instead of forwarding the internal MediaAsset object.
+ */
+export function toTelepostMediaAssetsWire(assets: MediaAsset[]): unknown[] {
+  return assets.map((asset) => ({
+    asset_id: asset.id,
+    kind: asset.kind,
+    source_url: asset.sourceUrl,
+    ...(asset.mimeType ? { mime_type: asset.mimeType } : {}),
+  }));
+}
 
 /** Generic streaming HTTP multipart delivery provider. */
 export class HttpMultipartDelivery implements DeliveryProvider {
@@ -182,8 +198,9 @@ export class HttpMultipartDelivery implements DeliveryProvider {
     );
     if (request.mediaAssets?.length) {
       // TelePost's optional media-asset contract is provider-independent. The
-      // local files still lead; assets are advisory delivery-plan facts.
-      fields.media_assets = [JSON.stringify(request.mediaAssets)];
+      // local files still lead; assets are advisory delivery-plan facts. The
+      // wire shape is TelePost's minimal contract, not our internal model.
+      fields.media_assets = [JSON.stringify(toTelepostMediaAssetsWire(request.mediaAssets))];
     }
     const multipart = await this.createMultipartBody(
       request.files, fields, request.previewFiles

@@ -132,7 +132,10 @@ describe('HttpMultipartDelivery', () => {
 
     await provider.deliver({
       files: [filePath],
-      mediaAssets: [{ id: 'pixiv:1:illust:page-1', source: 'pixiv', kind: 'image', sourceUrl: 'https://i.pximg.net/1.jpg' }],
+      mediaAssets: [
+        { id: 'pixiv:1:illust:page-1', source: 'pixiv', kind: 'image', sourceUrl: 'https://i.pximg.net/1.jpg' },
+        { id: 'pixiv:1:illust:page-2', source: 'pixiv', kind: 'image', sourceUrl: 'https://i.pximg.net/2.jpg', mimeType: 'image/jpeg' },
+      ],
       context: { title: 'T', pixivId: '1', type: 'illustration' },
     });
 
@@ -141,7 +144,10 @@ describe('HttpMultipartDelivery', () => {
     for await (const chunk of options.body as unknown as AsyncIterable<Buffer>) chunks.push(Buffer.from(chunk));
     const multipart = Buffer.concat(chunks).toString('utf8');
     expect(multipart).toContain('name="media_assets"');
-    expect(multipart).toContain('pixiv:1:illust:page-1');
+    expect(multipart).toContain('"asset_id":"pixiv:1:illust:page-1"');
+    expect(multipart).toContain('"source_url":"https://i.pximg.net/1.jpg"');
+    expect(multipart).toContain('"mime_type":"image/jpeg"');
+    expect(multipart).not.toContain('"sourceUrl"');
   });
 
   it('checks readiness independently of liveness', async () => {

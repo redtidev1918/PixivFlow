@@ -4,7 +4,7 @@
 
 **Pixiv downloader, filter and automatic collection tool.**
 
-📖 Full documentation: <https://redtidev1918.github.io/PixivFlow/>
+📖 [Full documentation](https://redtidev1918.github.io/PixivFlow/)
 
 Download a single Pixiv artwork (illustration, novel, ugoira) directly, or batch-collect
 by tag, ranking, publish date and bookmark count, and let the scheduler keep collecting
@@ -278,7 +278,7 @@ More commands in [USAGE.md](docs/USAGE.md); see the [migration guide](docs/MIGRA
 
 ## Documentation
 
-Full tutorial site: <https://redtidev1918.github.io/PixivFlow/>
+Full tutorial site: [tutorial site](https://redtidev1918.github.io/PixivFlow/)
 
 | Document | Description |
 | --- | --- |

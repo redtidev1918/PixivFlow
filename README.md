@@ -4,7 +4,7 @@
 
 **Pixiv 下载、筛选与自动收集工具。**
 
-📖 完整文档：<https://redtidev1918.github.io/PixivFlow/>
+📖 [完整文档](https://redtidev1918.github.io/PixivFlow/)
 
 可以直接下载单个 Pixiv 作品（插画、小说、动图），也可以按标签、热度、日期和收藏数等条件批量筛选，并通过 scheduler 定时自动收集。结果既能永久保存在本地，也能按需通过 HTTP 可靠交付给其他服务——下游是可选的，PixivFlow 自己就能跑完「发现 → 筛选 → 下载 → 保存」的完整链路。
 
@@ -254,7 +254,7 @@ pixivflow outbox cancel <id>  # 只取消尚未执行的 row
 
 ## 文档
 
-完整教程站点：<https://redtidev1918.github.io/PixivFlow/>
+完整教程站点：[教程站点](https://redtidev1918.github.io/PixivFlow/)
 
 | 文档 | 说明 |
 | --- | --- |

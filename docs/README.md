@@ -89,7 +89,7 @@
 ## 🔗 其他入口
 
 - 项目主页:<https://github.com/redtidev1918/PixivFlow>
-- 教程站点(HTML):<https://redtidev1918.github.io/PixivFlow/>
+- 教程站点(HTML)：[教程站点](https://redtidev1918.github.io/PixivFlow/)
 - npm 包:<https://www.npmjs.com/package/pixivflow>
 - 问题反馈:[Issues](https://github.com/redtidev1918/PixivFlow/issues)(安全漏洞请看 [SECURITY.md](https://github.com/redtidev1918/PixivFlow/blob/master/SECURITY.md))
 

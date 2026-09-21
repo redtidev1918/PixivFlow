@@ -6,7 +6,7 @@
 > mirrors the key entry points; in-depth pages currently live in Chinese under `/`
 > and are linked below.
 
-## Start here
+## Get started
 
 | Document | Description |
 | :-- | :-- |

@@ -97,6 +97,6 @@
 
 ## 相关文档
 
-- [QUICKSTART](QUICKSTART.md) — 还没跑起来?从这里开始
-- [USAGE](USAGE.md) — 已能运行?了解全部能力
-- [CONFIG](CONFIG.md) — 想精确控制下载什么?读这份
+- [QUICKSTART](QUICKSTART.md)：还没跑起来，先看这里
+- [USAGE](USAGE.md)：已经能跑，看完整能力
+- [CONFIG](CONFIG.md)：想精确控制下载内容，读这份

@@ -21,6 +21,6 @@
 
 ## Links
 
-- Documentation site: <https://redtidev1918.github.io/PixivFlow/>
+- Documentation site: [docs site](https://redtidev1918.github.io/PixivFlow/)
 - Releases: <https://github.com/redtidev1918/PixivFlow/releases>
 - Changelog: <https://github.com/redtidev1918/PixivFlow/blob/master/CHANGELOG.md>

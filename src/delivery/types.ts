@@ -11,7 +11,11 @@ export interface DownloadedArtifact {
   title: string;
   /** Pixiv tags attached to the concrete work (not the configured search topic). */
   tags?: string[];
-  /** Files sent to the configured delivery target. */
+  /**
+   * @deprecated use artifacts/mediaAssets
+   * Compatibility projection for legacy delivery providers; keep for one
+   * release cycle before migrating all consumers to the canonical facts.
+   */
   files: string[];
   /** Optional per-file lightweight preview sources, aligned with ``files``. */
   previewFiles?: string[];

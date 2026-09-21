@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.45.1](https://github.com/redtidev1918/PixivFlow/compare/v2.45.0...v2.45.1) (2026-09-21)
+
+
+### Bug Fixes
+
+* **webui:** reject cross-origin recovery write requests ([2706269](https://github.com/redtidev1918/PixivFlow/commit/2706269f625bad4f9f742e394c737d869f1c676e))
+
 ## [2.45.0](https://github.com/redtidev1918/PixivFlow/compare/v2.44.0...v2.45.0) (2026-09-21)
 
 

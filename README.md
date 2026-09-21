@@ -2,7 +2,7 @@
 
 **语言 / Language:** 中文 · [English](README.en.md)
 
-**Pixiv 下载、筛选与自动收集工具。**
+> **Pixiv 下载、筛选与自动收集工具。**
 
 📖 [完整文档](https://redtidev1918.github.io/PixivFlow/)
 

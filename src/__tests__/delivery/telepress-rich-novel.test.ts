@@ -2,6 +2,7 @@ import { promises as fs } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, basename } from 'node:path';
 import type { DownloadedArtifact } from '../../delivery/types';
+import type { Artifact } from '../../domain/media/Artifact';
 import {
   findRichNovelSources,
   publishRichNovelPreview,
@@ -30,6 +31,40 @@ describe('TelePress rich-novel preview', () => {
       ...(cleanupFiles.length ? { cleanupFiles } : {}),
     };
   }
+
+  it('uses canonical artifacts without legacy files projection', async () => {
+    const txt = join(dir, 'canonical.txt');
+    const md = txt.replace(/\.txt$/i, '.md');
+    const metadataPath = join(dir, 'metadata', '123456_novel.json');
+    await fs.writeFile(txt, 'body');
+    await fs.writeFile(md, '![](images/11.jpg)');
+    await fs.mkdir(join(dir, 'metadata'), { recursive: true });
+    await fs.writeFile(metadataPath, JSON.stringify({
+      pixiv_id: 123456,
+      assets: [{
+        marker: 'x', kind: 'uploadedimage', sourceId: '11', status: 'pending',
+        url: 'https://i.pximg.net/img-master/img/2026/09/19/11.jpg',
+      }],
+    }));
+
+    const artifacts: Artifact[] = [
+      { id: 'pixiv:123456:text:canonical.txt', workId: '123456', variant: 'text', path: txt },
+      { id: 'pixiv:123456:markdown:canonical.md', workId: '123456', variant: 'markdown', path: md },
+      { id: 'pixiv:123456:metadata:123456_novel.json', workId: '123456', variant: 'metadata', path: metadataPath },
+    ];
+    const found = findRichNovelSources({
+      pixivId: '123456',
+      type: 'novel',
+      title: '测试小说',
+      files: [],
+      artifacts,
+    });
+
+    expect(found).toBeDefined();
+    expect(found!.txtPath).toBe(txt);
+    expect(found!.mdPath).toBe(md);
+    expect(found!.manifest).toHaveLength(1);
+  });
 
   it('locates md + ordered images next to the txt artifact', async () => {
     const txt = join(dir, '1_测试.txt');

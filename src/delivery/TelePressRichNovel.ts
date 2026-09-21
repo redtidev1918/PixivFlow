@@ -101,7 +101,8 @@ function mediaAssetFrom(asset: NovelMetadataAsset, workId: string, localPath?: s
  * the markdown refs; source is the media fact).
  */
 function readNovelMediaAssets(artifact: DownloadedArtifact): { mediaAssets: MediaAsset[]; manifest: RichNovelManifestEntry[] } {
-  const metadataFile = (artifact.cleanupFiles ?? []).find((f) => /\.json$/i.test(f));
+  const metadataFile = artifact.artifacts?.find((a) => a.variant === 'metadata')?.path
+    ?? (artifact.cleanupFiles ?? []).find((f) => /\.json$/i.test(f));
   if (!metadataFile || !fs.existsSync(metadataFile)) {
     return { mediaAssets: [], manifest: [] };
   }
@@ -153,9 +154,11 @@ export function findRichNovelSources(
   artifact: DownloadedArtifact
 ): RichNovelSources | undefined {
   if (artifact.type !== 'novel') return undefined;
-  const txtPath = artifact.files.find((f) => /\.txt$/i.test(f));
+  const txtPath = artifact.artifacts?.find((a) => a.variant === 'text')?.path
+    ?? artifact.files.find((f) => /\.txt$/i.test(f));
   if (!txtPath) return undefined;
-  const mdPath = txtPath.replace(/\.txt$/i, '.md');
+  const mdPath = artifact.artifacts?.find((a) => a.variant === 'markdown')?.path
+    ?? txtPath.replace(/\.txt$/i, '.md');
   if (!fs.existsSync(mdPath)) return undefined;
   const imagesDir = path.join(path.dirname(txtPath), 'images');
   let imagePaths: string[] = [];

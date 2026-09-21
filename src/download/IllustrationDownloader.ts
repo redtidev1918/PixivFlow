@@ -6,10 +6,11 @@ import { PixivIllust, PixivIllustPage } from '@redtidev/pixiv-client';
 import { logger } from '../logger';
 import { processInParallel } from '../utils/concurrency';
 import { promises as fs } from 'node:fs';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { getErrorMessage } from '../utils/errors';
 import { detectAiFileMetadata } from '../utils/ai-detection';
 import { DownloadedArtifact } from '../delivery/types';
+import { artifactId, type Artifact } from '../domain/media/Artifact';
 import { buildMediaAsset, type MediaAsset } from '../domain/media/MediaAsset';
 import { convertUgoira } from './UgoiraConverter';
 
@@ -74,11 +75,17 @@ export class IllustrationDownloader {
       }
       
       logger.info(`Updated database with ${existingFiles.length} existing file(s) for illustration ${detail.id}`);
+      const existingArtifacts: Artifact[] = existingFiles.map((filePath) => ({
+        id: artifactId(String(detail.id), 'original', basename(filePath)),
+        workId: String(detail.id),
+        variant: 'original',
+        path: filePath,
+      }));
       return {
         pixivId: String(detail.id),
         type: 'illustration',
         title: detail.title,
-        files: existingFiles,
+        artifacts: existingArtifacts,
         spoiler: (detail.x_restrict ?? 0) > 0,
         xRestrict: detail.x_restrict,
       };
@@ -99,6 +106,7 @@ export class IllustrationDownloader {
           })]
         : [];
     });
+    const artifacts: Artifact[] = [];
 
     // Safety cap for small machines: skip huge page counts entirely so the
     // download + album upload memory spike never happens.
@@ -237,6 +245,14 @@ export class IllustrationDownloader {
           previewFiles.push(result.result.previewPath);
           cleanupFiles.push(result.result.previewPath);
         }
+        const pageAsset = mediaAssets[result.result.index - 1];
+        artifacts.push({
+          id: artifactId(String(detail.id), 'original', basename(result.result.filePath)),
+          sourceAssetId: pageAsset?.id,
+          workId: String(detail.id),
+          variant: 'original',
+          path: result.result.filePath,
+        });
       } else {
         logger.warn(`Failed to download page ${result.error.message}`, { 
           illustId: detail.id,
@@ -287,9 +303,9 @@ export class IllustrationDownloader {
       type: 'illustration',
       title: detail.title,
       tags: tags.map((item) => item.name).filter(Boolean),
-      files,
       previewFiles: previewFiles.length === files.length ? previewFiles : undefined,
       mediaAssets,
+      artifacts,
       cleanupFiles,
       spoiler: (detail.x_restrict ?? 0) > 0,
       xRestrict: detail.x_restrict,
@@ -399,7 +415,14 @@ export class IllustrationDownloader {
       type: 'illustration',
       title: detail.title,
       tags: tags.map((item) => item.name).filter(Boolean),
-      files: [gifPath],
+      artifacts: [
+        {
+          id: artifactId(String(detail.id), 'original', basename(gifPath)),
+          workId: String(detail.id),
+          variant: 'original',
+          path: gifPath,
+        },
+      ],
       cleanupFiles: [zipPath, framesPath],
       spoiler: (detail.x_restrict ?? 0) > 0,
       xRestrict: detail.x_restrict,

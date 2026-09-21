@@ -2,8 +2,9 @@
  * A materialized file produced for a work.
  *
  * `Artifact` is the file fact (which file, which variant), separate from
- * `MediaAsset` (the media fact). Legacy `DownloadedArtifact.files[]` remains a
- * compatibility projection until all consumers migrate.
+ * `MediaAsset` (the media fact). Since 2.45.0 `DownloadedArtifact` only
+ * carries `artifacts`; delivery providers receive transport paths derived
+ * from these file facts.
  */
 export type ArtifactVariant =
   | 'original'
@@ -35,14 +36,4 @@ export function artifactId(workId: string, variant: ArtifactVariant, label: stri
   const cleanWork = String(workId).trim();
   const cleanLabel = String(label).trim();
   return `pixiv:${cleanWork}:${variant}${cleanLabel ? `:${cleanLabel}` : ''}`;
-}
-
-/**
- * Legacy projection: old consumers can keep reading `files[]`, which the new
- * canonical list of artifacts backs. Only file-backed variants are projected.
- */
-export function projectLegacyFiles(artifacts: Artifact[]): string[] {
-  return artifacts
-    .filter((a): a is Artifact & { path: string } => Boolean(a && a.path))
-    .map((a) => a.path);
 }

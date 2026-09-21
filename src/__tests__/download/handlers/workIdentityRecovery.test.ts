@@ -77,7 +77,9 @@ const artifact = (pixivId: string): DownloadedArtifact =>
     type: 'illustration',
     pixivId,
     title: `Illust ${pixivId}`,
-    files: [`/tmp/${pixivId}.jpg`],
+    artifacts: [
+      { id: `pixiv:${pixivId}:original:${pixivId}.jpg`, workId: pixivId, variant: 'original', path: `/tmp/${pixivId}.jpg` },
+    ],
     pageCount: 1,
     cachedDir: `/tmp/${pixivId}`,
   }) as unknown as DownloadedArtifact;
@@ -422,7 +424,9 @@ describe('work identity across recovery', () => {
         type: 'illustration',
         pixivId: '100',
         title: 'Illust 100',
-        files: [file],
+        artifacts: [
+          { id: 'pixiv:100:original:100.jpg', workId: '100', variant: 'original', path: file },
+        ],
         pageCount: 1,
         cachedDir: dir,
       } as unknown as DownloadedArtifact);

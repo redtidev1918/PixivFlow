@@ -389,7 +389,6 @@ export class NovelDownloader {
       type: 'novel',
       title: detail.title,
       tags: tags.map((item) => item.name).filter(Boolean),
-      files: archivePath ? [filePath, archivePath] : [filePath],
       mediaAssets: returnedMediaAssets,
       artifacts,
       cleanupFiles: metadataPath ? [metadataPath] : [],

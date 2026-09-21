@@ -154,8 +154,7 @@ export function findRichNovelSources(
   artifact: DownloadedArtifact
 ): RichNovelSources | undefined {
   if (artifact.type !== 'novel') return undefined;
-  const txtPath = artifact.artifacts?.find((a) => a.variant === 'text')?.path
-    ?? artifact.files.find((f) => /\.txt$/i.test(f));
+  const txtPath = artifact.artifacts?.find((a) => a.variant === 'text')?.path;
   if (!txtPath) return undefined;
   const mdPath = artifact.artifacts?.find((a) => a.variant === 'markdown')?.path
     ?? txtPath.replace(/\.txt$/i, '.md');

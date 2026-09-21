@@ -23,11 +23,22 @@ describe('TelePress rich-novel preview', () => {
   });
 
   function artifact(files: string[], cleanupFiles: string[] = []): DownloadedArtifact {
+    const artifacts: Artifact[] = files.map((file) => {
+      if (/\.json$/i.test(file)) {
+        return { id: `pixiv:123456:metadata:${basename(file)}`, workId: '123456', variant: 'metadata', path: file };
+      }
+      return {
+        id: `pixiv:123456:${/\.md$/i.test(file) ? 'markdown' : 'text'}:${basename(file)}`,
+        workId: '123456',
+        variant: /\.md$/i.test(file) ? 'markdown' : 'text',
+        path: file,
+      };
+    });
     return {
       pixivId: '123456',
       type: 'novel',
       title: '测试小说',
-      files,
+      artifacts,
       ...(cleanupFiles.length ? { cleanupFiles } : {}),
     };
   }
@@ -56,7 +67,6 @@ describe('TelePress rich-novel preview', () => {
       pixivId: '123456',
       type: 'novel',
       title: '测试小说',
-      files: [],
       artifacts,
     });
 

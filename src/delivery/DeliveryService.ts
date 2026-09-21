@@ -3,7 +3,7 @@ import { existsSync } from 'node:fs';
 
 import { Database } from '../storage/Database';
 import { TargetConfig } from '../config';
-import { DownloadedArtifact } from './types';
+import { DownloadedArtifact, deliveryFilePaths } from './types';
 import { logger } from '../logger';
 
 /**
@@ -128,10 +128,11 @@ export class DeliveryService {
     if (!deliveryTarget) {
       throw new Error('enqueue called for a non-delivery (non-cache) target');
     }
-    if (artifact.files.length === 0) {
-      throw new Error(`no files produced for ${artifact.type} ${artifact.pixivId}`);
+    const files = deliveryFilePaths(artifact);
+    if (files.length === 0) {
+      throw new Error(`no deliverable artifacts produced for ${artifact.type} ${artifact.pixivId}`);
     }
-    const missing = artifact.files.find((file) => !existsSync(file));
+    const missing = files.find((file) => !existsSync(file));
     if (missing) {
       // Crash between download and intent, or cache eviction. Recoverable: the
       // cell stays selected and a resume re-downloads the SAME locked work.
@@ -172,7 +173,7 @@ export class DeliveryService {
             idempotencyKey: `outbox:${idempotencyKey}`,
             deliveryId: row.id,
             payload: {
-              files: artifact.files,
+              files,
               previewFiles: artifact.previewFiles ?? [],
               mediaAssets: artifact.mediaAssets,
               cleanupFiles: artifact.cleanupFiles ?? [],
@@ -194,7 +195,7 @@ export class DeliveryService {
         idempotencyKey: `outbox:${idempotencyKey}`,
         deliveryId: row.id,
         payload: {
-          files: artifact.files,
+          files,
           previewFiles: artifact.previewFiles ?? [],
           mediaAssets: artifact.mediaAssets,
           cleanupFiles: artifact.cleanupFiles ?? [],

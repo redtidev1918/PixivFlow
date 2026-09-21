@@ -3,8 +3,9 @@
  *
  * `MediaAsset` is the media fact (remote source + stable identity). It is NOT a
  * local file: consumers decide whether / when to materialize it. The legacy
- * `DownloadedArtifact.files[]` compatibility projection stays in place until all
- * consumers migrate.
+ * file-only projection has been removed; materialized files live in
+ * `DownloadedArtifact.artifacts`, and `artifactId` here is optional on
+ * purpose (referenced media may still be unmaterialized).
  */
 export type PixivMediaKind = 'uploadedimage' | 'pixivimage' | 'illust';
 

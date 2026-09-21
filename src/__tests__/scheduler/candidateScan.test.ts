@@ -136,7 +136,9 @@ function buildHarness(options: {
           pixivId: String(item.id),
           type: 'illustration',
           title: item.title,
-          files: [file],
+          artifacts: [
+            { id: `pixiv:${String(item.id)}:original:${item.id}.jpg`, workId: String(item.id), variant: 'original', path: file },
+          ],
           previewFiles: [],
         };
       }
@@ -668,7 +670,14 @@ describe('scheduler candidate scan: duplicate -> next candidate, never a complet
               pixivId: String(item.id),
               type: 'illustration',
               title: item.title,
-              files: [join(tmpdir(), `pixivflow-scan-race-${item.id}.jpg`)],
+              artifacts: [
+                {
+                  id: `pixiv:${String(item.id)}:original:${item.id}.jpg`,
+                  workId: String(item.id),
+                  variant: 'original',
+                  path: join(tmpdir(), `pixivflow-scan-race-${item.id}.jpg`),
+                },
+              ],
               previewFiles: [],
             } as DownloadedArtifact;
           }

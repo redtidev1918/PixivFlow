@@ -1,7 +1,8 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { IllustrationDownloader } from '../../download/IllustrationDownloader';
+import { deliveryFilePaths } from '../../delivery/types';
 import { NetworkError } from '../../utils/errors';
 import { convertUgoira } from '../../download/UgoiraConverter';
 
@@ -47,13 +48,19 @@ describe('IllustrationDownloader', () => {
         'https://example.test/original.png',
         'https://example.test/large.jpg',
       ]);
-      expect(result?.files).toEqual([originalPath]);
+      expect(deliveryFilePaths(result!)).toEqual([originalPath]);
       expect(result?.previewFiles).toEqual([`${originalPath}.preview.jpg`]);
       expect(result?.mediaAssets).toEqual([expect.objectContaining({
         id: 'pixiv:123:illust:page-1',
         kind: 'image',
         sourceUrl: 'https://example.test/original.png',
       })]);
+      expect(result?.artifacts).toHaveLength(1);
+      expect(result?.artifacts![0]).toMatchObject({
+        variant: 'original',
+        sourceAssetId: 'pixiv:123:illust:page-1',
+        path: originalPath,
+      });
       await expect(Promise.all([
         import('node:fs/promises').then((mod) => mod.readFile(originalPath, 'utf8')),
         import('node:fs/promises').then((mod) => mod.readFile(`${originalPath}.preview.jpg`, 'utf8')),
@@ -89,8 +96,11 @@ describe('IllustrationDownloader', () => {
       expect(insertDownload).not.toHaveBeenCalled();
       converter.mockResolvedValueOnce(gif);
       const result = await downloader.downloadIllustration({ id: 123 } as any, 'tag');
-      expect(result?.files).toEqual([gif]);
+      expect(deliveryFilePaths(result!)).toEqual([gif]);
       expect(result?.cleanupFiles).toEqual([zip, zip.replace('.zip', '_frames.json')]);
+      expect(result?.artifacts).toEqual([
+        { id: `pixiv:123:original:${basename(gif)}`, workId: '123', variant: 'original', path: gif },
+      ]);
       expect(insertDownload).toHaveBeenCalledWith(expect.objectContaining({ filePath: gif }));
       expect(client.downloadImage).not.toHaveBeenCalled();
     } finally {

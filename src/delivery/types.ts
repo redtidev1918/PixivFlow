@@ -1,28 +1,29 @@
 import { DeliveryFieldValue } from '../config';
 import type { MediaAsset } from '../domain/media/MediaAsset';
-import type { Artifact } from '../domain/media/Artifact';
+import { type Artifact } from '../domain/media/Artifact';
 
 export type DeliveryItemType = 'illustration' | 'novel';
 
-/** Files produced for one Pixiv work and needed by a delivery provider. */
+/**
+ * One materialized/resolved Pixiv work.
+ *
+ * `artifacts` is the canonical file fact. There is intentionally no legacy
+ * `files[]` projection here anymore: delivery providers receive paths through
+ * `deliveryFilePaths`, which always derives them from `artifacts` (and keeps
+ * historically enqueued payloads untouched).
+ */
 export interface DownloadedArtifact {
   pixivId: string;
   type: DeliveryItemType;
   title: string;
   /** Pixiv tags attached to the concrete work (not the configured search topic). */
   tags?: string[];
-  /**
-   * @deprecated use artifacts/mediaAssets
-   * Compatibility projection for legacy delivery providers; keep for one
-   * release cycle before migrating all consumers to the canonical facts.
-   */
-  files: string[];
-  /** Optional per-file lightweight preview sources, aligned with ``files``. */
+  /** Canonical materialized file facts. */
+  artifacts?: Artifact[];
+  /** Optional per-file lightweight preview sources, aligned with the deliverable files. */
   previewFiles?: string[];
   /** Canonical media facts for the work (remote source, stable id). */
   mediaAssets?: MediaAsset[];
-  /** Canonical materialized file facts backing ``files``. */
-  artifacts?: Artifact[];
   /** Local sidecars deleted with cache files after successful delivery. */
   cleanupFiles?: string[];
   /** R-18 work (x_restrict > 0): delivery templates may open Telegram spoiler. */
@@ -37,6 +38,35 @@ export interface DownloadedArtifact {
   bookmarkCount?: number;
   /** Pixiv view count (popularity signal). */
   viewCount?: number;
+}
+
+/**
+ * Delivery file paths derived from canonical artifacts.
+ *
+ * The rule mirrors the pre-migration transport contract exactly:
+ * novels ship their text (plus ZIP when present), illustrations ship their
+ * original media. Metadata, markdown-only sidecars and preview/delivery
+ * variants are never sent as independent Telegram attachments.
+ */
+export function deliveryFilePaths(artifact: DownloadedArtifact): string[] {
+  const chosen: string[] = [];
+  for (const item of artifact.artifacts ?? []) {
+    const deliverable =
+      item.variant === 'text' ||
+      item.variant === 'zip' ||
+      (artifact.type === 'illustration' && item.variant === 'original');
+    if (!deliverable) continue;
+    const path = item.path.trim();
+    if (path && !chosen.includes(path)) chosen.push(path);
+  }
+  if (chosen.length > 0) return chosen;
+
+  // Recovery-only fallback: files discovered on disk before the DB record
+  // (no artifact metadata exists to rebuild a canonical projection).
+  const mediaPaths = (artifact.mediaAssets ?? [])
+    .map((asset) => asset.artifactId?.trim())
+    .filter((path): path is string => Boolean(path));
+  return [...new Set(mediaPaths)];
 }
 
 export interface DeliveryContext {
@@ -93,6 +123,7 @@ export interface DeliveryContext {
 }
 
 export interface DeliveryRequest {
+  /** Transport file paths, derived from canonical artifacts before enqueue. */
   files: string[];
   /** Optional per-file preview sources, aligned with ``files``. */
   previewFiles?: string[];

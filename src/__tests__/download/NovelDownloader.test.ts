@@ -1,4 +1,5 @@
 import { NovelDownloader } from '../../download/NovelDownloader';
+import { deliveryFilePaths } from '../../delivery/types';
 import { TargetConfig } from '../../config';
 import { IPixivClient } from '../../interfaces/IPixivClient';
 import { IDatabase } from '../../interfaces/IDatabase';
@@ -167,7 +168,10 @@ describe('NovelDownloader rich media', () => {
       '456_Rich novel.txt.json',
       'images/11.jpg',
     ]);
-    expect(artifact!.files).toEqual(['/tmp/novels/456_Rich novel.txt', '/tmp/novels/456_Rich novel.zip']);
+    expect(deliveryFilePaths(artifact!)).toEqual([
+      '/tmp/novels/456_Rich novel.txt',
+      '/tmp/novels/456_Rich novel.zip',
+    ]);
 
     expect(artifact!.mediaAssets).toHaveLength(1);
     expect(artifact!.mediaAssets![0]).toMatchObject({
@@ -221,7 +225,7 @@ describe('NovelDownloader rich media', () => {
     expect(client.downloadImage).not.toHaveBeenCalled();
     expect(fileService.saveBinary).not.toHaveBeenCalled();
     expect(createZipArchiveMock).not.toHaveBeenCalled();
-    expect(artifact!.files).toEqual(['/tmp/novels/456_Rich novel.txt']);
+    expect(deliveryFilePaths(artifact!)).toEqual(['/tmp/novels/456_Rich novel.txt']);
     expect(artifact!.mediaAssets).toHaveLength(1);
     expect(artifact!.mediaAssets![0]).toMatchObject({
       id: 'pixiv:456:uploadedimage:11',

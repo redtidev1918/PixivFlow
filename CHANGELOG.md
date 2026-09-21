@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.44.0](https://github.com/redtidev1918/PixivFlow/compare/v2.43.1...v2.44.0) (2026-09-21)
+
+
+### Features
+
+* **telepress:** prefer canonical novel artifacts ([#164](https://github.com/redtidev1918/PixivFlow/issues/164)) ([ae9e009](https://github.com/redtidev1918/PixivFlow/commit/ae9e00955190b5363d386a8f4e9b4da443ea321d))
+
 ## [2.43.1](https://github.com/redtidev1918/PixivFlow/compare/v2.43.0...v2.43.1) (2026-09-20)
 
 

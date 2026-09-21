@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.45.0](https://github.com/redtidev1918/PixivFlow/compare/v2.44.0...v2.45.0) (2026-09-21)
+
+
+### Features
+
+* **delivery:** remove legacy downloaded artifact files projection ([b171640](https://github.com/redtidev1918/PixivFlow/commit/b1716403f812f9f209bccf07f214275603be6925))
+
 ## [2.44.0](https://github.com/redtidev1918/PixivFlow/compare/v2.43.1...v2.44.0) (2026-09-21)
 
 

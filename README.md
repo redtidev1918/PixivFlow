@@ -4,7 +4,7 @@
 
 > **Pixiv 下载、筛选与自动收集工具。**
 
-📖 [完整文档](https://redtidev1918.github.io/PixivFlow/)
+[完整文档](https://redtidev1918.github.io/PixivFlow/)
 
 可以直接下载单个 Pixiv 作品（插画、小说、动图），也可以按标签、热度、日期和收藏数等条件批量筛选，并通过 scheduler 定时自动收集。结果既能永久保存在本地，也能按需通过 HTTP 可靠交付给其他服务——下游是可选的，PixivFlow 自己就能跑完「发现 → 筛选 → 下载 → 保存」的完整链路。
 
@@ -12,6 +12,21 @@
 [![Node](https://img.shields.io/badge/Node.js-22.13%2B_LTS-green.svg?style=flat-square&logo=node.js)](https://nodejs.org/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](LICENSE)
 [![Documentation](https://img.shields.io/badge/Docs-redtidev1918.github.io-6366f1?style=flat-square)](https://redtidev1918.github.io/PixivFlow/)
+
+## 目录
+
+- [典型场景](#典型场景)
+- [快速开始](#快速开始)
+- [筛选与下载目标](#筛选与下载目标)
+- [本地留存与缓存交付](#本地留存与缓存交付)
+- [自动化与可靠性](#自动化与可靠性)
+- [常用命令](#常用命令)
+- [部署](#部署)
+- [文档](#文档)
+- [相关项目](#相关项目)
+- [问题反馈](#问题反馈)
+- [致谢](#致谢)
+- [许可证](#许可证)
 
 ## 典型场景
 

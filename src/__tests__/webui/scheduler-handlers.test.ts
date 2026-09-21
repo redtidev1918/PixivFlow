@@ -2,7 +2,13 @@ import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { Database } from '../../storage/Database';
-import { listRecentSlots, listExecutions, getSlotLogs, recoverTarget } from '../../webui/routes/handlers/scheduler-handlers';
+import {
+  listRecentSlots,
+  listExecutions,
+  getSlotLogs,
+  recoverTarget,
+  recoveryOriginAllowed,
+} from '../../webui/routes/handlers/scheduler-handlers';
 
 const TEMP_DB = join(mkdtempSync(join(tmpdir(), 'webui-scheduler-')), 'test.db');
 
@@ -106,13 +112,43 @@ describe('WebUI scheduler recovery proxy', () => {
     else process.env.SCHEDULER_TRIGGER_TOKEN = saved.token;
   });
 
+  function req(overrides: Record<string, unknown> = {}) {
+    return {
+      protocol: 'http',
+      params: { targetId: 'bot1-illust' },
+      body: { requestId: '11111111-2222-4333-8444-555555555555', retryMode: 'normal' as const },
+      get: (name: string) => (name === 'origin' ? 'http://localhost:3000' : name === 'host' ? 'localhost:3000' : null),
+      headers: {},
+      ...overrides,
+    } as any;
+  }
+
+  it('rejects a cross-site recovery request before any proxy call', async () => {
+    delete process.env.SCHEDULER_TRIGGER_URL;
+    delete process.env.SCHEDULER_TRIGGER_TOKEN;
+    let status = 0;
+    let payload: any = null;
+    const res: any = { json: (v: any) => { payload = v; }, status: (c: number) => { status = c; return res; } };
+    await recoverTarget(req({ get: (name: string) => name === 'origin' ? 'https://evil.example' : null }), res);
+    expect(status).toBe(403);
+    expect(payload.errorCode).toBe('SCHEDULER_RECOVERY_ORIGIN_REJECTED');
+    expect(payload.message).toContain('retry from the PixivFlow WebUI origin');
+  });
+
+  it('accepts only the request host as origin', () => {
+    const base = req();
+    expect(recoveryOriginAllowed(base)).toBe(true);
+    expect(recoveryOriginAllowed(req({ protocol: 'https' }))).toBe(true);
+    expect(recoveryOriginAllowed(req({ get: (name: string) => null }))).toBe(false);
+  });
+
   it('rejects a non-UUID requestId before any proxy call', async () => {
     delete process.env.SCHEDULER_TRIGGER_URL;
     delete process.env.SCHEDULER_TRIGGER_TOKEN;
     let status = 0;
     let payload: any = null;
     const res: any = { json: (v: any) => { payload = v; }, status: (c: number) => { status = c; return res; } };
-    await recoverTarget({ params: { targetId: 'bot1-illust' }, body: { requestId: 'nope', retryMode: 'normal' } } as any, res);
+    await recoverTarget(req({ body: { requestId: 'nope', retryMode: 'normal' } }), res);
     expect(status).toBe(400);
     expect(payload.error).toBe('requestId must be a UUID');
   });
@@ -123,7 +159,7 @@ describe('WebUI scheduler recovery proxy', () => {
     let status = 0;
     let payload: any = null;
     const res: any = { json: (v: any) => { payload = v; }, status: (c: number) => { status = c; return res; } };
-    await recoverTarget({ params: { targetId: 'bot1-illust' }, body: { requestId: '11111111-2222-4333-8444-555555555555', retryMode: 'normal' } } as any, res);
+    await recoverTarget(req(), res);
     expect(status).toBe(503);
     expect(payload.errorCode).toBe('SCHEDULER_RECOVERY_UNAVAILABLE');
     expect(payload.message).toContain('SCHEDULER_TRIGGER_TOKEN');

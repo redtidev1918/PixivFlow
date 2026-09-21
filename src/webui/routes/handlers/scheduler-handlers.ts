@@ -9,6 +9,23 @@ import { ErrorCode } from '../../utils/error-codes';
 const RECOVERY_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const TARGET_ID_SAFE = /^[A-Za-z0-9._-]{1,80}$/;
 
+/**
+ * CSRF / origin guard for the WebUI recovery write path.
+ *
+ * The scheduler trigger is a bearer-token control surface; the WebUI proxy
+ * must not let a cross-site page drive it with the operator's browser session.
+ * A same-origin POST carries ``Origin`` matching the request's own
+ * scheme+host, which is the only signal a browser cannot forge cross-site.
+ * Requests without an Origin (plain CLI / integration tooling) are rejected;
+ * the WebUI itself always serves and calls from the same origin.
+ */
+export function recoveryOriginAllowed(req: Request): boolean {
+  const origin = typeof req.get === 'function' ? req.get('origin') : req.headers?.origin;
+  const host = typeof req.get === 'function' ? req.get('host') : req.headers?.host;
+  if (!origin || !host) return false;
+  return origin === `http://${host}` || origin === `https://${host}`;
+}
+
 function recoveryBaseUrl(): string | null {
   return process.env.SCHEDULER_TRIGGER_URL?.trim() || process.env.PIXIVFLOW_TRIGGER_BASE_URL?.trim() || null;
 }
@@ -320,6 +337,13 @@ export async function getSlotLogs(req: Request, res: Response): Promise<void> {
  * read-only Scheduler remains fully usable.
  */
 export async function recoverTarget(req: Request, res: Response): Promise<void> {
+  if (!recoveryOriginAllowed(req)) {
+    res.status(403).json({
+      errorCode: ErrorCode.SCHEDULER_RECOVERY_ORIGIN_REJECTED,
+      message: 'recovery origin rejected; retry from the PixivFlow WebUI origin',
+    });
+    return;
+  }
   const targetId = req.params.targetId;
   if (!TARGET_ID_SAFE.test(targetId)) {
     res.status(400).json({ status: 'error', error: 'invalid targetId' });

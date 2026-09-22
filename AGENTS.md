@@ -9,6 +9,9 @@
 
 本文件只保留本仓边界与特殊约束；与上面权威冲突时以上面为准，并顺手修正。
 
+一次性/阶段文档不进仓库；动态状态只更新跨仓库 `current-state.md`，确需保留的证据
+放 `docs/archive/` 并带 docsite 生命周期块（`docsite.py lifecyclecheck` 校验）。
+
 ## 一句话
 
 PixivFlow 负责 Pixiv 认证、候选发现/排序/去重、下载、审核链投递、定时执行、

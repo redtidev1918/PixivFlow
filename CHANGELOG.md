@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.46.0](https://github.com/redtidev1918/PixivFlow/compare/v2.45.1...v2.46.0) (2026-09-24)
+
+
+### Features
+
+* **novel:** emit normalized cover as a dedicated novelcover asset ([a7e99c5](https://github.com/redtidev1918/PixivFlow/commit/a7e99c5218c774cea3058d1dabe157085c7c6c06))
+
 ## [2.45.1](https://github.com/redtidev1918/PixivFlow/compare/v2.45.0...v2.45.1) (2026-09-21)
 
 

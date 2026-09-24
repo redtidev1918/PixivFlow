@@ -7,7 +7,7 @@
  * `DownloadedArtifact.artifacts`, and `artifactId` here is optional on
  * purpose (referenced media may still be unmaterialized).
  */
-export type PixivMediaKind = 'uploadedimage' | 'pixivimage' | 'illust';
+export type PixivMediaKind = 'uploadedimage' | 'pixivimage' | 'illust' | 'novelcover';
 
 export interface MediaSourceRef {
   /** Pixiv work id, e.g. the novel/illust id. */

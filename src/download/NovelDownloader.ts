@@ -14,6 +14,7 @@ import { DEFAULT_MATERIALIZATION_POLICY, shouldMaterialize, type Materialization
 import { artifactId, type Artifact } from '../domain/media/Artifact';
 import { PixivMediaMaterializer, type MediaMaterializer } from './materialization/MediaMaterializer';
 import { extractNovelAssets, NovelAsset, renderNovelMarkdown, renderNovelMarkdownReference } from './novelMarkers';
+import { normalizeNovelCoverUrl, novelCoverAsset } from './novelCover';
 import { createZipArchive } from '../utils/zip';
 import type { Database } from '../storage/Database';
 
@@ -227,6 +228,15 @@ export class NovelDownloader {
       }
     }
 
+    // Novel cover (§novel-cover): normalized to null for Pixiv's default
+    // placeholder, carried as a dedicated `novelcover` MediaAsset so TelePost
+    // can build `cover root + TXT reply` without positional guessing. The
+    // cover is never materialized locally — Telegram fetches it (via proxy).
+    const coverUrl = normalizeNovelCoverUrl(
+      typeof textResponse === 'string' ? undefined : textResponse.coverUrl
+    );
+    const coverAsset = coverUrl ? novelCoverAsset(String(detail.id), coverUrl) : undefined;
+
     const downloadByAssetKey = new Map<string, (typeof assets)[number]>(
       assets.filter((a) => a.status === 'downloaded' && a.localPath)
         .map((a) => [`${a.kind}:${a.sourceId}`, a] as const)
@@ -284,6 +294,7 @@ export class NovelDownloader {
             },
           }
         : {}),
+      cover_url: coverUrl,
       ...(assets.length
         ? {
             assets: assets.map((a) => ({
@@ -382,7 +393,10 @@ export class NovelDownloader {
     }
 
     // On-demand mode carries resolved references without local originals.
-    const returnedMediaAssets = mediaAssets.length ? mediaAssets : resolved.mediaAssets;
+    // The cover is prepended: consumers may rely on cover-first ordering.
+    const returnedMediaAssets = coverAsset
+      ? [coverAsset, ...(mediaAssets.length ? mediaAssets : resolved.mediaAssets)]
+      : (mediaAssets.length ? mediaAssets : resolved.mediaAssets);
 
     return {
       pixivId: workId,

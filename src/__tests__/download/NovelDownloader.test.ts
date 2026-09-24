@@ -276,3 +276,79 @@ describe('NovelDownloader rich media', () => {
     });
   });
 });
+
+describe('NovelDownloader cover semantics (§novel-cover)', () => {
+  const novel = {
+    id: 789,
+    title: 'Covered novel',
+    user: { id: '42', name: 'Author' },
+    create_date: '2026-09-01T00:00:00+00:00',
+  } as PixivNovel;
+
+  function build(textResponse: Record<string, unknown>) {
+    const client = {
+      getNovelDetailWithTags: jest.fn().mockResolvedValue({ novel, tags: [] }),
+      getNovelText: jest.fn().mockResolvedValue(textResponse),
+      downloadImage: jest.fn(),
+    } as unknown as jest.Mocked<IPixivClient>;
+    const database = { insertDownload: jest.fn() } as unknown as jest.Mocked<IDatabase>;
+    const fileService = {
+      sanitizeFileName: jest.fn((name: string) => name),
+      saveText: jest.fn().mockResolvedValue('/tmp/novels/789_Covered novel.txt'),
+      saveMetadata: jest.fn().mockResolvedValue('/tmp/789_Covered novel.txt.json'),
+    } as unknown as jest.Mocked<IFileService>;
+    return { downloader: new NovelDownloader(client, database, fileService), fileService };
+  }
+
+  it('emits a novelcover media asset ahead of inline art and records cover_url', async () => {
+    const text = 'body [uploadedimage:11]';
+    const { downloader, fileService } = build({
+      novel_text: text,
+      coverUrl: 'https://i.pximg.net/c/240x480_70_a2/novel-cover-master/img/cover.jpg',
+      images: { '11': { urls: { original: 'https://i.pximg.net/img/original/u/11.jpg' } } },
+    });
+    const artifact = await downloader.download(
+      novel, 'bg', { type: 'novel', detectLanguage: false } as TargetConfig
+    );
+
+    expect(artifact!.mediaAssets![0]).toMatchObject({
+      id: 'pixiv:789:novelcover',
+      kind: 'image',
+      sourceUrl: 'https://i.pximg.net/novel-cover-master/img/cover.jpg',
+    });
+    // Cover rides the same wire contract; inline art keeps its own identity.
+    expect(artifact!.mediaAssets!.some((a) => a.id === 'pixiv:789:uploadedimage:11')).toBe(true);
+    expect(artifact!.mediaAssets!.filter((a) => a.id === 'pixiv:789:novelcover')).toHaveLength(1);
+
+    const metadata = artifact!.artifacts!.find((a) => a.variant === 'metadata');
+    expect(metadata).toBeDefined();
+    // The metadata json records the normalized cover (never the placeholder).
+    const savedMetadata = fileService.saveMetadata.mock.calls[0][1];
+    expect(savedMetadata.cover_url).toBe(
+      'https://i.pximg.net/novel-cover-master/img/cover.jpg'
+    );
+  });
+
+  it('normalizes the default placeholder cover to null (no cover asset)', async () => {
+    const text = 'body';
+    const { downloader, fileService } = build({
+      novel_text: text,
+      coverUrl: 'https://i.pximg.net/c/240x480_70_a2/novel-cover-master-default/img/def.png',
+    });
+    const artifact = await downloader.download(
+      novel, 'bg', { type: 'novel', detectLanguage: false } as TargetConfig
+    );
+    expect(fileService.saveMetadata.mock.calls[0][1].cover_url).toBeNull();
+
+    expect(artifact!.mediaAssets ?? []).toHaveLength(0);
+  });
+
+  it('omits any cover asset when the response has no coverUrl', async () => {
+    const { downloader, fileService } = build({ novel_text: 'plain body' });
+    const artifact = await downloader.download(
+      novel, 'bg', { type: 'novel', detectLanguage: false } as TargetConfig
+    );
+    expect(fileService.saveMetadata.mock.calls[0][1].cover_url).toBeNull();
+    expect(artifact!.mediaAssets ?? []).toHaveLength(0);
+  });
+});

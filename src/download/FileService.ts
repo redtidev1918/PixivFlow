@@ -36,6 +36,9 @@ export interface PixivMetadata {
     name: string; // Language name
     is_chinese: boolean;
   };
+  // Normalized novel cover: real CDN URL, or null when the work has no
+  // custom cover (Pixiv's default placeholder normalizes to null).
+  cover_url?: string | null;
   // Inline image assets (Phase 1 novel rich-media; additive only).
   assets?: Array<{
     marker: string;

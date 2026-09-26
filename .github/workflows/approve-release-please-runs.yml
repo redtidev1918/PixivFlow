@@ -34,10 +34,12 @@ on:
   # Catches held runs that appeared for any other reason.
   push:
     branches: ["master"]
-  # Safety net. A freshly added cron is not scheduled punctually by GitHub, so it
-  # is deliberately NOT the primary trigger.
+  # Safety net only. GitHub does not schedule crons punctually (the hourly release
+  # crons in this fleet actually fire about five times a day), so polling every ten
+  # minutes bought nothing: the two triggers above already fire within minutes of a
+  # release PR appearing. One poll an hour is the cheap backstop.
   schedule:
-    - cron: '*/10 * * * *'
+    - cron: '17 * * * *'
   workflow_dispatch:
 
 permissions:

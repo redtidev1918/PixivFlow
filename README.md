@@ -78,7 +78,10 @@ pixivflow scheduler             # 按 cron 配置长期挂机自动收集
 ```
 
 不想手写配置？运行交互式向导 `pixivflow setup` 一步步生成。图形界面用
-`pixivflow web`（前端见 [pixivflow-webui](https://github.com/redtidev1918/pixivflow-webui)）。
+`pixivflow web`（前端见 [pixivflow-webui](https://github.com/redtidev1918/pixivflow-webui)）；
+不想自己装 Node、也不想手动起服务，可以直接用官方桌面客户端
+[pixivflow-desktop](https://github.com/redtidev1918/pixivflow-desktop)——它把本仓库的运行时和
+WebUI 一起打包，双击即用。
 
 下载 Pixiv 动图（ugoira）还需要 `python3` 和 `ffmpeg`：程序按逐帧延迟合成循环 GIF，
 可直接作为动画交付给下游。官方 Docker 镜像已包含两者，详见
@@ -316,6 +319,7 @@ PixivFlow 可以完全独立使用。下面是同一作者生态里与它相关�
 | [TelePost](https://github.com/redtidev1918/TelePost) | Telegram 频道投稿、审核与自动化发布平台 | 想把下载结果投进 Telegram 频道、先人工审核再发布时，把它配成 delivery 下游即可。这只是可选组合，PixivFlow 不依赖它 |
 | [pixivflow-telepost-deploy](https://github.com/redtidev1918/pixivflow-telepost-deploy) | PixivFlow + TelePost 的部署与运维套件（Docker / VPS / 云平台） | 想一次性把上面两个项目部署并运维起来时。只跑 PixivFlow 不需要它 |
 | [pixivflow-webui](https://github.com/redtidev1918/pixivflow-webui) | PixivFlow 的 WebUI 前端 | 想用图形界面管理下载与计划 |
+| [pixivflow-desktop](https://github.com/redtidev1918/pixivflow-desktop) | PixivFlow 的官方桌面客户端（macOS / Windows / Linux），内置本仓库运行时与 WebUI | 想要双击即用的原生应用、不想自己装 Node 或起服务时。业务逻辑仍在本仓库，桌面端只负责启动、守护与打包 |
 | [pixiv-token-getter](https://github.com/redtidev1918/pixiv-token-getter) | PKCE OAuth 登录库与 CLI（`ptg`） | PixivFlow 的登录依赖；也可以单独用于获取 Pixiv token |
 
 ## 问题反馈
@@ -333,6 +337,7 @@ Bug 与功能建议请提交到
 - [get-pixivpy-token](https://github.com/eggplants/get-pixivpy-token) —— OAuth 登录流程参考
 - [pixiv-token-getter](https://github.com/redtidev1918/pixiv-token-getter) —— 登录库
 - [pixivflow-webui](https://github.com/redtidev1918/pixivflow-webui) —— WebUI 前端
+- [pixivflow-desktop](https://github.com/redtidev1918/pixivflow-desktop) —— 官方桌面客户端
 
 本项目与 Pixiv Inc. 无关联。完整声明见 [docs/ACKNOWLEDGMENTS.md](docs/ACKNOWLEDGMENTS.md)。
 

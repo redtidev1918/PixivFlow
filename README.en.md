@@ -72,7 +72,10 @@ pixivflow scheduler             # long-running cron collection
 
 Prefer not to hand-write config? The interactive wizard `pixivflow setup` generates it.
 For a GUI, run `pixivflow web` (frontend:
-[pixivflow-webui](https://github.com/redtidev1918/pixivflow-webui)).
+[pixivflow-webui](https://github.com/redtidev1918/pixivflow-webui)). Rather not install Node or
+start a server yourself? Use the official desktop client
+[pixivflow-desktop](https://github.com/redtidev1918/pixivflow-desktop) — it bundles this
+repository's runtime together with the WebUI, so a double-click is enough.
 
 Downloading Pixiv ugoira additionally needs `python3` and `ffmpeg`: frames are
 composited into a looping GIF by per-frame delay, ready to be delivered as an animation.
@@ -306,6 +309,7 @@ ecosystem, and what each one owns:
 | [TelePost](https://github.com/redtidev1918/TelePost) | Telegram channel submission, moderation and automated publishing platform | When you want downloads to land in a Telegram channel for human review before publishing — configure it as a delivery downstream. This is an optional composition; PixivFlow does not depend on it |
 | [pixivflow-telepost-deploy](https://github.com/redtidev1918/pixivflow-telepost-deploy) | Deployment and operations kit for PixivFlow + TelePost (Docker / VPS / cloud) | When you want to deploy and operate both projects together. Running PixivFlow alone does not need it |
 | [pixivflow-webui](https://github.com/redtidev1918/pixivflow-webui) | WebUI frontend for PixivFlow | When you want a GUI to manage downloads and schedules |
+| [pixivflow-desktop](https://github.com/redtidev1918/pixivflow-desktop) | Official desktop client for PixivFlow (macOS / Windows / Linux), bundling this repository's runtime and WebUI | When you want a native double-click app instead of installing Node and starting a server. Business logic still lives here; the desktop layer only launches, supervises and packages |
 | [pixiv-token-getter](https://github.com/redtidev1918/pixiv-token-getter) | PKCE OAuth login library and CLI (`ptg`) | PixivFlow's login dependency; also usable on its own to obtain Pixiv tokens |
 
 ## Feedback
@@ -323,6 +327,7 @@ secrets before sharing). Security issues are handled privately — see
 - [get-pixivpy-token](https://github.com/eggplants/get-pixivpy-token) — OAuth login flow reference
 - [pixiv-token-getter](https://github.com/redtidev1918/pixiv-token-getter) — login library
 - [pixivflow-webui](https://github.com/redtidev1918/pixivflow-webui) — WebUI frontend
+- [pixivflow-desktop](https://github.com/redtidev1918/pixivflow-desktop) — official desktop client
 
 Not affiliated with Pixiv Inc. Full statement: [docs/ACKNOWLEDGMENTS.md](docs/ACKNOWLEDGMENTS.md).
 

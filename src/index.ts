@@ -6,36 +6,10 @@ import { CommandRegistry } from './commands/CommandRegistry';
 import { formatCommandResult, formatCommandFailure, commandFailureReason } from './commands/CommandResultRenderer';
 import { registerAllCommands, RefreshCommand, DownloadCommand, SchedulerCommand, VersionCommand, HelpCommand } from './commands';
 import { ArgumentParser } from './cli/ArgumentParser';
-import { AuthenticationError, ConfigError, VersionRequest, HelpRequest } from './utils/errors';
+import { handleFatalError } from './cli/fatalError';
+import { VersionRequest, HelpRequest } from './utils/errors';
 import { CommandArgs, CommandContext } from './commands/types';
 import { resolveSchedules } from './scheduler/schedules';
-
-/**
- * Handles fatal errors, prints user-friendly messages, and exits the process.
- */
-function handleFatalError(error: unknown): void {
-  if (error instanceof ConfigError) {
-    console.error(`\n❌ Configuration Error: ${error.message}\n`);
-    logger.error('Configuration error', { error: error.message });
-  } else if (error instanceof AuthenticationError) {
-    console.error('\n❌ Authentication Error');
-    console.error('════════════════════════════════════════════════════════════════');
-    console.error(error.message);
-    console.error('');
-    console.error('💡 Your refresh token may have expired or is invalid.');
-    console.error('   Please login again to get a new refresh token:');
-    console.error('');
-    console.error('   • Interactive login:  pixivflow login');
-    console.error('   • Headless login:     pixivflow login-headless');
-    console.error('════════════════════════════════════════════════════════════════\n');
-    logger.error('Authentication failed', { error: error.message });
-  } else {
-    logger.error('Fatal error during application startup', {
-      error: error instanceof Error ? error.stack ?? error.message : String(error),
-    });
-  }
-  process.exit(1);
-}
 
 /**
  * Executes the given command.
@@ -114,10 +88,16 @@ async function executeCommand(registry: CommandRegistry, commandName: string, co
       process.exit(result.exitCode ?? 0);
     }
   } catch (error) {
+    // Pass the error itself: the logger expands it into
+    // `{name, message, stack, cause, …contract fields}`. A pre-formatted
+    // `error.stack` string dropped the `code` an operator greps for.
     logger.error('Unexpected error during command execution', {
       command: commandName,
-      error: error instanceof Error ? error.stack ?? error.message : String(error),
+      stage: 'command.execute',
+      retryable: false,
+      error: error instanceof Error ? error : String(error),
     });
+    console.error(formatCommandFailure({ error: error instanceof Error ? error : undefined }, commandName));
     process.exit(1);
   }
 }
@@ -136,8 +116,15 @@ async function executeDefaultBehavior(context: CommandContext, args: CommandArgs
   try {
     const result = await command.execute(context, args);
     if (!result.success) {
-      logger.error('Default command execution failed', { command: commandName, error: result.error });
-      process.exit(1);
+      logger.error('Default command execution failed', {
+        command: commandName,
+        stage: 'command.execute',
+        reason: commandFailureReason(result, commandName),
+        retryable: false,
+        error: result.error,
+      });
+      console.error(formatCommandFailure(result, commandName));
+      process.exit(result.exitCode ?? 1);
     }
     if (commandName === 'download') {
         process.exit(0);

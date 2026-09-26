@@ -116,6 +116,16 @@
 - 自动更新经 Tauri updater 读 GitHub Releases（无自建 updater）。
 - **desktop 在升级流程跑通前不入 fleet**（维持 F6 延后）。
 
+**宿主集成事实（F4.1 实测，任何桌面 / 启动器实现方都必须遵守）**：
+
+- **必须设 CWD**：存储路径**不能**靠环境变量注入——`src/utils/config-path-migrator/auto-fix.ts` 会把 `process.cwd()` 之外的绝对路径改回默认 `./data`、`./downloads`。宿主应把后端 CWD 设为用户数据根（如 `app_local_data_dir()/pixivflow`），让后端自身的相对默认值落位，`config/`、`data/`、`downloads/` 随 CWD 归位。
+- **环境契约只有 `PORT` / `HOST` / `STATIC_PATH`**；宿主不注入、不解析任何业务配置。
+- **不要用 `--version` 探活版本**：入口是服务进程，探测会真的把服务起起来；版本以发布清单或 `/api/version` 为准。
+- **探活**用 4.1 的免认证路径 `GET /api/health`（期望 `200`）。
+- **静态面（方案 A）**：宿主把 WebUI 构建产物以 `STATIC_PATH` 交给后端同源托管，宿主窗口只加载 `http://127.0.0.1:{port}/`；不复制 webui 源码、不做第二套前端。
+- **重入语义**：宿主崩溃 / 强退不会执行 stop，下次启动应「先探活再接管（adopt）」，而不是把「端口被占」当作致命错误。
+- 运行时清单 `runtime-manifest.json`（`version` / `platform` / `command[]` / `args[]` / `health` / `staticPath` / `servesWebui`）是**下游自有格式**，本仓库只提供发布产物，不消费它。
+
 ---
 
 ## 5. 分阶段路线图

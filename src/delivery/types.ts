@@ -133,6 +133,17 @@ export interface DeliveryRequest {
   files: string[];
   /** Optional per-file preview sources, aligned with ``files``. */
   previewFiles?: string[];
+  /**
+   * Optional explicit text body. When absent the neutral content model derives
+   * one from the work title plus its canonical Pixiv link.
+   */
+  caption?: string;
+  /**
+   * Neutral platform-agnostic content frozen at enqueue time. Adapters plan
+   * their platform messages from THIS (see `content.ts`); when it is absent
+   * (a row enqueued by an older build) they rebuild it from the paths below.
+   */
+  content?: import('./content').Content;
   fields?: Record<string, DeliveryFieldValue>;
   /** Optional canonical media facts sent to providers that understand them. */
   mediaAssets?: MediaAsset[];

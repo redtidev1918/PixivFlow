@@ -204,6 +204,48 @@ delivery outbox 持久化、携带稳定幂等标识、指数退避重试。`not
 任何 `delivery.targets` 时行为与历史版本完全一致。详见
 [投递运行时架构](architecture/delivery-runtime.md)。
 
+### Target capability 声明
+
+顶层 `delivery.targets.<name>.capabilities` 是**可选**的：它声明该交付目标真实支持的
+消息形态与硬上限（能力是数据，不是代码）。缺省时使用平台类型的内置档案
+（`httpMultipart` 声明全部能力且不设上限；`telegram` 为 caption ≤1024、上传 ≤50MB、
+album 2–10 条）。投递引擎按能力而不是平台名决定投递形态。
+
+| 字段 | 取值 | 说明 |
+| --- | --- | --- |
+| `text` / `image` / `file` / `album` / `video` | boolean | 是否支持该形态（覆盖平台默认） |
+| `maxTextLength` / `maxCaptionLength` / `maxUploadBytes` / `maxAttachmentsPerMessage` | integer ≥ 0 | 硬上限，单位：字符 / 字节 / 条 |
+| `albumMin` / `albumMax` | integer ≥ 1 | 相册条目数区间 |
+| `requiresTwoPhaseUpload` | boolean | 先上传取句柄、再引用句柄发送（飞书 image_key/file_key） |
+
+数值型上限**只能收紧、不能放宽**平台默认值：写一个比平台更大的数字不会生效（那只会
+在平台 API 处失败），PixivFlow 会保留平台档案里的更小值。
+
+```json
+{
+  "delivery": {
+    "targets": {
+      "tg-review": {
+        "type": "telegram",
+        "botId": "bot1",
+        "botToken": "${TELEGRAM_BOT1_TOKEN}",
+        "chatId": "-1001234567890",
+        "publishChatId": "@channel",
+        "controlPlaneUrl": "${CONTROL_PLANE_URL}",
+        "controlPlaneToken": "${CONTROL_PLANE_TOKEN}",
+        "capabilities": { "album": false, "maxUploadBytes": 10485760 }
+      }
+    }
+  }
+}
+```
+
+非法声明（非布尔、负数、非整数、`albumMin > albumMax`）在两个配置校验入口
+（loader 与 unified validator）都会被拒绝，错误码
+`CONFIG_VALIDATION_DELIVERY_CAPABILITY_INVALID`。作品内容如何按能力降级
+（相册展开、不支持媒体进 `unsupported` 而非静默丢弃）见
+[投递运行时架构 §4.2/§4.3](architecture/delivery-runtime.md)。
+
 `cache` 模式使用通用命名交付目标。当前内置 provider 是流式
 `httpMultipart`，下面的地址和字段仅为示例：
 

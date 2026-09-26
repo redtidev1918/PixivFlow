@@ -112,3 +112,63 @@ describe('telegram delivery target validation', () => {
     expect(unifiedErrors(target).join()).toContain('Unsupported type');
   });
 });
+
+/**
+ * Capability declarations are platform limits as data. Both validators must
+ * reject a malformed override identically, otherwise one of them would accept a
+ * config that silently disables a platform bound.
+ */
+describe('delivery target capability validation', () => {
+  it('accepts a well-formed capability declaration in both validators', () => {
+    const target = {
+      ...validTelegramTarget,
+      capabilities: { text: true, maxCaptionLength: 512, albumMin: 2, albumMax: 4 },
+    } as DeliveryTargetConfig;
+    expect(loaderErrors(target)).toEqual([]);
+    expect(unifiedErrors(target)).toEqual([]);
+  });
+
+  it('rejects a non-boolean capability flag', () => {
+    const target = {
+      ...validTelegramTarget,
+      capabilities: { image: 'yes' },
+    } as unknown as DeliveryTargetConfig;
+    expect(loaderErrors(target).join()).toContain('capabilities.image');
+    expect(loaderErrors(target).join()).toContain('Must be a boolean');
+    expect(unifiedErrors(target).join()).toContain('capabilities.image');
+  });
+
+  it('rejects a negative limit and a non-integer limit', () => {
+    const negative = {
+      ...validTelegramTarget,
+      capabilities: { maxUploadBytes: -5 },
+    } as unknown as DeliveryTargetConfig;
+    expect(loaderErrors(negative).join()).toContain('capabilities.maxUploadBytes');
+    expect(unifiedErrors(negative).join()).toContain('capabilities.maxUploadBytes');
+
+    const fractional = {
+      ...validTelegramTarget,
+      capabilities: { maxAttachmentsPerMessage: 2.5 },
+    } as unknown as DeliveryTargetConfig;
+    expect(loaderErrors(fractional).join()).toContain('capabilities.maxAttachmentsPerMessage');
+    expect(unifiedErrors(fractional).join()).toContain('capabilities.maxAttachmentsPerMessage');
+  });
+
+  it('rejects albumMin greater than albumMax in both validators', () => {
+    const target = {
+      ...validTelegramTarget,
+      capabilities: { albumMin: 9, albumMax: 2 },
+    } as unknown as DeliveryTargetConfig;
+    expect(loaderErrors(target).join()).toContain('capabilities.albumMin');
+    expect(unifiedErrors(target).join()).toContain('capabilities.albumMin');
+  });
+
+  it('rejects a non-object capability declaration', () => {
+    const target = {
+      ...validTelegramTarget,
+      capabilities: ['image'],
+    } as unknown as DeliveryTargetConfig;
+    expect(loaderErrors(target).join()).toContain('capabilities');
+    expect(unifiedErrors(target).join()).toContain('capabilities');
+  });
+});

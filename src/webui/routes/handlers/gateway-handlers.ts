@@ -13,8 +13,24 @@ import {
 import { redactUrl } from '../../../utils/redact';
 import { logger } from '../../../logger';
 import { ErrorCode } from '../../utils/error-codes';
+import { buildConfigAwareErrorBody } from '../../utils/config-error';
 
 const GATEWAY_NAME_SAFE = /^[A-Za-z0-9._-]{1,80}$/;
+
+/**
+ * Read the configuration WITHOUT credential validation.
+ *
+ * This projection needs the delivery routes and the ledger — never a Pixiv
+ * token. `skipValidation` is therefore required, not a shortcut: with
+ * validation on, a user who has not logged in yet (or whose refresh token
+ * expired) gets a 500 on a read-only panel, which is exactly the state in
+ * which an operator needs to see what the delivery plane is configured to do.
+ * Pixiv credentials are still enforced everywhere they are actually used
+ * (downloads, scheduling, login).
+ */
+function loadDeliveryPlaneConfig() {
+  return loadConfig(getConfigPath(), true);
+}
 
 /**
  * Read-only projection of the Messaging Gateway plane (WebUI Gateway panel).
@@ -32,8 +48,7 @@ const GATEWAY_NAME_SAFE = /^[A-Za-z0-9._-]{1,80}$/;
 export async function listGateways(_req: Request, res: Response): Promise<void> {
   let database: Database | null = null;
   try {
-    const configPath = getConfigPath();
-    const config = loadConfig(configPath);
+    const config = loadDeliveryPlaneConfig();
     const routes = configuredGateways(config);
     let connections: GatewayConnectionRow[] = [];
     let deliveriesByRoute: Record<string, Record<string, number>> = {};
@@ -100,7 +115,7 @@ export async function listGateways(_req: Request, res: Response): Promise<void> 
     }
     const message = error instanceof Error ? error.message : String(error);
     logger.error('Failed to list gateway connections', { error: { message } });
-    res.status(500).json({ errorCode: ErrorCode.GATEWAY_LIST_FAILED });
+    res.status(500).json(buildConfigAwareErrorBody(error, ErrorCode.GATEWAY_LIST_FAILED));
   }
 }
 
@@ -116,8 +131,7 @@ export async function getGateway(req: Request, res: Response): Promise<void> {
   }
   let database: Database | null = null;
   try {
-    const configPath = getConfigPath();
-    const config = loadConfig(configPath);
+    const config = loadDeliveryPlaneConfig();
     const route = configuredGateways(config).find((r) => r.name === name);
     if (!route) {
       res.status(404).json({
@@ -170,7 +184,7 @@ export async function getGateway(req: Request, res: Response): Promise<void> {
     }
     const message = error instanceof Error ? error.message : String(error);
     logger.error('Failed to read gateway connection', { name, error: { message } });
-    res.status(500).json({ errorCode: ErrorCode.GATEWAY_LIST_FAILED });
+    res.status(500).json(buildConfigAwareErrorBody(error, ErrorCode.GATEWAY_LIST_FAILED));
   }
 }
 

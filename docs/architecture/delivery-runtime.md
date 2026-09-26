@@ -408,10 +408,10 @@ Gateway，Apprise 等），它们才是平台适配的归属地；重复实现�
     探测不到）。**永远不会**把「端点应答」说成一次投递成功。写入 `gateway_connections`
     的 endpoint 已经过 `redactUrl`，凭据不落库、不打印。
   - `pixivflow delivery status [--target <name>] [--status failed] [--limit N] [--json]`、
-    `pixivflow delivery status --id <deliveryId>` —— 投递账本视图；不带过滤时按路由输出
-    `delivered/failed/pending/duplicate` 计数。
-  - `pixivflow delivery retry [--target <name>] [--status failed] [--id <id>] [--all]
-    [--limit N] [--dry-run] [--yes]` —— **默认只预览**，必须显式 `--yes` 才落地。它只
+    `pixivflow delivery status <deliveryId>`（等价 `--id <deliveryId>`）—— 投递账本视图；
+    不带过滤时按路由输出 `delivered/failed/pending/duplicate` 计数。
+  - `pixivflow delivery retry [--target <name>] [--status failed] [<id>] [--all]
+    [--limit N] [--dry-run] [--yes]`（`<id>` 也可写成 `--id <id>`）—— **默认只预览**，必须显式 `--yes` 才落地。它只
     重新武装**仍欠投递**的路由：已 delivered/duplicate 的行永不被重发；某行虽然 ledger 记为
     failed，但其 outbox 行仍处于可执行状态（worker 还会去重试）时会被**拒绝**并归入
     `skipped`，避免人工重试造成重复投递。落地时调用 `revive`/`requeue` 并用

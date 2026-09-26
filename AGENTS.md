@@ -68,6 +68,14 @@ PixivFlow 负责 Pixiv 认证、候选发现/排序/去重、下载、审核链�
 - `type: "telegram"`（PixivFlow 直发审核群）**已废弃**：不要在新配置里使用，也不要基于它扩展
   新能力；迁移方向是 `httpMultipart` → TelePost Submission API。
 
+## CLI 输出契约
+
+- 命令把结果放在 `CommandResult.message` / `data` 里返回、自己不打印时，必须在 `metadata`
+  里声明 `rendersResult: true`——入口（`src/index.ts` → `formatCommandResult`）才会打印。
+  忘记声明就什么都不显示（`delivery`/`gateway`/`outbox`/`runs` 曾经因此完全静默）。
+- 自己 `console.log` 的命令**不要**声明 `rendersResult`，否则输出两遍。
+- `--json` 打印 `data`（无 `data` 时退回 `message`）；人读输出只打印 `message`。
+
 ## 改完请自证
 
 - 全量 `npx jest --silent --runInBand`；单点

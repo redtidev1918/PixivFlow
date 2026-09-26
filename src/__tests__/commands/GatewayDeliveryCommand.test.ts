@@ -313,4 +313,44 @@ describe('DeliveryCommand', () => {
     const invalid = new DeliveryCommand().validate({ options: { status: 'exploded' }, positional: ['status'] });
     expect(invalid.valid).toBe(false);
   });
+
+  it('takes the delivery id positionally, the way an operator types it', async () => {
+    const { deliveryId, outboxId } = seedDeadFailed('primary-route', 'd');
+
+    const looked = await new DeliveryCommand().execute(ctx(configWithRoutes(), dbPath), {
+      options: { json: true },
+      positional: ['status', deliveryId],
+    });
+    expect(looked.success).toBe(true);
+    expect((looked.data as { delivery: Record<string, unknown> }).delivery.id).toBe(deliveryId);
+
+    const retried = await new DeliveryCommand().execute(ctx(configWithRoutes(), dbPath), {
+      options: { yes: true, json: true },
+      positional: ['retry', deliveryId],
+    });
+    expect((retried.data as { applied: boolean }).applied).toBe(true);
+
+    const db = new Database(dbPath);
+    expect(db.outbox.get(outboxId)!.status).toBe('pending');
+    expect(db.outbox.listEvents({ outboxId })[0]).toMatchObject({
+      event: 'outbox.replay_requested',
+      actor: 'cli',
+      deliveryId,
+    });
+    db.close();
+  });
+
+  it('refuses two different delivery ids in one command', async () => {
+    const command = new DeliveryCommand();
+    const accepted = command.validate({ options: {}, positional: ['retry', 'd-1'] });
+    expect(accepted.valid).toBe(true);
+
+    const agreed = command.validate({ options: { id: 'd-1' }, positional: ['retry', 'd-1'] });
+    expect(agreed.valid).toBe(true);
+
+    const conflicting = command.validate({ options: { id: 'd-1' }, positional: ['retry', 'd-2'] });
+    expect(conflicting.valid).toBe(false);
+    expect(conflicting.errors.join(' ')).toContain('d-2');
+    expect(conflicting.errors.join(' ')).toContain('d-1');
+  });
 });

@@ -16,6 +16,9 @@ export class RunsCommand extends BaseCommand {
     category: CommandCategory.MAINTENANCE,
     requiresAuth: true,
     longRunning: false,
+    // The output is returned, not printed: the entry point renders it, so
+    // `pixivflow runs list` actually shows its answer.
+    rendersResult: true,
   };
 
   getUsage(): string {

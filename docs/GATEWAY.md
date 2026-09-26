@@ -332,7 +332,9 @@ pixivflow gateway list                     # 有哪些路由、是否启用、�
 pixivflow gateway test my-gateway          # 端点是否应答（不等于投递成功）
 pixivflow delivery status                  # 按路由的 pending/delivered/failed 计数
 pixivflow delivery status --target my-gateway --limit 20
+pixivflow delivery status <deliveryId>     # 单条意图：ledger + outbox 状态
 pixivflow delivery retry                   # 默认只预览
+pixivflow delivery retry <deliveryId> --yes  # 只重开这一条
 pixivflow delivery retry --yes             # 只重开仍欠投递的路由（不会重发已确认的）
 pixivflow outbox list --status dead        # 需要人工介入的行
 ```

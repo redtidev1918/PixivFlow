@@ -3,6 +3,7 @@ import { loadConfig, getConfigPath as getConfigPathUtil } from './config';
 import { StandaloneConfig } from './config/types';
 import { logger } from './logger';
 import { CommandRegistry } from './commands/CommandRegistry';
+import { formatCommandResult } from './commands/CommandResultRenderer';
 import { registerAllCommands, RefreshCommand, DownloadCommand, SchedulerCommand, VersionCommand, HelpCommand } from './commands';
 import { ArgumentParser } from './cli/ArgumentParser';
 import { AuthenticationError, ConfigError, VersionRequest, HelpRequest } from './utils/errors';
@@ -78,10 +79,21 @@ async function executeCommand(registry: CommandRegistry, commandName: string, co
       process.exit(result.exitCode ?? 1);
     }
 
+    // Commands that return their output instead of printing it need the entry
+    // point to render it — otherwise the answer is computed and thrown away
+    // (that is what made `pixivflow delivery status` print nothing).
+    const metadata = typeof (command as any).getMetadata === 'function'
+      ? (command as any).getMetadata()
+      : undefined;
+    if (metadata?.rendersResult === true) {
+      const text = formatCommandResult(result, { json: args.options.json === true });
+      if (text) {
+        console.log(text);
+      }
+    }
+
     // Decide exit behavior based on command metadata (long running)
-    const isLongRunning = typeof (command as any).getMetadata === 'function'
-      ? (command as any).getMetadata().longRunning === true
-      : false;
+    const isLongRunning = metadata?.longRunning === true;
     if (!isLongRunning) {
       process.exit(result.exitCode ?? 0);
     }

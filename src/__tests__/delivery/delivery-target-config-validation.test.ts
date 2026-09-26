@@ -171,4 +171,96 @@ describe('delivery target capability validation', () => {
     expect(loaderErrors(target).join()).toContain('capabilities');
     expect(unifiedErrors(target).join()).toContain('capabilities');
   });
+
+  it('accepts and rejects the lifecycle declarations in both validators', () => {
+    const accepted = {
+      ...validTelegramTarget,
+      capabilities: { truncatePolicy: 'split', idempotencyMechanism: 'platform_key', minSendIntervalMs: 500 },
+    } as DeliveryTargetConfig;
+    expect(loaderErrors(accepted)).toEqual([]);
+    expect(unifiedErrors(accepted)).toEqual([]);
+
+    const badPolicy = {
+      ...validTelegramTarget,
+      capabilities: { truncatePolicy: 'clip' },
+    } as unknown as DeliveryTargetConfig;
+    expect(loaderErrors(badPolicy).join()).toContain('capabilities.truncatePolicy');
+    expect(unifiedErrors(badPolicy).join()).toContain('capabilities.truncatePolicy');
+
+    const badMechanism = {
+      ...validTelegramTarget,
+      capabilities: { idempotencyMechanism: 'telepathy' },
+    } as unknown as DeliveryTargetConfig;
+    expect(loaderErrors(badMechanism).join()).toContain('capabilities.idempotencyMechanism');
+    expect(unifiedErrors(badMechanism).join()).toContain('capabilities.idempotencyMechanism');
+
+    const badInterval = {
+      ...validTelegramTarget,
+      capabilities: { minSendIntervalMs: -1 },
+    } as unknown as DeliveryTargetConfig;
+    expect(loaderErrors(badInterval).join()).toContain('capabilities.minSendIntervalMs');
+    expect(unifiedErrors(badInterval).join()).toContain('capabilities.minSendIntervalMs');
+  });
+});
+
+/**
+ * The generic gateway `webhook` type is validated by the same two independent
+ * validators. Its only required contract is the endpoint URL, so both must
+ * reject a missing or non-http(s) one and neither may call the type unsupported.
+ */
+describe('webhook delivery target validation', () => {
+  const validWebhookTarget: DeliveryTargetConfig = {
+    type: 'webhook',
+    url: 'https://gateway.test/hook',
+    token: '${GATEWAY_TOKEN}',
+    signingSecret: '${GATEWAY_SIGNING_SECRET}',
+    mediaTransport: 'reference',
+  };
+
+  it('accepts a complete target in both validators', () => {
+    expect(loaderErrors(validWebhookTarget)).toEqual([]);
+    expect(unifiedErrors(validWebhookTarget)).toEqual([]);
+  });
+
+  it('does not report the webhook type as unsupported', () => {
+    expect(loaderErrors(validWebhookTarget).join()).not.toContain('Unsupported delivery type');
+    expect(unifiedErrors(validWebhookTarget).join()).not.toContain('Unsupported type');
+  });
+
+  it('accepts a URL that is only known at load time', () => {
+    const templated = { ...validWebhookTarget, url: '${GATEWAY_URL}' } as DeliveryTargetConfig;
+    expect(loaderErrors(templated)).toEqual([]);
+    expect(unifiedErrors(templated)).toEqual([]);
+  });
+
+  it('rejects a missing url in both validators', () => {
+    const target = { ...validWebhookTarget, url: '  ' } as DeliveryTargetConfig;
+    expect(loaderErrors(target).join()).toContain('delivery.targets.bot1-review.url');
+    expect(unifiedErrors(target).join()).toContain('delivery.targets.bot1-review.url');
+  });
+
+  it('rejects a non-http(s) url in both validators', () => {
+    const target = { ...validWebhookTarget, url: 'ftp://gateway.test/hook' } as DeliveryTargetConfig;
+    expect(loaderErrors(target).join()).toContain('delivery.targets.bot1-review.url');
+    expect(unifiedErrors(target).join()).toContain('delivery.targets.bot1-review.url');
+  });
+
+  it('rejects malformed inline and timeout limits in both validators', () => {
+    const badInline = { ...validWebhookTarget, maxInlineBytes: -1 } as unknown as DeliveryTargetConfig;
+    expect(loaderErrors(badInline).join()).toContain('maxInlineBytes');
+    expect(unifiedErrors(badInline).join()).toContain('maxInlineBytes');
+
+    const badTimeout = { ...validWebhookTarget, timeoutMs: 0 } as unknown as DeliveryTargetConfig;
+    expect(loaderErrors(badTimeout).join()).toContain('timeoutMs');
+    expect(unifiedErrors(badTimeout).join()).toContain('timeoutMs');
+  });
+
+  it('still validates capability declarations on a webhook target', () => {
+    const badPolicy = {
+      ...validWebhookTarget,
+      capabilities: { truncatePolicy: 'clip' },
+    } as unknown as DeliveryTargetConfig;
+    expect(loaderErrors(badPolicy).join()).toContain('capabilities.truncatePolicy');
+    expect(unifiedErrors(badPolicy).join()).toContain('capabilities.truncatePolicy');
+  });
 });

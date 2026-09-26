@@ -222,6 +222,14 @@ Email、Telegram、Discord、ntfy 等渠道；PixivFlow 不实现这些通知协
   不影响下载本身；重试只重发尚未确认的那个平台。`delivery.target`（单值）仍然可用，
   数组优先；两者都缺省时不投递，行为与历史版本一致。详见
   [投递运行时架构](docs/architecture/delivery-runtime.md)。
+- **通用消息网关（`type: "webhook"`）**：PixivFlow 只做 **Messaging Gateway Client**——
+  把一份平台无关的统一消息 JSON POST 给一个已有的消息网关（TelePost / AstrBot /
+  Hermes / 自建服务），网关自己负责 QQ、微信、Telegram、Discord、飞书的登录与协议。
+  PixivFlow **不实现任何平台协议、不生成配对二维码、不保存平台登录信息**。可选 HMAC
+  签名与 `base64` 内联媒体。WebUI 的 `GET /api/gateways` 提供只读的网关与投递历史投影
+  （endpoint 脱敏，`pairingSupported: false`）。详见
+  [投递运行时架构 §5.1](docs/architecture/delivery-runtime.md) 与
+  [配置说明](docs/CONFIG.md)。
 
 配置 `readinessUrl` 后，worker 每次认领都会先检查依赖 `/ready`；非 2xx 只把 row
 放回 pending，不增加 attempt。dead letter 通过正式 CLI 管理：

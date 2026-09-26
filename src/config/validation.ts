@@ -411,14 +411,39 @@ export function validateConfig(config: Partial<StandaloneConfig>, location: stri
       if (delivery.method && !['POST', 'PUT'].includes(delivery.method)) {
         errors.push(`${prefix}.method: Must be "POST" or "PUT"`);
       }
+    } else if (delivery.type === 'webhook') {
+      // A generic gateway endpoint: the URL is the whole required contract.
+      if (!delivery.url?.trim()) {
+        errors.push(`${prefix}.url: Required field is missing or empty`);
+      } else if (!/\$\{[A-Za-z_][A-Za-z0-9_]*\}/.test(delivery.url)) {
+        try {
+          const url = new URL(delivery.url);
+          if (!['http:', 'https:'].includes(url.protocol)) throw new Error('unsupported protocol');
+        } catch {
+          errors.push(`${prefix}.url: Must be a valid HTTP or HTTPS URL`);
+        }
+      }
+      if (
+        delivery.maxInlineBytes !== undefined &&
+        (!Number.isInteger(delivery.maxInlineBytes) || delivery.maxInlineBytes < 0)
+      ) {
+        errors.push(`${prefix}.maxInlineBytes: Must be an integer greater than or equal to 0`);
+      }
+      if (delivery.timeoutMs !== undefined && (!Number.isInteger(delivery.timeoutMs) || delivery.timeoutMs < 1)) {
+        errors.push(`${prefix}.timeoutMs: Must be an integer greater than 0`);
+      }
     } else {
       errors.push(`${prefix}.type: Unsupported delivery type "${(delivery as { type?: string }).type}"`);
       continue;
     }
-    if (delivery.maxAttempts !== undefined && (!Number.isInteger(delivery.maxAttempts) || delivery.maxAttempts < 1)) {
+    if (
+      delivery.type !== 'webhook' &&
+      delivery.maxAttempts !== undefined &&
+      (!Number.isInteger(delivery.maxAttempts) || delivery.maxAttempts < 1)
+    ) {
       errors.push(`${prefix}.maxAttempts: Must be an integer greater than 0`);
     }
-    if (delivery.retryDelayMs !== undefined && delivery.retryDelayMs < 0) {
+    if (delivery.type !== 'webhook' && delivery.retryDelayMs !== undefined && delivery.retryDelayMs < 0) {
       errors.push(`${prefix}.retryDelayMs: Must be greater than or equal to 0`);
     }
     // Capability declarations are platform limits as data; reject malformed

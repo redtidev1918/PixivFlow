@@ -2,6 +2,7 @@ import { DeliveryConfig } from '../config';
 import { ConfigError } from '../utils/errors';
 import { HttpMultipartDelivery, ReadinessProbeResult } from './HttpMultipartDelivery';
 import { TelegramReviewDelivery } from './TelegramReviewDelivery';
+import { WebhookDelivery } from './WebhookDelivery';
 import { DeliveryNotificationRequest, DeliveryRequest, DeliveryResult } from './types';
 
 /** Resolves named delivery targets without coupling the outbox to a provider. */
@@ -26,7 +27,8 @@ export class DeliveryDispatcher {
     // deliver/notify so the durable outbox records the normal retry error.
     if (!target) return { ready: true };
     // Only the HTTP provider exposes a readiness endpoint. A Telegram review
-    // target has nothing to probe: its delivery fails visibly instead.
+    // target and a generic gateway webhook have nothing to probe: they declare
+    // no preflight contract, so their deliveries fail visibly instead.
     if (target.type !== 'httpMultipart') return { ready: true };
     return new HttpMultipartDelivery(target, this.proxyUrl).readinessProbe();
   }
@@ -41,6 +43,8 @@ export class DeliveryDispatcher {
         return new HttpMultipartDelivery(target, this.proxyUrl).deliver(request);
       case 'telegram':
         return new TelegramReviewDelivery(target).deliver(request);
+      case 'webhook':
+        return new WebhookDelivery(target, this.proxyUrl).deliver(request);
       default:
         throw new ConfigError(`Unsupported delivery target type: ${(target as { type?: string }).type}`);
     }

@@ -717,7 +717,47 @@ export interface TelegramReviewDeliveryConfig {
   capabilities?: DeliveryCapabilityOverrides;
 }
 
-export type DeliveryTargetConfig = HttpMultipartDeliveryConfig | TelegramReviewDeliveryConfig;
+/**
+ * Post the work to a generic Messaging Gateway over HTTP.
+ *
+ * This is the "PixivFlow is a Gateway CLIENT" boundary: PixivFlow owns the
+ * Artifact, the unified message document and the delivery ledger; the receiver
+ * (TelePost, AstrBot, Hermes, a OneBot implementation behind an adapter, or any
+ * custom HTTP service) owns platform protocols, credentials and pairing. No
+ * platform login ever lives here.
+ */
+export interface WebhookDeliveryConfig {
+  type: 'webhook';
+  /** Gateway endpoint (supports ${ENV_NAME}). Must be http(s). */
+  url: string;
+  /** Optional bearer credential (supports ${ENV_NAME}); never logged. */
+  token?: string;
+  /**
+   * Optional HMAC secret (supports ${ENV_NAME}). When set, every request
+   * carries `X-Webhook-Timestamp` + `X-Webhook-Signature:
+   * sha256=HMAC-SHA256(secret, "<timestamp>.<rawBody>")`.
+   */
+  signingSecret?: string;
+  /** Extra request headers (supports ${ENV_NAME}); never logged unredacted. */
+  headers?: Record<string, string>;
+  /** Per-request timeout in milliseconds (default 30000). */
+  timeoutMs?: number;
+  /**
+   * How media is referenced. `reference` sends absolute local paths (the
+   * gateway must be co-located); `base64` inlines the bytes for a remote
+   * gateway. Default `reference`.
+   */
+  mediaTransport?: 'reference' | 'base64';
+  /** Refuse to send when inlined media exceeds this many bytes. */
+  maxInlineBytes?: number;
+  /** 声明该交付目标真实支持的能力与硬上限（见 HttpMultipartDeliveryConfig.capabilities）。 */
+  capabilities?: DeliveryCapabilityOverrides;
+}
+
+export type DeliveryTargetConfig =
+  | HttpMultipartDeliveryConfig
+  | TelegramReviewDeliveryConfig
+  | WebhookDeliveryConfig;
 
 export interface DeliveryConfig {
   /** 可供各 target 引用的命名交付目标 */

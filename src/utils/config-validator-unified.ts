@@ -31,6 +31,20 @@ export interface ValidationResult {
 }
 
 /**
+ * True when a URL field is a valid http(s) endpoint, or contains a `${ENV}`
+ * placeholder whose value is only known at load time.
+ */
+function isUsableHttpUrl(value: string): boolean {
+  if (/\$\{[A-Za-z_][A-Za-z0-9_]*\}/.test(value)) return true;
+  try {
+    const url = new URL(value);
+    return ['http:', 'https:'].includes(url.protocol);
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Unified configuration validator
  */
 export class ConfigValidator {
@@ -310,6 +324,42 @@ export class ConfigValidator {
             code: `CONFIG_VALIDATION_${error.code}`,
             field: error.field,
             message: `Delivery target '${name}': ${error.message}`,
+          });
+        }
+        continue;
+      }
+      if (delivery.type === 'webhook') {
+        if (!delivery.url?.trim()) {
+          errors.push({
+            code: 'CONFIG_VALIDATION_DELIVERY_WEBHOOK_URL_INVALID',
+            field: `${prefix}.url`,
+            message: `Delivery target '${name}': url is required`,
+          });
+        } else if (!isUsableHttpUrl(delivery.url)) {
+          errors.push({
+            code: 'CONFIG_VALIDATION_DELIVERY_WEBHOOK_URL_INVALID',
+            field: `${prefix}.url`,
+            message: `Delivery target '${name}': URL must be valid HTTP or HTTPS`,
+          });
+        }
+        if (
+          delivery.maxInlineBytes !== undefined &&
+          (!Number.isInteger(delivery.maxInlineBytes) || delivery.maxInlineBytes < 0)
+        ) {
+          errors.push({
+            code: 'CONFIG_VALIDATION_DELIVERY_WEBHOOK_INLINE_LIMIT_INVALID',
+            field: `${prefix}.maxInlineBytes`,
+            message: `Delivery target '${name}': maxInlineBytes must be an integer greater than or equal to 0`,
+          });
+        }
+        if (
+          delivery.timeoutMs !== undefined &&
+          (!Number.isInteger(delivery.timeoutMs) || delivery.timeoutMs < 1)
+        ) {
+          errors.push({
+            code: 'CONFIG_VALIDATION_DELIVERY_WEBHOOK_TIMEOUT_INVALID',
+            field: `${prefix}.timeoutMs`,
+            message: `Delivery target '${name}': timeoutMs must be an integer greater than 0`,
           });
         }
         continue;

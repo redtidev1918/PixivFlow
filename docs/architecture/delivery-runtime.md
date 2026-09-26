@@ -187,15 +187,21 @@ ledger 短路，不会产生第二次副作用。
 ```ts
 type DeliveryTargetConfig =
   | HttpMultipartDeliveryConfig   // type: 'httpMultipart'
-  | TelegramReviewDeliveryConfig; // type: 'telegram'
+  | TelegramReviewDeliveryConfig  // type: 'telegram'
+  | WebhookDeliveryConfig;        // type: 'webhook'
 ```
 
 `DeliveryDispatcher`（`src/delivery/DeliveryDispatcher.ts`）按 `target.type` 分派到
-`HttpMultipartDelivery` / `TelegramReviewDelivery`；未知 type 抛 `ConfigError`（non-retryable）。
-`readinessProbe(name)` 目前只对 `httpMultipart` 有效，其余 type 视为 ready。
+`HttpMultipartDelivery` / `TelegramReviewDelivery` / `WebhookDelivery`；未知 type 抛
+`ConfigError`（non-retryable）。`readinessProbe(name)` 目前只对 `httpMultipart` 有效，
+其余 type（含 `webhook`）声明没有 preflight 契约，视为 ready。
 
 `TelegramReviewDelivery` 是**审核链投递**：媒体不离开 Telegram，不过控制面，只上报 id，
 由持有凭据的控制面（TelePost）执行 copyMessage 发布。
+
+`WebhookDelivery` 是**通用 Messaging Gateway 客户端**：PixivFlow 只发一份平台无关的
+统一消息文档，网关侧是 TelePost / AstrBot / Hermes / OneBot 实现还是自建 HTTP 服务，
+PixivFlow 不关心（详见 §5.1）。
 
 ### 4.2 capability（已实现，`src/delivery/capabilities.ts`）
 
@@ -220,8 +226,16 @@ type DeliveryTargetConfig =
 - `TargetCapabilities` 现状：`httpMultipart` 声明全 5 项能力且全部限额为 `0`（不约束）——
   通用 HTTP 端点是**不透明契约**，PixivFlow 不能凭空替它设上限；`telegram` 声明
   `text/image/file/album/video`，caption ≤1024、上传 ≤50MB、album `{2,10}`。
+- 除布尔能力与尺寸上限外，capability 还声明三个**生命周期**字段（同样是数据）：
+  `minSendIntervalMs`（同目标最小发送间隔，0 = 不限）、`truncatePolicy`
+  （`split` / `truncate` / `error`，显式选择**切分、截断还是宁失败不静默截断**）、
+  `idempotencyMechanism`（`none` / `platform_key` / `upstream_ledger`，说明该平台能不能
+  自己幂等，还是必须由 PixivFlow 的账本兜住）。缺省档案给 `error` +
+  `upstream_ledger`。
 - `applyCapabilityOverrides()`：配置里的 `capabilities` 是**可选覆盖**，布尔值直接替换、
-  数值**只能收紧不能放宽**（`fallback === 0` 表示平台默认不约束，此时采用显式值）。
+  尺寸上限**只能收紧不能放宽**（`fallback === 0` 表示平台默认不约束，此时采用显式值）、
+  **节流只能加严**（`minSendIntervalMs` 取 `max`，慢者胜）；`truncatePolicy` 与
+  `idempotencyMechanism` 是显式枚举替换。
 - 校验：`collectCapabilityOverrideErrors()` 由 **两个**配置校验入口共享
   （`src/config/validation.ts` 与 `src/utils/config-validator-unified.ts`），因此两侧
   规则不可能漂移。
@@ -267,17 +281,41 @@ type ContentPart = ContentTextPart | ContentImagePart | ContentFilePart
 | --- | --- | --- |
 | 任意 HTTP | `httpMultipart`（已实现） | 通用 multipart POST + ACK 解析 |
 | Telegram 审核链 | `telegram`（已实现） | 只上报 id，凭据在 TelePost |
-| OneBot（QQ） | `onebot` | PixivFlow → HTTP → 成熟 OneBot 实现（NapCat 等）→ QQ |
-| Discord | `discord` | webhook 或 bot token |
-| 飞书 | `feishu` | 自建应用 tenant_access_token + 先上传后发送 |
-| 微信 | 外接 Bridge | 不做协议，只走成熟 Bridge / 官方 API / Webhook |
+| **通用 Messaging Gateway** | `webhook`（**已实现**，见 §5.1） | 统一消息 JSON POST + 可选 HMAC 签名 |
+| OneBot（QQ） | 由网关承担 | PixivFlow → `webhook` → 网关（AstrBot / 自建 adapter）→ OneBot 实现（NapCat 等）→ QQ |
+| Discord / 飞书 / 微信 / 其他 | 由网关承担 | PixivFlow → `webhook` → 网关 → 平台 |
 
-**不自己实现 QQ/微信协议**。OneBot 只实现 v11：v12 在 QQ 生态基本未落地（NapCat /
-Lagrange.Core / LuckyLilliaBot / go-cqhttp 全部只讲 v11）。OneBot 调用信封
-`{"action","params","echo"}`，HTTP 下**路径即 action**，响应 `{"status","retcode","data"}`
-且 HTTP 状态码几乎永远是 200——成败只看 `status` / `retcode`，不复用 `parseDeliveryAck`
-的 TelePost 语义。文件附件在 OneBot **不是标准消息段**，必须走
-`upload_group_file` / `upload_private_file`（与发消息组合成一个逻辑投递）。
+**PixivFlow 不做平台集成，只做 Messaging Gateway Client**：PixivFlow 维护 Artifact 格式、
+Media 上传、HTTP 调用、投递状态与重试；平台登录、协议、二维码配对、消息渲染由外部网关
+负责，**不 embed AstrBot / Hermes / OneBot 实现**。因此下表的 `onebot` / `discord` /
+`feishu` 原生 type **不在路线图上**——它们应由网关实现，PixivFlow 只增加 Connector 类型
+（`webhook`，以及必要时将来某个新的通用类型）。
+
+平台生态里成熟方案众多（OneBot 生态的 NapCat/Lagrange 等，AstrBot，Hermes Messaging
+Gateway，Apprise 等），它们才是平台适配的归属地；重复实现社区已解决的问题不符合本项目
+「小项目、低维护成本」的定位。
+
+### 5.1 通用网关 webhook（已实现，`src/delivery/WebhookDelivery.ts`）
+
+一次投递 = 一次 HTTP POST，body 是**统一消息文档**（`GatewayMessagePayload`）：
+`schemaVersion` / `idempotencyKey` / `deliveryTarget` / `work{id,type,title,sourceUrl,spoiler,tags}`
+/ `message{text,mediaTransport,parts[],media[],dropped[]}` / `delivery{idempotencyKey,slotId,targetId,executionId,triggerSource}`。
+
+- **媒体两种传输方式**：`reference`（默认）发 PixivFlow 主机上的**绝对路径**，要求网关与
+  PixivFlow 同机；`base64` 把字节内联进请求，供不同机的网关使用，并可用
+  `maxInlineBytes` 在超限时**直接拒绝发送**（宁失败不静默截断）。
+- **可选 HMAC 签名**：声明 `signingSecret` 后每个请求带 `X-Webhook-Timestamp` 与
+  `X-Webhook-Signature: sha256=HMAC-SHA256(secret, "<timestamp>.<rawBody>")`；声明 `token`
+  后带 `Authorization: Bearer …`。凭据支持 `${ENV_VAR}`，缺失时**抛错**而不是发空头。
+- **ACK 语义独立**：`parseWebhookAck()` 是纯函数，**刻意不复用** `parseDeliveryAck` 的
+  TelePost 信封语义（避免影响存量 multipart 行为）。规则：`pending/queued/submitted/
+  processing` 等「已记录但未发布」→ `retryable_failure`（同一幂等键继续重试）；
+  `failed/rejected/invalid/expired/blocked` 或 HTTP 409 的 duplicate 语义 → 终态；
+  **2xx 但 status 词不认识 → `retryable_failure`，绝不猜成功**；429/5xx → 可重试；
+  其余 4xx → `permanent_failure`（确定性拒绝，首轮 dead-letter，不烧重试预算）。
+- **传输失败必须 throw**，交给既有 `OutboxWorker` 分类、退避、dead-letter；webhook 自身
+  不做即时重试（`DeliveryProvider` 只做一次尝试）。
+- **无 preflight 契约**：`readinessProbe()` 恒为 ready；不做探测就不假装探测过。
 
 ---
 
@@ -318,9 +356,17 @@ Lagrange.Core / LuckyLilliaBot / go-cqhttp 全部只讲 v11）。OneBot 调用�
   `notificationUrl`），与历史单值行为一致。
 - 每个 `delivery.targets.<name>` 可选声明 `capabilities`（见 §4.2）：布尔能力覆盖 +
   `maxTextLength` / `maxCaptionLength` / `maxUploadBytes` / `maxAttachmentsPerMessage` /
-  `albumMin` / `albumMax` / `requiresTwoPhaseUpload`。缺省用平台类型内置档案；数值只
-  收紧不放宽。非法声明由两个校验入口同时拒绝
+  `albumMin` / `albumMax` / `requiresTwoPhaseUpload` / `minSendIntervalMs` /
+  `truncatePolicy` / `idempotencyMechanism`。缺省用平台类型内置档案；尺寸只收紧不放宽、
+  节流只加严。非法声明由两个校验入口同时拒绝
   （`CONFIG_VALIDATION_DELIVERY_CAPABILITY_INVALID`）。
+- `type: "webhook"` 的必填项只有 `url`（http/https，或 `${ENV}` 引用）；可选 `token` /
+  `signingSecret` / `headers` / `timeoutMs` / `mediaTransport` / `maxInlineBytes` /
+  `capabilities`。错误码
+  `CONFIG_VALIDATION_DELIVERY_WEBHOOK_URL_INVALID` /
+  `CONFIG_VALIDATION_DELIVERY_WEBHOOK_INLINE_LIMIT_INVALID` /
+  `CONFIG_VALIDATION_DELIVERY_WEBHOOK_TIMEOUT_INVALID`。该类型没有 `maxAttempts` /
+  `retryDelayMs`：**durable outbox 是它唯一的重试层**。
 - 凭据只能写 `"${ENV_VAR}"` 引用（沿用既有 `${VAR}` 插值），绝不硬编码、绝不进日志、
   绝不进 WebUI bundle。
 - 未配置任何 `delivery.targets` 时，PixivFlow 的行为与现在**逐字节一致**：投递是
@@ -331,13 +377,20 @@ Lagrange.Core / LuckyLilliaBot / go-cqhttp 全部只讲 v11）。OneBot 调用�
 ## 7. CLI 与 WebUI
 
 - CLI：`pixivflow outbox list|inspect|retry|cancel`（**已实现**）覆盖「投递状态 / 失败原因 /
-  重试」。`pixivflow target list` / `pixivflow target test <name>`（计划 P5）将呈报各
-  target 的配置与 health 状态。
-- WebUI：`GET /api/delivery/targets`、`GET /api/delivery/history`（计划 P5）是**只读投影**，
-  复用 WebUI basic auth；只输出 target 名、状态、时间、错误类别，**绝不输出 token /
-  chat_id / webhook URL / 文件路径 / SQL / stack**。
-
-WebUI 不得成为第二系统：不新建 DB、不新建状态机、不启动第二个 scheduler。
+  重试」。`pixivflow gateway list` / `pixivflow gateway test <name>`（计划 P4）将呈报各
+  gateway 的配置、连接状态与 health。
+- WebUI：`GET /api/gateways`（**已实现**）列出已配置的 gateway 及其只读投影：
+  `name` / `type` / 脱敏后的 `endpoint`（`redactUrl`）/ `connectionStatus`（
+  `unknown|unreachable|waiting|connected`，是网关侧配对真值的**缓存投影，允许 stale**）/
+  `capabilities`（`resolveTargetCapabilities`）/ `deliveryCounts`。
+  `GET /api/gateways/:name`（**已实现**）额外返回最近投递 `history[]`
+  （状态、attempts、`lastError`、时间）。
+- **配对（二维码）不在 WebUI 里做**：投影显式返回 `pairingSupported: false`。二维码由
+  外部网关自己生成，PixivFlow 不生成、不解析、不保存任何平台登录凭据
+  （`gateway_connections` 行只是**指针**：name / type / endpoint / status / metadata）。
+  将来的配对对话框只做「把网关返回的 payload 渲染出来 + 轮询状态」，仍不持久化凭据。
+- WebUI 只读：不新建 DB、不新建状态机、不启动第二个 scheduler；不输出 token /
+  chat_id / 凭据 / 文件路径 / SQL / stack（endpoint 一律经 `redactUrl`）。
 
 ---
 
@@ -362,14 +415,21 @@ WebUI 不得成为第二系统：不新建 DB、不新建状态机、不启动�
 | P0 | 代码审计 + 社区调研 + 跨仓库契约 | 已完成（[platform-contract.md](../platform-contract.md)） |
 | P1 | 多 target 扇出 + 全 target 去重 + Delivery Ledger/幂等/retry 的多 target 契约 | **已实现**（§3.1.1，`src/delivery/targetRoutes.ts`、`multiTargetFanout.test.ts`） |
 | P2 | 平台无关 Content/Media 模型 + adapter capability 声明 | **已实现**（§4.2/§4.3，`src/delivery/capabilities.ts`、`src/delivery/content.ts`、`deliveryCapabilities.test.ts`） |
-| P3 | OneBot v11 HTTP adapter + 通用 webhook adapter | 计划 |
-| P4 | Discord / 飞书 adapter（+ Telegram Bot API 路径与 TelePost 的边界确认） | 计划 |
-| P5 | CLI `target list/test` + WebUI Delivery Targets/History 只读投影 | 计划 |
-| P6 | 文档与示例补齐（含 `config/examples/` 多平台样例） | 计划 |
+| P3a | capability 生命周期字段（节流/截断/幂等）+ `gateway_connections` 表 + 只读 `/api/gateways*` | **已实现**（§4.2/§7，`GatewayConnectionRepository.ts`、`src/webui/routes/gateways.ts`、`gatewayConnections.test.ts`） |
+| P3b | 通用 Messaging Gateway `webhook` connector（统一消息 JSON + 可选 HMAC 签名） | **已实现**（§5.1，`src/delivery/WebhookDelivery.ts`、`webhookDelivery.test.ts`） |
+| P4 | CLI `gateway list/test` + WebUI 配对对话框（只渲染网关返回的 payload，不存凭据） | 计划 |
+| P5 | 文档与示例补齐（含 `config/examples/` 网关样例） | 计划 |
 
-补充：P1 与 P2 都**未新增任何数据库表或列**。扇出完全落在既有的
+补充：P1 / P2 / P3a / P3b 都**未新增 deliveries/outbox 的任何表或列**。扇出完全落在既有的
 `(delivery_target, work_type, pixiv_id)` 去重域与 `outbox.delivery_target` 上；Content 模型
 冻结进既有的 `outbox.payload_json`（`payload.content`），旧行缺字段时由 provider 重建。
+P3a 只**原位增补**了一张新表 `gateway_connections`（`CREATE TABLE IF NOT EXISTS`，无
+schemaVersion、无迁移账本、不删库重建）。
+
+**平台 adapter 的定位变更（重要）**：早期路线图曾计划原生 `onebot` / `discord` / `feishu`
+type，现已**取消**。PixivFlow 的定位是 **Messaging Gateway Client**（内容生产端），
+不是聊天平台集成层：只维护 Artifact 格式、Media 上传、HTTP 调用、投递状态与重试，
+平台生态交给社区（OneBot 实现、AstrBot、Hermes、自建服务）。见 §5.1 与 §8。
 
 ---
 

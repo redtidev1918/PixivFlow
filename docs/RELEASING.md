@@ -131,6 +131,7 @@ npm run check:version                 # 三方比对应为绿
 | Version Sync Check 红:npm 未发布 | 标签推了但发布失败——看 Publish 工作流日志定位,修复后删除该标签重新走流程 |
 | Version Sync Check 红:标签不一致 | v 标签指向的 package.json 版本不符,删除标签修正提交后重打 |
 | create-release.sh 发布到错误仓库 | 上文已知问题,手动指定 --repo redtidev1918/PixivFlow |
+| Version PR 上的检查一直不绿 | 该 PR 由 `github-actions[bot]` 创建,GitHub 扣住了它触发的运行等待人工批准(`action_required`,job 级 `if:` 拦不住),合并时那次运行记为失败。配置 `RELEASE_PLEASE_TOKEN`(细粒度 PAT,Contents / Pull requests / Issues 读写)后,下一个新建的 version PR 恢复正常;仓库里另有一条「批准 + 跳过」的兜底工作流 |
 
 
 ---

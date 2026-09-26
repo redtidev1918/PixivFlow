@@ -227,8 +227,11 @@ Email、Telegram、Discord、ntfy 等渠道；PixivFlow 不实现这些通知协
   Hermes / 自建服务），网关自己负责 QQ、微信、Telegram、Discord、飞书的登录与协议。
   PixivFlow **不实现任何平台协议、不生成配对二维码、不保存平台登录信息**。可选 HMAC
   签名与 `base64` 内联媒体。WebUI 的 `GET /api/gateways` 提供只读的网关与投递历史投影
-  （endpoint 脱敏，`pairingSupported: false`）。详见
-  [投递运行时架构 §5.1](docs/architecture/delivery-runtime.md) 与
+  （endpoint 脱敏，`pairingSupported: false`）。运维侧有两条只读/可控命令：
+  `pixivflow gateway list|status|test`（列出路由、看单条路由的账本 + outbox 状态、
+  探测端点是否应答——**端点应答不等于投递成功**）与 `pixivflow delivery status|retry`
+  （`retry` 默认只预览，需 `--yes`，且只重开仍欠投递的路由，已投递的绝不重发）。详见
+  [投递运行时架构 §5.1/§7](docs/architecture/delivery-runtime.md) 与
   [配置说明](docs/CONFIG.md)。
 
 配置 `readinessUrl` 后，worker 每次认领都会先检查依赖 `/ready`；非 2xx 只把 row

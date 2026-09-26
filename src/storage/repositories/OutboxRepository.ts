@@ -132,6 +132,36 @@ export class OutboxRepository extends BaseRepository {
   }
 
   /**
+   * The outbox rows behind a batch of delivery intents, keyed by delivery id.
+   *
+   * Read-only correlation for the operator CLI (`pixivflow delivery status`):
+   * the ledger says whether a route is owed a send, the outbox row says whether
+   * anything is actually going to attempt it. A delivery with no row at all is
+   * absent from the map (terminal and already reaped).
+   */
+  listForDeliveryIds(deliveryIds: string[]): Map<string, OutboxRow> {
+    const ids = [...new Set(deliveryIds.filter((id) => typeof id === 'string' && id))].slice(0, 500);
+    if (ids.length === 0) return new Map();
+    const placeholders = ids.map(() => '?').join(',');
+    const rows = this.db
+      .prepare(
+        `SELECT * FROM outbox
+          WHERE delivery_id IN (${placeholders})
+          ORDER BY created_at DESC`
+      )
+      .all(...ids) as any[];
+    const byDeliveryId = new Map<string, OutboxRow>();
+    for (const row of rows) {
+      const mapped = this.toRow(row);
+      // Newest row wins: a revived intent is the one that still matters.
+      if (mapped.deliveryId && !byDeliveryId.has(mapped.deliveryId)) {
+        byDeliveryId.set(mapped.deliveryId, mapped);
+      }
+    }
+    return byDeliveryId;
+  }
+
+  /**
    * True when this delivery intent still has a row the worker can act on
    * (pending / claimed / waiting to retry).
    *
@@ -308,7 +338,8 @@ export class OutboxRepository extends BaseRepository {
     return result.changes === 1;
   }
 
-  cancel(id: string, now: number = Date.now()): boolean {    const result = this.db.prepare(
+  cancel(id: string, now: number = Date.now()): boolean {
+    const result = this.db.prepare(
       `UPDATE outbox SET status='cancelled', lease_owner=NULL, lease_until=NULL,
               last_error='cancelled by operator', completed_at=@now, updated_at=@now
        WHERE id=@id AND status IN ('pending','retry_wait','dead')`

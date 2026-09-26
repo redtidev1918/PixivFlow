@@ -25,6 +25,16 @@ import type { ReadinessProbeResult } from './HttpMultipartDelivery';
  *  - it never puts a credential in the payload, and never logs one.
  */
 
+/**
+ * Outcome of a `gateway test` reachability probe.
+ *
+ * `reachable` means "the endpoint answered HTTP at all"; `status` is whatever it
+ * answered, including 404/405 (which still proves something is listening).
+ */
+export type WebhookReachability =
+  | { reachable: true; status: number }
+  | { reachable: false; error: string };
+
 /** How the message references its media. */
 export type WebhookMediaTransport = 'reference' | 'base64';
 
@@ -268,6 +278,44 @@ export class WebhookDelivery implements DeliveryProvider {
     return (await this.readinessProbe()).ready;
   }
 
+  /**
+   * Operator-facing reachability probe for `pixivflow gateway test`.
+   *
+   * This is NOT the delivery contract and NOT a health check the receiver must
+   * implement: a generic gateway declares no preflight contract, so a
+   * well-behaved gateway may answer 404/405/401 here and still accept
+   * deliveries. The probe therefore reports whether the endpoint ANSWERED at
+   * all (any HTTP status) and never claims the route is healthy because of it.
+   * It is a GET carrying a probe marker, so it can never be mistaken for a
+   * delivery attempt.
+   */
+  async probeReachability(timeoutMs = 5_000): Promise<WebhookReachability> {
+    const headers: Record<string, string> = {
+      Accept: 'application/json',
+      'X-PixivFlow-Probe': 'gateway-test',
+      ...(this.config.headers ?? {}),
+    };
+    if (this.config.token) headers.Authorization = `Bearer ${interpolate(this.config.token)}`;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), Math.max(1, Math.min(timeoutMs, this.config.timeoutMs ?? 30_000)));
+    timer.unref?.();
+    const options: Record<string, unknown> = { method: 'GET', headers, signal: controller.signal };
+    if (this.dispatcher) options.dispatcher = this.dispatcher;
+    try {
+      const response = await fetch(interpolate(this.config.url), options as Parameters<typeof fetch>[1]);
+      // Drain (and bound) the body so the socket can be reused/closed.
+      await response.text().catch(() => '');
+      return { reachable: true, status: response.status };
+    } catch (error) {
+      return {
+        reachable: false,
+        error: redactError(error),
+      };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   /** A generic webhook declares no preflight contract, so it is always "ready". */
   async readinessProbe(): Promise<ReadinessProbeResult> {
     return WEBHOOK_NOT_PROBED;
@@ -373,7 +421,7 @@ async function readJson(response: Response): Promise<unknown> {
 }
 
 /** `${ENV_VAR}` interpolation; a missing variable fails loudly, never silently. */
-function interpolate(value: string): string {
+export function interpolate(value: string): string {
   return value.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (_match, name: string) => {
     const resolved = process.env[name];
     if (resolved === undefined) {

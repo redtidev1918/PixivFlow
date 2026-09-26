@@ -1,10 +1,14 @@
 import { Request, Response } from 'express';
 import { Database } from '../../../storage/Database';
-import type { GatewayConnectionRow, GatewayConnectionStatus } from '../../../storage/repositories/GatewayConnectionRepository';
+import type { GatewayConnectionRow } from '../../../storage/repositories/GatewayConnectionRepository';
 import type { DeliveryRow } from '../../../storage/repositories/DeliveryRepository';
 import { loadConfig, getConfigPath } from '../../../config';
 import { resolveTargetCapabilities } from '../../../delivery/capabilities';
-import { targetDeliveryNames, primaryDeliveryName } from '../../../delivery/targetRoutes';
+import {
+  configuredGateways,
+  connectionStatusLabel,
+  redactedEndpoint,
+} from '../../../delivery/gatewayRoutes';
 import { redactUrl } from '../../../utils/redact';
 import { logger } from '../../../logger';
 import { ErrorCode } from '../../utils/error-codes';
@@ -29,7 +33,7 @@ export async function listGateways(_req: Request, res: Response): Promise<void> 
   try {
     const configPath = getConfigPath();
     const config = loadConfig(configPath);
-    const routes = configuredRoutes(config);
+    const routes = configuredGateways(config);
     let connections: GatewayConnectionRow[] = [];
     let deliveriesByRoute: Record<string, Record<string, number>> = {};
     if (config.storage?.databasePath) {
@@ -49,7 +53,10 @@ export async function listGateways(_req: Request, res: Response): Promise<void> 
       return {
         name: route.name,
         type: route.type,
-        endpoint: redactUrl(route.endpoint),
+        endpoint: redactedEndpoint(route.target),
+        // Declared in config; true while at least one enabled download target
+        // still fans out to this route.
+        enabled: route.enabled,
         connectionStatus: stored?.status ?? 'unknown',
         connectionUpdatedAt: stored?.updatedAt ?? null,
         // Declared in config; the same resolver the delivery engine uses.
@@ -106,7 +113,7 @@ export async function getGateway(req: Request, res: Response): Promise<void> {
   try {
     const configPath = getConfigPath();
     const config = loadConfig(configPath);
-    const route = configuredRoutes(config).find((r) => r.name === name);
+    const route = configuredGateways(config).find((r) => r.name === name);
     if (!route) {
       res.status(404).json({
         errorCode: ErrorCode.GATEWAY_NOT_FOUND,
@@ -132,7 +139,7 @@ export async function getGateway(req: Request, res: Response): Promise<void> {
         schemaVersion: 1,
         name: route.name,
         type: route.type,
-        endpoint: redactUrl(route.endpoint),
+        endpoint: redactedEndpoint(route.target),
         connectionStatus: connection?.status ?? 'unknown',
         connectionUpdatedAt: connection?.updatedAt ?? null,
         capabilities: resolveTargetCapabilities(route.target),
@@ -162,52 +169,8 @@ export async function getGateway(req: Request, res: Response): Promise<void> {
   }
 }
 
-interface ConfiguredRoute {
-  name: string;
-  type: string;
-  endpoint: string | null;
-  target: import('../../../config').DeliveryTargetConfig;
-}
-
 /**
- * Every delivery route referenced by a download target, plus the legacy
- * single-route projection. `primaryDeliveryName` is used for the legacy field
- * so this listing can never disagree with the operator-facing notification
- * route about which name a target means.
+ * Re-exported so existing callers keep one import site; the implementation is
+ * shared with the CLI in `delivery/gatewayRoutes`.
  */
-function configuredRoutes(config: ReturnType<typeof loadConfig>): ConfiguredRoute[] {
-  const registry = config.delivery?.targets ?? {};
-  const names = new Set<string>();
-  for (const target of config.targets ?? []) {
-    for (const route of targetDeliveryNames(target)) names.add(route);
-    const primary = primaryDeliveryName(target);
-    if (primary) names.add(primary);
-  }
-  const routes: ConfiguredRoute[] = [];
-  for (const name of [...names].sort()) {
-    const target = registry[name];
-    if (!target) continue;
-    routes.push({ name, type: target.type, endpoint: endpointOf(target), target });
-  }
-  return routes;
-}
-
-function endpointOf(target: import('../../../config').DeliveryTargetConfig): string | null {
-  const candidate = (target as { url?: string; endpoint?: string }).url
-    ?? (target as { endpoint?: string }).endpoint;
-  return typeof candidate === 'string' ? candidate : null;
-}
-
-/** Re-exported so a CLI/other consumer can label a status consistently. */
-export function connectionStatusLabel(status: GatewayConnectionStatus): string {
-  switch (status) {
-    case 'connected':
-      return 'connected';
-    case 'waiting':
-      return 'waiting for pairing';
-    case 'unreachable':
-      return 'unreachable';
-    default:
-      return 'unknown';
-  }
-}
+export { connectionStatusLabel };

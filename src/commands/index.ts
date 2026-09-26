@@ -31,6 +31,8 @@ import { VersionCommand } from './VersionCommand';
 import { TagsCommand } from './TagsCommand';
 import { TopicCommand } from './TopicCommand';
 import { OutboxCommand } from './OutboxCommand';
+import { GatewayCommand } from './GatewayCommand';
+import { DeliveryCommand } from './DeliveryCommand';
 import { RunsCommand } from './RunsCommand';
 
 /**
@@ -65,6 +67,8 @@ export function registerAllCommands(registry: CommandRegistry): void {
   registry.register(new TagsCommand());
   registry.register(new TopicCommand());
   registry.register(new OutboxCommand());
+  registry.register(new GatewayCommand());
+  registry.register(new DeliveryCommand());
   registry.register(new RunsCommand());
 }
 
@@ -100,5 +104,7 @@ export {
   TagsCommand,
   TopicCommand,
   OutboxCommand,
+  GatewayCommand,
+  DeliveryCommand,
   RunsCommand,
 };

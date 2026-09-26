@@ -298,6 +298,23 @@ album 2–10 条）。投递引擎按能力而不是平台名决定投递形态�
 唯一的重试层。详见
 [投递运行时架构 §5.1](architecture/delivery-runtime.md)。
 
+运维命令（不改配置，只读账本 + 探测）：
+
+```bash
+pixivflow gateway list                      # 每条路由：type / 脱敏 endpoint / enabled / 连接状态 / 投递计数
+pixivflow gateway status qq-main --limit 20 # 该路由最近投递意图 + 对应 outbox 状态
+pixivflow gateway test qq-main              # 探测端点是否应答并记录观测（应答 ≠ 投递成功）
+pixivflow delivery status --target qq-main  # 账本视图
+pixivflow delivery retry --target qq-main --dry-run   # 默认就是预览
+pixivflow delivery retry --target qq-main --yes       # 只重开仍欠投递的路由
+```
+
+`gateway test` 对 `webhook` 只证明「端点在应答」（任何 HTTP 状态码，含 404/405），对
+`httpMultipart` 才按声明的 `readinessUrl` 判 2xx，对 `telegram` 返回 `unknown`
+（媒体从不离开 Telegram）。写入 `gateway_connections` 的 endpoint 已经 `redactUrl`，
+凭据不落库也不打印。`delivery retry` 永不动已 delivered/duplicate 的行，并在对应 outbox
+行仍可执行时拒绝人工重开（worker 会自己重试，人工重开会重复投递）。
+
 `cache` 模式使用通用命名交付目标。当前内置 provider 是流式
 `httpMultipart`，下面的地址和字段仅为示例：
 

@@ -48,11 +48,27 @@ type PostOutcome =
   | { ok: true; messages: PostedMessage[]; mediaGroupId?: string }
   | { ok: false; ambiguous: boolean; error: string };
 
+/**
+ * One-shot per process. The whole provider is deprecated (see
+ * `TelegramReviewDeliveryConfig`): an operator should learn that from the log,
+ * not from a future release that removes the type.
+ */
+let deprecationWarned = false;
+
 export class TelegramReviewDelivery implements DeliveryProvider {
   constructor(
     private readonly config: TelegramReviewDeliveryConfig,
     private readonly fetchImpl: typeof fetch = defaultFetch
-  ) {}
+  ) {
+    if (!deprecationWarned) {
+      deprecationWarned = true;
+      logger.warn(
+        '[TelegramReview] delivery type "telegram" is deprecated: PixivFlow must not own a Telegram bot token. ' +
+          'Migrate this target to type "httpMultipart" -> TelePost Submission API.',
+        { botId: config.botId }
+      );
+    }
+  }
 
   /**
    * Deterministic review id: the same work in the same target can only ever have

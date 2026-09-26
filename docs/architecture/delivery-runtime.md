@@ -92,6 +92,10 @@ interface Artifact    {
   N 个平台就是 N 条独立意图。
 - `outbox(kind, idempotency_key)` 同样唯一，`kind='delivery'` 与 `kind='notification'`
   各自独立成行、独立泵送、互不阻塞。
+- 本地账本只解决「PixivFlow 不重复产生意图」；**接收端能否收敛，取决于投稿请求里带没带
+  `idempotency_key`**。所以 `httpMultipart` 在 `config.fields` 没有声明该字段时会自动补上
+  `idempotency_key: "{{idempotencyKey}}"`（`autoIdempotencyKey: false` 可关闭）：缺字段的旧
+  配置在 ACK 丢失后的重投会被接收端当成新投稿。
 
 ### 3.1.1 扇出（多平台投递，已实现）
 
@@ -274,8 +278,12 @@ type ContentPart = ContentTextPart | ContentImagePart | ContentFilePart
 ## 5. 平台实现策略
 
 平台类型 `delivery.targets.<name>.type` 的现状：`httpMultipart`（任意 HTTP 端点，已实现）
-与 `telegram`（Telegram 审核链，已实现）。后续平台以**新增 type** 的方式接入，不新增
+与 `telegram`（Telegram 审核链，**已废弃**）。后续平台以**新增 type** 的方式接入，不新增
 第二套投递 HTTP API（扩展 `DeliveryDispatcher` 的 switch 与两侧配置校验即可）。
+
+`telegram` 已废弃：它要求 PixivFlow 自己持有 Telegram Bot Token，与「TelePost 是唯一发布
+后端」的方向冲突，未来版本会移除。配置仍可解析（首次构造时打一条一次性 warning），但不要
+基于它扩展新能力；迁移方向是退化成 `httpMultipart` → TelePost Submission API。
 
 | 平台 | 计划 type | 接入方式 |
 | --- | --- | --- |
@@ -365,7 +373,9 @@ Gateway，Apprise 等），它们才是平台适配的归属地；重复实现�
   `albumMin` / `albumMax` / `requiresTwoPhaseUpload` / `minSendIntervalMs` /
   `truncatePolicy` / `idempotencyMechanism`。缺省用平台类型内置档案；尺寸只收紧不放宽、
   节流只加严。非法声明由两个校验入口同时拒绝
-  （`CONFIG_VALIDATION_DELIVERY_CAPABILITY_INVALID`）。
+  （`CONFIG_VALIDATION_DELIVERY_CAPABILITY_INVALID`）；**字段名不在上表里的键不是能力**，
+  会被忽略并由两个入口给出 warning（`CONFIG_VALIDATION_DELIVERY_CAPABILITY_UNKNOWN`，
+  例如 `supportsAlbum` 提示 `Did you mean "album"?`）——「看起来生效、实际被忽略」比报错更难查。
 - `type: "webhook"` 的必填项只有 `url`（http/https，或 `${ENV}` 引用）；可选 `token` /
   `signingSecret` / `headers` / `timeoutMs` / `mediaTransport` / `maxInlineBytes` /
   `capabilities`。错误码
@@ -469,6 +479,7 @@ Gateway，Apprise 等），它们才是平台适配的归属地；重复实现�
 | P5 | 文档与示例补齐（`config/examples/` 网关样例、[GATEWAY.md](../GATEWAY.md) 对接手册含 QQ/OneBot 网关侧模式与扫码边界） | 已完成 |
 | P6 | **网关契约固化**：[GATEWAY_CONTRACT.md](../GATEWAY_CONTRACT.md)（规范）+ `src/delivery/gatewayContract.ts`（可执行形式）+ 零依赖参考实现 `examples/gateway/`，三者由 `gateway-contract.test.ts` 逐行钉住 | 已完成 |
 | P3c | 原生 OneBot v11 Connector | **明确不实现**（与「平台生态交给网关」冲突，见下方决定） |
+| P7 | 一致性与可靠性收口：投稿必带 `idempotency_key`（缺省自动补齐）+ 能力字段名以 `TargetCapabilities` 为唯一来源（未知键 warning）+ `success` 明确不参与判定（判定只看 ACK）+ `type: "telegram"` 标记废弃 | **已实现**（`src/delivery/HttpMultipartDelivery.ts`、`src/delivery/capabilities.ts`、`idempotency-key-field.test.ts`） |
 
 补充：P1 / P2 / P3a / P3b 都**未新增 deliveries/outbox 的任何表或列**。扇出完全落在既有的
 `(delivery_target, work_type, pixiv_id)` 去重域与 `outbox.delivery_target` 上；Content 模型

@@ -262,6 +262,9 @@ X-Webhook-Signature: sha256=<HMAC-SHA256(secret, "<timestamp>.<raw body>") 的�
 - 节奏类限额只能**放宽/更保守**（`Math.max`）；
 - `album` 是**平铺**字段：`{"album": true, "albumMin": 2, "albumMax": 9}`，
   不是嵌套对象。
+- 没列出的键**不是能力**：`src/delivery/capabilities.ts` 的 `TargetCapabilities` 是唯一
+  字段来源，未知键会被忽略并在两个配置校验入口给出 warning（例如 `supportsAlbum` 提示
+  `Did you mean "album"?`）。写错的键不会被静默当成有效声明。
 
 ## 9. 错误码（PixivFlow 侧）
 

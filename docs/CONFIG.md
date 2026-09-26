@@ -225,6 +225,10 @@ album 2–10 条）。投递引擎按能力而不是平台名决定投递形态�
 在平台 API 处失败），PixivFlow 会保留平台档案里的更小值。节流相反——**只能加严**
 （`minSendIntervalMs` 取更大值，慢者胜），因为把节流放宽等于冒封号风险。
 
+`type: "telegram"`（下例）**已废弃**：它要求 PixivFlow 自己持有 Telegram Bot Token，
+与「TelePost 是唯一发布后端」的长期架构冲突，未来版本会移除。新配置请用
+`type: "httpMultipart"` 投递到 TelePost Submission API；旧配置继续可用，但不要再基于它扩展。
+
 ```json
 {
   "delivery": {
@@ -244,6 +248,11 @@ album 2–10 条）。投递引擎按能力而不是平台名决定投递形态�
 }
 ```
 
+字段来源就是 `src/delivery/capabilities.ts` 的 `TargetCapabilities`（平台档案
+`PLATFORM_CAPABILITIES` 在 `services` 侧同样以数据形式给出）；写错字段名（例如相册用
+`supportsAlbum` 而不是 `album`）不会被当成能力，只会在校验时给出 warning —— 校验器会
+提示 `Did you mean "album"?`，因为「看起来生效、实际被忽略」比直接报错更难查。
+
 非法声明（非布尔、负数、非整数、`albumMin > albumMax`）在两个配置校验入口
 （loader 与 unified validator）都会被拒绝，错误码
 `CONFIG_VALIDATION_DELIVERY_CAPABILITY_INVALID`。作品内容如何按能力降级
@@ -260,7 +269,7 @@ album 2–10 条）。投递引擎按能力而不是平台名决定投递形态�
 | --- | --- |
 | `files` | TelePost 的必填文件字段（`fileField` 默认 `files`）。cache 模式下原图与 preview 一一对应发送 |
 | `tags` | TelePost 的必填字段。写 `"Pixiv,{{topicTag}},{{xRestrictTag}},{{workTags}}"` 这类模板即可 |
-| `idempotency_key` | **建议必带**，值写 `{{idempotencyKey}}`。它是 ACK 超时后重投的收敛依据（见下） |
+| `idempotency_key` | **必带**，值写 `{{idempotencyKey}}`。它是 ACK 超时后重投的收敛依据（见下）。目标没声明这个字段时会**自动补上**（`autoIdempotencyKey: false` 可关闭）：漏掉它正是同一个作品被投两次的常见原因 |
 | `link` | 可选，指向原作品的来源链接；TelePost 要求 `http(s)://` 开头 |
 | `note` | 可选简介。**署名应写在这里**，例如 `"作者：{{author}}\nPixiv ID: {{pixivId}}"`：`{{author}}` 是 Pixiv 作者名，`illustration` 与 `novel` 都有；Pixiv 响应没带作者时渲染为空串，不会编造 `Unknown` |
 | 来源字段 | `target_id` / `source_label` / `source_ref` / `scheduled_at` 均可选：`target_id` 供人工「重抓/替换」定向回本目标，其余三个只用于审核卡展示与排查 |
@@ -382,7 +391,6 @@ pixivflow delivery retry --target qq-main --yes       # 只重开仍欠投递的
         "previewFileField": "previews",
         "fields": { "title": "{{title}}", "source_id": "{{pixivId}}" },
         "arrayFormat": "comma",
-        "success": { "statuses": [201], "jsonPath": "ok", "equals": true },
         "maxAttempts": 3,
         "retryDelayMs": 2000
       }
@@ -443,7 +451,6 @@ telepress-server --host 0.0.0.0 --port 8000
           "link": "{{link}}",
           "spoiler": "{{spoiler}}"
         },
-        "success": { "statuses": [200], "jsonPath": "ok", "equals": true },
         "maxAttempts": 3,
         "retryDelayMs": 2000
       }
@@ -455,8 +462,13 @@ telepress-server --host 0.0.0.0 --port 8000
 `title` 作为相册页标题；`tags` 会把作品 Pixiv 标签渲染成 `#标签` 页脚；
 `link` 生成指向原作品的来源链接；R-18 作品（`{{spoiler}}` 为 `true`）会在
 首页附加成人内容提示。telepress 对单张图片自动压缩到 5 MiB 以内、按 100 张
-一页自动分页，返回 `{"ok": true, "url": "...", "files": N}`，因此
-`success` 判定 `ok == true`。注意 telepress 相册目标只接受图片文件；
+一页自动分页，返回 `{"ok": true, "url": "...", "files": N}`。
+
+> **`success` 不参与判定。** 它是历史遗留键，只为兼容旧配置而保留解析：投递结论完全
+> 由业务 ACK 决定（`ack` + `data.business_status`，见
+> [投递运行时架构 §5](architecture/delivery-runtime.md)）。上面的示例里已经删掉了它。
+
+注意 telepress 相册目标只接受图片文件；
 小说（novel）不投这个相册目标，走下面的富媒体小说链路。
 
 #### 富媒体小说（Novel）→ TelePress `/publish/rich-novel`

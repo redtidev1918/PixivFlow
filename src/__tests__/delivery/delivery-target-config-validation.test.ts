@@ -8,6 +8,7 @@
 import { StandaloneConfig, DeliveryTargetConfig } from '../../config/types';
 import { validateConfig } from '../../config/validation';
 import { configValidator } from '../../utils/config-validator-unified';
+import { logger } from '../../logger';
 
 const validTelegramTarget: DeliveryTargetConfig = {
   type: 'telegram',
@@ -253,6 +254,51 @@ describe('webhook delivery target validation', () => {
     const badTimeout = { ...validWebhookTarget, timeoutMs: 0 } as unknown as DeliveryTargetConfig;
     expect(loaderErrors(badTimeout).join()).toContain('timeoutMs');
     expect(unifiedErrors(badTimeout).join()).toContain('timeoutMs');
+  });
+
+  it('reports a capability key that is not a capability, in both validators', () => {
+    // `supportsAlbum` is the misspelling this exists for: it used to be accepted
+    // and ignored, so the config looked like it enabled albums while the real
+    // `album` bound stayed at its default.
+    const misspelled = {
+      ...validTelegramTarget,
+      capabilities: { supportsAlbum: true },
+    } as unknown as DeliveryTargetConfig;
+
+    // 1. The loader's validator: a warning, never an error (a wrong key cannot
+    //    weaken a bound), surfaced through the log.
+    const warn = jest.spyOn(logger, 'warn').mockImplementation(() => {});
+    try {
+      expect(loaderErrors(misspelled)).toEqual([]);
+      const logged = warn.mock.calls
+        .flatMap(([, meta]) => (meta as { warnings?: string[] } | undefined)?.warnings ?? [])
+        .join('\n');
+      expect(logged).toContain('delivery.targets.bot1-review.capabilities.supportsAlbum');
+      expect(logged).toContain('Did you mean "album"?');
+    } finally {
+      warn.mockRestore();
+    }
+
+    // 2. The unified validator: the same warning, in its own structured shape.
+    const warnings = configValidator
+      .validate(buildConfig(misspelled))
+      .warnings.filter((warning) => (warning.field ?? '').includes('delivery.targets.'));
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0].code).toBe('CONFIG_VALIDATION_DELIVERY_CAPABILITY_UNKNOWN');
+    expect(warnings[0].field).toBe('delivery.targets.bot1-review.capabilities.supportsAlbum');
+    expect(warnings[0].message).toContain('Did you mean "album"?');
+
+    // A correctly spelled declaration warns in neither validator.
+    const correct = {
+      ...validTelegramTarget,
+      capabilities: { album: true, albumMin: 2, albumMax: 9 },
+    } as unknown as DeliveryTargetConfig;
+    expect(loaderErrors(correct)).toEqual([]);
+    expect(
+      configValidator
+        .validate(buildConfig(correct))
+        .warnings.filter((warning) => (warning.field ?? '').includes('capabilities'))
+    ).toEqual([]);
   });
 
   it('still validates capability declarations on a webhook target', () => {

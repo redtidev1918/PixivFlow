@@ -6,7 +6,10 @@
 import { StandaloneConfig, TargetConfig } from '../config';
 import { collectTelegramDeliveryErrors } from '../config/validation';
 import { targetDeliveryNames } from '../delivery/targetRoutes';
-import { collectCapabilityOverrideErrors } from '../delivery/capabilities';
+import {
+  collectCapabilityOverrideErrors,
+  collectCapabilityOverrideWarnings,
+} from '../delivery/capabilities';
 import cron from 'node-cron';
 import { isPlaceholderToken, getBestAvailableToken } from './token-manager';
 import { ConfigError } from './errors';
@@ -315,6 +318,13 @@ export class ConfigValidator {
           code: 'CONFIG_VALIDATION_DELIVERY_CAPABILITY_INVALID',
           field: problem.field,
           message: `Delivery target '${name}': ${problem.message}`,
+        });
+      }
+      for (const warning of collectCapabilityOverrideWarnings(delivery.capabilities, prefix)) {
+        warnings.push({
+          code: 'CONFIG_VALIDATION_DELIVERY_CAPABILITY_UNKNOWN',
+          field: warning.field,
+          message: `Delivery target '${name}': ${warning.message}`,
         });
       }
       if (delivery.type === 'telegram') {

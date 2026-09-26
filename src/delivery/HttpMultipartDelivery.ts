@@ -58,6 +58,8 @@ export function toTelepostMediaAssetsWire(assets: MediaAsset[]): unknown[] {
 /** Generic streaming HTTP multipart delivery provider. */
 export class HttpMultipartDelivery implements DeliveryProvider {
   private readonly dispatcher?: unknown;
+  /** Logged once per provider instance, not once per attempt. */
+  private autoIdempotencyKeyNoted = false;
 
   constructor(
     private readonly config: HttpMultipartDeliveryConfig,
@@ -193,7 +195,10 @@ export class HttpMultipartDelivery implements DeliveryProvider {
 
   private async attempt(request: DeliveryRequest): Promise<DeliveryResult> {
     const fields = this.resolveFields(
-      { ...(this.config.fields ?? {}), ...(request.fields ?? {}) },
+      this.addIdempotencyKeyIfMissing({
+        ...(this.config.fields ?? {}),
+        ...(request.fields ?? {}),
+      }),
       request
     );
     if (request.mediaAssets?.length) {
@@ -248,30 +253,31 @@ export class HttpMultipartDelivery implements DeliveryProvider {
     return { status: response.status, body };
   }
 
-  private assertSuccess(response: Response, body: unknown): void {
-    const expectedStatuses = this.config.success?.statuses;
-    const statusOk = expectedStatuses
-      ? expectedStatuses.includes(response.status)
-      : response.ok;
-    if (!statusOk) {
-      throw new Error(`delivery endpoint returned HTTP ${response.status}: ${this.preview(body)}`);
+  /**
+   * Submission-side dedup net: every submission must carry `idempotency_key`.
+   *
+   * Without it, an ACK-loss retry reaches the receiver as a brand-new post —
+   * the receiving service has nothing to match the resend against. Hand-written
+   * configs (and configs written before the requirement) omit the field, which
+   * is exactly how one work ends up submitted twice, so it is added when the
+   * resolved fields do not declare it.
+   *
+   * Only the FORM FIELD NAME is inspected: a template cannot rename a field, and
+   * both spellings seen in the wild count as declared. A receiver that rejects
+   * unknown fields can opt out with `autoIdempotencyKey: false`.
+   */
+  private addIdempotencyKeyIfMissing(
+    fields: Record<string, DeliveryFieldValue>
+  ): Record<string, DeliveryFieldValue> {
+    if (this.config.autoIdempotencyKey === false) return fields;
+    if ('idempotency_key' in fields || 'idempotencyKey' in fields) return fields;
+    if (!this.autoIdempotencyKeyNoted) {
+      this.autoIdempotencyKeyNoted = true;
+      logger.info('HTTP multipart delivery: idempotency_key not configured, adding it', {
+        url: redactUrl(this.config.url),
+      });
     }
-
-    const jsonPath = this.config.success?.jsonPath;
-    if (jsonPath) {
-      const actual = jsonPath.split('.').reduce<unknown>((value, key) => {
-        if (!value || typeof value !== 'object') return undefined;
-        return (value as Record<string, unknown>)[key];
-      }, body);
-      const expected = Object.prototype.hasOwnProperty.call(this.config.success, 'equals')
-        ? this.config.success?.equals
-        : true;
-      if (!Object.is(actual, expected)) {
-        throw new Error(
-          `delivery response ${jsonPath} did not equal ${JSON.stringify(expected)}: ${this.preview(body)}`
-        );
-      }
-    }
+    return { ...fields, idempotency_key: '{{idempotencyKey}}' };
   }
 
   private resolveHeaders(headers: Record<string, string>): Record<string, string> {
@@ -384,11 +390,6 @@ export class HttpMultipartDelivery implements DeliveryProvider {
 
   private escapeDispositionValue(value: string): string {
     return value.replace(/[\r\n]/g, ' ').replace(/"/g, '%22');
-  }
-
-  private preview(body: unknown): string {
-    const value = typeof body === 'string' ? body : JSON.stringify(body);
-    return value.slice(0, 500);
   }
 }
 

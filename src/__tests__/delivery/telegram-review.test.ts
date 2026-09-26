@@ -11,6 +11,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
 import { TelegramReviewDelivery } from '../../delivery/TelegramReviewDelivery';
+import { logger } from '../../logger';
 import type { DeliveryRequest } from '../../delivery/types';
 import type { TelegramReviewDeliveryConfig } from '../../config';
 
@@ -29,6 +30,27 @@ beforeAll(() => {
 
 afterAll(() => {
   rmSync(dir, { recursive: true, force: true });
+});
+
+it('warns about the deprecated type at most once per process', () => {
+  // The provider is deprecated (PixivFlow must not own a Telegram bot token), but
+  // an operator must hear that once — not on every provider construction.
+  const warn = jest.spyOn(logger, 'warn').mockImplementation(() => {});
+  try {
+    const deprecationCount = (): number =>
+      warn.mock.calls.filter(([message]) =>
+        String(message).includes('delivery type "telegram" is deprecated')
+      ).length;
+    new TelegramReviewDelivery(config());
+    new TelegramReviewDelivery(config());
+    const afterFirst = deprecationCount();
+    new TelegramReviewDelivery(config());
+    new TelegramReviewDelivery(config());
+    expect(deprecationCount()).toBe(afterFirst);
+    expect(afterFirst).toBeLessThanOrEqual(1);
+  } finally {
+    warn.mockRestore();
+  }
 });
 
 function config(overrides: Partial<TelegramReviewDeliveryConfig> = {}): TelegramReviewDeliveryConfig {

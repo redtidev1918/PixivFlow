@@ -103,7 +103,7 @@
         "mediaTransport": "reference",
         "capabilities": {
           "maxTextLength": 2000,
-          "supportsAlbum": true,
+          "album": true,
           "albumMin": 2,
           "albumMax": 9,
           "minSendIntervalMs": 500,

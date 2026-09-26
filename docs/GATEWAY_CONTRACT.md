@@ -21,6 +21,32 @@ PixivFlow ──GET  /pairing──▶ 外部网关      （可选：扫码/登�
 平台协议、登录态、凭据、二维码生成全部在网关里。PixivFlow 只负责「有一份作品要送出去」，
 以及「这件事到底成没成」的账本。
 
+### 职责边界（这条边界就是本契约存在的理由）
+
+| 层 | 拥有 |
+| --- | --- |
+| **PixivFlow** | 内容获取（Pixiv 认证、候选、下载）；Artifact / Content 模型；投递运行时（投递账本、outbox、重试与退避、死信、幂等键）；`GET /health` / `GET /pairing` 的只读投影 |
+| **网关** | 平台连接与登录态；凭据与 session；平台协议语义（消息形状、媒体上传方式、频控）；把收到的消息真正变成平台上的消息；用自己的持久化按 `idempotencyKey` 去重 |
+| **平台** | 自己的消息 id、审核/发布状态、账号体系 |
+
+**判据只有一句**：如果某件事需要平台凭据或平台 session，它就不属于 PixivFlow。
+
+三个方向上的推论，都是**刻意**的：
+
+- **走不过去**：不从 PixivFlow 内部接平台（不引入 Telegram Adapter、不为某个平台在投递链路里
+  长分支）。每加一个平台就在 PixivFlow 里加一条分支，等于把平台协议变成 PixivFlow 的第二个
+  维护面。
+- **不被绕过**：不做「PixivFlow → 某个中间件 → 平台」的专用桥。中间件按本文档接入就是网关；
+  按私有协议接入就是第二条契约，那第二条契约没人维护。
+- **不合并**：网关是独立进程，通过 HTTP 对话。不与 PixivFlow 共享代码、不加载插件、不读同一个
+  数据库。平台数量增长只发生在网关侧。
+
+它**不改变**已经存在的发布后端链路：PixivFlow 投递给「负责审核/发布的后端」（如 TelePost）
+走的是 `type: "httpMultipart"` 的投递路由，那是**发布后端**，不是这里的消息网关。
+两条链路的差别不在谁更「高级」，而在边界落在哪一层：发布后端拥有「发布」这个业务动作；
+消息网关拥有「把消息送进某个渠道」这个传输动作。两条链路都遵守同一条硬约束 ——
+**可重试的投递目标必须支持幂等键**（`idempotency_key` 必须带上 `{{idempotencyKey}}`）。
+
 ## 1. 端点
 
 | 端点 | 方法 | 必需 | PixivFlow 配置字段 |
@@ -307,3 +333,16 @@ WebUI 暴露的、与网关相关的错误码：
 - [delivery-runtime.md](architecture/delivery-runtime.md) —— PixivFlow 侧的投递运行时
 - [API.md](API.md) —— 只读投影端点（`/api/gateways`、`/api/deliveries`）
 - [CONFIG.md](CONFIG.md) —— `delivery.targets` 全部字段
+
+## 这份契约是怎么被证明的
+
+三层各证一层，缺一层就有一种失败查不出来：
+
+| 测试 | 证明 |
+| --- | --- |
+| `src/__tests__/delivery/gateway-contract.test.ts` | 本文档的表格与 `src/delivery/gatewayContract.ts` 的词汇表逐行一致；参考实现 `server.mjs` 的应答形状符合文档 |
+| `src/__tests__/delivery/gateway-delivery-e2e.test.ts` | 投递运行时（outbox → worker → 账本）在真实 HTTP 上的语义：ACK 分类、传输失败保持欠账、重试用同一个键 |
+| `src/__tests__/delivery/gateway-reference-e2e.test.ts` | **两半合起来**：真实运行时驱动真实参考网关（独立进程），一次投递落成 `delivered` 并带回网关签发的 `example-<uuid>`，停掉网关时保持欠账、重启后带同一个 `idempotencyKey` 收敛，且一条坏路由不会拖累另一条 |
+
+第三层是「外部系统能否作为网关接入」这个产品主张唯一的直接证据：前两层各自的替身都无法反驳自己。
+

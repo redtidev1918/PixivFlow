@@ -73,6 +73,18 @@ pixivflow delivery status                     # 账本里到底成没成
 
 `gateway test` 只证明可达性与鉴权，**绝不等于投递成功**。
 
+这三层都有自动化的对应物，其中最后一层是本文件最重要的用法
+—— 它把 PixivFlow 的投递运行时和这个参考实现**同时**跑起来：
+
+```bash
+npx jest src/__tests__/delivery/gateway-reference-e2e.test.ts
+```
+
+它启动 `server.mjs` 作为独立进程，用真实的 `DeliveryService` → outbox → `OutboxWorker`
+投递，验证：落成 `delivered` 并带回本网关签发的 `example-<uuid>`；网关停掉时该投递保持欠账、
+重启后带同一个 `idempotencyKey` 收敛；一条坏路由的失败不会影响另一条。写自己的网关时，
+让这个文件继续通过就是「你接对了」的最强证据。
+
 ## 它有意不做什么
 
 - 不保存任何东西到磁盘（去重表在内存里，进程重启即丢）—— 生产网关必须持久化，

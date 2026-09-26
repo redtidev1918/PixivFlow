@@ -22,8 +22,7 @@
         "media": {
           "kind": "image",
           "path": "/data/artifacts/12345678_p0.jpg",
-          "mime": "image/jpeg",
-          "size": 1234567
+          "mime": "image/jpeg"
         }
       }
     ],
@@ -31,8 +30,7 @@
       {
         "kind": "image",
         "path": "/data/artifacts/12345678_p0.jpg",
-        "mime": "image/jpeg",
-        "size": 1234567
+        "mime": "image/jpeg"
       }
     ],
     "dropped": []

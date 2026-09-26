@@ -17,54 +17,6 @@
 
 ```json
 {
-  "delivery": {
-    "targets": {
-      "my-gateway": {
-        "type": "webhook",
-        "url": "https://gateway.example/pixivflow/deliver",
-        "token": "${MY_GATEWAY_TOKEN}",
-        "signingSecret": "${MY_GATEWAY_SIGNING_SECRET}",
-        "timeoutMs": 30000,
-        "mediaTransport": "reference",
-        "capabilities": {
-          "maxTextLength": 4096,
-          "maxCaptionLength": 1024,
-          "maxAttachmentsPerMessage": 10,
-          "maxUploadBytes": 52428800,
-          "supportsAlbum": true,
-          "albumMin": 2,
-          "albumMax": 10,
-          "minSendIntervalMs": 500,
-          "truncatePolicy": "split",
-          "idempotencyMechanism": "upstream_ledger"
-        }
-      }
-    }
-  },
-  "targets": [
-    {
-      "id": "daily-hot",
-      "storageMode": "cache",
-      "delivery": { "targets": ["my-gateway"] }
-    }
-  ]
-}
-```
-
-- **凭据只写 `${ENV}` 引用**，绝不写明文；PixivFlow 也不会把它们的值写进日志、WebUI 响应或数据库。
-- `delivery.targets`（数组）是扇出入口：一个作品可以被投递到多条路由，彼此**独立失败、独立重试**。
-- `delivery.target`（单值）是历史写法，仍可用；两者并存时数组优先。
-- 未配置任何路由时，行为与没有投递能力时**完全一致**（投递是可选能力）。
-
-配置检查：`pixivflow config validate`；连通性观察：`pixivflow gateway test my-gateway`
-（**只证明端点是否应答，绝不等于投递成功**）。
-
-## 2. 请求：PixivFlow 会 POST 什么
-
-`POST <url>`，JSON body：
-
-```json
-{
   "schemaVersion": 1,
   "idempotencyKey": "pixivflow:my-gateway:illustration:12345678:daily-hot:daily-hot",
   "deliveryTarget": "my-gateway",
@@ -88,8 +40,7 @@
         "media": {
           "kind": "image",
           "path": "/data/artifacts/12345678_p0.jpg",
-          "mime": "image/jpeg",
-          "size": 1234567
+          "mime": "image/jpeg"
         }
       }
     ],
@@ -97,8 +48,7 @@
       {
         "kind": "image",
         "path": "/data/artifacts/12345678_p0.jpg",
-        "mime": "image/jpeg",
-        "size": 1234567
+        "mime": "image/jpeg"
       }
     ],
     "dropped": []
@@ -121,6 +71,7 @@
 | `message.media` | 媒体清单（与 `parts` 里每一项的 `media` 同形）。字段：`kind`、`path`（`reference`）、`dataBase64`（`base64`）、`mime`、`size`、`sourceUrl`、`assetId`——除 `kind` 外都是**存在时才出现**。 |
 | `message.dropped` | 因 capability 或契约被丢掉的媒体及原因（**不要静默忽略；这是给你排障用的**）。 |
 | `work.spoiler` | 平台若有剧透/折叠能力请遵守；不支持就原样发。 |
+| `delivery.slotId` / `targetId` / `triggerSource` | 该次投递的**来源身份**（哪个 slot、一次手动还是定时触发）。用于网关侧归因与排障；它们不参与去重（去重只看 `idempotencyKey`）。 |
 | `work.tags` | 预留字段：**当前恒为空数组**，不要依赖它取标签（需要标签时用 `message.text`）。 |
 
 ### 媒体传输：`reference` 还是 `base64`
@@ -162,8 +113,8 @@ PixivFlow 只看状态码和 body 里的状态词，**HTTP 200 不等于业务�
 
 | 网关回答 | PixivFlow 判定 | 后续行为 |
 | --- | --- | --- |
-| `2xx` + 无状态词 | `accepted`（成功） | 记录 `remote_id`（若有），清理文件 |
-| `2xx` + `published` / `ok` / `success` / `accepted` 等 | `accepted` | 同上 |
+| `2xx` + 无状态词 | `accepted`（成功） | 记录远端 id（若 body 里有 `id` 或 `message_id`），清理文件 |
+| `2xx` + `published` / `ok` / `success` / `accepted` 等 | `accepted` | 同上（`status` 词本身已识别，未知词见下一行） |
 | `2xx` + 未知状态词 | **可重试** | 按退避重试；不要用「200 + 奇怪字段」表示失败 |
 | `2xx` + `failed` / `rejected` / `invalid` / `expired` / `blocked` | `remote_failed`（**终态**） | 记账为失败，**不重试**（幂等键已钉死这条记录） |
 | `2xx` + `pending` / `queued` / `processing` 等 | **可重试** | 网关异步处理时用这个，PixivFlow 会再来问 |
@@ -175,7 +126,7 @@ PixivFlow 只看状态码和 body 里的状态词，**HTTP 200 不等于业务�
 推荐响应体：
 
 ```json
-{ "status": "accepted", "remote_id": "gw-9f2c1a", "message": "sent to QQ group 123456" }
+{ "status": "accepted", "id": "gw-9f2c1a", "message": "sent to QQ group 123456" }
 ```
 
 或异步时：
@@ -184,7 +135,13 @@ PixivFlow 只看状态码和 body 里的状态词，**HTTP 200 不等于业务�
 { "status": "pending", "message": "queued for the next QQ rate-limit window" }
 ```
 
-失败时把**原因**放在 body 里（会被记进 `last_error`，见 `pixivflow delivery status`）。
+**远端 id 的字段名**：只有 `id` 和 `message_id` 会被记为 `remoteId`（用于审计与对账），其它名字一律忽略。
+
+```json
+```
+
+失败时把**原因**放在 `reason` / `error` / `message` 任一字段里（会被记进 `last_error`，见
+`pixivflow delivery status`）。
 
 ## 4. 你的能力声明（`capabilities`）决定 PixivFlow 怎么发
 

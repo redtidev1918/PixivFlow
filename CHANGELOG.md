@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.0.1](https://github.com/redtidev1918/PixivFlow/compare/v3.0.0...v3.0.1) (2026-09-26)
+
+
+### Bug Fixes
+
+* **cli:** keep a failing stage visible ([12adaa0](https://github.com/redtidev1918/PixivFlow/commit/12adaa0c5538ddd575c6200cdc0a65691540fff3))
+
 ## [3.0.0](https://github.com/redtidev1918/PixivFlow/compare/v2.47.0...v3.0.0) (2026-09-26)
 
 

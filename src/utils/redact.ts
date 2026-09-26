@@ -4,7 +4,11 @@
  */
 
 /** Hide URL userinfo and query secrets from operational logs. */
-export function redactUrl(value: string): string {
+export function redactUrl(value: string): string;
+/** Null/undefined pass through, so a projection can redact an optional endpoint. */
+export function redactUrl(value: string | null | undefined): string | null;
+export function redactUrl(value: string | null | undefined): string | null {
+  if (value === null || value === undefined) return null;
   try {
     const url = new URL(value);
     const authority = (url.username || url.password ? 'redacted@' : '') + url.host;

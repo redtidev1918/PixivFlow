@@ -16,6 +16,7 @@ import { MetadataRepository } from './repositories/MetadataRepository';
 import { SQLiteRateLimitStateStore } from './repositories/RateLimitStateRepository';
 import { SystemErrorRepository } from './repositories/SystemErrorRepository';
 import { CandidateInventoryRepository } from './repositories/CandidateInventoryRepository';
+import { GatewayConnectionRepository } from './repositories/GatewayConnectionRepository';
 import { NodeSqliteDriver } from './drivers/NodeSqliteDriver';
 import type { SqliteDriver } from './drivers/SqliteDriver';
 
@@ -66,6 +67,7 @@ export class Database implements IDatabase {
   private rateLimitStateStore!: SQLiteRateLimitStateStore;
   private systemErrorRepo!: SystemErrorRepository;
   private candidateInventoryRepo!: CandidateInventoryRepository;
+  private gatewayConnectionRepo!: GatewayConnectionRepository;
 
   constructor(private readonly databasePath: string) {
     try {
@@ -96,6 +98,7 @@ export class Database implements IDatabase {
       this.rateLimitStateStore = new SQLiteRateLimitStateStore(this.db);
       this.systemErrorRepo = new SystemErrorRepository(this.db);
       this.candidateInventoryRepo = new CandidateInventoryRepository(this.db);
+      this.gatewayConnectionRepo = new GatewayConnectionRepository(this.db);
     } catch (error) {
       throw new DatabaseError(
         `Failed to initialize database at ${this.databasePath}`,
@@ -151,6 +154,10 @@ export class Database implements IDatabase {
     return this.candidateInventoryRepo;
   }
 
+  /** External Messaging Gateway connection registry (P3). */
+  public get gatewayConnections(): GatewayConnectionRepository {
+    return this.gatewayConnectionRepo;
+  }
   /** Raw transactional boundary for atomic multi-table intents. */
   public transaction<T>(fn: () => T): T {
     return this.db.transaction(fn)();

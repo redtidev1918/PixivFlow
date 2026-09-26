@@ -259,8 +259,26 @@ export class DatabaseMigration {
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             resolved_at DATETIME
           )`,
+        // Messaging Gateway connection registry (P3). A row is a POINTER to an
+        // external gateway (TelePost / NapCat / Lagrange / Hermes / AstrBot /
+        // any HTTP service), never a credential store: `endpoint` is a URL
+        // (secrets stay in ${ENV_VAR} interpolation) and `metadata` is short
+        // non-secret JSON. `status` is a cached projection of the gateway's own
+        // pairing truth and may be stale by design — the gateway stays
+        // authoritative, PixivFlow never owns a chat session.
+        `CREATE TABLE IF NOT EXISTS gateway_connections (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL UNIQUE,
+            type TEXT NOT NULL,
+            endpoint TEXT,
+            status TEXT NOT NULL DEFAULT 'unknown',
+            metadata TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          )`,
         `CREATE INDEX IF NOT EXISTS idx_system_errors_bot_created ON system_errors(bot_id, created_at)`,
         `CREATE INDEX IF NOT EXISTS idx_cinventory_pending ON candidate_inventory(status, first_seen_date, expires_at)`,
+        `CREATE INDEX IF NOT EXISTS idx_gateway_connections_type ON gateway_connections(type)`,
       ];
 
       // Phase 1: create tables (idempotent). Must run before any PRAGMA-based

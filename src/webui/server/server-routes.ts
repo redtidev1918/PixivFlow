@@ -11,6 +11,7 @@ import adminLogsRoutes from '../routes/admin-logs';
 import systemErrorsRoutes from '../routes/system-errors';
 import filesRoutes from '../routes/files';
 import schedulerRoutes from '../routes/scheduler';
+import gatewayRoutes from '../routes/gateways';
 
 /**
  * Setup API routes for Express app
@@ -64,4 +65,7 @@ export function setupRoutes(app: Express): void {
   app.use('/api/files', filesRoutes);
   // WebUI Control Center Phase 1: read-only scheduler projection.
   app.use('/api/scheduler', schedulerRoutes);
+  // Messaging Gateway plane: read-only projection of configured delivery
+  // routes + last observed connection state (no pairing, no credentials).
+  app.use('/api/gateways', gatewayRoutes);
 }

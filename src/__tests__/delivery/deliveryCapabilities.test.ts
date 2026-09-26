@@ -4,6 +4,8 @@ import * as path from 'node:path';
 
 import {
   ALL_DELIVERY_CAPABILITIES,
+  IDEMPOTENCY_MECHANISMS,
+  TRUNCATE_POLICIES,
   UNKNOWN_PLATFORM_CAPABILITIES,
   applyCapabilityOverrides,
   capabilitiesOfDeliveryTarget,
@@ -348,5 +350,83 @@ describe('delivery content model', () => {
       platformCapabilities('telegram')
     );
     expect(plan.parts[0]).toEqual({ kind: 'text', text: 'frozen' });
+  });
+
+  it('declares pacing, truncation and idempotency as platform data', () => {
+    // Every resolved profile must be complete: a delivery decision reads these
+    // fields, so a missing one would silently become `undefined` behaviour.
+    for (const type of ['httpMultipart', 'telegram', 'unknown', 'future-platform']) {
+      const capabilities = platformCapabilities(type);
+      expect(TRUNCATE_POLICIES).toContain(capabilities.truncatePolicy);
+      expect(IDEMPOTENCY_MECHANISMS).toContain(capabilities.idempotencyMechanism);
+      expect(capabilities.minSendIntervalMs).toBeGreaterThanOrEqual(0);
+    }
+    // An unknown platform refuses to silently clip content it cannot send.
+    expect(UNKNOWN_PLATFORM_CAPABILITIES.truncatePolicy).toBe('error');
+    expect(UNKNOWN_PLATFORM_CAPABILITIES.idempotencyMechanism).toBe('upstream_ledger');
+  });
+
+  it('pacing may only get safer, and truncation policy is replaceable', () => {
+    // Declaring pacing ADDS a floor; it can never schedule faster than the
+    // platform default.
+    expect(
+      applyCapabilityOverrides(platformCapabilities('telegram'), { minSendIntervalMs: 5000 })
+        .minSendIntervalMs
+    ).toBe(5000);
+    expect(platformCapabilities('telegram').minSendIntervalMs).toBe(0);
+    expect(
+      applyCapabilityOverrides(platformCapabilities('httpMultipart'), { minSendIntervalMs: 250 })
+        .minSendIntervalMs
+    ).toBe(250);
+    // A floor already in effect cannot be shortened back down by a later
+    // declaration (the slower of the two wins).
+    const declared = applyCapabilityOverrides(platformCapabilities('unknown'), { minSendIntervalMs: 1000 });
+    expect(applyCapabilityOverrides(declared, { minSendIntervalMs: 100 }).minSendIntervalMs).toBe(1000);
+
+    // Size ceilings keep the opposite (clamping) rule, so the two helpers stay
+    // distinguishable.
+    expect(applyCapabilityOverrides(platformCapabilities('telegram'), { maxUploadBytes: 5 }).maxUploadBytes).toBe(5);
+    expect(
+      applyCapabilityOverrides(platformCapabilities('telegram'), { maxUploadBytes: 999_999_999 })
+        .maxUploadBytes
+    ).toBe(50 * 1024 * 1024);
+
+    const clipped = applyCapabilityOverrides(platformCapabilities('telegram'), {
+      truncatePolicy: 'truncate',
+    });
+    expect(clipped.truncatePolicy).toBe('truncate');
+    expect(clipped.idempotencyMechanism).toBe('upstream_ledger');
+    expect(
+      applyCapabilityOverrides(clipped, { idempotencyMechanism: 'platform_key' })
+        .idempotencyMechanism
+    ).toBe('platform_key');
+  });
+
+  it('rejects malformed lifecycle declarations in both validators', () => {
+    expect(
+      collectCapabilityOverrideErrors({ truncatePolicy: 'clip' }, 'delivery.targets.tg')
+    ).toEqual([
+      {
+        field: 'delivery.targets.tg.capabilities.truncatePolicy',
+        message: 'Must be one of: split, truncate, error',
+      },
+    ]);
+    expect(
+      collectCapabilityOverrideErrors({ idempotencyMechanism: 1 }, 'delivery.targets.tg')[0].field
+    ).toBe('delivery.targets.tg.capabilities.idempotencyMechanism');
+    expect(
+      collectCapabilityOverrideErrors({ minSendIntervalMs: -1 }, 'delivery.targets.tg')
+    ).toEqual([
+      {
+        field: 'delivery.targets.tg.capabilities.minSendIntervalMs',
+        message: 'Must be an integer greater than or equal to 0',
+      },
+    ]);
+    expect(
+      collectCapabilityOverrideErrors(
+        { truncatePolicy: 'split', idempotencyMechanism: 'platform_key', minSendIntervalMs: 500 },
+        'delivery.targets.tg'
+      )
+    ).toEqual([]);
   });
 });

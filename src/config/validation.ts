@@ -414,6 +414,9 @@ export function validateConfig(config: Partial<StandaloneConfig>, location: stri
       if (delivery.method && !['POST', 'PUT'].includes(delivery.method)) {
         errors.push(`${prefix}.method: Must be "POST" or "PUT"`);
       }
+      if (delivery.autoIdempotencyKey !== undefined && typeof delivery.autoIdempotencyKey !== 'boolean') {
+        errors.push(`${prefix}.autoIdempotencyKey: Must be a boolean`);
+      }
     } else if (delivery.type === 'webhook') {
       // A generic gateway endpoint: the URL is the whole required contract.
       if (!delivery.url?.trim()) {

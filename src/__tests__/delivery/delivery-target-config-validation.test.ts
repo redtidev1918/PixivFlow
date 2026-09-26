@@ -310,3 +310,31 @@ describe('webhook delivery target validation', () => {
     expect(unifiedErrors(badPolicy).join()).toContain('capabilities.truncatePolicy');
   });
 });
+
+describe('httpMultipart submission idempotency configuration', () => {
+  const validMultipart = {
+    type: 'httpMultipart',
+    url: 'https://telepost.example/api/bot1/v1/submissions',
+    fields: { tags: '{{tag}}' },
+  } as unknown as DeliveryTargetConfig;
+
+  it('accepts the target with and without an explicit autoIdempotencyKey', () => {
+    expect(loaderErrors(validMultipart)).toEqual([]);
+    expect(unifiedErrors(validMultipart)).toEqual([]);
+    const optedOut = {
+      ...validMultipart,
+      autoIdempotencyKey: false,
+    } as unknown as DeliveryTargetConfig;
+    expect(loaderErrors(optedOut)).toEqual([]);
+    expect(unifiedErrors(optedOut)).toEqual([]);
+  });
+
+  it('rejects a non-boolean autoIdempotencyKey in both validators', () => {
+    const bad = {
+      ...validMultipart,
+      autoIdempotencyKey: 'no',
+    } as unknown as DeliveryTargetConfig;
+    expect(loaderErrors(bad).join()).toContain('autoIdempotencyKey: Must be a boolean');
+    expect(unifiedErrors(bad).join()).toContain('autoIdempotencyKey must be a boolean');
+  });
+});

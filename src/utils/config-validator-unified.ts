@@ -458,6 +458,13 @@ export class ConfigValidator {
           message: `Delivery target '${name}': maxAttempts must be an integer greater than 0`,
         });
       }
+      if (delivery.autoIdempotencyKey !== undefined && typeof delivery.autoIdempotencyKey !== 'boolean') {
+        errors.push({
+          code: 'CONFIG_VALIDATION_DELIVERY_AUTO_IDEMPOTENCY_KEY_INVALID',
+          field: `${prefix}.autoIdempotencyKey`,
+          message: `Delivery target '${name}': autoIdempotencyKey must be a boolean`,
+        });
+      }
     }
     const retryBase = config.delivery?.outboxRetryBaseMs;
     const retryMax = config.delivery?.outboxRetryMaxMs;

@@ -50,6 +50,14 @@ import { WebUIServerOptions } from './types';
 
 export { WebUIServerOptions } from './types';
 
+/**
+ * A bind address that is only reachable from this machine. Localhost is the
+ * intended credential-free mode; anything else is a network interface.
+ */
+export function hostIsLoopback(h: string): boolean {
+  return h === 'localhost' || h === '127.0.0.1' || h === '::1' || h.startsWith('127.');
+}
+
 export class WebUIServer {
   private app: Express;
   private server: ReturnType<typeof createServer>;
@@ -117,11 +125,6 @@ export class WebUIServer {
     // download/exec controls to anyone. Local bind (localhost/127.0.0.1/::1)
     // remains credential-free. Operators who *really* want a public
     // unauthenticated server must opt in explicitly.
-    const hostIsLoopback = (h: string): boolean =>
-      h === 'localhost' ||
-      h === '127.0.0.1' ||
-      h === '::1' ||
-      h.startsWith('127.');
     if (!this.basicAuthEnabled && !hostIsLoopback(this.host) && process.env.WEBUI_ALLOW_PUBLIC_NO_AUTH !== 'true') {
       throw new Error(
         `Refusing to bind WebUI to non-loopback host "${this.host}" without authentication. ` +
@@ -130,11 +133,17 @@ export class WebUIServer {
       );
     }
 
+    // The only state that deserves an in-page warning: the operator overrode
+    // the refusal above, so the page really is reachable by anyone. A loopback
+    // bind is the intended credential-free local mode (the desktop app and a
+    // first local start both live there) and gets no banner.
+    const exposedWithoutCredentials = !this.basicAuthEnabled && !hostIsLoopback(this.host);
+
     // Setup API routes
     setupRoutes(this.app);
 
     // Setup static file serving
-    setupStaticFiles(this.app, options.staticPath, this.basicAuthEnabled);
+    setupStaticFiles(this.app, options.staticPath, this.basicAuthEnabled, exposedWithoutCredentials);
 
     // Error handler (must be last)
     this.app.use(errorHandler);

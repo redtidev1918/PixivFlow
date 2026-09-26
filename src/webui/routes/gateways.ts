@@ -1,13 +1,20 @@
 import { Router } from 'express';
-import { listGateways, getGateway } from './handlers/gateway-handlers';
+import { getGateway, listGateways } from './handlers/gateway-handlers';
+import { getPairing } from './handlers/pairing-handler';
 
 const router = Router();
 
-// Read-only Messaging Gateway projection. There is deliberately no
-// `POST /api/gateways/:name/test` and no pairing write path here: probing an
-// external gateway is an operator action (`pixivflow gateway test`) so the
-// server never becomes a second control plane.
+/**
+ * Messaging Gateway projection.
+ *
+ * `/` and `/:name` render config truth plus the last stored observation.
+ * `/:name/pairing` is a PASSTHROUGH to the gateway's own pairing endpoint: the
+ * gateway owns pairing (QR generation, login state), PixivFlow only reads and
+ * renders the answer. There is deliberately no write path — PixivFlow never
+ * submits a code, never stores a session and never generates a QR itself.
+ */
 router.get('/', listGateways);
+router.get('/:name/pairing', getPairing);
 router.get('/:name', getGateway);
 
 export default router;

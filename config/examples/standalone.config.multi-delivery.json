@@ -1,0 +1,162 @@
+{
+  "_comment": "PixivFlow 多平台投递示例 —— 一个作品扇出到多个消息网关",
+  "_usage": "使用方法：",
+  "_usage1": "  1. 先按 config/examples/standalone.config.simple.json 完成登录与基础配置",
+  "_usage2": "  2. 把下面的 delivery.targets 换成你自己的网关地址（建议放在 .env 里用 ${VAR} 引用）",
+  "_usage3": "  3. pixivflow gateway list           # 确认路由被识别、查看能力与端点数",
+  "_usage4": "  4. pixivflow gateway test qq-main   # 只验证端点是否应答（不代表投递成功）",
+  "_usage5": "  5. pixivflow download               # 下载完成后每个路由各自独立投递",
+  "_usage6": "  6. pixivflow delivery status        # 按路由查看 delivered/failed/pending 计数",
+  "_usage7": "  7. pixivflow delivery retry         # 默认只预览；确认后加 --yes 只重开欠投递的路由",
+  "_key_point_1": "投递是可选能力：完全不写 delivery 段时，行为与从前逐字一致。",
+  "_key_point_2": "一个 target 可以写 delivery.targets 数组扇出到多个平台；写 delivery.target 是单平台的老写法，仍然有效。",
+  "_key_point_3": "每个路由是账本里独立的一行：一个平台失败不会影响其它平台，也不会影响下载本身。",
+  "_key_point_4": "重试只针对仍未确认的路由：已 delivered/duplicate 的平台绝不会被重发。",
+  "_key_point_5": "PixivFlow 只做「消息网关客户端」：不实现 QQ/微信/飞书/Discord 协议、不扫码、不保存平台登录信息。",
+  "logLevel": "info",
+  "pixiv": {
+    "clientId": "MOBrBDS8blbauoSck0ZfDbtuzpyT",
+    "clientSecret": "lsACyCD94FhDUtGTXi3QzcFE2uU1hqtDaKeqrdwj",
+    "deviceToken": "pixiv",
+    "refreshToken": "YOUR_REFRESH_TOKEN",
+    "userAgent": "PixivAndroidApp/5.0.234 (Android 11; Pixel 6)"
+  },
+  "network": {
+    "timeoutMs": 30000,
+    "retries": 3,
+    "retryDelay": 1000
+  },
+  "storage": {
+    "databasePath": "./data/pixiv-downloader.db",
+    "downloadDirectory": "./downloads",
+    "illustrationDirectory": "./downloads/illustrations",
+    "novelDirectory": "./downloads/novels"
+  },
+  "scheduler": {
+    "enabled": false
+  },
+  "delivery": {
+    "_comment": "投递目标注册表。键名就是「路由名」，也就是账本里的 delivery_target。",
+    "outboxRetryBaseMs": 30000,
+    "outboxRetryMaxMs": 21600000,
+    "deleteAfterDelivery": true,
+    "targets": {
+      "telepost-bot1": {
+        "_comment_1": "① 既有的 TelePost 审核链（httpMultipart）。媒体不离开本机时也能用。",
+        "_comment_2": "凭据只写 ${ENV_VAR} 引用；PixivFlow 不落盘也不打印真实 token。",
+        "type": "httpMultipart",
+        "url": "http://127.0.0.1:8080/api/bot1/v1/submissions",
+        "readinessUrl": "http://127.0.0.1:8080/ready",
+        "notificationUrl": "http://127.0.0.1:8080/api/bot1/v1/notifications",
+        "headers": {
+          "Authorization": "Bearer ${TELEPOST_BOT1_SUBMIT_TOKEN}"
+        },
+        "fileField": "files",
+        "fields": {
+          "title": "{{title}}",
+          "tags": [
+            "Pixiv",
+            "{{tag}}",
+            "{{workTags}}"
+          ],
+          "note": "Pixiv ID: {{pixivId}}"
+        },
+        "success": {
+          "statuses": [
+            201
+          ],
+          "jsonPath": "ok",
+          "equals": true
+        },
+        "maxAttempts": 3,
+        "retryDelayMs": 3000
+      },
+      "qq-main": {
+        "_comment_1": "② 通用网关（webhook）：QQ / 微信 / 任何自建服务。",
+        "_comment_2": "典型拓扑：PixivFlow --(统一消息 JSON)--> NapCat 上的适配服务 --> QQ。",
+        "_comment_3": "mediaTransport=reference 只发本机绝对路径（要求网关与 PixivFlow 同机可见）；",
+        "_comment_4": "mediaTransport=base64 内联字节，适合网关在另一台机器上，但受 maxInlineBytes 限制。",
+        "type": "webhook",
+        "url": "http://127.0.0.1:8790/pixivflow/deliver",
+        "token": "${QQ_GATEWAY_TOKEN}",
+        "signingSecret": "${QQ_GATEWAY_SIGNING_SECRET}",
+        "mediaTransport": "reference",
+        "timeoutMs": 30000,
+        "capabilities": {
+          "_comment": "只声明网关自报的边界；数值只能收紧（更小），节流只能加严（更慢）。",
+          "maxTextLength": 2000,
+          "maxCaptionLength": 1024,
+          "maxAttachmentsPerMessage": 9,
+          "supportsAlbum": true,
+          "albumMin": 2,
+          "albumMax": 9,
+          "truncatePolicy": "split",
+          "minSendIntervalMs": 500,
+          "idempotencyMechanism": "upstream_ledger"
+        },
+        "_comment_5": "pairingUrl 指向**网关自己**的配对端点（二维码/登录状态由网关产出）；PixivFlow 只读取并渲染，不生成二维码、不存会话。",
+        "pairingUrl": "http://127.0.0.1:8790/pixivflow/pairing"
+      },
+      "feishu-main": {
+        "_comment_1": "③ 第二个通用网关：飞书自定义机器人 / 自建服务。",
+        "_comment_2": "同一份统一消息 JSON，换一个 URL 即可；不需要在 PixivFlow 里写飞书协议。",
+        "type": "webhook",
+        "url": "https://open.feishu.cn/open-apis/bot/v2/hook/${FEISHU_HOOK_ID}",
+        "mediaTransport": "base64",
+        "maxInlineBytes": 10485760,
+        "capabilities": {
+          "maxTextLength": 4000,
+          "supportsAlbum": false,
+          "truncatePolicy": "truncate"
+        }
+      },
+      "retired-route": {
+        "_comment": "④ 已停用的路由：没有任何下载 target 引用它，但它的历史仍然可见。",
+        "_comment2": "pixivflow gateway list 会把它标成 ENABLED=no；投递历史不会隐藏它。",
+        "type": "webhook",
+        "url": "https://old.example/hook"
+      }
+    }
+  },
+  "targets": [
+    {
+      "id": "daily-illust-fanout",
+      "_comment": "一个下载 target 同时投递到三个平台：TelePost 审核链 + QQ 网关 + 飞书网关。",
+      "type": "illustration",
+      "mode": "ranking",
+      "rankingMode": "day",
+      "rankingDate": "YESTERDAY",
+      "limit": 5,
+      "storageMode": "cache",
+      "delivery": {
+        "targets": [
+          "telepost-bot1",
+          "qq-main",
+          "feishu-main"
+        ]
+      }
+    },
+    {
+      "id": "daily-novel-single",
+      "_comment": "单平台老写法仍然有效：delivery.target 是单个路由名。",
+      "type": "novel",
+      "mode": "search",
+      "tag": "百合",
+      "limit": 2,
+      "storageMode": "cache",
+      "delivery": {
+        "target": "telepost-bot1"
+      }
+    }
+  ],
+  "download": {
+    "concurrency": 3,
+    "requestDelay": 500,
+    "dynamicConcurrency": true,
+    "minConcurrency": 1,
+    "maxConcurrency": 5,
+    "maxRetries": 3,
+    "retryDelay": 2000,
+    "timeout": 60000
+  }
+}

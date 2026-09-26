@@ -235,6 +235,8 @@ Email、Telegram、Discord、ntfy 等渠道；PixivFlow 不实现这些通知协
   [配置说明](docs/CONFIG.md)。WebUI 另有只读的投递历史投影
   `GET /api/deliveries`（跨路由账本 + `outboxStatus`）与 `GET /api/deliveries/:id`
   （单条意图 + 事件轨迹）；**WebUI 里没有重试按钮**——人工重试是 CLI 的审计动作。
+  网关若自己提供配对端点，可用 `pairingUrl` 让 `GET /api/gateways/:name/pairing` 透传渲染
+  （PixivFlow 不生成二维码、不存登录信息）。
 
 配置 `readinessUrl` 后，worker 每次认领都会先检查依赖 `/ready`；非 2xx 只把 row
 放回 pending，不增加 attempt。dead letter 通过正式 CLI 管理：

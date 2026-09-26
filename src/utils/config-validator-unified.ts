@@ -362,6 +362,27 @@ export class ConfigValidator {
             message: `Delivery target '${name}': timeoutMs must be an integer greater than 0`,
           });
         }
+        if (delivery.pairingUrl !== undefined) {
+          // The gateway owns pairing; we only need a URL we may GET. A template
+          // is resolved at request time, so a missing secret is not a config error.
+          if (!delivery.pairingUrl.trim() || !isUsableHttpUrl(delivery.pairingUrl)) {
+            errors.push({
+              code: 'CONFIG_VALIDATION_DELIVERY_WEBHOOK_PAIRING_URL_INVALID',
+              field: `${prefix}.pairingUrl`,
+              message: `Delivery target '${name}': pairingUrl must be valid HTTP or HTTPS`,
+            });
+          }
+        }
+        if (
+          delivery.pairingAllowRedirects !== undefined &&
+          typeof delivery.pairingAllowRedirects !== 'boolean'
+        ) {
+          errors.push({
+            code: 'CONFIG_VALIDATION_DELIVERY_WEBHOOK_PAIRING_REDIRECT_INVALID',
+            field: `${prefix}.pairingAllowRedirects`,
+            message: `Delivery target '${name}': pairingAllowRedirects must be a boolean`,
+          });
+        }
         continue;
       }
       if (delivery.type !== 'httpMultipart') {

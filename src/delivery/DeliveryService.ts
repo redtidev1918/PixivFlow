@@ -253,6 +253,10 @@ export class DeliveryService {
 
     const deliveryContext = {
       ...this.contextFrom(artifact, target, deliveryTarget),
+      // The occurrence identity must reach the ADAPTER, not just the ledger
+      // column: a gateway uses `slotId` to attribute what it received, and
+      // without it the durable payload silently loses which run produced this.
+      ...(context.slotId ? { slotId: context.slotId } : {}),
       idempotencyKey,
       ...(context.extraContext ?? {}),
     };

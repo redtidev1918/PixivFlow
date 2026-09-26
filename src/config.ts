@@ -21,6 +21,7 @@ export type {
   HttpMultipartSuccessConfig,
   HttpMultipartDeliveryConfig,
   TelegramReviewDeliveryConfig,
+  WebhookDeliveryConfig,
   DeliveryTargetConfig,
   DeliveryConfig,
   StandaloneConfig,

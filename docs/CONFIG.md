@@ -250,6 +250,54 @@ album 2–10 条）。投递引擎按能力而不是平台名决定投递形态�
 （相册展开、不支持媒体进 `unsupported` 而非静默丢弃）见
 [投递运行时架构 §4.2/§4.3](architecture/delivery-runtime.md)。
 
+### 通用消息网关（`type: "webhook"`）
+
+`webhook` 是**平台无关**的投递目标：PixivFlow 只把一份统一消息文档 POST 给一个已有的
+消息网关（TelePost、AstrBot、Hermes Messaging Gateway、自建 adapter、或任何 HTTP 服务），
+网关自己负责 QQ / 微信 / Telegram / Discord / 飞书 的登录、协议与消息渲染。PixivFlow
+**不实现任何平台协议，也不生成配对二维码**。
+
+```json
+{
+  "delivery": {
+    "targets": {
+      "gateway-a": {
+        "type": "webhook",
+        "url": "${GATEWAY_URL}/hook",
+        "token": "${GATEWAY_TOKEN}",
+        "signingSecret": "${GATEWAY_SIGNING_SECRET}",
+        "headers": { "X-Origin": "pixivflow" },
+        "mediaTransport": "reference",
+        "maxInlineBytes": 8388608,
+        "timeoutMs": 30000,
+        "capabilities": { "album": true, "maxAttachmentsPerMessage": 9, "minSendIntervalMs": 1500 }
+      }
+    }
+  }
+}
+```
+
+| 字段 | 必填 | 说明 |
+| --- | --- | --- |
+| `url` | ✅ | 网关端点，http/https 或 `${ENV}` 引用 |
+| `token` | | Bearer 凭据（支持 `${ENV}`），绝不落日志 |
+| `signingSecret` | | 声明后每个请求带 `X-Webhook-Timestamp` 与 `X-Webhook-Signature`（`sha256=HMAC-SHA256(secret, "<timestamp>.<rawBody>")`） |
+| `headers` | | 额外请求头（支持 `${ENV}`） |
+| `mediaTransport` | | `reference`（默认，发本机绝对路径，要求网关同机）/ `base64`（内联字节） |
+| `maxInlineBytes` | | `base64` 时超过该字节数**直接拒绝发送**（宁失败不静默截断） |
+| `timeoutMs` | | 单次请求超时，默认 30000 |
+| `capabilities` | | 见 [Target capability 声明](#target-capability-声明) |
+
+请求体是一份平台无关的统一消息文档（`schemaVersion` / `idempotencyKey` /
+`work{…}` / `message{text,mediaTransport,parts[],media[]}` / `delivery{…}`），
+**不含任何平台凭据**。网关的响应决定投递结论：
+2xx + 明确的成功状态词才算成功；`pending`/`queued`/`submitted` 等「已记录未发布」按可重试
+处理（用同一幂等键继续重试）；`failed`/`rejected` 等终态失败**绝不记为成功**；
+2xx 但状态词不认识按可重试处理（不猜）。429/5xx 可重试，其余 4xx 视为确定性拒绝
+（首轮 dead-letter）。该类型**没有** `maxAttempts` / `retryDelayMs`：durable outbox 是它
+唯一的重试层。详见
+[投递运行时架构 §5.1](architecture/delivery-runtime.md)。
+
 `cache` 模式使用通用命名交付目标。当前内置 provider 是流式
 `httpMultipart`，下面的地址和字段仅为示例：
 

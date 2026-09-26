@@ -275,6 +275,52 @@ Pixiv 登录流程涉及的端点:`GET /api/auth/status` 检查令牌是否有�
 
 注意:`GET /files/list` 的响应包裹在 `data` 中(`{ files, directories, currentPath }`,文件项额外带 `downloadedAt`);`GET /files/recent` 则不带 `data` 包裹(`{ files, total, filter, type }`),前端消费时留意差异。
 
+## Gateways 组:`/api/gateways`
+
+只读投影:每个已配置的 `delivery.targets` 条目在 WebUI 里都被视为一个「消息网关」。
+这些端点**不发送任何消息**,也不写数据库;投递本身仍由 durable outbox 驱动(见
+[投递运行时架构](architecture/delivery-runtime.md))。
+
+| 方法 | 路径 | 说明 | 主要参数/请求体 |
+| --- | --- | --- | --- |
+| GET | `/` | 列出已配置网关及其能力与投递计数 | 无 |
+| GET | `/:name` | 单个网关详情 + 最近投递历史 | 路径参数 `name`(`[A-Za-z0-9._-]{1,80}`) |
+
+```json
+// GET /api/gateways(节选)
+{
+  "data": {
+    "schemaVersion": 1,
+    "pairingSupported": false,
+    "gateways": [
+      {
+        "name": "qq-main",
+        "type": "webhook",
+        "endpoint": "https://gateway.example/hook",
+        "connectionStatus": "connected",
+        "connectionUpdatedAt": "2025-01-01T00:00:00.000Z",
+        "capabilities": { "type": "webhook", "supported": ["text", "image", "file", "album", "video"] },
+        "deliveryCounts": { "pending": 1, "delivered": 42, "duplicate": 0, "failed": 2 }
+      }
+    ],
+    "unconfigured": []
+  }
+}
+```
+
+- `connectionStatus` 取值 `unknown` / `unreachable` / `waiting` / `connected`,是网关侧配对
+  真值的**缓存投影,允许 stale**:PixivFlow 不生成二维码、不持有任何平台登录凭据,
+  `gateway_connections` 行只是指针(name / type / endpoint / status / metadata)。
+  因此投影显式返回 `pairingSupported: false`。
+- `endpoint` 一律经 `redactUrl` 脱敏(用户信息与查询串不回显);响应不含 token / secret /
+  文件路径 / SQL / stack。
+- `GET /api/gateways/:name` 额外返回 `history[]`(最近投递:`status`、`attempts`、
+  `lastError`、`createdAt` / `updatedAt` / `deliveredAt`),未知名字返回
+  `GATEWAY_NOT_FOUND`。
+- `unconfigured[]` 是**悬挂指针**:数据库里存在但 `delivery.targets` 已无对应路由的连接行
+  (通常是已删除的 target)。显式暴露而不是隐藏,便于运维清理。
+- 失败时返回 `GATEWAY_LIST_FAILED`。
+
 ## Socket.IO 实时事件
 
 来源:`src/webui/websocket/LogStream.ts`(日志流)与 `src/webui/websocket/DownloadStatus.ts`(下载状态流),均在 `WebUIServer` 构造时挂载。客户端仍无任何自定义上报事件,断开连接后服务器端的每个连接级定时器都会清理。
@@ -326,220 +372,7 @@ socket.on("download", (payload) => {
 
 ## 相关文档
 
--
- 
-[
-p
-i
-x
-i
-v
-f
-l
-o
-w
--
-w
-e
-b
-u
-i
- 
-前
-端
-仓
-库
-]
-(
-h
-t
-t
-p
-s
-:
-/
-/
-g
-i
-t
-h
-u
-b
-.
-c
-o
-m
-/
-r
-e
-d
-t
-i
-d
-e
-v
-1
-9
-1
-8
-/
-p
-i
-x
-i
-v
-f
-l
-o
-w
--
-w
-e
-b
-u
-i
-)
- 
-—
-—
- 
-官
-方
-前
-端
-消
-费
-方
-,
-R
-E
-S
-T
-/
-实
-时
-事
-件
-的
-参
-考
-实
-现
-;
-组
-件
-与
-数
-据
-契
-约
-对
-照
-见
-其
- 
-[
-C
-O
-M
-P
-O
-N
-E
-N
-T
-_
-G
-U
-I
-D
-E
-]
-(
-h
-t
-t
-p
-s
-:
-/
-/
-g
-i
-t
-h
-u
-b
-.
-c
-o
-m
-/
-r
-e
-d
-t
-i
-d
-e
-v
-1
-9
-1
-8
-/
-p
-i
-x
-i
-v
-f
-l
-o
-w
--
-w
-e
-b
-u
-i
-/
-b
-l
-o
-b
-/
-m
-a
-s
-t
-e
-r
-/
-d
-o
-c
-s
-/
-C
-O
-M
-P
-O
-N
-E
-N
-T
-_
-G
-U
-I
-D
-E
-.
-m
-d
-)
+- [pixivflow-webui 前端仓库](https://github.com/redtidev1918/pixivflow-webui) —— 官方前端消费方,REST/实时事件的参考实现;组件与数据契约对照见其 [COMPONENT_GUIDE](https://github.com/redtidev1918/pixivflow-webui/blob/master/docs/COMPONENT_GUIDE.md)
 
 - [架构文档](./ARCHITECTURE.md) —— 服务端各模块如何协作
 - [使用指南](./USAGE.md) —— CLI 与 WebUI 日常操作

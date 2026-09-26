@@ -138,6 +138,7 @@
     "webui-frontend/dist/",
     "!dist/**/*.map",
     "config/examples/",
+    "examples/gateway/",
     "config/fly-two-bots.example.json",
     "README.md",
     "README.en.md",

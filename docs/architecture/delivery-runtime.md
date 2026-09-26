@@ -297,6 +297,12 @@ Gateway，Apprise 等），它们才是平台适配的归属地；重复实现�
 
 ### 5.1 通用网关 webhook（已实现，`src/delivery/WebhookDelivery.ts`）
 
+> 对外规范见 **[Gateway Contract v1](../GATEWAY_CONTRACT.md)**；契约的词汇表定义在
+> `src/delivery/gatewayContract.ts`，并有两个测试钉住它：`gateway-contract.test.ts`（文档 ↔ 代码 ↔
+> 参考实现三方一致）与 `gateway-contract-doc.test.ts`（文档里的请求样例与 fixture 逐字一致）。
+> 参考实现：`examples/gateway/`。
+
+
 一次投递 = 一次 HTTP POST，body 是**统一消息文档**（`GatewayMessagePayload`）：
 `schemaVersion` / `idempotencyKey` / `deliveryTarget` / `work{id,type,title,sourceUrl,spoiler,tags}`
 / `message{text,mediaTransport,parts[],media[],dropped[]}` / `delivery{idempotencyKey,slotId,targetId,executionId,triggerSource}`。
@@ -461,6 +467,7 @@ Gateway，Apprise 等），它们才是平台适配的归属地；重复实现�
 | P3b | 通用 Messaging Gateway `webhook` connector（统一消息 JSON + 可选 HMAC 签名） | **已实现**（§5.1，`src/delivery/WebhookDelivery.ts`、`webhookDelivery.test.ts`） |
 | P4 | CLI `gateway list/status/test` + `delivery status/retry`（**已实现**，§7）+ WebUI 只读投递历史 `GET /api/deliveries[/:id]`（**已实现**，§7）+ 配对对话框两端（后端 `GET /api/gateways/:name/pairing` 透传 + `pairingSupported`；前端在 `pixivflow-webui` 的 `/deliveries` 面板渲染） | **已实现** |
 | P5 | 文档与示例补齐（`config/examples/` 网关样例、[GATEWAY.md](../GATEWAY.md) 对接手册含 QQ/OneBot 网关侧模式与扫码边界） | 已完成 |
+| P6 | **网关契约固化**：[GATEWAY_CONTRACT.md](../GATEWAY_CONTRACT.md)（规范）+ `src/delivery/gatewayContract.ts`（可执行形式）+ 零依赖参考实现 `examples/gateway/`，三者由 `gateway-contract.test.ts` 逐行钉住 | 已完成 |
 | P3c | 原生 OneBot v11 Connector | **明确不实现**（与「平台生态交给网关」冲突，见下方决定） |
 
 补充：P1 / P2 / P3a / P3b 都**未新增 deliveries/outbox 的任何表或列**。扇出完全落在既有的
@@ -488,6 +495,8 @@ type，现已**取消**。PixivFlow 的定位是 **Messaging Gateway Client**（
 ## 10. 相关文档
 
 - [外部网关投递指南](../GATEWAY.md) —— 面向网关实现者的对接手册（统一消息 JSON、HMAC 验签、ACK 契约、capability、QQ/OneBot 网关侧模式、排障命令）
+- [Gateway Contract v1](../GATEWAY_CONTRACT.md) —— 对外契约规范（端点、schema、响应词汇表、配对、错误码）
+- [`examples/gateway/`](../../examples/gateway/README.md) —— 契约的零依赖参考实现
 
 - [Principles（不变量与治理准则）](./principles.md)
 - [Operational Result Contract（终态原因/恢复语义）](./operational-result-contract.md)

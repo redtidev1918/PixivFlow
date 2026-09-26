@@ -35,6 +35,12 @@ export interface DeliveryPayload {
   cleanupFiles?: string[];
   deleteAfterDelivery?: boolean;
   fields?: Record<string, unknown>;
+  /**
+   * Neutral platform-agnostic content frozen at enqueue time. Absent on rows
+   * written by builds before the content model existed; providers then rebuild
+   * it from `files` + `context`.
+   */
+  content?: import('./content').Content;
   context: Record<string, unknown>;
 }
 
@@ -269,10 +275,10 @@ export class OutboxWorker {
           files: payload.files,
           previewFiles: payload.previewFiles,
           mediaAssets: payload.mediaAssets,
+          content: payload.content,
           fields: payload.fields as DeliveryRequest['fields'],
           context: payload.context as unknown as DeliveryRequest['context'],
-        });
-        const ack: DeliveryAck = result.ack ?? {
+        });        const ack: DeliveryAck = result.ack ?? {
           kind: result.status && result.status >= 200 && result.status < 300 ? 'accepted' : 'retryable_failure',
           error: `no ack (HTTP ${result.status})`,
         };

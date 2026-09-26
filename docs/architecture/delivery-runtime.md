@@ -197,10 +197,7 @@ type DeliveryTargetConfig =
 `TelegramReviewDelivery` 是**审核链投递**：媒体不离开 Telegram，不过控制面，只上报 id，
 由持有凭据的控制面（TelePost）执行 copyMessage 发布。
 
-### 4.2 capability（计划中，尚未实现）
-
-> 状态：**未实现**。当前代码里 adapter 的 type 只有 `httpMultipart` 与 `telegram`，
-> 不存在 capability 声明字段。本节描述的是 Phase 3/4 的目标形状，不应当被当作现有行为。
+### 4.2 capability（已实现，`src/delivery/capabilities.ts`）
 
 投递决策不按平台名分支，而按**能力**分支：
 
@@ -212,21 +209,51 @@ type DeliveryTargetConfig =
 | `album` | 一次投递多条媒体 | Telegram media group（≤10）、OneBot 多 image 段 |
 | `video` | 视频 | Telegram、Discord、OneBot（≤100MB） |
 
-Delivery Engine 依据 capability 决定投递形态；目标平台不支持某能力时按声明的降级策略
-处理（例：只支持 `text` 的 webhook 收到图集时退化为「文本 + 链接」），**不假设所有平台
-支持所有能力**。
+`DeliveryDispatcher` 与 provider **不按平台名分支**，而是读 `TargetCapabilities`：
+布尔能力集合 + 硬上限（`maxTextLength` / `maxCaptionLength` / `maxUploadBytes` /
+`maxAttachmentsPerMessage` / `album{min,max}` / `requiresTwoPhaseUpload`）。
+平台限额是**数据**（`PLATFORM_CAPABILITIES` 表），新 adapter 只需声明自己的档案。
 
-能力描述是 adapter 的静态声明（`capabilities`），`validate()` 在配置校验期检查
-「该 target 被要求发送它不具备的形态」，`healthCheck()` 供 `target test` 使用。
+- `platformCapabilities(type)`：按 `delivery.targets.<name>.type` 取内置档案；**未知 type
+  返回保守的 text-only 档案而不是抛错**（配置校验才负责拒绝拼错的 type，resolver 必须
+  total）。
+- `TargetCapabilities` 现状：`httpMultipart` 声明全 5 项能力且全部限额为 `0`（不约束）——
+  通用 HTTP 端点是**不透明契约**，PixivFlow 不能凭空替它设上限；`telegram` 声明
+  `text/image/file/album/video`，caption ≤1024、上传 ≤50MB、album `{2,10}`。
+- `applyCapabilityOverrides()`：配置里的 `capabilities` 是**可选覆盖**，布尔值直接替换、
+  数值**只能收紧不能放宽**（`fallback === 0` 表示平台默认不约束，此时采用显式值）。
+- 校验：`collectCapabilityOverrideErrors()` 由 **两个**配置校验入口共享
+  （`src/config/validation.ts` 与 `src/utils/config-validator-unified.ts`），因此两侧
+  规则不可能漂移。
 
-### 4.3 消息模型（计划中，尚未实现）
+### 4.3 消息模型（已实现，`src/delivery/content.ts`）
 
-> 状态：**未实现**。现有实现直接把 `DownloadedArtifact` 的字段映射到各 provider 的
-> 表单/消息体（`DeliveryContext` + `fields` 模板），尚无平台无关的 Content/Media 类型。
+核心模型平台无关：
 
-核心模型平台无关：`Text` / `Image` / `File` / `Video` / `Album` 的组合，由 adapter 转成
-各平台 wire format。**不用** `TelegramMessage` / `DiscordMessage` / `QQMessage` 作为核心
-类型。OneBot 的 message segment 数组是成熟设计，adapter 内直接参考其形状而非另造。
+```ts
+interface Content { text: string; parts: ContentPart[]; workId: string; workType: string;
+                    sourceUrl: string; title: string; spoiler?: boolean }
+type ContentPart = ContentTextPart | ContentImagePart | ContentFilePart
+                 | ContentVideoPart | ContentAlbumPart;
+```
+
+- `buildContent()` 只从**已经解析好的**投递文件列表构造媒体（`previewFiles` 必须与
+  `files` 一一对应才采用），canonical facts 只补充 `size` / `mime` / `assetId` /
+  `sourceUrl`。因此「metadata / markdown / preview 变体永不作为独立附件」这条规则
+  在任何人构造 Content 时都继续成立。
+- part 顺序固定为 text → 各独立文件 → 视觉内容；单张图片/视频保持独立 part（一条
+  相册只放一张没有意义，也和 Telegram `sendMediaGroup` 最少 2 项一致），同类型多张
+  才组成 `album`。**混合类型不混编**：图片组成 album、每个视频独立成 part
+  （Telegram 禁止 document/audio 与 media 同组，飞书 `post` 只能带图片）。
+- `planDelivery(content, { capabilities })` 是唯一下降点：album 在能力与 `[min,max]`
+  都满足时保留，否则展开为单项 part 并记 `downgrades`；目标完全不支持的媒体进
+  `unsupported`（adapter 必须上报，**绝不静默丢弃**）。超过 `album.max` 的相册**不算
+  capability 缺口**，只展开为单项，分批由 adapter 负责（它才知道自己的消息限制）。
+- 模型在 **enqueue 时冻结进 outbox payload**（`payload.content`，durable intent before
+  transport）。旧版本写入的 outbox 行没有 `content`，provider 用
+  `contentFromRequest()` 从 `files` + `context` 重建，因此**不需要数据迁移**。
+- 不使用 `TelegramMessage` / `DiscordMessage` / `QQMessage` 作为核心类型。OneBot 的 message
+  segment 数组是成熟设计，adapter 内直接参考其形状而非另造。
 
 ---
 
@@ -284,6 +311,11 @@ Lagrange.Core / LuckyLilliaBot / go-cqhttp 全部只讲 v11）。OneBot 调用�
   `src/config/validation.ts` 与 `src/utils/config-validator-unified.ts`。
 - `noMatchPolicy.notify` 的通知端点由**第一条路由**提供（`httpMultipart` +
   `notificationUrl`），与历史单值行为一致。
+- 每个 `delivery.targets.<name>` 可选声明 `capabilities`（见 §4.2）：布尔能力覆盖 +
+  `maxTextLength` / `maxCaptionLength` / `maxUploadBytes` / `maxAttachmentsPerMessage` /
+  `albumMin` / `albumMax` / `requiresTwoPhaseUpload`。缺省用平台类型内置档案；数值只
+  收紧不放宽。非法声明由两个校验入口同时拒绝
+  （`CONFIG_VALIDATION_DELIVERY_CAPABILITY_INVALID`）。
 - 凭据只能写 `"${ENV_VAR}"` 引用（沿用既有 `${VAR}` 插值），绝不硬编码、绝不进日志、
   绝不进 WebUI bundle。
 - 未配置任何 `delivery.targets` 时，PixivFlow 的行为与现在**逐字节一致**：投递是
@@ -323,14 +355,15 @@ WebUI 不得成为第二系统：不新建 DB、不新建状态机、不启动�
 | --- | --- | --- |
 | P0 | 代码审计 + 社区调研 + 跨仓库契约 | 已完成（[platform-contract.md](../platform-contract.md)） |
 | P1 | 多 target 扇出 + 全 target 去重 + Delivery Ledger/幂等/retry 的多 target 契约 | **已实现**（§3.1.1，`src/delivery/targetRoutes.ts`、`multiTargetFanout.test.ts`） |
-| P2 | 平台无关 Content/Media 模型 + adapter capability 声明 | 计划 |
+| P2 | 平台无关 Content/Media 模型 + adapter capability 声明 | **已实现**（§4.2/§4.3，`src/delivery/capabilities.ts`、`src/delivery/content.ts`、`deliveryCapabilities.test.ts`） |
 | P3 | OneBot v11 HTTP adapter + 通用 webhook adapter | 计划 |
 | P4 | Discord / 飞书 adapter（+ Telegram Bot API 路径与 TelePost 的边界确认） | 计划 |
 | P5 | CLI `target list/test` + WebUI Delivery Targets/History 只读投影 | 计划 |
 | P6 | 文档与示例补齐（含 `config/examples/` 多平台样例） | 计划 |
 
-补充：P1 未新增任何数据库表或列 —— 扇出完全落在既有的
-`(delivery_target, work_type, pixiv_id)` 去重域与 `outbox.delivery_target` 上。
+补充：P1 与 P2 都**未新增任何数据库表或列**。扇出完全落在既有的
+`(delivery_target, work_type, pixiv_id)` 去重域与 `outbox.delivery_target` 上；Content 模型
+冻结进既有的 `outbox.payload_json`（`payload.content`），旧行缺字段时由 provider 重建。
 
 ---
 

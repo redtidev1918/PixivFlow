@@ -4,6 +4,10 @@
 
 export type TargetType = 'illustration' | 'novel';
 
+// Type-only: `src/delivery/capabilities.ts` imports this module at runtime, so a
+// value import here would create a cycle. The type is erased at compile time.
+import type { DeliveryCapabilityOverrides } from '../delivery/capabilities';
+
 export type DeliveryFieldValue = string | number | boolean | string[];
 
 /** Discovery tuning for mode='topic'. Every value has a safe default. */
@@ -671,6 +675,11 @@ export interface HttpMultipartDeliveryConfig {
     reasonField?: string;
     keyField?: string;
   };
+  /**
+   * 声明该交付目标真实支持的能力与硬上限（platform limits 是数据不是代码）。
+   * 缺省时使用平台类型的内置档案；显式值只能**收紧**不能放宽平台上限。
+   */
+  capabilities?: DeliveryCapabilityOverrides;
 }
 
 /**
@@ -704,6 +713,8 @@ export interface TelegramReviewDeliveryConfig {
   album?: boolean;
   maxAttempts?: number;
   retryDelayMs?: number;
+  /** 声明该交付目标真实支持的能力与硬上限（见 HttpMultipartDeliveryConfig.capabilities）。 */
+  capabilities?: DeliveryCapabilityOverrides;
 }
 
 export type DeliveryTargetConfig = HttpMultipartDeliveryConfig | TelegramReviewDeliveryConfig;

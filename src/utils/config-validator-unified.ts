@@ -6,6 +6,7 @@
 import { StandaloneConfig, TargetConfig } from '../config';
 import { collectTelegramDeliveryErrors } from '../config/validation';
 import { targetDeliveryNames } from '../delivery/targetRoutes';
+import { collectCapabilityOverrideErrors } from '../delivery/capabilities';
 import cron from 'node-cron';
 import { isPlaceholderToken, getBestAvailableToken } from './token-manager';
 import { ConfigError } from './errors';
@@ -293,6 +294,15 @@ export class ConfigValidator {
 
     for (const [name, delivery] of Object.entries(config.delivery?.targets ?? {})) {
       const prefix = `delivery.targets.${name}`;
+      // Capability declarations apply to EVERY target type, so they are checked
+      // before the per-type branches (a telegram target carries them too).
+      for (const problem of collectCapabilityOverrideErrors(delivery.capabilities, prefix)) {
+        errors.push({
+          code: 'CONFIG_VALIDATION_DELIVERY_CAPABILITY_INVALID',
+          field: problem.field,
+          message: `Delivery target '${name}': ${problem.message}`,
+        });
+      }
       if (delivery.type === 'telegram') {
         // Same checks the loader's validator runs: one shared source, no drift.
         for (const error of collectTelegramDeliveryErrors(name, delivery)) {

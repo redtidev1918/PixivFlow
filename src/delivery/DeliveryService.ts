@@ -5,6 +5,7 @@ import { Database } from '../storage/Database';
 import { TargetConfig } from '../config';
 import { DownloadedArtifact, deliveryFilePaths } from './types';
 import { targetDeliveryNames } from './targetRoutes';
+import { buildContent } from './content';
 import { logger } from '../logger';
 
 /**
@@ -250,6 +251,39 @@ export class DeliveryService {
       context.idempotencyKey ??
       DeliveryService.idempotencyKey(deliveryTarget, artifact, context.slotId, target.id);
 
+    const deliveryContext = {
+      ...this.contextFrom(artifact, target, deliveryTarget),
+      idempotencyKey,
+      ...(context.extraContext ?? {}),
+    };
+
+    // The neutral, platform-agnostic content model is frozen INTO the durable
+    // payload at enqueue time (durable intent before transport). Adapters read
+    // this instead of re-deriving media from downloader structures, and an
+    // outbox row enqueued by an older build (no content) still works because
+    // providers rebuild it from `files` + `context` when it is absent.
+    const content = buildContent({
+      context: {
+        pixivId: artifact.pixivId,
+        type: artifact.type,
+        title: artifact.title,
+        ...(artifact.spoiler !== undefined ? { spoiler: artifact.spoiler } : {}),
+      },
+      files,
+      previewFiles: artifact.previewFiles,
+      mediaAssets: artifact.mediaAssets,
+      artifactFacts: artifact.artifacts,
+    });
+    const payload = {
+      files,
+      previewFiles: artifact.previewFiles ?? [],
+      mediaAssets: artifact.mediaAssets,
+      cleanupFiles: artifact.cleanupFiles ?? [],
+      fields: context.fields ?? null,
+      content,
+      context: deliveryContext,
+    };
+
     const result = this.database.transaction(() => {
       const { row, created } = this.database.deliveries.insertIntent({
         id: randomUUID(),
@@ -274,14 +308,7 @@ export class DeliveryService {
             deliveryTarget,
             idempotencyKey: `outbox:${idempotencyKey}`,
             deliveryId: row.id,
-            payload: {
-              files,
-              previewFiles: artifact.previewFiles ?? [],
-              mediaAssets: artifact.mediaAssets,
-              cleanupFiles: artifact.cleanupFiles ?? [],
-              fields: context.fields ?? null,
-              context: { ...this.contextFrom(artifact, target, deliveryTarget), idempotencyKey, ...(context.extraContext ?? {}) },
-            },
+            payload,
           },
           Date.now()
         );
@@ -296,14 +323,7 @@ export class DeliveryService {
         deliveryTarget,
         idempotencyKey: `outbox:${idempotencyKey}`,
         deliveryId: row.id,
-        payload: {
-          files,
-          previewFiles: artifact.previewFiles ?? [],
-          mediaAssets: artifact.mediaAssets,
-          cleanupFiles: artifact.cleanupFiles ?? [],
-          fields: context.fields ?? null,
-          context: { ...this.contextFrom(artifact, target, deliveryTarget), idempotencyKey, ...(context.extraContext ?? {}) },
-        },
+        payload,
       });
 
       if (context.slotId && target.id) {

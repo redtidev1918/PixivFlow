@@ -8,6 +8,7 @@ import { ConfigError } from '../utils/errors';
 import { getBestAvailableToken, isPlaceholderToken } from '../utils/token-manager';
 import { StandaloneConfig, TelegramReviewDeliveryConfig } from './types';
 import { targetDeliveryNames } from '../delivery/targetRoutes';
+import { collectCapabilityOverrideErrors } from '../delivery/capabilities';
 import { loadConfig } from './loader';
 
 const ENV_PLACEHOLDER = /\$\{[A-Za-z_][A-Za-z0-9_]*\}/;
@@ -419,6 +420,11 @@ export function validateConfig(config: Partial<StandaloneConfig>, location: stri
     }
     if (delivery.retryDelayMs !== undefined && delivery.retryDelayMs < 0) {
       errors.push(`${prefix}.retryDelayMs: Must be greater than or equal to 0`);
+    }
+    // Capability declarations are platform limits as data; reject malformed
+    // ones here so a bad override can never silently weaken a platform bound.
+    for (const problem of collectCapabilityOverrideErrors(delivery.capabilities, prefix)) {
+      errors.push(`${problem.field}: ${problem.message}`);
     }
   }
   if (

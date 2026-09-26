@@ -284,3 +284,34 @@ describe('multi-target delivery fan-out', () => {
     });
   });
 });
+
+/**
+ * Durable intent before transport: the neutral content model is frozen into the
+ * outbox payload at enqueue time, for EVERY route, so a provider never has to
+ * re-derive media from downloader structures on a retry that runs in another
+ * process days later.
+ */
+describe('multi-target fan-out freezes the content model into the outbox payload', () => {
+  it('carries one content model per route, built from the resolved delivery files', () => {
+    withDb((db, dir) => {
+      const artifact = artifactFor(dir, '4242');
+      const service = new DeliveryService(db);
+      const names = ['telegram-main', 'discord-main'];
+      const result = service.enqueue(artifact, fanoutTarget(names));
+
+      expect(result.routes).toHaveLength(2);
+      for (const route of result.routes) {
+        const row = db.outbox.getByKey('delivery', `outbox:${route.idempotencyKey}`);
+        expect(row).toBeTruthy();
+        const payload = JSON.parse(row!.payloadJson) as {
+          content?: { parts: Array<{ kind: string }>; workId: string; title: string };
+        };
+        expect(payload.content).toBeDefined();
+        expect(payload.content!.workId).toBe('4242');
+        expect(payload.content!.title).toBe('Work 4242');
+        // One local jpg -> text part + standalone image part (never a 1-item album).
+        expect(payload.content!.parts.map((part) => part.kind)).toEqual(['text', 'image']);
+      }
+    });
+  });
+});

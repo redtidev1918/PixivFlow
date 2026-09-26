@@ -74,16 +74,22 @@
     "deleteAfterDelivery": true,
     "targets": {
       "telepost-bot1": {
-        "_comment": "既有 TelePost 审核链（multipart 上传）。",
+        "_comment": "既有 TelePost 审核链（multipart 上传）。tags 是 TelePost 的必填字段；idempotency_key 建议必带——丢了它，ACK 超时后的重投在 TelePost 侧无从去重，作品会被投稿两次。",
         "type": "httpMultipart",
         "url": "http://127.0.0.1:8080/api/bot1/v1/submissions",
+        "readinessUrl": "http://127.0.0.1:8080/ready",
         "headers": {
           "Authorization": "Bearer ${TELEPOST_BOT1_SUBMIT_TOKEN}"
         },
         "fileField": "files",
         "fields": {
           "title": "{{title}}",
-          "note": "Pixiv ID: {{pixivId}}"
+          "tags": "Pixiv,{{topicTag}},{{xRestrictTag}},{{workTags}}",
+          "note": "Pixiv ID: {{pixivId}}",
+          "link": "{{link}}",
+          "target_id": "{{targetId}}",
+          "idempotency_key": "{{idempotencyKey}}",
+          "source_ref": "{{executionId}}"
         }
       },
       "qq-main": {

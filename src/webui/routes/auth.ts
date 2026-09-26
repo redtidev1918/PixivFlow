@@ -22,6 +22,19 @@ router.post('/login', authHandlers.login);
 router.post('/refresh', authHandlers.refreshToken);
 
 /**
+ * POST /api/auth/login/host/start
+ * Start an interactive login the caller completes in a window it owns
+ * (PixivFlow Desktop opens it in an app window; no system browser involved)
+ */
+router.post('/login/host/start', authHandlers.hostLoginStart);
+
+/**
+ * POST /api/auth/login/host/complete
+ * Exchange the authorization code captured from the host window
+ */
+router.post('/login/host/complete', authHandlers.hostLoginComplete);
+
+/**
  * POST /api/auth/login-with-token
  * Login with refresh token directly
  */

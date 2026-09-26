@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.0.2](https://github.com/redtidev1918/PixivFlow/compare/v3.0.1...v3.0.2) (2026-09-26)
+
+
+### Bug Fixes
+
+* **cli:** keep an error's contract fields in a structured line ([4617d7d](https://github.com/redtidev1918/PixivFlow/commit/4617d7d331b2b4f0d07efc9cd7cc16dcf02cd2af))
+
 ## [3.0.1](https://github.com/redtidev1918/PixivFlow/compare/v3.0.0...v3.0.1) (2026-09-26)
 
 

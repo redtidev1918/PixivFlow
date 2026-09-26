@@ -418,6 +418,14 @@ pixivflow delivery retry <deliveryId> --yes           # 只重开这一条（仍
 `"tags": ["Pixiv", "{{tag}}", "{{workTags}}"]`。headers
 和 URL 支持 `${ENV_NAME}`。`arrayFormat` 可设 `comma`、`repeat` 或 `json`。
 
+**`spoiler` 字段是目标自己的策略**：`{{spoiler}}` 只报告「Pixiv 是否把这条作品标为受限」
+（`x_restrict > 0`），是否真的加遮罩由接收端决定，推荐写法有三种——`false`（默认不遮罩，
+R-18/R-18G 也照常展示）、`"{{spoiler}}"`（兼容旧版：受限作品一律遮罩）、`true`（全部遮罩）。
+值写成 JSON 布尔或字符串都行：投递时统一渲染成字符串，接收端按 `true/1/yes` 判真。
+若接收端是 TelePost，这**一个**值同时决定它的**审核群预览**与**频道发布**是否遮罩
+（逐稿切换要用审核卡片上的遮罩按钮），所以不要为了「先给审核人看不遮罩的、发布时再遮」
+而在模板里做条件；参考部署把两个 target 都设成 `false`。
+
 **空值纪律**：变量只在有值时替换；已知变量取不到值时渲染成空串，未知变量原样保留。
 所以 `{{rankingDate}}` 只对**榜单来源**的候选中存在（`mode: "ranking"`，或目标里把
 `rankingDate` 设成 `YESTERDAY`/日期）——话题/标签/搜索模式的候选没有榜单日期，会渲染成空串，

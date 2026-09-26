@@ -26,6 +26,9 @@ export class DownloadCommand extends BaseCommand {
     category: CommandCategory.DOWNLOAD,
     requiresAuth: true,
     longRunning: false,
+    // Auth/config failures print their own multi-line guidance here, so the
+    // entry point must not repeat the reason (it is still logged, structured).
+    printsOwnErrors: true,
   };
 
   async execute(context: CommandContext, args: CommandArgs): Promise<CommandResult> {

@@ -27,3 +27,26 @@ export function formatCommandResult(
   }
   return result.message;
 }
+
+/**
+ * Why a command failed, in one line an operator (or a CI log) can act on.
+ *
+ * `BaseCommand.failure` puts the reason in `message`; a result that predates
+ * that still carries it in `error`. Neither is allowed to become "exit code 1
+ * and silence" — that is the failure the deploy repo recorded as a Failure
+ * Contract violation (Deploy `AGENTS.md` §25).
+ */
+export function commandFailureReason(
+  result: Pick<CommandResult, 'message' | 'error'>,
+  commandName: string
+): string {
+  return result.message ?? result.error?.message ?? `command "${commandName}" failed`;
+}
+
+/** The stderr text for a failed command. */
+export function formatCommandFailure(
+  result: Pick<CommandResult, 'message' | 'error'>,
+  commandName: string
+): string {
+  return `\n❌ ${commandFailureReason(result, commandName)}\n`;
+}

@@ -48,6 +48,9 @@ export class GatewayCommand extends BaseCommand {
     category: CommandCategory.MONITORING,
     requiresAuth: true,
     longRunning: false,
+    // The output is returned, not printed: the entry point renders it, so
+    // `pixivflow gateway` actually shows its answer.
+    rendersResult: true,
   };
 
   getUsage(): string {

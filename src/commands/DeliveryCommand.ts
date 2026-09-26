@@ -27,6 +27,17 @@ function stringOption(value: unknown): string | undefined {
 }
 
 /**
+ * A delivery id given as a bare positional argument.
+ *
+ * A value that starts with a dash is a mis-placed flag, not an id (`retry
+ * --target x` must not be read as `retry` on the id `--target`).
+ */
+function positionalDeliveryId(args: CommandArgs): string | undefined {
+  const value = stringOption(args.positional[1]);
+  return value && !value.startsWith('-') ? value : undefined;
+}
+
+/**
  * The delivery LEDGER, per route — the operator view of "what did we promise
  * each gateway, and did it happen".
  *
@@ -44,14 +55,17 @@ export class DeliveryCommand extends BaseCommand {
     category: CommandCategory.MONITORING,
     requiresAuth: true,
     longRunning: false,
+    // The output is returned, not printed: the entry point renders it, so
+    // `pixivflow delivery` actually shows its answer.
+    rendersResult: true,
   };
 
   getUsage(): string {
     return [
       'pixivflow delivery status [--target <name>] [--status failed] [--limit 25] [--json]',
-      'pixivflow delivery status --id <deliveryId> [--json]',
+      'pixivflow delivery status <deliveryId> [--json]',
       'pixivflow delivery retry --target <name> [--status failed] [--limit 25] [--dry-run] [--yes]',
-      'pixivflow delivery retry --id <deliveryId> [--yes]',
+      'pixivflow delivery retry <deliveryId> [--yes]',
       'pixivflow delivery retry --all [--limit 25] [--yes]',
     ].join('\n');
   }
@@ -68,7 +82,27 @@ export class DeliveryCommand extends BaseCommand {
         `Unknown delivery status: ${status}. Expected ${[...DELIVERY_STATUSES].join(', ')}.`
       );
     }
+    // `--id <id>` and a bare `<id>` mean the same thing; two different ids in
+    // one command line are an error rather than a silent preference.
+    const flagId = stringOption(args.options.id);
+    const positionalId = positionalDeliveryId(args);
+    if (flagId && positionalId && flagId !== positionalId) {
+      errors.push(
+        `Two different delivery ids given (${positionalId} positionally, ${flagId} via --id). ` +
+          'Give the id once, either way.'
+      );
+    }
     return { valid: errors.length === 0, errors };
+  }
+
+  /**
+   * The delivery intent an action is about, if any.
+   *
+   * Both spellings work — `pixivflow delivery retry <deliveryId>` reads better
+   * in a terminal than the flag, and the flag stays for scripts.
+   */
+  private deliveryId(args: CommandArgs): string | undefined {
+    return stringOption(args.options.id) ?? positionalDeliveryId(args);
   }
 
   async execute(context: CommandContext, args: CommandArgs): Promise<CommandResult> {
@@ -80,7 +114,7 @@ export class DeliveryCommand extends BaseCommand {
     const limit = integerOption(args.options.limit, 25, 1, 200);
     const db = openDb(context);
     try {
-      const id = stringOption(args.options.id);
+      const id = this.deliveryId(args);
       if (id) {
         const row = db.deliveries.getById(id);
         if (!row) return this.failure(`No delivery intent with id ${id}.`);
@@ -219,7 +253,7 @@ export class DeliveryCommand extends BaseCommand {
     args: CommandArgs,
     limit: number
   ): DeliveryRow[] {
-    const id = stringOption(args.options.id);
+    const id = this.deliveryId(args);
     if (id) {
       const row = db.deliveries.getById(id);
       if (!row) return [];

@@ -39,6 +39,9 @@ export class OutboxCommand extends BaseCommand {
     category: CommandCategory.MAINTENANCE,
     requiresAuth: true,
     longRunning: false,
+    // The output is returned, not printed: the entry point renders it, so
+    // `pixivflow outbox` actually shows its answer.
+    rendersResult: true,
   };
 
   getUsage(): string {

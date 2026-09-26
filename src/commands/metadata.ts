@@ -24,6 +24,16 @@ export interface CommandMetadata {
   requiresAuth: boolean;
   /** Whether this command is a long-running process */
   longRunning: boolean;
+  /**
+   * Whether the entry point must print the returned result.
+   *
+   * A command that hands its human-readable output back in `CommandResult`
+   * (`message`, or `data` when `--json` is given) instead of printing it
+   * inline sets this — otherwise the result would be computed and thrown
+   * away, which is what made `pixivflow delivery status` silent. Commands that
+   * print their own output leave it unset so nothing is printed twice.
+   */
+  rendersResult?: boolean;
   /** Command examples */
   examples?: string[];
   /** Related commands */

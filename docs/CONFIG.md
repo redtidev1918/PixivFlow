@@ -361,8 +361,10 @@ pixivflow gateway list                      # 每条路由：type / 脱敏 endpo
 pixivflow gateway status qq-main --limit 20 # 该路由最近投递意图 + 对应 outbox 状态
 pixivflow gateway test qq-main              # 探测端点是否应答并记录观测（应答 ≠ 投递成功）
 pixivflow delivery status --target qq-main  # 账本视图
+pixivflow delivery status <deliveryId>      # 单条意图（等价 --id <deliveryId>）
 pixivflow delivery retry --target qq-main --dry-run   # 默认就是预览
 pixivflow delivery retry --target qq-main --yes       # 只重开仍欠投递的路由
+pixivflow delivery retry <deliveryId> --yes           # 只重开这一条（仍走 outbox）
 ```
 
 `gateway test` 对 `webhook` 只证明「端点在应答」（任何 HTTP 状态码，含 404/405），对

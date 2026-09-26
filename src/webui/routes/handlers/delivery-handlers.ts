@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { Database } from '../../../storage/Database';
 import type { DeliveryRow, DeliveryStatus } from '../../../storage/repositories/DeliveryRepository';
 import { getConfigPath, loadConfig } from '../../../config';
+import { buildConfigAwareErrorBody } from '../../utils/config-error';
 import { configuredGateways } from '../../../delivery/gatewayRoutes';
 import { logger } from '../../../logger';
 import { ErrorCode } from '../../utils/error-codes';
@@ -20,11 +21,25 @@ const DELIVERY_STATUSES = new Set<DeliveryStatus>(['pending', 'delivered', 'dupl
  * `lastError` is the provider's own short message (already persisted by the
  * delivery plane, which never stores a token in it).
  */
+
+/**
+ * Read the configuration WITHOUT credential validation.
+ *
+ * The delivery ledger is Pixiv-independent: it is the record of what PixivFlow
+ * promised each configured gateway. Requiring a valid Pixiv refresh token to
+ * read it would 500 the panel for an operator who has not logged in yet — the
+ * very state in which "did anything get delivered?" matters most. Credentials
+ * stay enforced everywhere they are actually used (downloads, scheduling,
+ * login).
+ */
+function loadDeliveryPlaneConfig() {
+  return loadConfig(getConfigPath(), true);
+}
+
 export async function listDeliveries(req: Request, res: Response): Promise<void> {
   let database: Database | null = null;
   try {
-    const configPath = getConfigPath();
-    const config = loadConfig(configPath);
+    const config = loadDeliveryPlaneConfig();
     const limit = Math.min(Math.max(Number(req.query.limit ?? 25) || 25, 1), 200);
     const statusQuery = typeof req.query.status === 'string' ? req.query.status : undefined;
     const targetQuery = typeof req.query.target === 'string' ? req.query.target : undefined;
@@ -91,7 +106,7 @@ export async function listDeliveries(req: Request, res: Response): Promise<void>
     }
     const message = error instanceof Error ? error.message : String(error);
     logger.error('Failed to list delivery history', { error: { message } });
-    res.status(500).json({ errorCode: ErrorCode.DELIVERY_LIST_FAILED });
+    res.status(500).json(buildConfigAwareErrorBody(error, ErrorCode.DELIVERY_LIST_FAILED));
   }
 }
 
@@ -104,7 +119,7 @@ export async function getDelivery(req: Request, res: Response): Promise<void> {
   }
   let database: Database | null = null;
   try {
-    const config = loadConfig(getConfigPath());
+    const config = loadDeliveryPlaneConfig();
     if (!config.storage?.databasePath) {
       res.status(404).json({ errorCode: ErrorCode.DELIVERY_NOT_FOUND });
       return;
@@ -159,7 +174,7 @@ export async function getDelivery(req: Request, res: Response): Promise<void> {
     }
     const message = error instanceof Error ? error.message : String(error);
     logger.error('Failed to read delivery intent', { id, error: { message } });
-    res.status(500).json({ errorCode: ErrorCode.DELIVERY_LIST_FAILED });
+    res.status(500).json(buildConfigAwareErrorBody(error, ErrorCode.DELIVERY_LIST_FAILED));
   }
 }
 

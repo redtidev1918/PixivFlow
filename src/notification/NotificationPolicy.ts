@@ -1,5 +1,6 @@
 import { Database } from '../storage/Database';
 import { DeliveryService, RefetchOutcomePayload } from '../delivery/DeliveryService';
+import { primaryDeliveryName } from '../delivery/targetRoutes';
 import { ScheduleConfig, StandaloneConfig, TargetConfig } from '../config';
 import { operationalReasonForCode, TargetOutcome } from '../scheduler/TargetOutcome';
 import { SlotContext, SlotCoordinator } from '../scheduler/SlotCoordinator';
@@ -20,8 +21,18 @@ export class NotificationPolicy {
     private readonly config: StandaloneConfig
   ) {}
 
+  /**
+   * The PRIMARY delivery route of a target: the legacy single `delivery.target`,
+   * or the first entry of the multi-route `delivery.targets` array.
+   *
+   * Operational notifications (no-match / hard-fail / dead-letter / slot
+   * summary) stay on this one route on purpose: the occurrence contract is
+   * "exactly ONE durable terminal notification", so fanning a user-visible
+   * notice out to every platform would notify the operator N times for one
+   * outcome. Fan-out is a CONTENT concern, not a notification concern.
+   */
   private targetName(target: TargetConfig): string | null {
-    return target.delivery?.target?.trim() || null;
+    return primaryDeliveryName(target) ?? null;
   }
 
   /**

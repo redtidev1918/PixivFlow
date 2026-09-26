@@ -162,8 +162,14 @@ function buildHarness(options: {
     options.blindPlanner
       ? undefined
       : {
-          deliveredIds: (target, type, ids) => deliveryService.deliveredIds(target, type, ids),
-          submittedIds: (target, type, ids) => deliveryService.submittedIds(target, type, ids),
+          deliveredIds: (scope, type, ids) =>
+            Array.isArray(scope)
+              ? deliveryService.deliveredIdsForAllTargets(scope, type, ids)
+              : deliveryService.deliveredIds(scope, type, ids),
+          submittedIds: (scope, type, ids) =>
+            Array.isArray(scope)
+              ? deliveryService.submittedIdsForAllTargets(scope, type, ids)
+              : deliveryService.submittedIds(scope, type, ids),
         },
     config.download?.candidateScanLimit
   );

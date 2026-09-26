@@ -79,6 +79,15 @@ export interface NoMatchPolicyConfig {
 export interface TargetDeliveryConfig {
   /** 顶层 delivery.targets 中定义的交付目标名称 */
   target: string;
+  /**
+   * 追加的交付目标名称：把这些作品同时投递到多个外部平台。
+   *
+   * 与 `target` 并存（数组优先）；每一项都是顶层 `delivery.targets` 的键。
+   * 每个交付目标各自拥有独立的投保意图、发件箱行与重试预算，因此一个平台
+   * 失败不会影响其他平台，重试也只重发失败的那一个。缺省时行为与历史版本
+   * 完全一致（只投 `target`，未配置则不投递）。
+   */
+  targets?: string[];
   /** 覆盖该交付目标的表单字段，支持 {{title}} 等模板变量 */
   fields?: Record<string, DeliveryFieldValue>;
   /** Optional rich-novel preview enrichment before the submission. */

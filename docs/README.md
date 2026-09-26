@@ -67,6 +67,7 @@
 | --- | --- |
 | [architecture/README](architecture/README.md) | 长期架构决策与治理索引 |
 | [principles](architecture/principles.md) | 架构原则 |
+| [delivery-runtime](architecture/delivery-runtime.md) | 投递运行时：Artifact → Delivery Engine → Target Adapter |
 | [operational-result-contract](architecture/operational-result-contract.md) | 运行结果契约 |
 | [candidate-supply-rfc](architecture/candidate-supply-rfc.md) | 候选供给 RFC（Phase 5：主题画像 + 候选库存） |
 | [candidate-supply-observability-rfc](architecture/candidate-supply-observability-rfc.md) | 候选供给可观测性 RFC |

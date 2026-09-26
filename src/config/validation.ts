@@ -7,6 +7,7 @@ import { logger } from '../logger';
 import { ConfigError } from '../utils/errors';
 import { getBestAvailableToken, isPlaceholderToken } from '../utils/token-manager';
 import { StandaloneConfig, TelegramReviewDeliveryConfig } from './types';
+import { targetDeliveryNames } from '../delivery/targetRoutes';
 import { loadConfig } from './loader';
 
 const ENV_PLACEHOLDER = /\$\{[A-Za-z_][A-Za-z0-9_]*\}/;
@@ -289,8 +290,10 @@ export function validateConfig(config: Partial<StandaloneConfig>, location: stri
         }
       }
       if (target.noMatchPolicy?.notify === true) {
-        const deliveryTarget = target.delivery?.target?.trim();
-        const notifyTarget = deliveryTarget ? config.delivery?.targets?.[deliveryTarget] : undefined;
+        // The no-match notice needs a reachable notification endpoint; with
+        // fan-out the FIRST route is the one that must provide it.
+        const notifyName = target.delivery?.target?.trim() || target.delivery?.targets?.[0]?.trim();
+        const notifyTarget = notifyName ? config.delivery?.targets?.[notifyName] : undefined;
         const hasNotificationUrl =
           notifyTarget?.type === 'httpMultipart' && Boolean(notifyTarget.notificationUrl?.trim());
         if (!hasNotificationUrl) {
@@ -310,11 +313,34 @@ export function validateConfig(config: Partial<StandaloneConfig>, location: stri
         errors.push(`targets[${index}].storageMode: Must be "persistent" or "cache"`);
       }
       if (target.storageMode === 'cache') {
-        const deliveryTarget = target.delivery?.target?.trim();
-        if (!deliveryTarget) {
+        const targets = target.delivery?.targets;
+        if (targets !== undefined) {
+          if (!Array.isArray(targets)) {
+            errors.push(`targets[${index}].delivery.targets: Must be an array of delivery target names`);
+          } else if (targets.length === 0) {
+            errors.push(`targets[${index}].delivery.targets: Must not be empty`);
+          } else {
+            targets.forEach((name, routeIndex) => {
+              if (typeof name !== 'string' || !name.trim()) {
+                errors.push(`targets[${index}].delivery.targets[${routeIndex}]: Must be a non-empty delivery target name`);
+              } else if (!config.delivery?.targets?.[name.trim()]) {
+                errors.push(`targets[${index}].delivery.targets[${routeIndex}]: Unknown delivery target "${name.trim()}"`);
+              }
+            });
+          }
+        }
+        // A cache target still has to deliver somewhere: either the multi-route
+        // array or the legacy single name must resolve to at least one route.
+        const routeNames = targetDeliveryNames(target);
+        if (routeNames.length === 0 && targets === undefined) {
           errors.push(`targets[${index}].delivery.target: Required when storageMode is "cache"`);
-        } else if (!config.delivery?.targets?.[deliveryTarget]) {
-          errors.push(`targets[${index}].delivery.target: Unknown delivery target "${deliveryTarget}"`);
+        } else if (!Array.isArray(targets) || targets.length === 0) {
+          const deliveryTarget = target.delivery?.target?.trim();
+          if (!deliveryTarget) {
+            errors.push(`targets[${index}].delivery.target: Required when storageMode is "cache"`);
+          } else if (!config.delivery?.targets?.[deliveryTarget]) {
+            errors.push(`targets[${index}].delivery.target: Unknown delivery target "${deliveryTarget}"`);
+          }
         }
       }
       if (target.delivery?.richNovelPreview) {

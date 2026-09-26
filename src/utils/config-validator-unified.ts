@@ -5,6 +5,7 @@
 
 import { StandaloneConfig, TargetConfig } from '../config';
 import { collectTelegramDeliveryErrors } from '../config/validation';
+import { targetDeliveryNames } from '../delivery/targetRoutes';
 import cron from 'node-cron';
 import { isPlaceholderToken, getBestAvailableToken } from './token-manager';
 import { ConfigError } from './errors';
@@ -204,8 +205,10 @@ export class ConfigValidator {
           });
         }
         if (target.noMatchPolicy?.notify === true) {
-          const deliveryTarget = target.delivery?.target?.trim();
-          const notifyTarget = deliveryTarget ? config.delivery?.targets?.[deliveryTarget] : undefined;
+          // The no-match notice needs a reachable notification endpoint; with
+          // fan-out the FIRST route is the one that must provide it.
+          const notifyName = target.delivery?.target?.trim() || target.delivery?.targets?.[0]?.trim();
+          const notifyTarget = notifyName ? config.delivery?.targets?.[notifyName] : undefined;
           const hasNotificationUrl =
             notifyTarget?.type === 'httpMultipart' && Boolean(notifyTarget.notificationUrl?.trim());
           if (!hasNotificationUrl) {
@@ -225,19 +228,61 @@ export class ConfigValidator {
           });
         }
         if (target.storageMode === 'cache') {
-          const deliveryTarget = target.delivery?.target?.trim();
-          if (!deliveryTarget) {
+          const targets = target.delivery?.targets;
+          if (targets !== undefined) {
+            if (!Array.isArray(targets)) {
+              errors.push({
+                code: 'CONFIG_VALIDATION_DELIVERY_TARGETS_INVALID',
+                field: `${targetPrefix}.delivery.targets`,
+                message: `Target ${index + 1}: delivery.targets must be an array of delivery target names`,
+              });
+            } else if (targets.length === 0) {
+              errors.push({
+                code: 'CONFIG_VALIDATION_DELIVERY_TARGETS_INVALID',
+                field: `${targetPrefix}.delivery.targets`,
+                message: `Target ${index + 1}: delivery.targets must not be empty`,
+              });
+            } else {
+              targets.forEach((name, routeIndex) => {
+                if (typeof name !== 'string' || !name.trim()) {
+                  errors.push({
+                    code: 'CONFIG_VALIDATION_DELIVERY_TARGETS_INVALID',
+                    field: `${targetPrefix}.delivery.targets`,
+                    message: `Target ${index + 1}: delivery.targets[${routeIndex}] must be a non-empty delivery target name`,
+                  });
+                } else if (!config.delivery?.targets?.[name.trim()]) {
+                  errors.push({
+                    code: 'CONFIG_VALIDATION_DELIVERY_TARGET_UNKNOWN',
+                    field: `${targetPrefix}.delivery.targets`,
+                    message: `Target ${index + 1}: Unknown delivery target '${name.trim()}'`,
+                  });
+                }
+              });
+            }
+          }
+          // One route (array or legacy single name) is still mandatory in cache mode.
+          const routeNames = targetDeliveryNames(target);
+          if (routeNames.length === 0 && targets === undefined) {
             errors.push({
               code: 'CONFIG_VALIDATION_DELIVERY_TARGET_REQUIRED',
               field: `${targetPrefix}.delivery.target`,
               message: `Target ${index + 1}: Cache mode requires a delivery target`,
             });
-          } else if (!config.delivery?.targets?.[deliveryTarget]) {
-            errors.push({
-              code: 'CONFIG_VALIDATION_DELIVERY_TARGET_UNKNOWN',
-              field: `${targetPrefix}.delivery.target`,
-              message: `Target ${index + 1}: Unknown delivery target '${deliveryTarget}'`,
-            });
+          } else if (!Array.isArray(targets) || targets.length === 0) {
+            const deliveryTarget = target.delivery?.target?.trim();
+            if (!deliveryTarget) {
+              errors.push({
+                code: 'CONFIG_VALIDATION_DELIVERY_TARGET_REQUIRED',
+                field: `${targetPrefix}.delivery.target`,
+                message: `Target ${index + 1}: Cache mode requires a delivery target`,
+              });
+            } else if (!config.delivery?.targets?.[deliveryTarget]) {
+              errors.push({
+                code: 'CONFIG_VALIDATION_DELIVERY_TARGET_UNKNOWN',
+                field: `${targetPrefix}.delivery.target`,
+                message: `Target ${index + 1}: Unknown delivery target '${deliveryTarget}'`,
+              });
+            }
           }
         }
 

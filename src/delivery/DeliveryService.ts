@@ -4,6 +4,7 @@ import { existsSync } from 'node:fs';
 import { Database } from '../storage/Database';
 import { TargetConfig } from '../config';
 import { DownloadedArtifact, deliveryFilePaths } from './types';
+import { targetDeliveryNames } from './targetRoutes';
 import { logger } from '../logger';
 
 /**
@@ -22,6 +23,27 @@ export interface EnqueueResult {
   /** True when an already-confirmed ledger/fact short-circuited a new intent. */
   duplicate: boolean;
   /** True when this call created a brand new delivery row. */
+  created: boolean;
+}
+
+/** One route of a multi-target fan-out (one external platform). */
+export interface RouteResult extends EnqueueResult {
+  /** The `delivery.targets` entry this route publishes to. */
+  deliveryTarget: string;
+}
+
+/**
+ * Result of enqueuing one artifact against EVERY delivery target the download
+ * target declares. `duplicate` is the AND over all routes: true only when no
+ * route still owes a delivery.
+ */
+export interface FanoutResult {
+  routes: RouteResult[];
+  /** First route's ledger id ('' when every route was already confirmed). */
+  deliveryId: string;
+  /** First route's intent key ('' when every route was already confirmed). */
+  idempotencyKey: string;
+  duplicate: boolean;
   created: boolean;
 }
 
@@ -70,6 +92,20 @@ export class DeliveryService {
     return target.delivery?.target?.trim() || null;
   }
 
+  /**
+   * EVERY delivery target this download target fans out to, in stable
+   * config-declared order, de-duplicated. `delivery.targets` (the multi-target
+   * array) takes precedence over the legacy single `delivery.target`; a target
+   * declaring neither resolves to `[]`, which is exactly the pre-multi-target
+   * behaviour (no delivery at all).
+   *
+   * Fan-out happens HERE and only here: each name becomes its own ledger row,
+   * outbox row and retry budget, so one platform failing can never fail another.
+   */
+  static targetNames(target: TargetConfig): string[] {
+    return targetDeliveryNames(target);
+  }
+
   /** Stable per-occurrence intent key, so ACK loss / replays converge to one row. */
   static idempotencyKey(
     deliveryTarget: string,
@@ -91,9 +127,29 @@ export class DeliveryService {
     return this.database.deliveries.isDelivered(deliveryTarget, workType, String(pixivId));
   }
 
+  /**
+   * Multi-target preflight: is this work CONFIRMED on EVERY route? False as soon
+   * as one route still owes a delivery, so a partially delivered work stays
+   * selectable instead of being skipped entirely.
+   */
+  isDeliveredToAllTargets(deliveryTargets: string[], workType: string, pixivId: string): boolean {
+    const names = [...new Set(deliveryTargets.filter((name) => name?.trim()))];
+    if (names.length === 0) return false;
+    return names.every((name) => this.database.deliveries.isDelivered(name, workType, String(pixivId)));
+  }
+
   /** Batch form for pre-lock candidate filtering. */
   deliveredIds(deliveryTarget: string, workType: string, pixivIds: string[]): Set<string> {
     return this.database.deliveries.deliveredIds(deliveryTarget, workType, pixivIds);
+  }
+
+  /** Multi-target batch form: only works confirmed on ALL routes. */
+  deliveredIdsForAllTargets(
+    deliveryTargets: string[],
+    workType: string,
+    pixivIds: string[]
+  ): Set<string> {
+    return this.database.deliveries.deliveredIdsForAllTargets(deliveryTargets, workType, pixivIds);
   }
 
   /**
@@ -108,10 +164,27 @@ export class DeliveryService {
     return this.database.deliveries.submittedIds(deliveryTarget, workType, pixivIds);
   }
 
+  /** Multi-target batch form: works submitted (or confirmed) on ALL routes. */
+  submittedIdsForAllTargets(
+    deliveryTargets: string[],
+    workType: string,
+    pixivIds: string[]
+  ): Set<string> {
+    return this.database.deliveries.submittedIdsForAllTargets(deliveryTargets, workType, pixivIds);
+  }
+
   /**
-   * Atomically create the delivery intent + outbox row and advance the cell.
-   * Missing local artifact files are treated as a recoverable error (the
-   * caller re-runs the download); a crash leaves the intent pending for the
+   * Atomically create the delivery intent + outbox row and advance the cell, for
+   * EVERY delivery target this download target declares.
+   *
+   * Each route is an independent ledger row, outbox row and retry budget: one
+   * platform failing never fails another, and a retry only re-sends the routes
+   * that are not yet confirmed. `duplicate` is true only when EVERY route was
+   * already confirmed — a work whose second platform still owes a delivery must
+   * stay actionable, not be skipped as a duplicate.
+   *
+   * Missing local artifact files are treated as a recoverable error (the caller
+   * re-runs the download); a crash leaves the intent pending for the
    * OutboxWorker — it never fabricates a submitted cell.
    */
   enqueue(
@@ -123,9 +196,9 @@ export class DeliveryService {
       fields?: Record<string, unknown>;
       extraContext?: Record<string, unknown>;
     } = {}
-  ): EnqueueResult {
-    const deliveryTarget = DeliveryService.targetName(target);
-    if (!deliveryTarget) {
+  ): FanoutResult {
+    const deliveryTargets = DeliveryService.targetNames(target);
+    if (deliveryTargets.length === 0) {
       throw new Error('enqueue called for a non-delivery (non-cache) target');
     }
     const files = deliveryFilePaths(artifact);
@@ -139,9 +212,38 @@ export class DeliveryService {
       throw new Error(`artifact file missing before enqueue: ${missing}`);
     }
 
+    const routes = deliveryTargets.map((deliveryTarget) =>
+      this.enqueueOne(artifact, target, deliveryTarget, context, files)
+    );
+    const first = routes[0];
+    return {
+      // Per-route detail, in config-declared order.
+      routes,
+      // Backward-compatible single-route projection: the first route's ids, and
+      // `duplicate` only when nothing is left owed on ANY route.
+      deliveryId: first?.deliveryId ?? '',
+      idempotencyKey: first?.idempotencyKey ?? '',
+      duplicate: routes.every((route) => route.duplicate),
+      created: routes.some((route) => route.created),
+    };
+  }
+
+  /** One route of a fan-out: the whole atomic intent + outbox + cell sequence. */
+  private enqueueOne(
+    artifact: DownloadedArtifact,
+    target: TargetConfig,
+    deliveryTarget: string,
+    context: {
+      slotId?: string;
+      idempotencyKey?: string;
+      fields?: Record<string, unknown>;
+      extraContext?: Record<string, unknown>;
+    },
+    files: string[]
+  ): RouteResult {
     // Ledger short-circuit: a confirmed fact must never create a new intent.
     if (this.database.deliveries.isDelivered(deliveryTarget, artifact.type, artifact.pixivId)) {
-      return { deliveryId: '', idempotencyKey: '', duplicate: true, created: false };
+      return { deliveryTarget, deliveryId: '', idempotencyKey: '', duplicate: true, created: false };
     }
 
     const idempotencyKey =
@@ -178,7 +280,7 @@ export class DeliveryService {
               mediaAssets: artifact.mediaAssets,
               cleanupFiles: artifact.cleanupFiles ?? [],
               fields: context.fields ?? null,
-              context: { ...this.contextFrom(artifact, target), idempotencyKey, ...(context.extraContext ?? {}) },
+              context: { ...this.contextFrom(artifact, target, deliveryTarget), idempotencyKey, ...(context.extraContext ?? {}) },
             },
           },
           Date.now()
@@ -200,7 +302,7 @@ export class DeliveryService {
           mediaAssets: artifact.mediaAssets,
           cleanupFiles: artifact.cleanupFiles ?? [],
           fields: context.fields ?? null,
-          context: { ...this.contextFrom(artifact, target), idempotencyKey, ...(context.extraContext ?? {}) },
+          context: { ...this.contextFrom(artifact, target, deliveryTarget), idempotencyKey, ...(context.extraContext ?? {}) },
         },
       });
 
@@ -219,7 +321,7 @@ export class DeliveryService {
       created: result.created,
       idempotencyKey,
     });
-    return { ...result, idempotencyKey };
+    return { ...result, deliveryTarget, idempotencyKey };
   }
 
   /**
@@ -304,8 +406,13 @@ export class DeliveryService {
     }
   }
 
-  private contextFrom(artifact: DownloadedArtifact, target: TargetConfig): Record<string, unknown> {
+  private contextFrom(
+    artifact: DownloadedArtifact,
+    target: TargetConfig,
+    deliveryTarget: string
+  ): Record<string, unknown> {
     return {
+      deliveryTarget,
       title: artifact.title,
       pixivId: artifact.pixivId,
       type: artifact.type,

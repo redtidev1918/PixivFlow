@@ -250,6 +250,48 @@ album 2–10 条）。投递引擎按能力而不是平台名决定投递形态�
 （相册展开、不支持媒体进 `unsupported` 而非静默丢弃）见
 [投递运行时架构 §4.2/§4.3](architecture/delivery-runtime.md)。
 
+### TelePost 投稿链（`type: "httpMultipart"`）
+
+`httpMultipart` 是**多部分表单**投递：把已下载的文件与渲染好的表单字段一次性 POST 给
+接收端。当前生产接收端就是 TelePost 的 `POST /api/botN/v1/submissions`。请求侧要做对
+这几件事：
+
+| 要求 | 说明 |
+| --- | --- |
+| `files` | TelePost 的必填文件字段（`fileField` 默认 `files`）。cache 模式下原图与 preview 一一对应发送 |
+| `tags` | TelePost 的必填字段。写 `"Pixiv,{{topicTag}},{{xRestrictTag}},{{workTags}}"` 这类模板即可 |
+| `idempotency_key` | **建议必带**，值写 `{{idempotencyKey}}`。它是 ACK 超时后重投的收敛依据（见下） |
+| `link` | 可选，指向原作品的来源链接；TelePost 要求 `http(s)://` 开头 |
+| 来源字段 | `target_id` / `source_label` / `source_ref` / `scheduled_at` 均可选：`target_id` 供人工「重抓/替换」定向回本目标，其余三个只用于审核卡展示与排查 |
+
+**响应如何决定投递结论。** TelePost 的 `data.status` 是**记录状态**而不是传输结果，
+`data.business_status` 才是正式业务 ACK；两者与 HTTP 状态码是**成对产生**的，因此
+PixivFlow 分类时读 HTTP 状态码与记录状态，不额外分支 `business_status`：
+
+| TelePost 应答 | 下游结论 |
+| --- | --- |
+| `201` + `business_status: accepted`（记录 `pending_review`，新建审核稿） | `accepted` → 账本 `delivered`，cell `submitted` |
+| `201` + `business_status: accepted`（记录 `published`，审核关闭时直发） | 同上，`remote_id` 取 `message_id` |
+| `200` + `business_status: idempotent_replay`（`reused: true`，同一个 key） | `idempotent_replay` → **按成功处理**，频道里只有一条 |
+| `200` + `business_status: duplicate_existing`（另一个 key 已发布同一作品） | `duplicate_existing` → 账本记 `duplicate`，不重复投稿 |
+| `400` + `business_status: permanent_failure` | 确定性拒绝 → 首轮进死信，原样重发无意义 |
+| `503` + `business_status: retryable_failure` | 可重试 → 退避重投，**幂等键不变**（TelePost 侧 Telegram 是否收到未知，键不变才不会重复发布） |
+
+`remote_id` 优先取 `review_id`，没有才取 `message_id`：审核模式（API token 的默认模式）
+下能被幂等键钉住的记录是**审核稿**，把频道消息 id 记成投递目标会掩盖「其实还没发布」。
+按 key 复用一条**终态失败**的审核稿时，TelePost 回 `400`（而不是 200），这条路径靠
+HTTP 状态码就能正确落成确定性失败。
+
+`fields` 里的模板变量与 `ack` 信封映射都可以覆盖，但 `ack` 的默认值就是 TelePost 的
+`{ok, data:{review_id, reused, reuse_reason, matched_idempotency_key}}`，日常不需要写。
+这条边界的完整证据（每一条应答形状与它对应的下游结论）在
+`src/__tests__/delivery/telepost-compat.test.ts`；TelePost 侧的权威定义是它自己的
+`docs/API.md` §「投稿业务 ACK」。
+
+`readinessUrl` 是可选消费屏障：指到 TelePost 的 `/ready`（多 Bot 部署是路由进程的
+`/ready`，它按每个 bot 子进程的真实就绪度返回 200/503）。**不要**指到 `/live` 或写一个
+不存在的路径——探测失败时 worker 把 outbox 行放回、不消耗 attempt，但也就一直不投递。
+
 ### 通用消息网关（`type: "webhook"`）
 
 `webhook` 是**平台无关**的投递目标：PixivFlow 只把一份统一消息文档 POST 给一个已有的

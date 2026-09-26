@@ -89,7 +89,11 @@ export abstract class BaseCommand implements Command {
    */
   protected failure(error: Error | string, data?: unknown): CommandResult {
     const errorObj = error instanceof Error ? error : new Error(error);
-    return { success: false, error: errorObj, data };
+    // The reason travels IN the result, not only inside the Error: the entry
+    // point prints `message` for an operator, and a result that carried only
+    // `{success:false, error}` left the failing stage invisible (Deploy
+    // `AGENTS.md` §25 Failure Contract).
+    return { success: false, message: errorObj.message, error: errorObj, data };
   }
 
   /**

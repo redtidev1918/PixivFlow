@@ -57,6 +57,13 @@ export class ReconcileCommand extends BaseCommand {
         remoteId,
         reason,
       });
+      context.logger.info('Historical duplicate reconciled into ledger', {
+        target,
+        workType,
+        pixivId,
+        deliveryId: res.deliveryId,
+        created: res.created,
+      });
       return this.success('historical duplicate reconciled into ledger', {
         deliveryId: res.deliveryId,
         created: res.created,

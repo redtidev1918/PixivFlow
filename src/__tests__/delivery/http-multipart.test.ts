@@ -1,7 +1,7 @@
 import { promises as fs } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { HttpMultipartDelivery } from '../../delivery/HttpMultipartDelivery';
+import { HttpMultipartDelivery, renderDeliveryTemplate } from '../../delivery/HttpMultipartDelivery';
 import { logger } from '../../logger';
 
 describe('HttpMultipartDelivery', () => {
@@ -331,6 +331,69 @@ describe('HttpMultipartDelivery', () => {
     expect(multipart).toContain(
       'name="note"\r\n\r\n📅 2026-08-29 🕒 2026-08-28 🌐 Chinese (Mandarin) (cmn)'
     );
+  });
+
+  it('renders the production topic-mode note: author line, no empty date slot', async () => {
+    const filePath = join(directory, 'topic-note.txt');
+    await fs.writeFile(filePath, 'body');
+    const fetchMock = jest.fn().mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), {
+        status: 201,
+        headers: { 'content-type': 'application/json' },
+      })
+    );
+    global.fetch = fetchMock as typeof fetch;
+
+    // The note shipped in pixivflow-telepost-deploy/pixivflow/config/production.json.
+    // All four production targets are mode:"topic" (tag discovery, not ranking),
+    // so no candidate carries a ranking date.
+    const productionNote =
+      '🖌 作者：{{author}}\n⭐ {{bookmarkCount}} · 👁 {{viewCount}}\n🏷 {{topicTag}} · Pixiv 分级：{{xRestrictLabel}}';
+
+    // Why `{{rankingDate}}` was removed from that note rather than kept: a known
+    // variable with no value renders empty, and gluing it to fixed punctuation
+    // leaves a hole in the delivered message.
+    expect(
+      renderDeliveryTemplate('📅 {{rankingDate}} · ⭐ {{bookmarkCount}}', {
+        rankingDate: '',
+        bookmarkCount: '49',
+      })
+    ).toBe('📅  · ⭐ 49');
+
+    const provider = new HttpMultipartDelivery({
+      type: 'httpMultipart',
+      url: 'https://example.test/submissions',
+      fileField: 'files',
+      fields: { note: productionNote },
+      success: { statuses: [201], jsonPath: 'ok', equals: true },
+      maxAttempts: 1,
+      retryDelayMs: 0,
+    });
+
+    await provider.deliver({
+      files: [filePath],
+      context: {
+        title: '中秋节特别篇：月圆，肚肚圆',
+        pixivId: '111',
+        type: 'illustration',
+        author: '藤原ここあ',
+        topic: 'ボテ腹',
+        xRestrict: 1,
+        bookmarkCount: 49,
+        viewCount: 694,
+      },
+    });
+
+    const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const chunks: Buffer[] = [];
+    for await (const chunk of options.body as unknown as AsyncIterable<Buffer>) chunks.push(Buffer.from(chunk));
+    const multipart = Buffer.concat(chunks).toString('utf8');
+
+    expect(multipart).toContain('🖌 作者：藤原ここあ');
+    expect(multipart).toContain('⭐ 49 · 👁 694');
+    expect(multipart).toContain('🏷 ボテ腹 · Pixiv 分级：R-18');
+    expect(multipart).not.toContain('📅');
+    expect(multipart).not.toMatch(/·\s*·/);
   });
 
   it('renders bookmark/view popularity counts (compact, empty when absent)', async () => {

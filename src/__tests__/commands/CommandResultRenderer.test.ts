@@ -1,5 +1,9 @@
 import { describe, it, expect } from '@jest/globals';
-import { formatCommandResult } from '../../commands/CommandResultRenderer';
+import {
+  formatCommandResult,
+  commandFailureReason,
+  formatCommandFailure,
+} from '../../commands/CommandResultRenderer';
 
 describe('formatCommandResult — a returned result reaches the terminal', () => {
   it('prints the human message for an operator', () => {
@@ -24,5 +28,28 @@ describe('formatCommandResult — a returned result reaches the terminal', () =>
   it('prints nothing when there is nothing to say', () => {
     expect(formatCommandResult({})).toBeUndefined();
     expect(formatCommandResult({ data: { hidden: true } })).toBeUndefined();
+  });
+});
+
+describe('formatCommandFailure — a failing stage stays visible', () => {
+  it('uses the reason the command returned', () => {
+    expect(commandFailureReason({ message: 'Usage: reconcile --target <name>' }, 'reconcile')).toBe(
+      'Usage: reconcile --target <name>'
+    );
+  });
+
+  it('falls back to the error message for results that predate it', () => {
+    expect(commandFailureReason({ error: new Error('db is locked') }, 'reconcile')).toBe('db is locked');
+  });
+
+  it('never answers with silence, even with nothing to go on', () => {
+    expect(commandFailureReason({}, 'reconcile')).toBe('command "reconcile" failed');
+    expect(formatCommandFailure({}, 'reconcile')).toContain('command "reconcile" failed');
+  });
+
+  it('renders the reason for stderr with the reason intact', () => {
+    expect(formatCommandFailure({ message: 'Usage: reconcile --target <name>' }, 'reconcile')).toBe(
+      '\n❌ Usage: reconcile --target <name>\n'
+    );
   });
 });

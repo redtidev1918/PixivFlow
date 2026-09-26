@@ -24,6 +24,29 @@ interface LogMeta {
 
 const ctxStore = new AsyncLocalStorage<LogContext>();
 
+/**
+ * Serialise a log record so an `Error` survives as data.
+ *
+ * `JSON.stringify(new Error('boom'))` is `{}` — `message`/`stack` are own but
+ * non-enumerable — so a structured line carrying an error used to say
+ * `"error":{}` and hide the failing stage (the exact shape that made
+ * `pixivflow reconcile` undiagnosable in production). Errors are expanded
+ * explicitly, `cause` included.
+ */
+function serializeLogValue(value: unknown): string {
+  return JSON.stringify(value, (_key, item) => {
+    if (item instanceof Error) {
+      return {
+        name: item.name,
+        message: item.message,
+        ...(item.stack ? { stack: item.stack } : {}),
+        ...(item.cause !== undefined ? { cause: item.cause } : {}),
+      };
+    }
+    return item;
+  });
+}
+
 function defaultMaxBytes(): number {
   const parsed = Number.parseInt(process.env.PIXIV_LOG_MAX_BYTES ?? '', 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 20 * 1024 * 1024;
@@ -96,8 +119,8 @@ class Logger {
     };
 
     const logLine = this.format === 'json'
-      ? JSON.stringify(record)
-      : `[${record.timestamp}] [${level.toUpperCase()}] ${message}${meta && Object.keys(meta).length > 0 ? ` ${JSON.stringify(meta)}` : ''}`;
+      ? serializeLogValue(record)
+      : `[${record.timestamp}] [${level.toUpperCase()}] ${message}${meta && Object.keys(meta).length > 0 ? ` ${serializeLogValue(meta)}` : ''}`;
 
     switch (level) {
       case 'debug': console.debug(logLine); break;

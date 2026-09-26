@@ -3,7 +3,7 @@ import { loadConfig, getConfigPath as getConfigPathUtil } from './config';
 import { StandaloneConfig } from './config/types';
 import { logger } from './logger';
 import { CommandRegistry } from './commands/CommandRegistry';
-import { formatCommandResult } from './commands/CommandResultRenderer';
+import { formatCommandResult, formatCommandFailure, commandFailureReason } from './commands/CommandResultRenderer';
 import { registerAllCommands, RefreshCommand, DownloadCommand, SchedulerCommand, VersionCommand, HelpCommand } from './commands';
 import { ArgumentParser } from './cli/ArgumentParser';
 import { AuthenticationError, ConfigError, VersionRequest, HelpRequest } from './utils/errors';
@@ -72,12 +72,6 @@ async function executeCommand(registry: CommandRegistry, commandName: string, co
     }
 
     const result = await command.execute(context, args);
-    if (!result.success) {
-      logger.error('Command execution failed', { command: commandName, error: result.error });
-      // A batch command distinguishes "nothing succeeded" from "the process could
-      // not run at all"; honour the explicit code when it provides one.
-      process.exit(result.exitCode ?? 1);
-    }
 
     // Commands that return their output instead of printing it need the entry
     // point to render it — otherwise the answer is computed and thrown away
@@ -85,6 +79,28 @@ async function executeCommand(registry: CommandRegistry, commandName: string, co
     const metadata = typeof (command as any).getMetadata === 'function'
       ? (command as any).getMetadata()
       : undefined;
+
+    if (!result.success) {
+      // Failure Contract (Deploy `AGENTS.md` §25): an exit code alone is not an
+      // answer. The failing stage and its reason must survive to both the
+      // operator and the structured log — `error: {}` in a log line is exactly
+      // what made a failing `reconcile` undiagnosable (the logger now expands
+      // `Error` into `{name,message,stack}`).
+      logger.error('Command execution failed', {
+        command: commandName,
+        stage: 'command.execute',
+        reason: commandFailureReason(result, commandName),
+        retryable: false,
+        error: result.error,
+      });
+      if (metadata?.printsOwnErrors !== true) {
+        console.error(formatCommandFailure(result, commandName));
+      }
+      // A batch command distinguishes "nothing succeeded" from "the process could
+      // not run at all"; honour the explicit code when it provides one.
+      process.exit(result.exitCode ?? 1);
+    }
+
     if (metadata?.rendersResult === true) {
       const text = formatCommandResult(result, { json: args.options.json === true });
       if (text) {

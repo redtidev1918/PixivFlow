@@ -68,7 +68,7 @@ const defaultFetch: typeof fetch = (input, init) => globalThis.fetch(input, init
 export class DiagnoseEgressCommand extends BaseCommand {
   readonly name = 'diagnose';
   readonly description = 'Minimal Pixiv data-plane egress probe (usage: diagnose egress)';
-  readonly aliases = ['diag'];
+  readonly aliases = ['diag', 'diagnose-egress'];
   readonly requiresToken = false;
   readonly metadata = {
     category: CommandCategory.MONITORING,

@@ -34,6 +34,15 @@ export interface CommandMetadata {
    * print their own output leave it unset so nothing is printed twice.
    */
   rendersResult?: boolean;
+  /**
+   * Whether this command presents its own failures.
+   *
+   * The entry point prints `CommandResult.message` to stderr when a command
+   * fails (a failing stage must be visible — Deploy `AGENTS.md` §25). A command
+   * that already wrote its own, richer failure text (e.g. `download`'s login
+   * guidance) sets this so the reason is not printed twice.
+   */
+  printsOwnErrors?: boolean;
   /** Command examples */
   examples?: string[];
   /** Related commands */

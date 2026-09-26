@@ -1,0 +1,77 @@
+# GitHub holds every workflow run that a release-please PR triggers, because the
+# PR is authored by github-actions[bot] (release-please authenticates with the
+# built-in GITHUB_TOKEN) and GitHub requires approval before it runs workflows
+# for a PR in that situation. Nobody approves them, so GitHub eventually
+# finalises the held run as a FAILED check -- which is what turns every release
+# cycle into a burst of failure notifications.
+#
+# No workflow-level filter can prevent that. The approval gate is resolved at RUN
+# level, before a single job is created or any job-level `if:` is evaluated, so
+# neither a guard nor `paths-ignore` on the other workflows can suppress it. The
+# only lever available from inside a workflow is to approve the held run.
+#
+# Once approved, the job-level guard in the other workflows
+#
+#   github.event_name != 'pull_request' ||
+#   github.event.pull_request.user.login != 'github-actions[bot]'
+#
+# skips every job, so the run completes as `skipped`: no false failure is
+# recorded on the release PR, no notification is sent, and no runner minutes are
+# spent (a skipped job never starts a runner).
+#
+# Self-healing: if a real RELEASE_PLEASE_TOKEN is ever added to this repository
+# (releasegraph's reusable-release.yml already prefers it over github.token),
+# release-please PRs are authored by a human account, no run is ever held, this
+# workflow finds nothing to approve, and the guards stop matching on their own.
+name: Approve release-please PR runs
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: approve-release-please-runs
+  cancel-in-progress: false
+
+jobs:
+  approve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Approve held runs created by release-please
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -uo pipefail
+          held=/tmp/held-runs
+          # Only runs that release-please itself created: this repository (never
+          # a fork of it) and the built-in Actions identity. Auto-approving
+          # anything else would bypass the approval control that protects
+          # untrusted contributors, so the filter is deliberately narrow.
+          gh api --paginate "repos/$REPO/actions/runs?status=action_required&per_page=100" \
+            --jq '.workflow_runs[]
+                  | select(.head_branch | startswith("release-please--"))
+                  | select(.actor.login == "github-actions[bot]")
+                  | select(.head_repository.full_name == env.REPO)
+                  | .id' > "$held" || true
+
+          approved=0
+          skipped=0
+          while read -r id; do
+            [ -n "$id" ] || continue
+            if gh api --method POST "repos/$REPO/actions/runs/$id/approve" >/dev/null 2>&1; then
+              approved=$((approved + 1))
+            else
+              # Already resolved, or approval is not permitted. Never fail the
+              # job: a red scheduled workflow would itself become noise.
+              skipped=$((skipped + 1))
+            fi
+          done < "$held"
+
+          echo "approved=$approved not_approved=$skipped"

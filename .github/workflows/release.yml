@@ -33,7 +33,7 @@ jobs:
     # check on every release PR. Self-healing: once RELEASE_PLEASE_TOKEN (a real user
     # PAT) authors the release PR, this guard no longer matches and CI returns.
     if: github.event_name != 'pull_request' || github.event.pull_request.user.login != 'github-actions[bot]'
-    uses: redtidev1918/releasegraph/.github/workflows/reusable-release.yml@164413cb765a9cd404e73b2203cf7165717ca5a8 # ReleaseGraph 164413c (id-token write added for npm provenance)
+    uses: redtidev1918/releasegraph/.github/workflows/reusable-release.yml@6d6f4a4a0a7631b55ccc20b4b1f0e89969484b61 # ReleaseGraph v1.5.14
     with:
       version: ${{ inputs.version || '' }}
       dry_run: ${{ github.event_name == 'pull_request' || inputs.dry_run || false }}

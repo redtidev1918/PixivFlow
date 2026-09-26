@@ -232,7 +232,9 @@ Email、Telegram、Discord、ntfy 等渠道；PixivFlow 不实现这些通知协
   探测端点是否应答——**端点应答不等于投递成功**）与 `pixivflow delivery status|retry`
   （`retry` 默认只预览，需 `--yes`，且只重开仍欠投递的路由，已投递的绝不重发）。详见
   [投递运行时架构 §5.1/§7](docs/architecture/delivery-runtime.md) 与
-  [配置说明](docs/CONFIG.md)。
+  [配置说明](docs/CONFIG.md)。WebUI 另有只读的投递历史投影
+  `GET /api/deliveries`（跨路由账本 + `outboxStatus`）与 `GET /api/deliveries/:id`
+  （单条意图 + 事件轨迹）；**WebUI 里没有重试按钮**——人工重试是 CLI 的审计动作。
 
 配置 `readinessUrl` 后，worker 每次认领都会先检查依赖 `/ready`；非 2xx 只把 row
 放回 pending，不增加 attempt。dead letter 通过正式 CLI 管理：

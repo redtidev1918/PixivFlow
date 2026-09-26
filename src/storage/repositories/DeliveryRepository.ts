@@ -301,8 +301,45 @@ export class DeliveryRepository extends BaseRepository {
     return rows.map((r) => this.toRow(r));
   }
 
-  /** Counts per status for one route (used by the Gateway panel summary). */
-  countByStatusForTarget(deliveryTarget: string): Record<DeliveryStatus, number> {
+  /**
+   * Recent delivery intents across every route, newest first.
+   *
+   * Read-only projection for the delivery History view: unlike
+   * `listRecentByTarget` this is not scoped to one gateway, so it also shows
+   * rows for routes that are no longer enabled in config (their history is
+   * still the operator's audit trail).
+   */
+  listRecent(
+    options: { limit?: number; status?: DeliveryStatus; deliveryTarget?: string; workType?: string } = {}
+  ): DeliveryRow[] {
+    const limit = Math.min(Math.max(Math.trunc(options.limit ?? 50), 1), 500);
+    const clauses: string[] = [];
+    const params: Record<string, unknown> = { limit };
+    if (options.status) {
+      clauses.push('status = @status');
+      params.status = options.status;
+    }
+    if (options.deliveryTarget) {
+      clauses.push('delivery_target = @deliveryTarget');
+      params.deliveryTarget = options.deliveryTarget;
+    }
+    if (options.workType) {
+      clauses.push('work_type = @workType');
+      params.workType = options.workType;
+    }
+    const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+    const rows = this.db
+      .prepare(
+        `SELECT * FROM deliveries
+          ${where}
+          ORDER BY updated_at DESC, created_at DESC
+          LIMIT @limit`
+      )
+      .all(params) as any[];
+    return rows.map((r) => this.toRow(r));
+  }
+
+  /** Counts per status for one route (used by the Gateway panel summary). */  countByStatusForTarget(deliveryTarget: string): Record<DeliveryStatus, number> {
     const rows = this.db
       .prepare(`SELECT status, COUNT(*) AS n FROM deliveries WHERE delivery_target = ? GROUP BY status`)
       .all(deliveryTarget) as Array<{ status: DeliveryStatus; n: number }>;

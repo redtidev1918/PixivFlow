@@ -278,7 +278,7 @@ express() → setupMiddleware(json/urlencoded、cors(origin 默认 '*')、请求
 - 静态资源探测顺序:`--static-path` → `STATIC_PATH` 环境变量 → 当前工作目录下 `webui-frontend/dist` → 从 `__dirname` 逐级向上查找 → 包安装根目录;前端源码存在而 dist 缺失时会尝试自动构建。找不到静态目录时,`GET /` 返回描述各 API 前缀的 JSON。
 - `startWebUI()` 先加载配置、按 `storage.databasePath` 打开数据库并 `migrate()`(确保表存在后即关闭),再启动服务器;`SIGINT`/`SIGTERM` 触发 `io.close()` → `server.close()` 的优雅退出。
 - 各 REST 处理器的数据库访问模式统一:按请求 `new Database(path)` → `migrate()` → 操作 → `close()`。
-- 路由组挂载于 `src/webui/server/server-routes.ts`:`/api/auth`、`/api/config`、`/api/download`、`/api/stats`、`/api/logs`、`/admin/logs`、`/admin/system-errors`、`/api/files`、`/api/scheduler`、`/api/gateways`。其中 `/api/scheduler` 与 `/api/gateways` 是**只读投影**(`src/webui/routes/scheduler.ts`、`src/webui/routes/gateways.ts`):不新建状态机,写操作一律转发给既有系统或干脆不提供。
+- 路由组挂载于 `src/webui/server/server-routes.ts`:`/api/auth`、`/api/config`、`/api/download`、`/api/stats`、`/api/logs`、`/admin/logs`、`/admin/system-errors`、`/api/files`、`/api/scheduler`、`/api/gateways`、`/api/deliveries`。其中 `/api/scheduler`、`/api/gateways` 与 `/api/deliveries` 是**只读投影**(`src/webui/routes/scheduler.ts`、`src/webui/routes/gateways.ts`、`src/webui/routes/deliveries.ts`):不新建状态机,写操作一律转发给既有系统或干脆不提供。
 - `DownloadTaskManager`(`src/webui/services/DownloadTaskManager.ts`)是 WebUI 进程内的单例任务管理器:同一时刻只允许一个活动任务(`hasActiveTask`),任务状态与进度同步写入 `task_history`,任务日志保存在内存(每任务上限 1000 条)。
 - Socket.IO 承载两条推送通道:日志流(`logs`)与下载任务状态流(`download`,由 `DownloadTaskManager.subscribe` 的合并去抖通知驱动),详见 `API.md`;REST 的 `GET /api/download/status` 继续保留,作为客户端兜底轮询与历史水合入口。
 

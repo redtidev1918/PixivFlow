@@ -411,6 +411,12 @@ Gateway，Apprise 等），它们才是平台适配的归属地；重复实现�
   `capabilities`（`resolveTargetCapabilities`）/ `deliveryCounts`。
   `GET /api/gateways/:name`（**已实现**）额外返回最近投递 `history[]`
   （状态、attempts、`lastError`、时间）。
+- WebUI 投递历史投影（**已实现**）：`GET /api/deliveries` 跨**所有**路由列出最近的投递意图
+  （`limit` / `status` / `target` / `workType` 过滤）+ 全局计数 + 按路由计数 + 配置里的
+  全部路由（含 `enabled:false` 的已停用路由，其历史仍需可见）；`GET /api/deliveries/:id`
+  返回单条意图 + 其 outbox 行 + 事件轨迹（`outboxStatus` 说明是否**还会有人去重试**）。
+  这两个端点**构造上只读**：没有 retry/cancel 写路径——人工重试是审计过的 CLI 动作
+  （`pixivflow delivery retry --yes`）。
 - **配对（二维码）不在 WebUI 里做**：投影显式返回 `pairingSupported: false`。二维码由
   外部网关自己生成，PixivFlow 不生成、不解析、不保存任何平台登录凭据
   （`gateway_connections` 行只是**指针**：name / type / endpoint / status / metadata）。
@@ -443,7 +449,7 @@ Gateway，Apprise 等），它们才是平台适配的归属地；重复实现�
 | P2 | 平台无关 Content/Media 模型 + adapter capability 声明 | **已实现**（§4.2/§4.3，`src/delivery/capabilities.ts`、`src/delivery/content.ts`、`deliveryCapabilities.test.ts`） |
 | P3a | capability 生命周期字段（节流/截断/幂等）+ `gateway_connections` 表 + 只读 `/api/gateways*` | **已实现**（§4.2/§7，`GatewayConnectionRepository.ts`、`src/webui/routes/gateways.ts`、`gatewayConnections.test.ts`） |
 | P3b | 通用 Messaging Gateway `webhook` connector（统一消息 JSON + 可选 HMAC 签名） | **已实现**（§5.1，`src/delivery/WebhookDelivery.ts`、`webhookDelivery.test.ts`） |
-| P4 | CLI `gateway list/status/test` + `delivery status/retry`（**已实现**，§7，`src/commands/GatewayCommand.ts`、`src/commands/DeliveryCommand.ts`、`gatewayRoutes.ts`、`GatewayDeliveryCommand.test.ts`）；WebUI 配对对话框（只渲染网关返回的 payload，不存凭据）仍计划 | 进行中 |
+| P4 | CLI `gateway list/status/test` + `delivery status/retry`（**已实现**，§7）+ WebUI 只读投递历史 `GET /api/deliveries[/:id]`（**已实现**，§7）；WebUI 配对对话框（只渲染网关返回的 payload，不存凭据）与前端面板渲染仍计划 | **已实现**（配对对话框未做） |
 | P5 | 文档与示例补齐（含 `config/examples/` 网关样例） | 计划 |
 
 补充：P1 / P2 / P3a / P3b 都**未新增 deliveries/outbox 的任何表或列**。扇出完全落在既有的

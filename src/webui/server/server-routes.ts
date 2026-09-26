@@ -12,6 +12,7 @@ import systemErrorsRoutes from '../routes/system-errors';
 import filesRoutes from '../routes/files';
 import schedulerRoutes from '../routes/scheduler';
 import gatewayRoutes from '../routes/gateways';
+import deliveryRoutes from '../routes/deliveries';
 
 /**
  * Setup API routes for Express app
@@ -68,4 +69,7 @@ export function setupRoutes(app: Express): void {
   // Messaging Gateway plane: read-only projection of configured delivery
   // routes + last observed connection state (no pairing, no credentials).
   app.use('/api/gateways', gatewayRoutes);
+  // Delivery History: read-only ledger projection across all gateway routes
+  // (no retry/cancel here — operator retries are audited CLI actions).
+  app.use('/api/deliveries', deliveryRoutes);
 }

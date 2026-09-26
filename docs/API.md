@@ -297,6 +297,7 @@ Pixiv 登录流程涉及的端点:`GET /api/auth/status` 检查令牌是否有�
         "name": "qq-main",
         "type": "webhook",
         "endpoint": "https://gateway.example/hook",
+        "enabled": true,
         "connectionStatus": "connected",
         "connectionUpdatedAt": "2025-01-01T00:00:00.000Z",
         "capabilities": { "type": "webhook", "supported": ["text", "image", "file", "album", "video"] },
@@ -320,6 +321,28 @@ Pixiv 登录流程涉及的端点:`GET /api/auth/status` 检查令牌是否有�
 - `unconfigured[]` 是**悬挂指针**:数据库里存在但 `delivery.targets` 已无对应路由的连接行
   (通常是已删除的 target)。显式暴露而不是隐藏,便于运维清理。
 - 失败时返回 `GATEWAY_LIST_FAILED`。
+
+## Deliveries 组:`/api/deliveries`
+
+投递账本的只读投影,覆盖**所有**网关路由(不限单个 target)。这些端点不写数据库、不重试、
+不取消:运维重试是经过审计的 CLI 动作(`pixivflow delivery retry --yes`,记录
+`actor=cli` 事件),WebUI 只展示账本已经决定的事实。
+
+| 方法 | 路径 | 说明 | 主要参数/请求体 |
+| --- | --- | --- | --- |
+| GET | `/` | 最近的投递意图 + 每条路由计数 + 配置里的全部路由 | 查询参数 `limit`(1–200,默认 25)、`status`(`pending`/`delivered`/`duplicate`/`failed`)、`target`(路由名)、`workType`(`illustration`/`novel`) |
+| GET | `/:id` | 单条投递意图 + 其 outbox 行 + 事件轨迹 | 路径参数 `id` |
+
+响应字段:`readOnly: true`、`routes[]`(`name`/`type`/`enabled`——`enabled` 表示仍有启用的
+下载 target 扇出到该路由;已停用路由的历史仍列出)、`counts`(全局)、`perRoute`(按路由)、
+`deliveries[]`(每条含 `deliveryTarget`/`workType`/`pixivId`/`status`/`attempts`/`lastError`/
+`outboxStatus`——`outboxStatus` 说明**是否还会有人去重试**)。`GET /:id` 额外返回
+`outbox`(attempts/`maxAttempts`/`nextAttemptAt`/`lastError`)与 `events[]`(event/`errorClass`/
+`retryable`/`countsAsAttempt`/`actor`/`detail`;detail 在写库时已脱敏)。
+
+错误码:`DELIVERY_LIST_FAILED`(500)、`DELIVERY_NOT_FOUND`(404)、
+`DELIVERY_STATUS_INVALID`(400,未知的 `status` 过滤值)。响应不含 token、凭据、文件路径或
+stack;`lastError` 是 provider 自己写入的短消息(投递平面从不把凭据写进去)。
 
 ## Socket.IO 实时事件
 

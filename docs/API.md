@@ -35,11 +35,13 @@ curl http://localhost:3000/api/health
 
 **可选 Basic Auth(2.4.0 起)**:同时设置环境变量 `WEBUI_USERNAME` 与 `WEBUI_PASSWORD` 后,除健康探测与 Runtime Contract 探针(`/api/health`、`/health`、`/api/status`、`/status`、`/api/version`、`/version`)外的所有请求(含静态页与 Socket.IO 握手)都要求 HTTP Basic 认证。未设置则维持无鉴权行为。公网部署仍建议叠加反向代理与 TLS。
 
-Pixiv 登录流程涉及的端点:`GET /api/auth/status` 检查令牌是否有效 → `POST /api/auth/login`(浏览器授权)或 `POST /api/auth/login-with-token`(已有刷新令牌)→ 之后可随时 `POST /api/auth/refresh` 刷新、`POST /api/auth/logout` 清除。
+Pixiv 登录流程涉及的端点:`GET /api/auth/status` 检查令牌是否有效 → `POST /api/auth/login`(后端拉起系统浏览器完成授权)或 `POST /api/auth/login-with-token`(已有刷新令牌)→ 之后可随时 `POST /api/auth/refresh` 刷新、`POST /api/auth/logout` 清除。
+
+**宿主内登录(F4.1 新增,供桌面宿主等自带窗口的运行环境使用)**:`POST /api/auth/login/host/start` 返回 `authUrl`(含 PKCE challenge)与 `redirectUri`,由**调用方自己的窗口**加载授权页并监听跳转;捕获到回调 URL 后 `POST /api/auth/login/host/complete` 提交 `loginId` + `code`(或整条 `callbackUrl`)换取令牌。PKCE `code_verifier` 全程留在后端,不经过调用方。适用于 Tauri/WKWebView 这类 puppeteer 无法驱动的宿主。
 
 ## REST 端点
 
-以下 52 个端点对应 `src/webui/server/server-routes.ts` 挂载的全部路由。约定:多数响应带 `errorCode` 字段(枚举见 `src/webui/utils/error-codes.ts`);个别处理器在校验失败时仍返回 HTTP 200 并用 `data.success: false` 表达结果,文中已标注。
+以下 54 个端点对应 `src/webui/server/server-routes.ts` 挂载的全部路由。约定:多数响应带 `errorCode` 字段(枚举见 `src/webui/utils/error-codes.ts`);个别处理器在校验失败时仍返回 HTTP 200 并用 `data.success: false` 表达结果,文中已标注。
 
 ### GET /api/health(别名 `/health`)
 
@@ -78,6 +80,8 @@ Pixiv 登录流程涉及的端点:`GET /api/auth/status` 检查令牌是否有�
 | POST | `/login` | 浏览器/Puppeteer 登录获取令牌,成功后写回配置文件 | body:`username?`、`password?`、`headless`(默认 true)、`proxy?`;headless 模式下 username/password 必填 |
 | POST | `/refresh` | 刷新访问令牌;返回的若为新 refresh token 会自动写回配置 | body:`refreshToken?`(缺省时依次取配置文件 → 统一存储) |
 | POST | `/login-with-token` | 直接提交刷新令牌,先校验再保存 | body:`refreshToken`(必填) |
+| POST | `/login/host/start` | 宿主内登录第一步:创建 PKCE 会话并返回 `authUrl`/`redirectUri` | 无 |
+| POST | `/login/host/complete` | 宿主内登录第二步:用捕获到的授权码换取令牌并写回配置 | body:`loginId`(必填)、`code` 或 `callbackUrl`(二选一) |
 | POST | `/logout` | 清除配置文件与统一存储中的令牌 | 无 |
 
 ```json

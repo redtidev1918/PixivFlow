@@ -750,6 +750,21 @@ export interface WebhookDeliveryConfig {
   mediaTransport?: 'reference' | 'base64';
   /** Refuse to send when inlined media exceeds this many bytes. */
   maxInlineBytes?: number;
+  /**
+   * Optional pairing endpoint exposed BY THE GATEWAY (supports `${ENV_NAME}`).
+   *
+   * PixivFlow never generates a QR code, never speaks the platform's login
+   * protocol and never stores a credential: it GETs this URL and renders
+   * whatever the gateway returns. Absent = the panel shows "pairing not
+   * supported" rather than inventing a flow.
+   */
+  pairingUrl?: string;
+  /**
+   * Whether PixivFlow may follow redirects when reading `pairingUrl`
+   * (default false). A pairing payload is untrusted input; a redirect could
+   * send the request anywhere, so following one is opt-in.
+   */
+  pairingAllowRedirects?: boolean;
   /** 声明该交付目标真实支持的能力与硬上限（见 HttpMultipartDeliveryConfig.capabilities）。 */
   capabilities?: DeliveryCapabilityOverrides;
 }

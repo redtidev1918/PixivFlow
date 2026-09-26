@@ -202,6 +202,35 @@ pixivflow login --config "$(pwd)/config/examples/yesterday-popular-novel.zh.json
 
 ---
 
+### 投递示例（多平台扇出）
+
+### `standalone.config.multi-delivery.json` - 一个作品投递到多个消息网关
+**推荐用于：** 想把下载结果同时发到多个平台（TelePost 审核链 + QQ + 飞书 + 任意自建服务）
+
+- ✅ 演示 `delivery.targets` 注册表：`httpMultipart`（TelePost）/ `webhook`（通用网关）两种类型
+- ✅ 演示 `delivery.targets: ["a","b","c"]` 数组扇出与 `delivery.target: "a"` 单平台老写法并存
+- ✅ 演示 `capabilities`（文本/相册/节流/截断策略）与 `${ENV_VAR}` 凭据引用
+- ✅ 演示已停用路由（没有任何下载 target 引用，但历史仍可见）
+- ✅ 说明「一个平台失败不影响其它平台，重试只重开欠投递的路由」
+
+**使用方法：**
+```bash
+cp config/examples/standalone.config.multi-delivery.json config/standalone.config.json
+# 1. 替换 refreshToken（或 pixivflow login）
+# 2. 导出凭据环境变量：TELEPOST_BOT1_SUBMIT_TOKEN / QQ_GATEWAY_TOKEN / QQ_GATEWAY_SIGNING_SECRET
+# 3. 换成你自己的网关地址
+pixivflow gateway list          # 确认路由被识别
+pixivflow gateway test qq-main  # 只验证端点应答，不代表投递成功
+pixivflow download              # 下载完成后每个路由各自独立投递
+pixivflow delivery status       # 按路由查看 delivered/failed/pending
+```
+
+> PixivFlow **只做消息网关客户端**：不实现 QQ/微信/飞书/Discord 协议、不扫码、不保存平台登录信息。
+> 平台生态（NapCat / AstrBot / 自建服务）作为**外部系统**接入这个 webhook。
+> 详见 [投递运行时架构](../../docs/architecture/delivery-runtime.md) 与 [配置说明](../../docs/CONFIG.md)。
+
+---
+
 ## ⚠️ 注意事项
 
 1. **所有示例文件中的 `YOUR_REFRESH_TOKEN` 都需要替换为实际值**

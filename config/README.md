@@ -16,6 +16,7 @@ config/
 │   ├── yesterday-popular-novel.zh.json    # 昨日热门中文小说示例
 │   ├── yesterday-ranking-illustration.json # 昨日日榜插画示例
 │   ├── multi-tag-or-limit.zh.json          # 多标签并集示例
+│   ├── standalone.config.multi-delivery.json # 多平台投递扇出示例
 │   └── README.md                           # 示例文件详细说明
 ├── backups/                        # 备份文件目录（自动生成）
 ├── data/                          # 数据目录（自动生成）
@@ -50,6 +51,11 @@ config/
 5. **`specific-download.example.json`** - 特定下载任务示例
    - 包含10个实际使用场景的配置示例
    - 随机下载、质量过滤、时间范围等场景
+
+6. **`standalone.config.multi-delivery.json`** - 多平台投递示例（扇出）
+   - `delivery.targets` 注册表：`httpMultipart`（TelePost）与 `webhook`（通用网关）
+   - 一个作品扇出到多个平台；单平台老写法仍有效
+   - 一个平台失败不影响其它平台，重试只重开欠投递的路由
 
 ### 快速使用示例
 

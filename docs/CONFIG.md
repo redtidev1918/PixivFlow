@@ -255,7 +255,8 @@ album 2–10 条）。投递引擎按能力而不是平台名决定投递形态�
 `webhook` 是**平台无关**的投递目标：PixivFlow 只把一份统一消息文档 POST 给一个已有的
 消息网关（TelePost、AstrBot、Hermes Messaging Gateway、自建 adapter、或任何 HTTP 服务），
 网关自己负责 QQ / 微信 / Telegram / Discord / 飞书 的登录、协议与消息渲染。PixivFlow
-**不实现任何平台协议，也不生成配对二维码**。
+**不实现任何平台协议，也不生成配对二维码**；如果网关自己提供配对端点，可以用
+`pairingUrl` 让 WebUI 把它渲染出来（PixivFlow 只读取，见下）。
 
 ```json
 {
@@ -266,6 +267,7 @@ album 2–10 条）。投递引擎按能力而不是平台名决定投递形态�
         "url": "${GATEWAY_URL}/hook",
         "token": "${GATEWAY_TOKEN}",
         "signingSecret": "${GATEWAY_SIGNING_SECRET}",
+        "pairingUrl": "${GATEWAY_URL}/pairing",
         "headers": { "X-Origin": "pixivflow" },
         "mediaTransport": "reference",
         "maxInlineBytes": 8388608,
@@ -286,6 +288,8 @@ album 2–10 条）。投递引擎按能力而不是平台名决定投递形态�
 | `mediaTransport` | | `reference`（默认，发本机绝对路径，要求网关同机）/ `base64`（内联字节） |
 | `maxInlineBytes` | | `base64` 时超过该字节数**直接拒绝发送**（宁失败不静默截断） |
 | `timeoutMs` | | 单次请求超时，默认 30000 |
+| `pairingUrl` | | **网关自己**的配对端点（支持 `${ENV}`）。PixivFlow 只 GET 并原样渲染，不生成二维码、不存会话、不落库；不配则 `GET /api/gateways/:name/pairing` 返回 404 `GATEWAY_PAIRING_UNSUPPORTED` |
+| `pairingAllowRedirects` | | 默认 `false`。读取 `pairingUrl` 时是否跟随重定向；配对报文是不可信输入，跟随需显式开启 |
 | `capabilities` | | 见 [Target capability 声明](#target-capability-声明) |
 
 请求体是一份平台无关的统一消息文档（`schemaVersion` / `idempotencyKey` /

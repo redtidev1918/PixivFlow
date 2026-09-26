@@ -35,6 +35,8 @@ export interface GatewayEndpoints {
   endpoint: string | null;
   /** Optional preflight URL declared by the route (httpMultipart only). */
   readinessUrl: string | null;
+  /** Optional pairing endpoint exposed BY the gateway (webhook only). */
+  pairingUrl: string | null;
 }
 
 /**
@@ -81,11 +83,27 @@ export function configuredGateway(config: StandaloneConfig, name: string): Confi
 
 /** The endpoint a route delivers to, plus its optional readiness URL. */
 export function gatewayEndpoints(target: DeliveryTargetConfig): GatewayEndpoints {
-  const record = target as { url?: unknown; endpoint?: unknown; readinessUrl?: unknown };
+  const record = target as {
+    url?: unknown;
+    endpoint?: unknown;
+    readinessUrl?: unknown;
+    pairingUrl?: unknown;
+  };
   return {
     endpoint: stringOrNull(record.url) ?? stringOrNull(record.endpoint),
     readinessUrl: stringOrNull(record.readinessUrl),
+    pairingUrl: stringOrNull(record.pairingUrl),
   };
+}
+
+/** Does this route declare a pairing endpoint we may read? */
+export function supportsPairing(target: DeliveryTargetConfig): boolean {
+  return gatewayEndpoints(target).pairingUrl !== null;
+}
+
+/** Whether following redirects while reading `pairingUrl` was opted into. */
+export function pairingAllowsRedirects(target: DeliveryTargetConfig): boolean {
+  return (target as { pairingAllowRedirects?: unknown }).pairingAllowRedirects === true;
 }
 
 /** The endpoint a route delivers to, if its type has one. */

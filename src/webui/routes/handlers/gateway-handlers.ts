@@ -8,6 +8,7 @@ import {
   configuredGateways,
   connectionStatusLabel,
   redactedEndpoint,
+  supportsPairing,
 } from '../../../delivery/gatewayRoutes';
 import { redactUrl } from '../../../utils/redact';
 import { logger } from '../../../logger';
@@ -57,6 +58,9 @@ export async function listGateways(_req: Request, res: Response): Promise<void> 
         // Declared in config; true while at least one enabled download target
         // still fans out to this route.
         enabled: route.enabled,
+        // Whether the GATEWAY offers a pairing endpoint we may read. False
+        // means the panel must not show a pairing dialog at all.
+        pairingSupported: supportsPairing(route.target),
         connectionStatus: stored?.status ?? 'unknown',
         connectionUpdatedAt: stored?.updatedAt ?? null,
         // Declared in config; the same resolver the delivery engine uses.
@@ -84,7 +88,8 @@ export async function listGateways(_req: Request, res: Response): Promise<void> 
         schemaVersion: 1,
         // Read-only by construction: the WebUI never generates a QR code and
         // never stores a chat session (both belong to the gateway process).
-        pairingSupported: false,
+        // True when at least one route offers a pairing endpoint to read.
+        pairingSupported: routes.some((route) => supportsPairing(route.target)),
         gateways,
         unconfigured,
       },

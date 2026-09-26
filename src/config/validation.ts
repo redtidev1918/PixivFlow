@@ -432,6 +432,27 @@ export function validateConfig(config: Partial<StandaloneConfig>, location: stri
       if (delivery.timeoutMs !== undefined && (!Number.isInteger(delivery.timeoutMs) || delivery.timeoutMs < 1)) {
         errors.push(`${prefix}.timeoutMs: Must be an integer greater than 0`);
       }
+      if (delivery.pairingUrl !== undefined) {
+        // The pairing endpoint belongs to the gateway; we only need to know it
+        // is somewhere we can GET. An unresolved ${ENV} is checked at request
+        // time so a missing secret cannot break config loading.
+        if (!delivery.pairingUrl.trim()) {
+          errors.push(`${prefix}.pairingUrl: Required field is missing or empty`);
+        } else if (!/\$\{[A-Za-z_][A-Za-z0-9_]*\}/.test(delivery.pairingUrl)) {
+          try {
+            const url = new URL(delivery.pairingUrl);
+            if (!['http:', 'https:'].includes(url.protocol)) throw new Error('unsupported protocol');
+          } catch {
+            errors.push(`${prefix}.pairingUrl: Must be a valid HTTP or HTTPS URL`);
+          }
+        }
+      }
+      if (
+        delivery.pairingAllowRedirects !== undefined &&
+        typeof delivery.pairingAllowRedirects !== 'boolean'
+      ) {
+        errors.push(`${prefix}.pairingAllowRedirects: Must be a boolean`);
+      }
     } else {
       errors.push(`${prefix}.type: Unsupported delivery type "${(delivery as { type?: string }).type}"`);
       continue;

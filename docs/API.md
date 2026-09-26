@@ -285,6 +285,7 @@ Pixiv 登录流程涉及的端点:`GET /api/auth/status` 检查令牌是否有�
 | --- | --- | --- | --- |
 | GET | `/` | 列出已配置网关及其能力与投递计数 | 无 |
 | GET | `/:name` | 单个网关详情 + 最近投递历史 | 路径参数 `name`(`[A-Za-z0-9._-]{1,80}`) |
+| GET | `/:name/pairing` | **透传**到网关自己的配对端点（只读） | 路径参数 `name`;网关需配置 `pairingUrl` |
 
 ```json
 // GET /api/gateways(节选)
@@ -298,6 +299,7 @@ Pixiv 登录流程涉及的端点:`GET /api/auth/status` 检查令牌是否有�
         "type": "webhook",
         "endpoint": "https://gateway.example/hook",
         "enabled": true,
+        "pairingSupported": true,
         "connectionStatus": "connected",
         "connectionUpdatedAt": "2025-01-01T00:00:00.000Z",
         "capabilities": { "type": "webhook", "supported": ["text", "image", "file", "album", "video"] },
@@ -321,6 +323,46 @@ Pixiv 登录流程涉及的端点:`GET /api/auth/status` 检查令牌是否有�
 - `unconfigured[]` 是**悬挂指针**:数据库里存在但 `delivery.targets` 已无对应路由的连接行
   (通常是已删除的 target)。显式暴露而不是隐藏,便于运维清理。
 - 失败时返回 `GATEWAY_LIST_FAILED`。
+
+### 配对透传 `GET /api/gateways/:name/pairing`
+
+**PixivFlow 不做配对**:不生成二维码、不说平台登录协议、不持有会话、不写数据库。配对属于
+**网关进程**;网关自己暴露一个 HTTP 端点(配置里的 `delivery.targets.<name>.pairingUrl`),
+PixivFlow 只 GET 它并把答案原样交给前端渲染。
+
+响应把网关的报文**原样**放在 `payload` 字段下,外面只加溯源信息——也就是说响应 schema 是
+**网关的**,不是 PixivFlow 的:
+
+```json
+// GET /api/gateways/qq-main/pairing(节选)
+{
+  "schemaVersion": 1,
+  "readOnly": true,
+  "fetchedAt": "2025-01-01T00:00:00.000Z",
+  "gateway": "qq-main",
+  "type": "webhook",
+  "endpoint": "http://127.0.0.1:8790/pixivflow/deliver",
+  "pairable": true,
+  "contentType": "application/json",
+  "truncated": false,
+  "payload": { "qr": "data:image/png;base64,…", "state": "scan me" }
+}
+```
+
+语义边界:
+
+- `pairable` 为 `true` 仅当网关以 2xx 应答;非 2xx 会透传网关响应体并附
+  `GATEWAY_PAIRING_UNAVAILABLE`(`pairable:false`),**绝不当作配对成功**。
+- 路由没配 `pairingUrl` ⇒ 404 `GATEWAY_PAIRING_UNSUPPORTED`(面板据此不显示对话框,而不是
+  显示一个坏掉的对话框)。
+- 默认**不跟随重定向**(`redirect: manual`);要跟随必须显式开
+  `pairingAllowRedirects: true`,因为配对报文是不可信输入。
+- 未设置的 `${ENV}` 与传输失败一样报 502,不会让服务崩。
+- 进程内 2 秒缓存,只为避免轮询面板打爆网关;**不落库**、不跨进程共享。
+- 传输失败的错误经 `redactError` 脱敏;响应不含 token、路径或 stack。
+
+错误码:`GATEWAY_PAIRING_UNSUPPORTED`(404)、`GATEWAY_PAIRING_UNAVAILABLE`(502 或网关的
+非 2xx)、`PAIRING_READ_FAILED`(500)、`GATEWAY_NOT_FOUND`(404)。
 
 ## Deliveries 组:`/api/deliveries`
 

@@ -2,10 +2,8 @@
   "_comment": "PixivFlow 完整配置示例 - 包含所有可用选项和详细说明",
   "_usage": "使用方法：复制此文件为 standalone.config.json 并修改 refreshToken",
   "_note": "所有以 _ 开头的字段都是注释说明，不会影响程序运行",
-  
   "logLevel": "info",
   "_logLevel_note": "日志级别: debug（详细）| info（信息）| warn（警告）| error（错误）",
-  
   "pixiv": {
     "_comment": "Pixiv API 认证配置（必需）",
     "clientId": "MOBrBDS8blbauoSck0ZfDbtuzpyT",
@@ -15,7 +13,6 @@
     "_refreshToken_note": "重要：请将 YOUR_REFRESH_TOKEN 替换为您的实际 refresh token。运行 pixivflow login 可自动获取",
     "userAgent": "PixivAndroidApp/5.0.234 (Android 11; Pixel 6)"
   },
-  
   "network": {
     "_comment": "网络配置（可选，有默认值）",
     "timeoutMs": 30000,
@@ -35,7 +32,6 @@
       "password": ""
     }
   },
-  
   "storage": {
     "_comment": "存储配置（可选，有默认值）",
     "databasePath": "./data/pixiv-downloader.db",
@@ -51,7 +47,6 @@
     "novelOrganization": "byDownloadDate",
     "_novelOrganization_note": "小说目录组织方式，选项同 illustrationOrganization"
   },
-  
   "scheduler": {
     "_comment": "定时任务配置（可选）",
     "enabled": false,
@@ -71,7 +66,48 @@
     "failureRetryDelay": null,
     "_failureRetryDelay_note": "失败后重试延迟（毫秒），null 表示无延迟"
   },
-  
+  "delivery": {
+    "_comment": "投递配置示例（可选能力）。不写 delivery 段时行为与从前逐字一致。",
+    "_note": "完整可运行的扇出示例见 config/examples/standalone.config.multi-delivery.json。",
+    "outboxRetryBaseMs": 30000,
+    "outboxRetryMaxMs": 21600000,
+    "deleteAfterDelivery": true,
+    "targets": {
+      "telepost-bot1": {
+        "_comment": "既有 TelePost 审核链（multipart 上传）。",
+        "type": "httpMultipart",
+        "url": "http://127.0.0.1:8080/api/bot1/v1/submissions",
+        "headers": {
+          "Authorization": "Bearer ${TELEPOST_BOT1_SUBMIT_TOKEN}"
+        },
+        "fileField": "files",
+        "fields": {
+          "title": "{{title}}",
+          "note": "Pixiv ID: {{pixivId}}"
+        }
+      },
+      "qq-main": {
+        "_comment_1": "通用消息网关：QQ / 微信 / 任何自建服务。",
+        "_comment_2": "PixivFlow 只 POST 一份统一消息 JSON；不实现平台协议、不扫码、不存登录信息。",
+        "_comment_3": "reference 发本机绝对路径（网关需与 PixivFlow 同机可见）；base64 内联字节。",
+        "type": "webhook",
+        "url": "http://127.0.0.1:8790/pixivflow/deliver",
+        "token": "${QQ_GATEWAY_TOKEN}",
+        "signingSecret": "${QQ_GATEWAY_SIGNING_SECRET}",
+        "mediaTransport": "reference",
+        "capabilities": {
+          "maxTextLength": 2000,
+          "supportsAlbum": true,
+          "albumMin": 2,
+          "albumMax": 9,
+          "minSendIntervalMs": 500,
+          "truncatePolicy": "split"
+        },
+        "_comment_5": "pairingUrl 指向**网关自己**的配对端点；PixivFlow 只读取渲染，不生成二维码、不存会话（见 docs/architecture/delivery-runtime.md）。",
+        "pairingUrl": "http://127.0.0.1:8790/pixivflow/pairing"
+      }
+    }
+  },
   "download": {
     "_comment": "下载配置（可选，有默认值）",
     "concurrency": 3,
@@ -89,7 +125,6 @@
     "timeout": 60000,
     "_timeout_note": "下载超时时间（毫秒），默认 60000（60秒）"
   },
-  
   "targets": [
     {
       "_comment": "下载目标配置（必需，至少一个）",
@@ -161,7 +196,6 @@
       "_novelId_note": "小说ID，从URL https://www.pixiv.net/novel/show.php?id=26132156 中获取"
     }
   ],
-  
   "initialDelay": 0,
   "_initialDelay_note": "启动延迟（毫秒），用于测试或延迟启动，默认 0"
 }

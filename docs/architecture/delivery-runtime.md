@@ -472,9 +472,20 @@ type，现已**取消**。PixivFlow 的定位是 **Messaging Gateway Client**（
 不是聊天平台集成层：只维护 Artifact 格式、Media 上传、HTTP 调用、投递状态与重试，
 平台生态交给社区（OneBot 实现、AstrBot、Hermes、自建服务）。见 §5.1 与 §8。
 
+**关于原计划的 (P3c) 原生 OneBot v11 Connector（明确决定）**：**不实现**。它与本仓库
+「平台生态交给网关」的边界直接冲突：一旦 Connector 进仓库，OneBot 的 token、风控、限速、
+掉线重连、`retcode` 方言与 `message_id`/`file_id` 的 LRU 失效就会变成 PixivFlow 的运维负担
+（协议细节见 [GATEWAY.md §5](../GATEWAY.md)）。QQ 的接入路径是
+`PixivFlow --webhook--> 你的网关 --OneBot v11--> NapCat/Lagrange --> QQ`：
+网关侧要做的三件事（按 `idempotencyKey` 去重、把 `message.parts` 翻成消息段、
+把 `retcode` 映射成 ACK 状态词）已写成可直接照做的对接手册。若将来确有需求，
+正确做法仍是把它做成**仓库外**的独立网关，而不是在 PixivFlow 里加协议实现。
+
 ---
 
 ## 10. 相关文档
+
+- [外部网关投递指南](../GATEWAY.md) —— 面向网关实现者的对接手册（统一消息 JSON、HMAC 验签、ACK 契约、capability、QQ/OneBot 网关侧模式、排障命令）
 
 - [Principles（不变量与治理准则）](./principles.md)
 - [Operational Result Contract（终态原因/恢复语义）](./operational-result-contract.md)

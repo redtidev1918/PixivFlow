@@ -10,6 +10,7 @@
 - 部署运行
   - [Docker 部署](/DOCKER.md)
   - [Apprise 通知网关](/APPRISE.md)
+  - [外部网关投递](/GATEWAY.md)
   - [Termux 安装](/TERMUX_INSTALL.md)
 - 开发
   - [架构说明](/ARCHITECTURE.md)

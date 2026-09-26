@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "idempotencyKey": "pixivflow:my-gateway:illustration:12345678:daily-hot:daily-hot",
+  "deliveryTarget": "my-gateway",
+  "work": {
+    "id": "12345678",
+    "type": "illustration",
+    "title": "作品标题",
+    "sourceUrl": "https://www.pixiv.net/artworks/12345678",
+    "spoiler": false,
+    "tags": []
+  },
+  "message": {
+    "text": "作品标题\nhttps://www.pixiv.net/artworks/12345678",
+    "mediaTransport": "reference",
+    "parts": [
+      {
+        "kind": "text"
+      },
+      {
+        "kind": "image",
+        "media": {
+          "kind": "image",
+          "path": "/data/artifacts/12345678_p0.jpg",
+          "mime": "image/jpeg",
+          "size": 1234567
+        }
+      }
+    ],
+    "media": [
+      {
+        "kind": "image",
+        "path": "/data/artifacts/12345678_p0.jpg",
+        "mime": "image/jpeg",
+        "size": 1234567
+      }
+    ],
+    "dropped": []
+  },
+  "delivery": {
+    "idempotencyKey": "pixivflow:my-gateway:illustration:12345678:daily-hot:daily-hot",
+    "slotId": "daily-hot",
+    "targetId": "daily-hot",
+    "triggerSource": "schedule"
+  }
+}

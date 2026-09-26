@@ -244,7 +244,7 @@ Pixiv 登录流程涉及的端点:`GET /api/auth/status` 检查令牌是否有�
 | GET | `/preview` | 文件预览:图片按 MIME 返回,文本内联 | query:`path`(必填,绝对或相对)、`type?` |
 | DELETE | `/:id` | 删除单个已下载文件(不删数据库记录) | 路径参数 id;query:`path?`(相对路径)、`type?` |
 | POST | `/normalize` | 规范化/重排文件并同步数据库路径 | body:`dryRun?(false)`、`normalizeNames?(true)`、`reorganize?(true)`、`updateDatabase?(true)`、`type?('all')` |
-| POST | `/reveal` | 在系统文件管理器中显示下载目录(或某个文件的所在目录) | body:`path?`(省略即目录本身)、`type?`(`illustration`)、`resolveOnly?`(只解析不打开) |
+| GET | `/location` | **只回答文件/目录在磁盘上的位置**,不打开任何东西 | query:`path?`(省略即下载目录本身)、`type?`(`illustration`) |
 
 ```json
 // GET /api/files/recent?filter=today&type=illustration(节选)
@@ -275,14 +275,30 @@ Pixiv 登录流程涉及的端点:`GET /api/auth/status` 检查令牌是否有�
 ```
 
 ```json
-// POST /api/files/reveal { "type": "illustration", "resolveOnly": true }
-{ "success": true, "errorCode": "FILE_REVEAL_SUCCESS", "path": "/app/downloads/illustrations", "exists": true }
+// GET /api/files/location?type=illustration&path=/app/downloads/illustrations/123456_夕日の海_1.jpg
+{
+  "success": true,
+  "path": "/app/downloads/illustrations/123456_夕日の海_1.jpg",
+  "directory": "/app/downloads/illustrations",
+  "exists": true,
+  "isDirectory": false
+}
 
-// 该主机没有文件管理器(容器/无 DISPLAY 的 Linux):HTTP 200,不是错误
-{ "success": false, "errorCode": "FILE_REVEAL_UNSUPPORTED", "path": "/app/downloads/illustrations" }
+// GET /api/files/location?type=illustration(不带 path:下载目录本身,尚未下载时 exists=false)
+{
+  "success": true,
+  "path": "/app/downloads/illustrations",
+  "directory": "/app/downloads/illustrations",
+  "exists": false,
+  "isDirectory": false
+}
 ```
 
-`POST /api/files/reveal` 的语义:路径先经目录穿越检查(越界 → 400 `FILE_PATH_INVALID`,不存在 → 404 `FILE_NOT_FOUND`),再交给平台打开器(macOS `open` / Windows `explorer` / Linux `xdg-open`)。`resolveOnly: true` 只返回"会打开哪个目录",不触碰操作系统 —— WebUI 借此先拿到后端已收敛的目录,让桌面宿主在前台打开本机文件夹;宿主不可用或后端所在机器没有文件管理器时,前端改为把路径复制到剪贴板。打开目录不校验 Pixiv 凭据:配置里只有占位 token 的机器同样能打开下载目录。
+`GET /api/files/location` **没有副作用**:它不调用 `open` / `explorer` / `xdg-open`,只做路径规范化、越界拦截和存在性检查。越界(含 `/downloads-out` 这类同前缀兄弟目录)一律 400 `FILE_PATH_INVALID`;文件已被删除时**仍返回 200**,用 `exists: false` 如实告知 —— 历史记录里的一条旧记录仍然可以「复制路径」。`directory` 是应当在文件管理器中展示的目录(文件取父目录,目录取自身),`path` 是原始目标,宿主据此可以**选中**该文件而不只是打开它的文件夹。
+
+"在系统文件管理器中显示"是**用户设备的能力**,不是本服务的能力:桌面宿主用 Tauri 命令直接在本机打开(Finder 为 `open -R`,Explorer 为 `explorer /select,`);纯浏览器访问远程部署时没有可打开的桌面,前端降级为「复制路径」。宿主能力边界见 `docs/platform-contract.md` §4.7。
+
+位置查询不校验 Pixiv 凭据:配置里只有占位 token 的机器同样能查到下载目录。
 
 注意:`GET /files/list` 的响应包裹在 `data` 中(`{ files, directories, currentPath }`,文件项额外带 `downloadedAt`);`GET /files/recent` 则不带 `data` 包裹(`{ files, total, filter, type }`),前端消费时留意差异。
 

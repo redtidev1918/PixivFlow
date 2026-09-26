@@ -1,5 +1,31 @@
 # Changelog
 
+## [2.47.0](https://github.com/redtidev1918/PixivFlow/compare/v2.46.0...v2.47.0) (2026-09-26)
+
+
+### Features
+
+* **auth:** host-driven interactive login for window-owning hosts ([aa3d538](https://github.com/redtidev1918/PixivFlow/commit/aa3d53808272afb6c1bc38b54848030f91e30ad6))
+* **cli:** add gateway and delivery operator commands ([47a38dc](https://github.com/redtidev1918/PixivFlow/commit/47a38dcd08dfcee9241a6b404fbc7373e7471132))
+* **delivery:** add a platform-agnostic webhook gateway connector ([a6354e2](https://github.com/redtidev1918/PixivFlow/commit/a6354e2fbb5373c9af1376eb90074dcd8f914ab0))
+* **delivery:** add gateway lifecycle capabilities and read-only gateway projection ([f4619f8](https://github.com/redtidev1918/PixivFlow/commit/f4619f82799689b10f9cabf7d4e524c591425285))
+* **delivery:** add platform-agnostic content model and target capabilities ([25bcefb](https://github.com/redtidev1918/PixivFlow/commit/25bcefb73d49b6ef30e0be1bc73fa739f1db2cc5))
+* **delivery:** carry the author into every submission ([5b5b4cf](https://github.com/redtidev1918/PixivFlow/commit/5b5b4cf6d39c676488cf3b8c732c82b3fb66848e))
+* **delivery:** fan out one artifact to every configured delivery target ([7eba7fb](https://github.com/redtidev1918/PixivFlow/commit/7eba7fb8ea9a7a2a75ecdfd77e82a10eeb58e6df))
+* **gateway:** freeze the gateway contract and ship a reference implementation ([e6efdac](https://github.com/redtidev1918/PixivFlow/commit/e6efdacdb410e845e93a280ed78c2737c785b98c))
+* **gateway:** pass gateway pairing through read-only, with shipping examples ([c064cf9](https://github.com/redtidev1918/PixivFlow/commit/c064cf9501b4c365b44867996c6dfc8095f8c869))
+* **webui:** add read-only delivery history projection ([3add3eb](https://github.com/redtidev1918/PixivFlow/commit/3add3eb1cb234a432a810393085732a56c553156))
+* **webui:** add runtime-contract /status and /version endpoints ([b2e267f](https://github.com/redtidev1918/PixivFlow/commit/b2e267f485a58f3d8fb70dd5026e080c58062cbf))
+
+
+### Bug Fixes
+
+* **config:** validate autoIdempotencyKey in both validators ([80aeea6](https://github.com/redtidev1918/PixivFlow/commit/80aeea63385383714e8b351e6eec194ab0d121a5))
+* **delivery:** carry the occurrence slot into the durable delivery context ([5381aac](https://github.com/redtidev1918/PixivFlow/commit/5381aac2a246a8d2051a8b0647a466361d6b3123))
+* **delivery:** close the Phase 1 consistency gaps on the submission path ([48c22ea](https://github.com/redtidev1918/PixivFlow/commit/48c22ea915c0e8da68e11377ef68687364990671))
+* **webui:** answer config failures with a localisable code, not CLI text ([b6d5e74](https://github.com/redtidev1918/PixivFlow/commit/b6d5e74d4a073396ed1ab37df92bb8c8df31758b))
+* **webui:** read-only delivery panels must not require a Pixiv login ([beb40fa](https://github.com/redtidev1918/PixivFlow/commit/beb40fa4b6e6d1b644129dd2bcce392ce1c0ea6e))
+
 ## [2.46.0](https://github.com/redtidev1918/PixivFlow/compare/v2.45.1...v2.46.0) (2026-09-24)
 
 

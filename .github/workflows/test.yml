@@ -18,6 +18,11 @@ concurrency:
 
 jobs:
   test:
+    # Skip release-please PRs (authored by github-actions[bot]): GitHub holds their
+    # workflow runs for approval so they never start, which shows a permanent failed
+    # check on every release PR. Self-healing: once RELEASE_PLEASE_TOKEN (a real user
+    # PAT) authors the release PR, this guard no longer matches and CI returns.
+    if: github.event_name != 'pull_request' || github.event.pull_request.user.login != 'github-actions[bot]'
     name: Test (Node ${{ matrix.node }})
     runs-on: ubuntu-latest
     strategy:
@@ -53,6 +58,11 @@ jobs:
           python3 src/__tests__/download/test_ugoira_to_gif.py
 
   scheduler-image:
+    # Skip release-please PRs (authored by github-actions[bot]): GitHub holds their
+    # workflow runs for approval so they never start, which shows a permanent failed
+    # check on every release PR. Self-healing: once RELEASE_PLEASE_TOKEN (a real user
+    # PAT) authors the release PR, this guard no longer matches and CI returns.
+    if: github.event_name != 'pull_request' || github.event.pull_request.user.login != 'github-actions[bot]'
     name: Scheduler source image
     runs-on: ubuntu-latest
     steps:

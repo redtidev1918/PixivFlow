@@ -418,6 +418,14 @@ pixivflow delivery retry <deliveryId> --yes           # 只重开这一条（仍
 `"tags": ["Pixiv", "{{tag}}", "{{workTags}}"]`。headers
 和 URL 支持 `${ENV_NAME}`。`arrayFormat` 可设 `comma`、`repeat` 或 `json`。
 
+**空值纪律**：变量只在有值时替换；已知变量取不到值时渲染成空串，未知变量原样保留。
+所以 `{{rankingDate}}` 只对**榜单来源**的候选中存在（`mode: "ranking"`，或目标里把
+`rankingDate` 设成 `YESTERDAY`/日期）——话题/标签/搜索模式的候选没有榜单日期，会渲染成空串，
+模板里写成 `📅 {{rankingDate}} · ⭐ {{bookmarkCount}}` 就会留下「📅  · ⭐ 12」这样的空档。
+`{{publishedDate}}`、`{{language}}`、`{{slot*}}` 同样可能为空。因此：**不要把可能为空的变量和固定
+标点绑在同一行**——要么用模式匹配的模板，要么把整行放进可选片段。`{{author}}` 在插画与小说
+路径都会填充；若某条链路确实取不到作者，模板会露出空值而不是编造署名。
+
 `readinessUrl` 是可选消费屏障：非 2xx 时 worker 放回 outbox row，不增加 attempt；
 不要用只表示进程存活的 `/live`。cache 模式插画会从 Pixiv 下载较小的 `large`/`medium`
 preview，并按 `previewFileField`（默认 `previews`）与 `fileField` 原图一一对应发送；原图

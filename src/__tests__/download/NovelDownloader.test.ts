@@ -72,6 +72,8 @@ describe('NovelDownloader', () => {
       type: 'novel',
       spoiler: true,
       tags: ['ボテ腹', 'R-18'],
+      // Attribution travels with the artifact, not only the downloads table.
+      author: 'Author',
     });
     expect(artifact!.mediaAssets).toEqual([]);
     expect(artifact!.artifacts).toEqual([

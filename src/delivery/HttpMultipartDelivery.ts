@@ -424,6 +424,10 @@ export function buildTemplateVariables(request: DeliveryRequest): Record<string,
     tag: c.tag ?? '',
     topic: c.topic ?? '',
     workTags: c.workTags?.join(',') ?? '',
+    // Pixiv author display name. Empty (not "Unknown") when the API response
+    // carried none, so a template like `作者：{{author}}` degrades visibly
+    // instead of inventing an attribution.
+    author: c.author ?? '',
     // Canonical Pixiv permalink; generated here so templates stay type-agnostic.
     link:
       c.type === 'novel'

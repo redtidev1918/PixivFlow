@@ -262,6 +262,7 @@ album 2–10 条）。投递引擎按能力而不是平台名决定投递形态�
 | `tags` | TelePost 的必填字段。写 `"Pixiv,{{topicTag}},{{xRestrictTag}},{{workTags}}"` 这类模板即可 |
 | `idempotency_key` | **建议必带**，值写 `{{idempotencyKey}}`。它是 ACK 超时后重投的收敛依据（见下） |
 | `link` | 可选，指向原作品的来源链接；TelePost 要求 `http(s)://` 开头 |
+| `note` | 可选简介。**署名应写在这里**，例如 `"作者：{{author}}\nPixiv ID: {{pixivId}}"`：`{{author}}` 是 Pixiv 作者名，`illustration` 与 `novel` 都有；Pixiv 响应没带作者时渲染为空串，不会编造 `Unknown` |
 | 来源字段 | `target_id` / `source_label` / `source_ref` / `scheduled_at` 均可选：`target_id` 供人工「重抓/替换」定向回本目标，其余三个只用于审核卡展示与排查 |
 
 **响应如何决定投递结论。** TelePost 的 `data.status` 是**记录状态**而不是传输结果，
@@ -391,10 +392,12 @@ pixivflow delivery retry --target qq-main --yes       # 只重开仍欠投递的
 ```
 
 字段值支持 `{{title}}`、`{{pixivId}}`、`{{type}}`、`{{tag}}`、`{{topic}}`、
-`{{workTags}}`、`{{link}}`、`{{topicTag}}`、`{{spoiler}}`、`{{xRestrict}}`、
+`{{workTags}}`、`{{author}}`、`{{link}}`、`{{topicTag}}`、`{{spoiler}}`、`{{xRestrict}}`、
 `{{xRestrictLabel}}`、`{{xRestrictTag}}`、`{{rankingDate}}`、`{{publishedDate}}`、
 `{{language}}`、`{{bookmarkCount}}`、`{{viewCount}}`
-模板。`{{bookmarkCount}}`/`{{viewCount}}` 是作品收藏数/浏览数（Pixiv
+模板。`{{author}}` 是 Pixiv 作者名（`illustration` 与 `novel` 都有），Pixiv 响应里
+没有作者时为空串——**不会**填 `Unknown`，所以模板写 `作者：{{author}}` 在缺失时会
+明显地露出空值，而不是编造一个署名。`{{bookmarkCount}}`/`{{viewCount}}` 是作品收藏数/浏览数（Pixiv
 `total_bookmarks`/`total_view`），大数字紧凑渲染（`1.2k`、`34.6w`），接口
 未返回时为空串，可写进简介作为热门依据。`{{xRestrict}}` 保留 Pixiv 原始整数（0=全年龄、1=R-18、2=R-18G）；
 `{{xRestrictLabel}}` 输出 `all-ages` / `R-18` / `R-18G`，`{{xRestrictTag}}`

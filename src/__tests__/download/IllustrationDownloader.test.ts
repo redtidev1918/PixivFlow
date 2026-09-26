@@ -56,6 +56,9 @@ describe('IllustrationDownloader', () => {
         sourceUrl: 'https://example.test/original.png',
       })]);
       expect(result?.artifacts).toHaveLength(1);
+      // Attribution must survive into the artifact: a publishing provider
+      // renders it from the delivery context, not from the downloads table.
+      expect(result?.author).toBe('author');
       expect(result?.artifacts![0]).toMatchObject({
         variant: 'original',
         sourceAssetId: 'pixiv:123:illust:page-1',

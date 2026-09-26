@@ -16,6 +16,15 @@ export interface DownloadedArtifact {
   pixivId: string;
   type: DeliveryItemType;
   title: string;
+  /**
+   * Pixiv author (artist) display name, when the API response carried one.
+   *
+   * Attribution is part of the artifact, not a downloader-private detail: a
+   * publishing provider renders it into its own submission fields
+   * (TelePost: `source_label`/caption署名), and the delivery layer must never
+   * re-derive it by re-reading the `downloads` table.
+   */
+  author?: string;
   /** Pixiv tags attached to the concrete work (not the configured search topic). */
   tags?: string[];
   /** Canonical materialized file facts. */
@@ -84,6 +93,8 @@ export interface DeliveryContext {
   tag?: string;
   topic?: string;
   workTags?: string[];
+  /** Pixiv author display name — rendered as {{author}}; empty when unknown. */
+  author?: string;
   spoiler?: boolean;
   /** Raw Pixiv x_restrict value; kept separate from the channel spoiler policy. */
   xRestrict?: number;

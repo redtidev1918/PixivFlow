@@ -62,7 +62,7 @@
             "{{tag}}",
             "{{workTags}}"
           ],
-          "note": "Pixiv ID: {{pixivId}}",
+          "note": "作者：{{author}}\nPixiv ID: {{pixivId}}",
           "link": "{{link}}",
           "target_id": "{{targetId}}",
           "idempotency_key": "{{idempotencyKey}}",

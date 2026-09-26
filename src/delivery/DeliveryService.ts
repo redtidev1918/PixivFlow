@@ -444,6 +444,7 @@ export class DeliveryService {
       tag: target.filterTag || target.tag || '',
       topic: target.topic?.trim() || undefined,
       workTags: artifact.tags,
+      author: artifact.author,
       spoiler: artifact.spoiler,
       xRestrict: artifact.xRestrict,
       publishedAt: artifact.publishedAt,

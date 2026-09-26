@@ -85,6 +85,7 @@ export class IllustrationDownloader {
         pixivId: String(detail.id),
         type: 'illustration',
         title: detail.title,
+        author: detail.user?.name || undefined,
         artifacts: existingArtifacts,
         spoiler: (detail.x_restrict ?? 0) > 0,
         xRestrict: detail.x_restrict,
@@ -302,6 +303,10 @@ export class IllustrationDownloader {
       pixivId: String(detail.id),
       type: 'illustration',
       title: detail.title,
+      // Attribution travels with the artifact: a publishing provider (e.g. the
+      // TelePost submission target) renders it into its own fields, so the
+      // downloader must not be the only place that knows the author.
+      author: detail.user?.name || undefined,
       tags: tags.map((item) => item.name).filter(Boolean),
       previewFiles: previewFiles.length === files.length ? previewFiles : undefined,
       mediaAssets,

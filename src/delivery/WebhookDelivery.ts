@@ -8,6 +8,12 @@ import { redactError, redactHeaders, redactUrl } from '../utils/redact';
 import type { DeliveryAck } from './DeliveryAck';
 import { contentFromRequest } from './content';
 import type { ContentMedia, ContentTextPart, ContentPart } from './content';
+import {
+  GATEWAY_ACCEPTED_STATUSES,
+  GATEWAY_DUPLICATE_STATUSES,
+  GATEWAY_PENDING_STATUSES,
+  GATEWAY_TERMINAL_FAILURE_STATUSES,
+} from './gatewayContract';
 import type { DeliveryProvider, DeliveryRequest, DeliveryResult } from './types';
 import type { ReadinessProbeResult } from './HttpMultipartDelivery';
 
@@ -91,10 +97,15 @@ export const WEBHOOK_NOT_PROBED: ReadinessProbeResult = { ready: true };
  * outbox keeps retrying the SAME idempotency key until the receiver confirms a
  * business terminal state, which is the only honest reading of a partial ack.
  */
-const PENDING_STATUSES = new Set(['pending', 'queued', 'accepted_pending', 'submitted', 'processing']);
-const ACCEPTED_STATUSES = new Set(['accepted', 'ok', 'success', 'published', 'sent', 'delivered']);
-const DUPLICATE_STATUSES = new Set(['duplicate', 'duplicate_existing', 'already_exists', 'replayed']);
-const TERMINAL_FAILURE_STATUSES = new Set(['failed', 'rejected', 'invalid', 'expired', 'blocked']);
+/**
+ * Receiver-reported status words, taken from the contract module rather than
+ * spelled here a second time — `docs/GATEWAY_CONTRACT.md` §5 is generated from
+ * the same lists, and a test asserts all three agree.
+ */
+const PENDING_STATUSES = new Set<string>(GATEWAY_PENDING_STATUSES);
+const ACCEPTED_STATUSES = new Set<string>(GATEWAY_ACCEPTED_STATUSES);
+const DUPLICATE_STATUSES = new Set<string>(GATEWAY_DUPLICATE_STATUSES);
+const TERMINAL_FAILURE_STATUSES = new Set<string>(GATEWAY_TERMINAL_FAILURE_STATUSES);
 
 /** What one attempt produced, before it is turned into a durable ack. */
 export interface WebhookAttempt {

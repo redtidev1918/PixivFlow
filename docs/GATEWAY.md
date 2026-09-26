@@ -340,6 +340,20 @@ WebUI 的只读投影：`GET /api/gateways`、`GET /api/gateways/:name/pairing`�
 `GET /api/deliveries/:id`（意图 + 事件轨迹）。**WebUI 里没有重试按钮** ——
 人工重试是经过审计的 CLI 动作（记 `actor=cli` 事件）。
 
+## 8. 契约本身与参考实现
+
+- **[Gateway Contract v1](GATEWAY_CONTRACT.md)** —— 规范：端点、消息 schema、响应词汇表、
+  配对 schema、错误码。本文档是「怎么写」，那份是「长什么样」。**两者冲突时以那份为准**，
+  因为它由 `src/delivery/gatewayContract.ts` 和测试逐行钉住。
+- **[`examples/gateway/`](../examples/gateway/README.md)** —— 零依赖参考网关，实现全部三个端点
+  并把收到的消息打印出来。它是「协议本身通不通」的最小验证物，**不是** QQ 适配器；
+  写真正的适配器之前先把契约跑通。
+
+```bash
+node examples/gateway/server.mjs --selftest   # 契约自检
+node examples/gateway/server.mjs              # 起服务，默认 127.0.0.1:8790
+```
+
 ## 相关文档
 
 - [投递运行时架构](architecture/delivery-runtime.md) —— 平面分层、账本与幂等、扇出、capability

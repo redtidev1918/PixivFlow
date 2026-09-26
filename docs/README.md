@@ -20,6 +20,7 @@
 | 精细控制下载内容(标签、收藏数、日期、排行) | [配置参考](CONFIG.md) + [示例合集](https://github.com/redtidev1918/PixivFlow/tree/master/config/examples) |
 | 部署到服务器长期挂机 | [Docker 部署](DOCKER.md) |
 | 把作品投递到 QQ / 飞书 / 自建服务 | [外部网关投递](GATEWAY.md) |
+| 写一个自己的网关 / 对接已有网关 | [网关契约 v1](GATEWAY_CONTRACT.md) + [参考实现](../examples/gateway/README.md) |
 | 在 Android 手机上运行 | [Termux 安装](TERMUX_INSTALL.md) |
 | 从 v1 升级到 v2 | [迁移指南](MIGRATION.md) |
 | 二次开发、改代码、查接口 | [架构说明](ARCHITECTURE.md) → [Pixiv Client Kit](PIXIV_CLIENT_KIT.md) → [WebUI API](API.md) |
@@ -48,6 +49,7 @@
 | --- | --- |
 | [DOCKER](DOCKER.md) | docker compose 双服务部署、环境变量参考、数据持久化、故障排查 |
 | [GATEWAY](GATEWAY.md) | 作品投递到自建网关:统一消息 JSON、HMAC 验签、ACK 契约、capability、QQ/OneBot 网关侧模式与「扫码在网关、投递在 PixivFlow」的边界 |
+| [GATEWAY_CONTRACT](GATEWAY_CONTRACT.md) | **网关契约规范 v1**:三个端点、消息 schema、响应词汇表、配对 schema、签名、错误码 —— 由代码与测试逐行钉住 |
 | [TERMUX_INSTALL](TERMUX_INSTALL.md) | Android/Termux 环境从零安装 |
 
 ### 开发者

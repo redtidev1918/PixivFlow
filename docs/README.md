@@ -19,6 +19,7 @@
 | 了解每种下载方式和全部命令 | [功能与命令](USAGE.md) |
 | 精细控制下载内容(标签、收藏数、日期、排行) | [配置参考](CONFIG.md) + [示例合集](https://github.com/redtidev1918/PixivFlow/tree/master/config/examples) |
 | 部署到服务器长期挂机 | [Docker 部署](DOCKER.md) |
+| 把作品投递到 QQ / 飞书 / 自建服务 | [外部网关投递](GATEWAY.md) |
 | 在 Android 手机上运行 | [Termux 安装](TERMUX_INSTALL.md) |
 | 从 v1 升级到 v2 | [迁移指南](MIGRATION.md) |
 | 二次开发、改代码、查接口 | [架构说明](ARCHITECTURE.md) → [Pixiv Client Kit](PIXIV_CLIENT_KIT.md) → [WebUI API](API.md) |
@@ -46,6 +47,7 @@
 | 文档 | 内容 |
 | --- | --- |
 | [DOCKER](DOCKER.md) | docker compose 双服务部署、环境变量参考、数据持久化、故障排查 |
+| [GATEWAY](GATEWAY.md) | 作品投递到自建网关:统一消息 JSON、HMAC 验签、ACK 契约、capability、QQ/OneBot 网关侧模式 |
 | [TERMUX_INSTALL](TERMUX_INSTALL.md) | Android/Termux 环境从零安装 |
 
 ### 开发者

@@ -234,7 +234,7 @@ Email、Telegram、Discord、ntfy 等渠道；PixivFlow 不实现这些通知协
   [投递运行时架构 §5.1/§7](docs/architecture/delivery-runtime.md) 与
   [配置说明](docs/CONFIG.md)。WebUI 另有只读的投递历史投影
   `GET /api/deliveries`（跨路由账本 + `outboxStatus`）与 `GET /api/deliveries/:id`
-  （单条意图 + 事件轨迹）；**WebUI 里没有重试按钮**——人工重试是 CLI 的审计动作。
+  （单条意图 + 事件轨迹）；**WebUI 里没有重试按钮**——人工重试是 CLI 的审计动作。想把作品投递到 QQ/飞书/自建服务，见 [外部网关投递指南](docs/GATEWAY.md)（统一消息 JSON、HMAC 验签、ACK 契约、OneBot 网关侧模式）。
   网关若自己提供配对端点，可用 `pairingUrl` 让 `GET /api/gateways/:name/pairing` 透传渲染
   （PixivFlow 不生成二维码、不存登录信息）。
 

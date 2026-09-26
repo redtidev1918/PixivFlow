@@ -376,9 +376,35 @@ Gateway，Apprise 等），它们才是平台适配的归属地；重复实现�
 
 ## 7. CLI 与 WebUI
 
-- CLI：`pixivflow outbox list|inspect|retry|cancel`（**已实现**）覆盖「投递状态 / 失败原因 /
-  重试」。`pixivflow gateway list` / `pixivflow gateway test <name>`（计划 P4）将呈报各
-  gateway 的配置、连接状态与 health。
+- CLI（**已实现**）：
+  - `pixivflow gateway list [--json]` —— 列出 `delivery.targets` 里的每条路由：type、
+    **脱敏后的** endpoint、`enabled`（是否仍有启用的下载 target 扇出到它）、最近一次观测到的
+    连接状态、该路由的投递计数。列表是**配置真值**：某条路由即使已没有任何启用的下载 target
+    指向它，也照样列出来（它的 ledger 行还在，运维需要看到并删除它）。
+  - `pixivflow gateway status <name> [--limit N] [--json]` —— 单条路由：capability、
+    连接状态、按状态分组的投递计数，以及最近投递意图 + **对应的 outbox 行**（`outboxStatus`
+    / `outboxAttempts` / `nextAttemptAt`），因此「是否还会有人去重试」一眼可见。
+  - `pixivflow gateway test <name> [--json]` —— 探测并持久化一次观测。判定故意很弱：
+    `httpMultipart` 按其声明的 `readinessUrl` 走（2xx = connected，否则 unreachable）；
+    `webhook` 只证明**端点在应答**（任何 HTTP 状态码，包括 404/405/401，都算
+    connected，并在 note 里写明「通用网关没有健康契约」），连接层失败（DNS/TLS/超时）
+    算 unreachable；`telegram` 明确返回 `unknown`（媒体从不离开 Telegram，PixivFlow
+    探测不到）。**永远不会**把「端点应答」说成一次投递成功。写入 `gateway_connections`
+    的 endpoint 已经过 `redactUrl`，凭据不落库、不打印。
+  - `pixivflow delivery status [--target <name>] [--status failed] [--limit N] [--json]`、
+    `pixivflow delivery status --id <deliveryId>` —— 投递账本视图；不带过滤时按路由输出
+    `delivered/failed/pending/duplicate` 计数。
+  - `pixivflow delivery retry [--target <name>] [--status failed] [--id <id>] [--all]
+    [--limit N] [--dry-run] [--yes]` —— **默认只预览**，必须显式 `--yes` 才落地。它只
+    重新武装**仍欠投递**的路由：已 delivered/duplicate 的行永不被重发；某行虽然 ledger 记为
+    failed，但其 outbox 行仍处于可执行状态（worker 还会去重试）时会被**拒绝**并归入
+    `skipped`，避免人工重试造成重复投递。落地时调用 `revive`/`requeue` 并用
+    `outbox.replay_requested` + `actor=cli` + `countsAsAttempt=0` 记录审计事件，网关侧
+    看到的仍是同一个幂等键。
+  - `pixivflow outbox list|inspect|retry|cancel`（**已实现**）仍是 outbox 层面的原始工具。
+- CLI 不做的事：**不配对任何平台**（二维码/登录都在外部网关进程里完成），**不打印任何
+  凭据**（endpoint 一律脱敏），**不新建第二套状态**（读写的都是既有 `deliveries` /
+  `outbox` / `gateway_connections`）。
 - WebUI：`GET /api/gateways`（**已实现**）列出已配置的 gateway 及其只读投影：
   `name` / `type` / 脱敏后的 `endpoint`（`redactUrl`）/ `connectionStatus`（
   `unknown|unreachable|waiting|connected`，是网关侧配对真值的**缓存投影，允许 stale**）/
@@ -417,7 +443,7 @@ Gateway，Apprise 等），它们才是平台适配的归属地；重复实现�
 | P2 | 平台无关 Content/Media 模型 + adapter capability 声明 | **已实现**（§4.2/§4.3，`src/delivery/capabilities.ts`、`src/delivery/content.ts`、`deliveryCapabilities.test.ts`） |
 | P3a | capability 生命周期字段（节流/截断/幂等）+ `gateway_connections` 表 + 只读 `/api/gateways*` | **已实现**（§4.2/§7，`GatewayConnectionRepository.ts`、`src/webui/routes/gateways.ts`、`gatewayConnections.test.ts`） |
 | P3b | 通用 Messaging Gateway `webhook` connector（统一消息 JSON + 可选 HMAC 签名） | **已实现**（§5.1，`src/delivery/WebhookDelivery.ts`、`webhookDelivery.test.ts`） |
-| P4 | CLI `gateway list/test` + WebUI 配对对话框（只渲染网关返回的 payload，不存凭据） | 计划 |
+| P4 | CLI `gateway list/status/test` + `delivery status/retry`（**已实现**，§7，`src/commands/GatewayCommand.ts`、`src/commands/DeliveryCommand.ts`、`gatewayRoutes.ts`、`GatewayDeliveryCommand.test.ts`）；WebUI 配对对话框（只渲染网关返回的 payload，不存凭据）仍计划 | 进行中 |
 | P5 | 文档与示例补齐（含 `config/examples/` 网关样例） | 计划 |
 
 补充：P1 / P2 / P3a / P3b 都**未新增 deliveries/outbox 的任何表或列**。扇出完全落在既有的

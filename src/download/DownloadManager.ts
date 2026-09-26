@@ -170,12 +170,18 @@ export class DownloadManager implements IDownloadManager {
       materialization
     );
     this.planner = new DownloadPlanner(database, {
-      deliveredIds: (target, type, ids) =>
-        this.deliveryService.deliveredIds(target, type, ids),
+      // `scope` is a single legacy target name, or the full fan-out array for a
+      // multi-platform target (then only works confirmed on EVERY platform count).
+      deliveredIds: (scope, type, ids) =>
+        Array.isArray(scope)
+          ? this.deliveryService.deliveredIdsForAllTargets(scope, type, ids)
+          : this.deliveryService.deliveredIds(scope, type, ids),
       // CANDIDATE SELECTION dedupe: also treats a work whose review submission is
       // still PENDING as taken, so it is skipped instead of submitted again.
-      submittedIds: (target, type, ids) =>
-        this.deliveryService.submittedIds(target, type, ids),
+      submittedIds: (scope, type, ids) =>
+        Array.isArray(scope)
+          ? this.deliveryService.submittedIdsForAllTargets(scope, type, ids)
+          : this.deliveryService.submittedIds(scope, type, ids),
       // Durable duplicate history handed in by the caller (the batch runner asks
       // the control plane for it). Independent of any local delivery target, so it
       // also works for a shadow run that delivers nowhere.

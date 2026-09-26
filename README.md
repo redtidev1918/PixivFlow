@@ -217,6 +217,11 @@ Email、Telegram、Discord、ntfy 等渠道；PixivFlow 不实现这些通知协
   幂等意图；下游按幂等键收敛，不会在频道里出现重复消息。
 - 旧的文件型 `delivery-outbox/*.json` 会在启动时自动一次性迁移进 SQLite（迁移幂等）。
 - 「今天没有可投稿内容」这类通知与内容投递走同一张表、独立泵送，互不阻塞。
+- **多平台投递（fan-out）**：`targets[].delivery.targets` 可以声明多个交付目标，同一个
+  作品会为每个平台各写一条独立意图 + 独立 outbox 行。一个平台失败不影响其他平台，也
+  不影响下载本身；重试只重发尚未确认的那个平台。`delivery.target`（单值）仍然可用，
+  数组优先；两者都缺省时不投递，行为与历史版本一致。详见
+  [投递运行时架构](docs/architecture/delivery-runtime.md)。
 
 配置 `readinessUrl` 后，worker 每次认领都会先检查依赖 `/ready`；非 2xx 只把 row
 放回 pending，不增加 attempt。dead letter 通过正式 CLI 管理：

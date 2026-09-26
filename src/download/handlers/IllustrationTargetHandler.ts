@@ -10,6 +10,7 @@ import { NetworkError, isRetryableNetworkError, isPixivKitError } from '../../ut
 import { calculatePopularityScore } from '../../utils/pixiv-utils';
 import { PixivIllust } from '@redtidev/pixiv-client';
 import { DeliveryService } from '../../delivery/DeliveryService';
+import { targetDeliveryNames } from '../../delivery/targetRoutes';
 import {
   CandidateAttempt,
   CandidateScanSummary,
@@ -883,7 +884,7 @@ export class IllustrationTargetHandler {
           aiMetadataCheck: target.aiMetadataCheck === true,
           maxPageCount: target.maxPageCount,
           includeDeliveryPreviews: Boolean(
-            target.storageMode === 'cache' && target.delivery?.target?.trim()
+            target.storageMode === 'cache' && targetDeliveryNames(target).length > 0
           ),
         }
       );
@@ -938,21 +939,23 @@ export class IllustrationTargetHandler {
     artifact: import('../../delivery/types').DownloadedArtifact,
     target: TargetConfig
   ): CandidateAttempt {
-    const isDelivery = target.storageMode === 'cache' && target.delivery?.target?.trim();
-    if (!isDelivery || !this.deliveryService) {
+    const deliveryTargets = targetDeliveryNames(target);
+    if (deliveryTargets.length === 0 || !this.deliveryService) {
       this.outcomes.push({ kind: 'stored', workId: artifact.pixivId, workType: artifact.type });
       return { kind: 'selected', workId: artifact.pixivId, workType: artifact.type };
     }
     // Pre-lock delivery dedupe (after selection): if the ledger already knows it,
-    // that is a confirmed fact, not a new submission.
+    // that is a confirmed fact, not a new submission. With fan-out this is only
+    // true once EVERY configured platform has it — a work still owed to one
+    // platform must proceed so that platform gets its delivery.
     const slotId = (target.delivery as { executionContext?: { slotId?: string } } | undefined)?.executionContext?.slotId;
-    if (this.deliveryService.isAlreadyDelivered(target.delivery!.target!, artifact.type, artifact.pixivId)) {
+    if (this.deliveryService.isDeliveredToAllTargets(deliveryTargets, artifact.type, artifact.pixivId)) {
       return {
         kind: 'skipped',
         skip: {
           code: 'duplicate',
           workId: artifact.pixivId,
-          reason: 'already delivered to target (delivery ledger)',
+          reason: 'already delivered to every target (delivery ledger)',
         },
       };
     }
@@ -961,6 +964,9 @@ export class IllustrationTargetHandler {
       fields: target.delivery?.fields as Record<string, unknown> | undefined,
       extraContext: deliveryContextFields(target),
     });
+    // `duplicate` is the AND over all routes: it is true only when nothing is
+    // left to send, so at least one route always carries a delivery when we get
+    // here. Report the first route that actually owes a delivery.
     if (res.duplicate) {
       return {
         kind: 'skipped',
@@ -971,11 +977,12 @@ export class IllustrationTargetHandler {
         },
       };
     }
+    const owed = res.routes.find((route) => !route.duplicate && route.deliveryId) ?? res.routes[0];
     this.outcomes.push({
       kind: 'delivery_pending',
       workId: artifact.pixivId,
       workType: artifact.type,
-      deliveryId: res.deliveryId,
+      deliveryId: owed?.deliveryId ?? res.deliveryId,
     });
     return { kind: 'selected', workId: artifact.pixivId, workType: artifact.type };
   }

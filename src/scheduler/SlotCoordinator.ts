@@ -17,6 +17,7 @@ import {
 import { TERMINAL_REASON_MESSAGES, TargetOutcome, terminalReasonFor } from './TargetOutcome';
 import { SlotBusinessStatus, classifySlotBusinessStatus } from './SlotBusinessStatus';
 import { TargetExecutionContext, WorkBinding, isSingleWorkCell } from './WorkIdentity';
+import { targetDeliveryNames } from '../delivery/targetRoutes';
 
 /**
  * Execution-lease TTL and heartbeat cadence.
@@ -182,14 +183,27 @@ export type CellDeliveryState =
  * learning anything about TelePost, bots or any hosting platform (see below).
  */
 export interface SchedulerDeliveryPort {
-  stateFor(input: { deliveryTarget: string; slotId: string; targetId: string }): CellDeliveryState;
+  /**
+   * `deliveryTargets` is the full set of platforms the cell publishes to (one
+   * entry for a legacy single-channel target). `deliveryTarget` is accepted as
+   * a legacy singular alias.
+   */
+  stateFor(input: {
+    deliveryTargets?: string[];
+    deliveryTarget?: string;
+    slotId: string;
+    targetId: string;
+  }): CellDeliveryState;
 }
 
-/** The delivery channel a scheduled cell publishes to (null = download-only). */
-function deliveryTargetOf(target: TargetConfig): string | null {
-  if (target.storageMode !== 'cache') return null;
-  const name = target.delivery?.target;
-  return typeof name === 'string' && name.trim() ? name.trim() : null;
+/**
+ * The delivery channels a scheduled cell publishes to ([] = download-only).
+ * A target may fan out to several platforms; every one of them owns its own
+ * ledger row for this cell.
+ */
+function deliveryTargetsOf(target: TargetConfig): string[] {
+  if (target.storageMode !== 'cache') return [];
+  return targetDeliveryNames(target);
 }
 
 /**
@@ -527,15 +541,15 @@ export class SlotCoordinator {
    * another work behind the operator's back.
    */
   private settlePendingDelivery(slotId: string, target: TargetConfig): boolean {
-    const deliveryTarget = deliveryTargetOf(target);
-    if (!deliveryTarget || !this.delivery || !target.id) return false;
-    const state = this.delivery.stateFor({ deliveryTarget, slotId, targetId: target.id });
+    const deliveryTargets = deliveryTargetsOf(target);
+    if (deliveryTargets.length === 0 || !this.delivery || !target.id) return false;
+    const state = this.delivery.stateFor({ deliveryTargets, slotId, targetId: target.id });
     switch (state.kind) {
       case 'live':
         logger.info('Cell delivery still owned by the outbox; selection not re-run', {
           slot: slotId,
           target: target.id,
-          deliveryTarget,
+          deliveryTargets,
         });
         return true;
       case 'confirmed':
@@ -688,10 +702,12 @@ export class SlotCoordinator {
 
     // Only targets the caller still knows about can name a delivery channel; a
     // cell with no known channel has no delivery fact to consult.
-    const deliveryTargetByTargetId = new Map<string, string>();
+    const deliveryTargetsByTargetId = new Map<string, string[]>();
     for (const target of targets) {
-      const deliveryTarget = deliveryTargetOf(target);
-      if (target.id && deliveryTarget) deliveryTargetByTargetId.set(target.id, deliveryTarget);
+      const deliveryTargets = deliveryTargetsOf(target);
+      if (target.id && deliveryTargets.length > 0) {
+        deliveryTargetsByTargetId.set(target.id, deliveryTargets);
+      }
     }
 
     let submitted = 0;
@@ -701,7 +717,7 @@ export class SlotCoordinator {
     let delivery_failed = 0;
 
     const targetsDetail = cellRows.map((cell) => {
-      const classified = this.classifyCell(cell.status, slot.slotId, cell.targetId, deliveryTargetByTargetId);
+      const classified = this.classifyCell(cell.status, slot.slotId, cell.targetId, deliveryTargetsByTargetId);
       if (classified === 'submitted') submitted += 1;
       else if (classified === 'no_match') no_match += 1;
       else if (classified === 'duplicate') duplicate += 1;
@@ -776,15 +792,15 @@ export class SlotCoordinator {
     cellStatus: CellStatus,
     slotId: string,
     targetId: string,
-    deliveryTargetByTargetId: Map<string, string>
+    deliveryTargetsByTargetId: Map<string, string[]>
   ): 'submitted' | 'no_match' | 'duplicate' | 'delivery_failed' | 'executor_failed' | 'other' {
     if (cellStatus === 'submitted') return 'submitted';
     if (cellStatus === 'no_candidate') return 'no_match';
     if (cellStatus === 'duplicate') return 'duplicate';
-    const deliveryTarget = deliveryTargetByTargetId.get(targetId);
-    if (deliveryTarget && this.delivery) {
+    const deliveryTargets = deliveryTargetsByTargetId.get(targetId);
+    if (deliveryTargets && deliveryTargets.length > 0 && this.delivery) {
       try {
-        const state = this.delivery.stateFor({ deliveryTarget, slotId, targetId });
+        const state = this.delivery.stateFor({ deliveryTargets, slotId, targetId });
         if (state.kind === 'lost') return 'delivery_failed';
       } catch (error) {
         // Observability must never break the rollup.

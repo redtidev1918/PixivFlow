@@ -26,6 +26,7 @@ import {
 import { TargetOutcome } from '../scheduler/TargetOutcome';
 import { applyAcquisitionPolicy } from '../scheduler/RecoveryPolicy';
 import { DeliveryService } from '../delivery/DeliveryService';
+import { primaryDeliveryName } from '../delivery/targetRoutes';
 import { createDeliveryLedgerPort } from '../delivery/DeliveryLedgerPort';
 import { OutboxWorker } from '../delivery/OutboxWorker';
 import { settleDeliveryTerminal } from '../delivery/settleDeliveryTerminal';
@@ -263,7 +264,7 @@ export async function notifyScheduleFailure(
     failure: JobFailure
   ): Promise<void> {
   const targetNames = selectScheduleTargets(config.targets, schedule)
-    .map((target) => target.delivery?.target?.trim())
+    .map((target) => primaryDeliveryName(target))
     .filter((name): name is string => Boolean(name));
   const status = failure.status === 'timeout' ? '超时' : '失败';
   const stopped = failure.stopped

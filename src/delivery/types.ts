@@ -73,6 +73,12 @@ export interface DeliveryContext {
   title: string;
   pixivId: string;
   type: DeliveryItemType;
+  /**
+   * The `delivery.targets` route this delivery publishes to (e.g. "tg-review",
+   * "qq-main"). One work fans out to one outbox row per route, so an adapter can
+   * always tell which configured platform it is serving.
+   */
+  deliveryTarget?: string;
   /** The PixivFlow target id (e.g. "bot1-illust-tag-a") that produced this work. */
   targetId?: string;
   tag?: string;

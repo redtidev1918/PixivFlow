@@ -193,8 +193,16 @@ delivery outbox 持久化、携带稳定幂等标识、指数退避重试。`not
 | 字段 | 取值 | 说明 |
 | --- | --- | --- |
 | `storageMode` | `persistent` / `cache` | 默认 `persistent`;`cache` 交付成功后删除本地文件 |
-| `delivery.target` | string | 顶层 `delivery.targets` 中的目标名称，cache 模式必填 |
+| `delivery.target` | string | 顶层 `delivery.targets` 中的目标名称（单平台投递） |
+| `delivery.targets` | string[] | 顶层 `delivery.targets` 中的多个目标名称：同一作品扇出到多个平台 |
 | `delivery.fields` | object | 当前 target 的表单字段覆盖 |
+
+`delivery.targets` 与 `delivery.target` 并存，数组优先；`cache` 模式下至少要有一条路由
+（数组非空或 `target` 有效），每一项都必须是顶层 `delivery.targets` 的既有键，否则配置
+校验失败。每个目标各自拥有独立的投递意图、发件箱行与重试预算：某个平台失败不影响其他
+平台，重试只重发尚未确认的平台；只有所有目标都已确认，作品才被视为「已投递」。未配置
+任何 `delivery.targets` 时行为与历史版本完全一致。详见
+[投递运行时架构](architecture/delivery-runtime.md)。
 
 `cache` 模式使用通用命名交付目标。当前内置 provider 是流式
 `httpMultipart`，下面的地址和字段仅为示例：

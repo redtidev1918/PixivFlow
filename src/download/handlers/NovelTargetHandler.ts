@@ -10,6 +10,7 @@ import { getTodayDate, getYesterdayDate } from '../../utils/pixiv-date-utils';
 import { calculatePopularityScore } from '../../utils/pixiv-utils';
 import { PixivNovel } from '@redtidev/pixiv-client';
 import { DeliveryService } from '../../delivery/DeliveryService';
+import { targetDeliveryNames } from '../../delivery/targetRoutes';
 import {
   CandidateAttempt,
   CandidateScanSummary,
@@ -971,20 +972,21 @@ export class NovelTargetHandler {
     artifact: DownloadedArtifact,
     target: TargetConfig
   ): Promise<CandidateAttempt> {
-    const isDelivery = target.storageMode === 'cache' && target.delivery?.target?.trim();
-    if (!isDelivery || !this.deliveryService) {
+    const deliveryTargets = targetDeliveryNames(target);
+    if (deliveryTargets.length === 0 || !this.deliveryService) {
       this.outcomes.push({ kind: 'stored', workId: artifact.pixivId, workType: artifact.type });
       return { kind: 'selected', workId: artifact.pixivId, workType: artifact.type };
     }
     const ec = target.delivery as { executionContext?: { slotId?: string } } | undefined;
     const slotId = ec?.executionContext?.slotId;
-    if (this.deliveryService.isAlreadyDelivered(target.delivery!.target!, artifact.type, artifact.pixivId)) {
+    // Fan-out: only a work confirmed on EVERY configured platform is a duplicate.
+    if (this.deliveryService.isDeliveredToAllTargets(deliveryTargets, artifact.type, artifact.pixivId)) {
       return {
         kind: 'skipped',
         skip: {
           code: 'duplicate',
           workId: artifact.pixivId,
-          reason: 'already delivered to target (delivery ledger)',
+          reason: 'already delivered to every target (delivery ledger)',
         },
       };
     }
@@ -1004,11 +1006,12 @@ export class NovelTargetHandler {
         },
       };
     }
+    const owed = res.routes.find((route) => !route.duplicate && route.deliveryId) ?? res.routes[0];
     this.outcomes.push({
       kind: 'delivery_pending',
       workId: artifact.pixivId,
       workType: artifact.type,
-      deliveryId: res.deliveryId,
+      deliveryId: owed?.deliveryId ?? res.deliveryId,
     });
     return { kind: 'selected', workId: artifact.pixivId, workType: artifact.type };
   }

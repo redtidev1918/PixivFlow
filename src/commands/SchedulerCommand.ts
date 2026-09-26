@@ -10,6 +10,7 @@ import { MultiScheduleManager } from '../scheduler/MultiScheduleManager';
 import { ScheduleTriggerServer, TriggerRunResult } from '../scheduler/ScheduleTriggerServer';
 import { SlotCoordinator } from '../scheduler/SlotCoordinator';
 import { selectScheduleTargets } from '../scheduler/schedules';
+import { primaryDeliveryName } from '../delivery/targetRoutes';
 import { createSchedulerRuntime } from './scheduler-runtime';
 import { recoveryOutcomeFor, recoveryUserMessage } from '../scheduler/RecoveryOutcome';
 import { SchedulerIdleLifecycle } from './SchedulerIdleLifecycle';
@@ -180,7 +181,7 @@ export class SchedulerCommand extends BaseCommand {
               if (plans.length !== 1) throw new Error('ambiguous target');
               const plan = plans[0];
               const target = selectScheduleTargets(cfg.targets, plan).find((item) => item.id === targetId)!;
-              const deliveryName = target.delivery?.target;
+              const deliveryName = primaryDeliveryName(target);
               const delivery = deliveryName ? cfg.delivery?.targets?.[deliveryName] : undefined;
               if (delivery?.type !== 'httpMultipart' || !delivery.refetchOutcomeUrl?.trim()) {
                 throw new Error('refetch outcome endpoint not configured');
@@ -238,7 +239,7 @@ export class SchedulerCommand extends BaseCommand {
               if (plans.length !== 1) throw new Error('ambiguous target');
               const plan = plans[0];
               const target = selectScheduleTargets(cfg.targets, plan).find((item) => item.id === targetId)!;
-              const deliveryName = target.delivery?.target;
+              const deliveryName = primaryDeliveryName(target);
               const delivery = deliveryName ? cfg.delivery?.targets?.[deliveryName] : undefined;
               if (delivery?.type !== 'httpMultipart' || !delivery.scheduleOutcomeUrl?.trim()) {
                 throw new Error('schedule outcome endpoint not configured');

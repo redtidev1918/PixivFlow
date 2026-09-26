@@ -22,6 +22,7 @@
 - 架构设计
   - [索引与治理](/architecture/README.md)
   - [架构原则](/architecture/principles.md)
+  - [投递运行时](/architecture/delivery-runtime.md)
   - [运行结果契约](/architecture/operational-result-contract.md)
   - [候选供给 RFC](/architecture/candidate-supply-rfc.md)
   - [候选供给可观测性 RFC](/architecture/candidate-supply-observability-rfc.md)

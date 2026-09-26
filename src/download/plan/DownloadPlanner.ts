@@ -1,4 +1,5 @@
 import type { TargetConfig } from '../../config';
+import { targetDeliveryNames } from '../../delivery/targetRoutes';
 import type { PixivIllust, PixivNovel } from '@redtidev/pixiv-client';
 import { parseDateRange, isDateInRange } from '../../utils/date-utils';
 import { isAIIllustration } from '../../utils/ai-detection';
@@ -67,18 +68,29 @@ export function resolveCandidateScanLimit(
 }
 
 /**
+ * Which delivery channel(s) a candidate-dedupe question is about: one legacy
+ * target name, or the full set of platforms a download target fans out to.
+ */
+export type DeliveryTargetScope = string | string[];
+
+/**
  * Centralizes planning logic (filtering, deduplication, already-downloaded detection, random selection).
  */
 export interface DeliveryDedupeSource {
-  /** Returns the subset of ids already CONFIRMED delivered to this target. */
-  deliveredIds?(deliveryTarget: string, workType: 'illustration' | 'novel', ids: string[]): Set<string>;
   /**
-   * Returns the subset of ids already SUBMITTED for this target — delivered OR
+   * Returns the subset of ids already CONFIRMED delivered to this channel (or,
+   * for an array scope, to EVERY channel in it).
+   */
+  deliveredIds?(scope: DeliveryTargetScope, workType: 'illustration' | 'novel', ids: string[]): Set<string>;
+  /**
+   * Returns the subset of ids already SUBMITTED for this channel — delivered OR
    * still awaiting a review answer. Candidate selection prefers this over
    * `deliveredIds`: a work whose review submission is pending is already in the
-   * human queue, so selecting it again would submit it twice.
+   * human queue, so selecting it again would submit it twice. With an array
+   * scope the answer is AND-over-scope: a work still owed to one platform stays
+   * selectable.
    */
-  submittedIds?(deliveryTarget: string, workType: 'illustration' | 'novel', ids: string[]): Set<string>;
+  submittedIds?(scope: DeliveryTargetScope, workType: 'illustration' | 'novel', ids: string[]): Set<string>;
   /**
    * Works this bot has already handled ANYWHERE — durable history owned by a
    * control plane, supplied by the caller.
@@ -143,19 +155,22 @@ export class DownloadPlanner {
     // instead of selecting a historical duplicate. `submittedIds` is preferred
     // because a pending review submission is already in the human queue.
     // Best-effort only: downstream reconciliation remains the final safety net.
-    const deliveryTarget = target.delivery?.target?.trim();
+    const deliveryTargets = targetDeliveryNames(target);
+    const deliveryScope: DeliveryTargetScope | undefined =
+      deliveryTargets.length > 1 ? deliveryTargets : deliveryTargets[0];
     const submittedQuery =
       this.deliveryDedupe?.submittedIds ?? this.deliveryDedupe?.deliveredIds;
     let deliveryDuplicateCount = 0;
     if (
-      deliveryTarget &&
+      deliveryScope &&
       submittedQuery &&
       typeof (this.database as { deliveries?: unknown }).deliveries === 'object'
     ) {
+      const deliveryLabel = Array.isArray(deliveryScope) ? deliveryScope.join(', ') : deliveryScope;
       try {
         const taken = submittedQuery.call(
           this.deliveryDedupe,
-          deliveryTarget,
+          deliveryScope,
           itemType,
           available.map((item) => String(item.id))
         );
@@ -166,14 +181,14 @@ export class DownloadPlanner {
             prefiltered.push({
               code: 'duplicate',
               workId: id,
-              reason: `already submitted to ${deliveryTarget} (delivery ledger)`,
+              reason: `already submitted to ${deliveryLabel} (delivery ledger)`,
             });
           }
         }
         available = available.filter((item) => !taken.has(String(item.id)));
         deliveryDuplicateCount = before - available.length;
         if (deliveryDuplicateCount > 0) {
-          logger.info(`Delivery dedupe skipped ${deliveryDuplicateCount} already-submitted ${itemType}(s) for ${deliveryTarget}`);
+          logger.info(`Delivery dedupe skipped ${deliveryDuplicateCount} already-submitted ${itemType}(s) for ${deliveryLabel}`);
         }
       } catch (error) {
         logger.warn('Delivery dedupe preflight failed; continuing (downstream net remains)', {

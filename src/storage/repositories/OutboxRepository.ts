@@ -106,7 +106,15 @@ export class OutboxRepository extends BaseRepository {
       });
     // On conflict the existing row is authoritative; fetch by the natural key.
     if (input.idempotencyKey) {
-      return this.getByKey(input.kind, input.idempotencyKey)!;
+      const existing = this.getByKey(input.kind, input.idempotencyKey)!;
+      // A terminal row for work that is still owed must not swallow the new
+      // intent (see `revive`): otherwise a per-target retry could never re-send
+      // the platform that dead-lettered.
+      if (existing.status === 'dead' || existing.status === 'cancelled') {
+        this.revive(existing.id, now);
+        return this.get(existing.id)!;
+      }
+      return existing;
     }
     return this.get(id)!;
   }
@@ -275,8 +283,32 @@ export class OutboxRepository extends BaseRepository {
       .run({ id, dueAt });
   }
 
-  cancel(id: string, now: number = Date.now()): boolean {
-    const result = this.db.prepare(
+  /**
+   * Re-arm a row whose work was NOT actually settled (delivery intent still
+   * owed) but whose outbox row reached a TERMINAL state — dead after its retry
+   * budget, or cancelled by an operator.
+   *
+   * This is what makes the retry contract hold per delivery target: re-running a
+   * work whose second platform dead-lettered must retry THAT platform (and only
+   * it), not leave it permanently dead behind a "has an outbox row already"
+   * conflict. The fresh attempt budget is deliberate: a new explicit attempt is
+   * a new chance to converge, unlike `markRetry` which spends the old budget.
+   *
+   * Returns true when the row was terminal and has been reopened.
+   */
+  revive(id: string, now: number = Date.now()): boolean {
+    const result = this.db
+      .prepare(
+        `UPDATE outbox SET status='pending', attempts=0, next_attempt_at=@now,
+                 last_error=NULL, lease_owner=NULL, lease_until=NULL,
+                 completed_at=NULL, updated_at=@now
+         WHERE id=@id AND status IN ('dead','cancelled')`
+      )
+      .run({ id, now });
+    return result.changes === 1;
+  }
+
+  cancel(id: string, now: number = Date.now()): boolean {    const result = this.db.prepare(
       `UPDATE outbox SET status='cancelled', lease_owner=NULL, lease_until=NULL,
               last_error='cancelled by operator', completed_at=@now, updated_at=@now
        WHERE id=@id AND status IN ('pending','retry_wait','dead')`

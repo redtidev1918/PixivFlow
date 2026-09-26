@@ -115,6 +115,37 @@ export class DeliveryRepository extends BaseRepository {
   }
 
   /**
+   * Multi-target batch dedupe: works that are CONFIRMED on EVERY delivery
+   * target at once.
+   *
+   * This is the fan-out counterpart of `deliveredIds`. A work delivered to one
+   * platform out of three is NOT finished — the remaining platforms still owe a
+   * delivery, so the work must stay selectable instead of being skipped as a
+   * duplicate. An empty target list means "no delivery configured" and returns
+   * nothing, exactly like the single-target version with no delivery target.
+   */
+  deliveredIdsForAllTargets(
+    deliveryTargets: string[],
+    workType: string,
+    pixivIds: string[]
+  ): Set<string> {
+    return this.idsByStatusForAllTargets(deliveryTargets, workType, pixivIds, ['delivered', 'duplicate']);
+  }
+
+  /** Fan-out counterpart of `submittedIds` (delivered/duplicate or still pending). */
+  submittedIdsForAllTargets(
+    deliveryTargets: string[],
+    workType: string,
+    pixivIds: string[]
+  ): Set<string> {
+    return this.idsByStatusForAllTargets(deliveryTargets, workType, pixivIds, [
+      'pending',
+      'delivered',
+      'duplicate',
+    ]);
+  }
+
+  /**
    * Batch pre-lock dedupe for CANDIDATE SELECTION: works already delivered, or
    * whose review submission is still PENDING.
    *
@@ -148,6 +179,43 @@ export class DeliveryRepository extends BaseRepository {
              AND pixiv_id IN (${placeholders})`
         )
         .all(deliveryTarget, workType, ...slice) as Array<{ pixiv_id: string }>;
+      for (const r of rows) out.add(r.pixiv_id);
+    }
+    return out;
+  }
+
+  /**
+   * Works whose delivery rows cover EVERY listed target in one of `statuses`.
+   * Implemented as one GROUP BY ... HAVING COUNT(DISTINCT delivery_target)
+   * query, so N platforms cost one statement, not N.
+   */
+  private idsByStatusForAllTargets(
+    deliveryTargets: string[],
+    workType: string,
+    pixivIds: string[],
+    statuses: DeliveryStatus[]
+  ): Set<string> {
+    const out = new Set<string>();
+    if (pixivIds.length === 0) return out;
+    const targets = [...new Set(deliveryTargets.filter((name) => typeof name === 'string' && name.trim()))];
+    if (targets.length === 0) return out;
+
+    const statusList = statuses.map((status) => `'${status}'`).join(',');
+    const targetPlaceholders = targets.map(() => '?').join(',');
+    const CHUNK = 400;
+    for (let i = 0; i < pixivIds.length; i += CHUNK) {
+      const slice = pixivIds.slice(i, i + CHUNK);
+      const placeholders = slice.map(() => '?').join(',');
+      const rows = this.db
+        .prepare(
+          `SELECT pixiv_id FROM deliveries
+           WHERE delivery_target IN (${targetPlaceholders})
+             AND work_type = ? AND status IN (${statusList})
+             AND pixiv_id IN (${placeholders})
+           GROUP BY pixiv_id
+           HAVING COUNT(DISTINCT delivery_target) >= ?`
+        )
+        .all(...targets, workType, ...slice, targets.length) as Array<{ pixiv_id: string }>;
       for (const r of rows) out.add(r.pixiv_id);
     }
     return out;

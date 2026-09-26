@@ -81,7 +81,11 @@ PixivFlow 负责 Pixiv 认证、候选发现/排序/去重、下载、审核链�
 - `BaseCommand.failure(error)` 把原因**同时**放进 `message` 和 `error`；入口在 `success === false`
   时把原因打到 stderr，并把 `{command, stage, reason, retryable, error}` 写进结构化日志。
   只 `process.exit(1)` 不说明原因，等于让失败阶段不可见（Deploy `AGENTS.md` §25 禁止）。
-- 日志里的 `Error` 由 `src/logger.ts` 的 `serializeLogValue` 展开成 `{name, message, stack, cause}`。
+- 日志里的 `Error` 由 `src/logger.ts` 的 `serializeLogValue` 展开成
+  `{name, message, stack, cause, …自身可枚举字段}`。`PixivFlowError` 子类的
+  `code`/`statusCode`/`url`/`isRateLimit`/`waitTime`/`itemId`/`itemType` 是机器可读契约
+  （Deploy `AGENTS.md` §25 要求 `code` 可被 grep），必须一并保留；新增错误子类时把契约字段
+  声明成 own enumerable（构造函数参数属性即可），不要藏在不可枚举属性里。
   **不要**退回裸 `JSON.stringify(record)`：`Error` 的 `message`/`stack` 不可枚举，会写成
   `"error":{}`（这正是 `pixivflow reconcile` 失败时无法诊断的原因）。
 - 自己打印失败细节的命令在 `metadata` 里声明 `printsOwnErrors: true`（见 `download`），

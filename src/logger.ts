@@ -31,17 +31,31 @@ const ctxStore = new AsyncLocalStorage<LogContext>();
  * non-enumerable — so a structured line carrying an error used to say
  * `"error":{}` and hide the failing stage (the exact shape that made
  * `pixivflow reconcile` undiagnosable in production). Errors are expanded
- * explicitly, `cause` included.
+ * explicitly, `cause` included, and every own enumerable field is kept:
+ * `PixivFlowError` subclasses carry the machine-readable contract there
+ * (`code`, `statusCode`, `url`, `isRateLimit`, `waitTime`, `itemId`,
+ * `itemType`), which is what the deploy Failure Contract requires an operator
+ * to be able to grep.
  */
 function serializeLogValue(value: unknown): string {
   return JSON.stringify(value, (_key, item) => {
     if (item instanceof Error) {
-      return {
+      const serialized: Record<string, unknown> = {
         name: item.name,
         message: item.message,
-        ...(item.stack ? { stack: item.stack } : {}),
-        ...(item.cause !== undefined ? { cause: item.cause } : {}),
       };
+      for (const key of Object.keys(item)) {
+        if (!(key in serialized)) {
+          serialized[key] = (item as unknown as Record<string, unknown>)[key];
+        }
+      }
+      if (item.stack) {
+        serialized.stack = item.stack;
+      }
+      if (item.cause !== undefined) {
+        serialized.cause = item.cause;
+      }
+      return serialized;
     }
     return item;
   });

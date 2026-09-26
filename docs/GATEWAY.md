@@ -162,8 +162,9 @@ PixivFlow 会读你声明的 capability 来组装消息，**只收紧、不放�
 
 ## 5. 具体例子：QQ / OneBot v11（网关侧）
 
-PixivFlow 不做 OneBot 协议；下面这套是你网关里的**对接形状**（协议细节以
-[OneBot v11 规范](https://github.com/botuniverse/onebot-11) 与你的实现文档为准）：
+PixivFlow 不做 OneBot 协议，**也没有内置 OneBot 连接器**；下面这套是你网关里的**对接形状**
+（协议细节以 [OneBot v11 规范](https://github.com/botuniverse/onebot-11) 与你的实现文档为准）。
+5.1–5.5 把最容易误解的一环 —— 扫码登录到底发生在哪里 —— 拆开讲清楚。
 
 ```
 PixivFlow --HTTP POST(统一消息 JSON)--> 你的网关 --OneBot v11 HTTP--> NapCat / Lagrange / LLOneBot --> QQ
@@ -190,12 +191,114 @@ PixivFlow --HTTP POST(统一消息 JSON)--> 你的网关 --OneBot v11 HTTP--> Na
 
 **不要让 PixivFlow 直接对 QQ 说话**：token、风控、限速、掉线重连、协议版本漂移都属于网关。
 
+### 5.1 一个必须说清的事实：投递与扫码是两个不同的接口
+
+用 NapCat 时，QQ 的**登录态**由 NapCat 持有（它在自己的 WebUI 里出二维码，你扫码，
+会话留在 NapCat 进程内）。而 PixivFlow 只会对**一个** URL 说话：配置里的
+`delivery.targets.<name>.url`，且它 POST 的是本文档 §1 的统一消息 JSON —— 不是 OneBot 的
+`{group_id, message:[...]}`。
+
+所以两件事不要混为一谈：
+
+| 你想要的 | 谁负责 | PixivFlow 做到哪一步 |
+| --- | --- | --- |
+| 扫码登录 QQ | NapCat 自己的 WebUI（人类操作） | 不参与；凭据与 session 都不进 PixivFlow |
+| 把作品发到 QQ | 一个说 webhook 契约的网关进程 | POST 统一消息 JSON、记账、重试、幂等 |
+
+**今天 PixivFlow 里没有内置 OneBot 连接器**（这是刻意的产品边界：PixivFlow 是 Messaging
+Gateway Client，不嵌平台协议，见 [投递运行时架构 §5](architecture/delivery-runtime.md)）。
+`type: "webhook"` 的路由会原样把统一消息 JSON POST 到 `url`，OneBot 的实现端不认这个
+body。因此「让 PixivFlow 直接发到 NapCat」这条路目前是**不通的**，需要一个很薄的转换进程
+（下面 5.3）站在中间。
+
+### 5.2 扫码在哪扫、`pairingUrl` 指向谁
+
+- **扫码**：在 NapCat 自己的面板/控制台里完成 —— 账号的登录、上下线都在那边，具体入口与
+  端口以你装的版本的官方文档为准（NapCat 文档：<https://napneko.github.io/>）。这一步与
+  PixivFlow 完全无关，也不需要 PixivFlow 配置任何东西。
+- **`pairingUrl`**：这是 PixivFlow **只读展示**用的地址。WebUI 的投递面板（`/deliveries`）点
+  「配对」时，PixivFlow `GET` 这个 URL 并把答案原样渲染（不生成二维码、不跑登录协议、
+  不存 session、不落库，见 [API 文档](../API.md#配对透传-get-apigatewaysnamepairing)）。它可以是：
+  - 你那个薄转换进程自己暴露的一个状态端点（推荐 —— 它能同时回答「NapCat 在线吗、账号登录了吗」）；
+  - 任何返回登录/配对状态的网关端点。
+
+  没配 `pairingUrl` 的行不会有「配对」按钮；配了但 URL 返回非 2xx，面板会显示
+  `pairable: false` 并**保留网关原文**，不会假装成功。
+
+  ⚠️ 不要把 NapCat 的面板地址直接当 `pairingUrl` 用：那是一个给人看的 HTML 页面，
+  不是配对状态接口；它返回的 HTML 会被当作原文展示，不会变成二维码图片。
+
+### 5.3 最小转换进程的形状（QQ 场景）
+
+三个路由就够，全部是幂等友好的（重复调用不会重复发）：
+
+```
+POST /deliver      PixivFlow → 你（验签、按 idempotencyKey 去重、立刻回 accepted/pending）
+                   → 你 → NapCat: POST /send_group_msg   (text 段 + 多个 image 段)
+GET  /pairing      你 → NapCat: POST /get_login_info 等，转成一小段 JSON 给面板
+GET  /health       你 → NapCat: POST /get_status（判 data.online !== false && data.good === true）
+```
+
+要点：
+
+- **鉴权**：PixivFlow → 你走 `Authorization: Bearer ${ENV}`（见 §2「请求头」）；你 → NapCat 走
+  NapCat 自己配置的 token。两段凭据不要复用同一个值。
+- **判成败**：OneBot 的 HTTP 状态码几乎永远是 200，成败在 `status`/`retcode`
+  （`retcode 0` → `accepted`；`status:"async"` 或 `retcode 1` → `pending`，别报成功）。
+- **文件附件**：不是消息段，走 `upload_group_file {group_id, file, name}`（两段式），再发一条提示消息。
+- **幂等**：`retcode 0` 之后的重试**不要重发** —— 用 `idempotencyKey` 在你自己这侧短路返回
+  `duplicate_existing`。
+
+### 5.4 PixivFlow 侧配置样例
+
+```json
+{
+  "delivery": {
+    "targets": {
+      "qq-main": {
+        "type": "webhook",
+        "url": "${QQ_GATEWAY_URL}/deliver",
+        "token": "${QQ_GATEWAY_TOKEN}",
+        "pairingUrl": "${QQ_GATEWAY_URL}/pairing",
+        "capabilities": {
+          "maxTextLength": 4000,
+          "maxAttachmentsPerMessage": 9,
+          "album": true,
+          "albumMin": 2,
+          "albumMax": 9,
+          "minSendIntervalMs": 500
+        }
+      }
+    }
+  }
+}
+```
+
+覆盖字段名即 `TargetCapabilities` 的平铺字段（`album` 是布尔，上下界分别是 `albumMin`/`albumMax`，
+不是嵌套对象）。尺寸类限制只能**收紧**（`Math.min`）、节奏类只能**放宽**（`Math.max`），所以写错方向
+的值会被忽略而不是放大上限。
+
+凭据只以 `${ENV_VAR}` 形式进配置文件（`QQ_GATEWAY_URL`、`QQ_GATEWAY_TOKEN`）；PixivFlow 的
+日志、API 响应与 WebUI 都会脱敏，但**网关侧的错误体可能被 relay**，不要在错误信息里回显 token。
+
+### 5.5 怎么验证（每一层都要单独证明）
+
+| 层 | 命令/动作 | 证明的是什么 |
+| --- | --- | --- |
+| QQ 登录态 | NapCat 自己的面板 | 账号在线；**不证明** PixivFlow 能投递 |
+| 网关可达 | `pixivflow gateway test qq-main` | 端点应答；**仍不证明**投递成功 |
+| 投递落地 | 跑一次下载并看 `pixivflow delivery status`、面板「投递历史」 | 账本上的 `delivered` / `failed` 与 `last_error` |
+| 幂等 | 再跑一次同一作品 | 该路由出现 `duplicate`，群里**不再多一条** |
+
+`gateway test` 只证明网络与鉴权，**绝不等于投递成功** —— 这是刻意的语义区分，别把它当成
+「QQ 已经通了」的证据。
+
 ## 6. 安全与部署
 
 - **网络**：网关 URL 若指向内网地址，请确认 PixivFlow 所在主机可达；不要把 token 放进 URL query（会进日志/代理访问日志）。
 - **凭据**：只用 `${ENV}`；PixivFlow 的响应与日志都会脱敏，但**网关侧的错误体可能被 relay** —— 别在错误信息里回显你自己的凭据。
 - **重定向**：默认**不跟随**重定向（避免凭据被转发到第三方）；确有需要时用 `pairingAllowRedirects`/网关侧显式配置。
-- **配对/扫码**：由网关承担。若它暴露一个配对端点，可用 `pairingUrl` 让 WebUI 只读渲染
+- **配对/扫码**：由网关承担（QQ 场景见 §5.2）。若它暴露一个配对端点，可用 `pairingUrl` 让 WebUI 只读渲染
   （`GET /api/gateways/:name/pairing`，透传，不落库）——见 [API 文档](../API.md#配对透传-get-apigatewaysnamepairing)。
 - **不要把 WebUI 暴露到公网**：见 [部署文档](../DOCKER.md) 的鉴权说明。
 
@@ -242,3 +345,5 @@ WebUI 的只读投影：`GET /api/gateways`、`GET /api/gateways/:name/pairing`�
 - [投递运行时架构](architecture/delivery-runtime.md) —— 平面分层、账本与幂等、扇出、capability
 - [配置说明](../CONFIG.md) —— `delivery.*` 全部字段与校验规则
 - [API 文档](../API.md) —— `/api/gateways*`、`/api/deliveries*` 的请求/响应与错误码
+- [OneBot v11 规范](https://github.com/botuniverse/onebot-11) —— 网关侧要实现的那一侧协议
+- [NapCat 文档](https://napneko.github.io/) —— 最活跃的 QQ 协议实现；扫码登录在它自己的面板里完成

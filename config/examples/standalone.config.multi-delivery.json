@@ -96,7 +96,7 @@
           "maxTextLength": 2000,
           "maxCaptionLength": 1024,
           "maxAttachmentsPerMessage": 9,
-          "supportsAlbum": true,
+          "album": true,
           "albumMin": 2,
           "albumMax": 9,
           "truncatePolicy": "split",
@@ -115,7 +115,7 @@
         "maxInlineBytes": 10485760,
         "capabilities": {
           "maxTextLength": 4000,
-          "supportsAlbum": false,
+          "album": false,
           "truncatePolicy": "truncate"
         }
       },

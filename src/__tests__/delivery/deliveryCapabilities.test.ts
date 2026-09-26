@@ -10,6 +10,7 @@ import {
   applyCapabilityOverrides,
   capabilitiesOfDeliveryTarget,
   collectCapabilityOverrideErrors,
+  collectCapabilityOverrideWarnings,
   platformCapabilities,
   resolveTargetCapabilities,
   supportsCapability,
@@ -134,6 +135,58 @@ describe('delivery capabilities', () => {
       { field: 'p.capabilities.albumMin', message: 'Must not be greater than capabilities.albumMax' },
     ]);
     expect(collectCapabilityOverrideErrors({ albumMin: 2, albumMax: 4 }, 'p')).toEqual([]);
+  });
+
+  it('reports unknown capability keys instead of silently ignoring them', () => {
+    // A correct config never warns: every known key is accepted as-is.
+    expect(collectCapabilityOverrideWarnings(undefined, 'p')).toEqual([]);
+    expect(collectCapabilityOverrideWarnings(null, 'p')).toEqual([]);
+    expect(collectCapabilityOverrideWarnings({}, 'p')).toEqual([]);
+    expect(collectCapabilityOverrideWarnings({ album: true, albumMin: 2, albumMax: 9 }, 'p')).toEqual([]);
+    expect(
+      collectCapabilityOverrideWarnings(
+        {
+          text: true,
+          image: true,
+          file: true,
+          video: false,
+          requiresTwoPhaseUpload: false,
+          maxTextLength: 1,
+          maxCaptionLength: 1,
+          maxUploadBytes: 1,
+          maxAttachmentsPerMessage: 1,
+          minSendIntervalMs: 1,
+          albumMin: 1,
+          albumMax: 2,
+          truncatePolicy: 'split',
+          idempotencyMechanism: 'none',
+        },
+        'p'
+      )
+    ).toEqual([]);
+
+    // The real-world misspelling this exists for: `supportsAlbum` vs `album`.
+    // It must be named, not just flagged, so the fix is obvious.
+    expect(collectCapabilityOverrideWarnings({ supportsAlbum: true }, 'delivery.targets.x')).toEqual([
+      {
+        field: 'delivery.targets.x.capabilities.supportsAlbum',
+        message: 'Unknown capability field (ignored). Did you mean "album"?',
+      },
+    ]);
+    // Case and separators are the same mistake.
+    expect(collectCapabilityOverrideWarnings({ 'Supports_Album': true }, 'p')[0].message).toContain(
+      'Did you mean "album"?'
+    );
+    // A key with no resemblance to any capability is listed with the real ones.
+    expect(collectCapabilityOverrideWarnings({ maxInlineBytes: 10 }, 'p')).toEqual([
+      {
+        field: 'p.capabilities.maxInlineBytes',
+        message: expect.stringContaining('Unknown capability field (ignored). Known fields:'),
+      },
+    ]);
+    // Note: a near-miss on a KNOWN key is still an error from the error
+    // collector, so warnings must not double-report it.
+    expect(collectCapabilityOverrideWarnings({ album: 'yes' }, 'p')).toEqual([]);
   });
 });
 

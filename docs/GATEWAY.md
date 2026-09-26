@@ -153,10 +153,12 @@ PixivFlow 会读你声明的 capability 来组装消息，**只收紧、不放�
 | `maxTextLength` / `maxCaptionLength` | 文本与图文说明的长度上限；超限按 `truncatePolicy` 处理 |
 | `maxAttachmentsPerMessage` | 单条消息附件上限 ⇒ 超过就自动拆成多条 |
 | `maxUploadBytes` | 单文件字节上限 ⇒ 超过的媒体进 `dropped[]`（或走文件消息） |
-| `supportsAlbum` / `albumMin` / `albumMax` | 是否支持相册（一次多图）；`albumMin` 不足/`albumMax` 超出都会降级为逐条 |
+| `album` / `albumMin` / `albumMax` | 是否支持相册（一次多图）；`albumMin` 不足/`albumMax` 超出都会降级为逐条 |
 | `minSendIntervalMs` | 最小发送间隔（慢者胜）；例：OneBot 侧建议 ≥500ms，防封号 |
 | `truncatePolicy` | `split`（拆条）/ `truncate`（截断）/ `error`（宁可失败不截断） |
 | `idempotencyMechanism` | `none` / `platform_key` / `upstream_ledger`；只是**声明**，实际去重仍由 PixivFlow 的账本承担 |
+
+字段名的唯一来源是 PixivFlow 的 `src/delivery/capabilities.ts`（`TargetCapabilities`）：写错的键**不是能力**，会被忽略并在两个配置校验入口给出 warning（例如 `supportsAlbum` 会提示 `Did you mean "album"?`）。照抄下面例子里的键名，不要自己造同义词。
 
 不确定就**不要声明**：内置档案是保守的文字优先，宁可发得朴素，也不要让 PixivFlow 以为你支持相册而丢图。
 
@@ -186,7 +188,7 @@ PixivFlow --HTTP POST(统一消息 JSON)--> 你的网关 --OneBot v11 HTTP--> Na
 网关自己建议声明：
 
 ```json
-{ "capabilities": { "maxTextLength": 4000, "supportsAlbum": true, "albumMin": 2, "albumMax": 9, "minSendIntervalMs": 500 } }
+{ "capabilities": { "maxTextLength": 4000, "album": true, "albumMin": 2, "albumMax": 9, "minSendIntervalMs": 500 } }
 ```
 
 **不要让 PixivFlow 直接对 QQ 说话**：token、风控、限速、掉线重连、协议版本漂移都属于网关。

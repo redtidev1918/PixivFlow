@@ -602,6 +602,11 @@ export interface SchedulerTriggerConfig {
   graceMinutes?: number;
 }
 
+/**
+ * @deprecated NOT EVALUATED — kept only so existing configs keep parsing.
+ * The delivery verdict comes from the business ACK (`ack` + `DeliveryAck.ts`),
+ * which is the single source of truth. Setting this key has no effect.
+ */
 export interface HttpMultipartSuccessConfig {
   /** 可接受的 HTTP 状态码；缺省接受全部 2xx */
   statuses?: number[];
@@ -657,10 +662,20 @@ export interface HttpMultipartDeliveryConfig {
   previewFileField?: string;
   /** Optional dependency readiness endpoint. Non-200 defers outbox attempts. */
   readinessUrl?: string;
-  /** 普通表单字段，支持 title/pixivId/type/tag/topic/workTags 模板变量 */
+  /** 普通表单字段，支持 title/pixivId/type/tag/topic/workTags/author 模板变量 */
   fields?: Record<string, DeliveryFieldValue>;
   /** 数组字段编码方式，默认 comma */
   arrayFormat?: 'comma' | 'repeat' | 'json';
+  /**
+   * 未显式声明 `idempotency_key` 字段时，是否自动补上
+   * `idempotency_key: "{{idempotencyKey}}"`（默认 true）。
+   *
+   * 幂等键必须随每次投稿一起送达：缺了它，ACK 丢失后的重试会被接收端当成
+   * 新投稿。（手写配置遗漏它是重复投稿最常见的原因。）只有接收端拒绝未知字段
+   * 时才需要设为 false。
+   */
+  autoIdempotencyKey?: boolean;
+  /** @deprecated 不生效，仅兼容解析；判定以 `ack` 为准 */
   success?: HttpMultipartSuccessConfig;
   /** 单次交付的最大尝试次数（含首次），默认 3（遗留即时重试；SQLite outbox 是主重试层） */
   maxAttempts?: number;
@@ -689,6 +704,11 @@ export interface HttpMultipartDeliveryConfig {
  * The media never leaves Telegram and never passes through the control plane:
  * this provider uploads once, reports only ids, and the control plane's approve
  * path uses `copyMessage`/`copyMessages`.
+ *
+ * @deprecated 已废弃，不推荐新配置使用，未来版本会移除。它要求 PixivFlow 自己持有
+ * Telegram Bot Token，与长期架构（TelePost 是唯一发布后端，PixivFlow 只产出投稿意图）
+ * 相冲突。新配置请用 `type: "httpMultipart"` 投递到 TelePost Submission API；
+ * 现有配置继续可用，但不要基于它扩展新能力。
  */
 export interface TelegramReviewDeliveryConfig {
   type: 'telegram';

@@ -8,7 +8,10 @@ import { ConfigError } from '../utils/errors';
 import { getBestAvailableToken, isPlaceholderToken } from '../utils/token-manager';
 import { StandaloneConfig, TelegramReviewDeliveryConfig } from './types';
 import { targetDeliveryNames } from '../delivery/targetRoutes';
-import { collectCapabilityOverrideErrors } from '../delivery/capabilities';
+import {
+  collectCapabilityOverrideErrors,
+  collectCapabilityOverrideWarnings,
+} from '../delivery/capabilities';
 import { loadConfig } from './loader';
 
 const ENV_PLACEHOLDER = /\$\{[A-Za-z_][A-Za-z0-9_]*\}/;
@@ -471,6 +474,11 @@ export function validateConfig(config: Partial<StandaloneConfig>, location: stri
     // ones here so a bad override can never silently weaken a platform bound.
     for (const problem of collectCapabilityOverrideErrors(delivery.capabilities, prefix)) {
       errors.push(`${problem.field}: ${problem.message}`);
+    }
+    // A misspelled key (`supportsAlbum` for `album`) cannot weaken a bound, but it
+    // does mean the config does not do what it looks like it does.
+    for (const warning of collectCapabilityOverrideWarnings(delivery.capabilities, prefix)) {
+      warnings.push(`${warning.field}: ${warning.message}`);
     }
   }
   if (

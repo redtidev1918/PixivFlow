@@ -59,6 +59,14 @@ PixivFlow 负责 Pixiv 认证、候选发现/排序/去重、下载、审核链�
   收敛 owning cell；不得把确定性失败留在 `retry_wait`，拖住 Slot 与 idle shutdown。
 - 候选/去重/排序复用现有 topic resolver / scan / ranking / duplicate history，
   禁止写第二套搜索器；禁止突破 content policy、work type、topic 边界。
+- **投稿必带幂等键**：`httpMultipart` 的 `config.fields` 没声明 `idempotency_key` 时自动补
+  `{{idempotencyKey}}`（`autoIdempotencyKey: false` 关闭）。本地账本只保证 PixivFlow 不重复产生
+  意图；接收端能收敛 ACK 丢失后的重投，靠的就是请求里这个字段。
+- 能力声明的字段名以 `src/delivery/capabilities.ts` 的 `TargetCapabilities` 为唯一来源
+  （相册是平铺的 `album` + `albumMin`/`albumMax`，不是 `supportsAlbum`）；写错的键会被忽略并
+  warning。`success` 不参与投递判定——判定只看业务 ACK。
+- `type: "telegram"`（PixivFlow 直发审核群）**已废弃**：不要在新配置里使用，也不要基于它扩展
+  新能力；迁移方向是 `httpMultipart` → TelePost Submission API。
 
 ## 改完请自证
 

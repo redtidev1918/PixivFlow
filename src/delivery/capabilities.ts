@@ -348,3 +348,77 @@ export function collectCapabilityOverrideErrors(
   }
   return errors;
 }
+
+/**
+ * Every capability key a target may declare. `collectCapabilityOverrideErrors`
+ * checks the VALUES of these keys; anything else is not a capability at all.
+ */
+const CAPABILITY_OVERRIDE_KEYS = [
+  'text',
+  'image',
+  'file',
+  'album',
+  'video',
+  'requiresTwoPhaseUpload',
+  'maxTextLength',
+  'maxCaptionLength',
+  'maxUploadBytes',
+  'maxAttachmentsPerMessage',
+  'minSendIntervalMs',
+  'albumMin',
+  'albumMax',
+  'truncatePolicy',
+  'idempotencyMechanism',
+] as const;
+
+/** `supportsAlbum` / `Supports_Album` / `album-support` all normalise the same way. */
+function normalizeCapabilityKey(key: string): string {
+  return key.toLowerCase().replace(/[_\-\s]/g, '');
+}
+
+/** The declared key a misspelling most likely meant, if any. */
+function suggestCapabilityKey(key: string): string | undefined {
+  const normalized = normalizeCapabilityKey(key);
+  const stripped = normalized
+    .replace(/^(supports|support|has|is|enable|enables|allow|allows)/, '')
+    .replace(/(support|supported|enabled|enable)$/, '');
+  for (const candidate of new Set([normalized, stripped])) {
+    if (!candidate) continue;
+    const match = CAPABILITY_OVERRIDE_KEYS.find(
+      (known) => normalizeCapabilityKey(known) === candidate
+    );
+    if (match) return match;
+  }
+  return undefined;
+}
+
+/**
+ * Warn about capability keys that are not capabilities.
+ *
+ * A wrong key is silently ignored today: `collectCapabilityOverrideErrors` only
+ * validates the keys it knows, so `supportsAlbum: true` looked accepted while the
+ * real `album` bound stayed at its default. That is a config that LOOKS right and
+ * behaves differently, which is worse than a rejected one — so unknown keys are
+ * reported (as warnings, never errors: an unknown key cannot corrupt a bound).
+ *
+ * Shared by BOTH config validators, like the error collector.
+ */
+export function collectCapabilityOverrideWarnings(
+  overrides: unknown,
+  prefix: string
+): Array<{ field: string; message: string }> {
+  if (overrides === undefined || overrides === null) return [];
+  if (typeof overrides !== 'object' || Array.isArray(overrides)) return [];
+  const warnings: Array<{ field: string; message: string }> = [];
+  for (const key of Object.keys(overrides as Record<string, unknown>)) {
+    if ((CAPABILITY_OVERRIDE_KEYS as readonly string[]).includes(key)) continue;
+    const suggestion = suggestCapabilityKey(key);
+    warnings.push({
+      field: `${prefix}.capabilities.${key}`,
+      message: suggestion
+        ? `Unknown capability field (ignored). Did you mean "${suggestion}"?`
+        : `Unknown capability field (ignored). Known fields: ${CAPABILITY_OVERRIDE_KEYS.join(', ')}`,
+    });
+  }
+  return warnings;
+}

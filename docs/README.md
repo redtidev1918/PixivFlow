@@ -47,7 +47,7 @@
 | 文档 | 内容 |
 | --- | --- |
 | [DOCKER](DOCKER.md) | docker compose 双服务部署、环境变量参考、数据持久化、故障排查 |
-| [GATEWAY](GATEWAY.md) | 作品投递到自建网关:统一消息 JSON、HMAC 验签、ACK 契约、capability、QQ/OneBot 网关侧模式 |
+| [GATEWAY](GATEWAY.md) | 作品投递到自建网关:统一消息 JSON、HMAC 验签、ACK 契约、capability、QQ/OneBot 网关侧模式与「扫码在网关、投递在 PixivFlow」的边界 |
 | [TERMUX_INSTALL](TERMUX_INSTALL.md) | Android/Termux 环境从零安装 |
 
 ### 开发者

@@ -427,8 +427,10 @@ Gateway，Apprise 等），它们才是平台适配的归属地；重复实现�
 - **配对（二维码）由外部网关承担，WebUI 只透传渲染**：投影按路由返回
   `pairingSupported`（该路由是否配了 `pairingUrl`）。二维码由网关自己生成，PixivFlow
   不生成、不解析、不保存任何平台登录凭据（`gateway_connections` 行只是**指针**：
-  name / type / endpoint / status / metadata）。配对对话框的数据源已经就位
-  （`GET /api/gateways/:name/pairing` 透传），剩下的是前端渲染。
+  name / type / endpoint / status / metadata）。配对对话框的**两端都已就位**：后端
+  `GET /api/gateways/:name/pairing` 透传 + `pairingSupported` 标记，前端在
+  `pixivflow-webui` 仓库的投递面板（`/deliveries`，组件 `PairingDialog.tsx`）渲染，
+  只识别安全的图像形状（`data:image/` 或网关显式给出的二维码字段），其余原样当文本展示。
 - WebUI 只读：不新建 DB、不新建状态机、不启动第二个 scheduler；不输出 token /
   chat_id / 凭据 / 文件路径 / SQL / stack（endpoint 一律经 `redactUrl`）。
 
@@ -457,9 +459,9 @@ Gateway，Apprise 等），它们才是平台适配的归属地；重复实现�
 | P2 | 平台无关 Content/Media 模型 + adapter capability 声明 | **已实现**（§4.2/§4.3，`src/delivery/capabilities.ts`、`src/delivery/content.ts`、`deliveryCapabilities.test.ts`） |
 | P3a | capability 生命周期字段（节流/截断/幂等）+ `gateway_connections` 表 + 只读 `/api/gateways*` | **已实现**（§4.2/§7，`GatewayConnectionRepository.ts`、`src/webui/routes/gateways.ts`、`gatewayConnections.test.ts`） |
 | P3b | 通用 Messaging Gateway `webhook` connector（统一消息 JSON + 可选 HMAC 签名） | **已实现**（§5.1，`src/delivery/WebhookDelivery.ts`、`webhookDelivery.test.ts`） |
-| P4 | CLI `gateway list/status/test` + `delivery status/retry`（**已实现**，§7）+ WebUI 只读投递历史 `GET /api/deliveries[/:id]`（**已实现**，§7）；WebUI 配对对话框的**数据源与端点已实现**（`GET /api/gateways/:name/pairing` 透传 +
-`pairingSupported` 标记），前端面板渲染仍计划 | **已实现**（配对对话框未做） |
-| P5 | 文档与示例补齐（含 `config/examples/` 网关样例） | 计划 |
+| P4 | CLI `gateway list/status/test` + `delivery status/retry`（**已实现**，§7）+ WebUI 只读投递历史 `GET /api/deliveries[/:id]`（**已实现**，§7）+ 配对对话框两端（后端 `GET /api/gateways/:name/pairing` 透传 + `pairingSupported`；前端在 `pixivflow-webui` 的 `/deliveries` 面板渲染） | **已实现** |
+| P5 | 文档与示例补齐（`config/examples/` 网关样例、[GATEWAY.md](../GATEWAY.md) 对接手册含 QQ/OneBot 网关侧模式与扫码边界） | 已完成 |
+| P3c | 原生 OneBot v11 Connector | **明确不实现**（与「平台生态交给网关」冲突，见下方决定） |
 
 补充：P1 / P2 / P3a / P3b 都**未新增 deliveries/outbox 的任何表或列**。扇出完全落在既有的
 `(delivery_target, work_type, pixiv_id)` 去重域与 `outbox.delivery_target` 上；Content 模型

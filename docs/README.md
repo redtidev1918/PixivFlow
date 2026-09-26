@@ -87,6 +87,13 @@
 | [组件目录](https://github.com/redtidev1918/pixivflow-webui/blob/master/docs/COMPONENT_GUIDE.md) | 全量组件职责与组合套路 |
 | [构建选项](https://github.com/redtidev1918/pixivflow-webui/blob/master/docs/BUILD_OPTIONS.md) | 静态托管 / Docker 一体化两条路线 |
 
+## 🖥️ 桌面客户端
+
+| 文档 | 内容 |
+| --- | --- |
+| [pixivflow-desktop 仓库](https://github.com/redtidev1918/pixivflow-desktop) | 官方桌面客户端（Tauri 2），把本仓库的运行时与 WebUI 一起打包 |
+| [桌面端文档站](https://redtidev1918.github.io/pixivflow-desktop/) | 安装、排障、架构与发布说明 |
+
 ## 致谢
 
 灵感来源、核心依赖与规范声明见 [ACKNOWLEDGMENTS.md](ACKNOWLEDGMENTS.md)。

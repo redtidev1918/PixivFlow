@@ -5,6 +5,7 @@ import { Database } from '../../../storage/Database';
 import { loadConfig, getConfigPath } from '../../../config';
 import { logger } from '../../../logger';
 import { ErrorCode } from '../../utils/error-codes';
+import { buildConfigAwareErrorBody } from '../../utils/config-error';
 
 const RECOVERY_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const TARGET_ID_SAFE = /^[A-Za-z0-9._-]{1,80}$/;
@@ -132,7 +133,7 @@ export async function listRecentSlots(req: Request, res: Response): Promise<void
     }
     const message = error instanceof Error ? error.message : String(error);
     logger.error('Failed to list scheduler slots', { error: { message } });
-    res.status(500).json({ errorCode: ErrorCode.SCHEDULER_LIST_FAILED });
+    res.status(500).json(buildConfigAwareErrorBody(error, ErrorCode.SCHEDULER_LIST_FAILED));
   }
 }
 
@@ -263,7 +264,7 @@ export async function listExecutions(req: Request, res: Response): Promise<void>
     }
     const message = error instanceof Error ? error.message : String(error);
     logger.error('Failed to list scheduler executions', { error: { message } });
-    res.status(500).json({ errorCode: ErrorCode.SCHEDULER_LIST_FAILED });
+    res.status(500).json(buildConfigAwareErrorBody(error, ErrorCode.SCHEDULER_LIST_FAILED));
   }
 }
 
@@ -321,7 +322,7 @@ export async function getSlotLogs(req: Request, res: Response): Promise<void> {
     }
     const message = error instanceof Error ? error.message : String(error);
     logger.error('Failed to read slot logs', { slotId, error: { message } });
-    res.status(500).json({ errorCode: ErrorCode.LOGS_GET_FAILED });
+    res.status(500).json(buildConfigAwareErrorBody(error, ErrorCode.LOGS_GET_FAILED));
   }
 }
 

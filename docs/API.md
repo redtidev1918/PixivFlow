@@ -434,6 +434,7 @@ socket.on("download", (payload) => {
 1. 全局兜底:未被捕获的异常进入统一 `errorHandler`,返回 **500** 与 `{"error":"Internal Server Error"}`(`NODE_ENV=development` 时附带 `message`)。
 2. 部分处理器故意返回 **HTTP 200 + `data.success:false`** 表示业务失败(如 `POST /api/download/parse-url`);判断成败要看 success/errorCode,不能只看状态码。
 3. 状态码语义化程度不一:`409` 表示已有活动下载任务,其余多为 400/404/500;兼容做法是同时检查状态码与 errorCode 字段。
+4. **配置校验失败不返回终端文案**:读取配置的处理器捕获到 `ConfigError`(其 `cause` 为 `ConfigValidationError`)时改用 `src/webui/utils/config-error.ts` 的 `buildConfigAwareErrorBody()`,返回 **500** 与 `{"errorCode":"CONFIG_VALIDATION_*","message":"<首条校验原因>","details":[...]}`:`errorCode` 由首条校验行归类(未登录 → `CONFIG_VALIDATION_PIXIV_REFRESH_TOKEN_REQUIRED`,缺 clientId → `CONFIG_VALIDATION_PIXIV_CLIENT_ID_REQUIRED`,其余回落到各自的 `CONFIG_VALIDATION_*` / `CONFIG_INVALID`);`message` 截断到 400 字符,`details` 最多 8 条;`💡 You need to login first…pixivflow login` 这类只供终端使用的提示块被整块剔除,只会出现在服务端日志里。前端据此展示本地化的「尚未登录 → 立即登录」引导。该分支只影响配置类异常,其余失败仍沿用 `{"errorCode": "<原有 _FAILED 码>"}`。
 
 ## 相关文档
 

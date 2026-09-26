@@ -2,6 +2,9 @@ import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { Database } from '../../storage/Database';
+import * as configModule from '../../config';
+import { ConfigValidationError } from '../../config/validation';
+import { ConfigError } from '../../utils/errors';
 import {
   listRecentSlots,
   listExecutions,
@@ -14,7 +17,7 @@ const TEMP_DB = join(mkdtempSync(join(tmpdir(), 'webui-scheduler-')), 'test.db')
 
 jest.mock('../../config', () => ({
   getConfigPath: () => '/tmp/pixivflow.yml',
-  loadConfig: () => ({ storage: { databasePath: TEMP_DB } }),
+  loadConfig: jest.fn(() => ({ storage: { databasePath: TEMP_DB } })),
 }));
 
 describe('WebUI scheduler read API', () => {
@@ -54,6 +57,35 @@ describe('WebUI scheduler read API', () => {
     const res: any = { json: (v: any) => { payload = v; }, status: (c: number) => { status = c; return res; } };
     await listRecentSlots({ query: { limit: 'abc' } } as any, res);
     expect(payload.data.slots.length).toBeLessThanOrEqual(14);
+  });
+
+  it('answers a configuration failure with a localisable code and no CLI guidance', async () => {
+    const spy = (configModule.loadConfig as unknown as jest.Mock).mockImplementationOnce(() => {
+      throw new ConfigError(
+        'Configuration validation failed in /tmp/pixivflow.yml',
+        new ConfigValidationError('invalid', [
+          'pixiv.refreshToken: No valid refresh token found. Please login to authenticate.',
+          '💡 You need to login first. Run one of the following commands:',
+          '  • pixivflow login',
+        ])
+      );
+    });
+
+    let status = 0;
+    let payload: any = null;
+    const res: any = { json: (v: any) => { payload = v; }, status: (c: number) => { status = c; return res; } };
+
+    await listRecentSlots({ query: {} } as any, res);
+    expect(spy).toHaveBeenCalled();
+
+    expect(status).toBe(500);
+    expect(payload.errorCode).toBe('CONFIG_VALIDATION_PIXIV_REFRESH_TOKEN_REQUIRED');
+    expect(payload.details).toContain('pixiv.refreshToken: No valid refresh token found. Please login to authenticate.');
+
+    const serialised = JSON.stringify(payload);
+    expect(serialised).not.toContain('💡');
+    expect(serialised).not.toContain('pixivflow login');
+    expect(serialised).not.toContain('Run one of the following commands');
   });
 });
 

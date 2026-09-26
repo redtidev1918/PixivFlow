@@ -1,6 +1,6 @@
 # PixivFlow API 文档
 
-> **English:** This document lists every REST endpoint exposed by the PixivFlow WebUI server and the Socket.IO events used for live log streaming. Endpoints are grouped by route prefix (`/api/auth`, `/api/config`, `/api/download`, `/api/stats`, `/api/logs`, `/api/files`, plus `GET /api/health`) with request/response examples. It also explains how to start the server, the error-code convention, and why the API has no authentication layer. All shapes are taken from the handler source code in `src/webui/routes/handlers/`.
+> **English:** This document lists every REST endpoint exposed by the PixivFlow WebUI server and the Socket.IO events used for live log streaming. Endpoints are grouped by route prefix (`/api/auth`, `/api/config`, `/api/download`, `/api/stats`, `/api/logs`, `/api/files`, plus `GET /api/health`, `GET /api/status`, `GET /api/version`) with request/response examples. It also explains how to start the server, the error-code convention, and why the API has no authentication layer. All shapes are taken from the handler source code in `src/webui/routes/handlers/`.
 
 本文档面向直接调用 WebUI HTTP 接口的开发者(前端开发、脚本集成、容器健康检查)。示例均从 `src/webui/websocket/` 与 `src/webui/routes/` 的源码整理;不确定的字段按保守描述,以源码为准。
 
@@ -33,7 +33,7 @@ curl http://localhost:3000/api/health
 
 **REST API 默认没有鉴权**:路由组未挂载任何登录态、API Key 或 JWT 中间件,凡是能访问到端口的客户端都可以调用。`/api/auth/*` 一组管理的是 **Pixiv 账号的 OAuth 令牌**(刷新令牌的获取/验证/清除),与保护本 API 无关。部署时请依赖端口绑定(本地默认 `localhost`;Docker 镜像内为 `0.0.0.0`,由端口映射决定暴露范围)访问控制,CORS 默认放开(`origin: '*'`)。
 
-**可选 Basic Auth(2.4.0 起)**:同时设置环境变量 `WEBUI_USERNAME` 与 `WEBUI_PASSWORD` 后,除 `/api/health`、`/health` 外的所有请求(含静态页与 Socket.IO 握手)都要求 HTTP Basic 认证。未设置则维持无鉴权行为。公网部署仍建议叠加反向代理与 TLS。
+**可选 Basic Auth(2.4.0 起)**:同时设置环境变量 `WEBUI_USERNAME` 与 `WEBUI_PASSWORD` 后,除健康探测与 Runtime Contract 探针(`/api/health`、`/health`、`/api/status`、`/status`、`/api/version`、`/version`)外的所有请求(含静态页与 Socket.IO 握手)都要求 HTTP Basic 认证。未设置则维持无鉴权行为。公网部署仍建议叠加反向代理与 TLS。
 
 Pixiv 登录流程涉及的端点:`GET /api/auth/status` 检查令牌是否有效 → `POST /api/auth/login`(浏览器授权)或 `POST /api/auth/login-with-token`(已有刷新令牌)→ 之后可随时 `POST /api/auth/refresh` 刷新、`POST /api/auth/logout` 清除。
 
@@ -44,6 +44,31 @@ Pixiv 登录流程涉及的端点:`GET /api/auth/status` 检查令牌是否有�
 ### GET /api/health(别名 `/health`)
 
 无条件返回 `{"status":"ok","timestamp":"<ISO 时间>"}`,不做任何资源检查。
+
+### Runtime Contract 组:`/api/status`、`/api/version`(别名 `/status`、`/version`)
+
+生态 Runtime Contract 的探针端点(新增,追加式、非敏感,供 CLI/WebUI/Desktop/Docker 统一探测进程运行状态与版本)。同样注册 `/api/…` 与 `/…` 双路径别名,与健康检查一致;载荷不含下载列表、令牌或配置。版本取自身份权威来源 `package.json`(不是可能滞后的生成文件 `src/version.ts`)。
+
+`GET /api/status`:
+
+```json
+{
+  "schemaVersion": 1,
+  "state": "ok",
+  "pid": 12345,
+  "startedAt": "2026-09-26T00:00:00.000Z",
+  "uptimeSec": 42,
+  "version": "2.46.0"
+}
+```
+
+`GET /api/version`:
+
+```json
+{ "schemaVersion": 1, "name": "pixivflow", "version": "2.46.0" }
+```
+
+开启 Basic Auth 时,这两个端点与健康检查同属默认豁免路径;若运维自定义了 `exemptPaths`,新端点默认要求认证(更安全,可按需另行豁免)。
 
 ### Auth 组:`/api/auth`
 

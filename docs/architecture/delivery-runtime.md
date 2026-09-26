@@ -290,14 +290,19 @@ Lagrange.Core / LuckyLilliaBot / go-cqhttp 全部只讲 v11）。OneBot 调用�
 {
   "delivery": {
     "targets": {
-      "telepost":     { "type": "httpMultipart", "url": "https://…/submissions", "notificationUrl": "https://…/notify" },
-      "tg-review":    { "type": "telegram", "botId": "review-bot", "chatId": "-100…",
-                        "controlPlaneUrl": "https://…", "controlPlaneToken": "${CONTROL_PLANE_TOKEN}" }
+      "telepost":  { "type": "httpMultipart", "url": "https://…/submissions", "notificationUrl": "https://…/notify" },
+      "tg-review": { "type": "telegram", "botId": "review-bot", "chatId": "-100…",
+                     "controlPlaneUrl": "https://…", "controlPlaneToken": "${CONTROL_PLANE_TOKEN}" },
+      "qq-main":   { "type": "webhook", "url": "${GATEWAY_URL}/hook",
+                     "token": "${GATEWAY_TOKEN}", "signingSecret": "${GATEWAY_SIGNING_SECRET}",
+                     "mediaTransport": "reference",
+                     "capabilities": { "album": true, "maxAttachmentsPerMessage": 9,
+                                       "minSendIntervalMs": 1500, "truncatePolicy": "split" } }
     }
   },
   "targets": [
     { "id": "daily", "tag": "…", "storageMode": "cache",
-      "delivery": { "targets": ["telepost", "tg-review"] } }
+      "delivery": { "targets": ["telepost", "qq-main"] } }
   ]
 }
 ```
@@ -340,10 +345,11 @@ WebUI 不得成为第二系统：不新建 DB、不新建状态机、不启动�
 
 - 不把 PixivFlow 变成 Bot Framework：不做 PixivFlow → AstrBot → 平台，不 embed AstrBot /
   OneBot 实现。
+- **不实现任何平台协议**：不做 QQ / 微信 / 飞书 / Discord 原生 adapter，不实现扫码登录，
+  不生成二维码，不保存平台登录信息。平台生态交给社区网关（见 §5.1）。
 - 不新增第二套 HTTP 服务器或第二套投递 API（扩展 `delivery.targets` 的 type 即可）。
 - 不实现复杂 Workflow Engine（保留 download → process → filter → deliver 的扩展边界）。
 - 不引入 Redis / Kafka / RabbitMQ / Kubernetes / 常驻大型 Bot Framework。
-- 不自己实现 QQ / 微信协议。
 - 不改 `deliveries` / `outbox` 既有列的含义，不改幂等键格式，不删库重建。
 - 不用平台上消息类型（TelegramMessage / DiscordMessage / QQMessage）当核心模型。
 

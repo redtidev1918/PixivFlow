@@ -26,6 +26,26 @@ export const ALL_DELIVERY_CAPABILITIES: readonly DeliveryCapability[] = [
 ];
 
 /**
+ * What a target does when its text does not fit `maxTextLength`.
+ *
+ * Declared rather than assumed: silently clipping a caption loses content, and
+ * splitting a caption across messages can spam a channel. The delivery engine
+ * reads this instead of inventing a default, and `error` means "fail loudly".
+ */
+export type TruncatePolicy = 'split' | 'truncate' | 'error';
+
+export const TRUNCATE_POLICIES: readonly TruncatePolicy[] = ['split', 'truncate', 'error'];
+
+/** Where the platform itself can dedupe a resent message. Documented, not code. */
+export type IdempotencyMechanism = 'none' | 'platform_key' | 'upstream_ledger';
+
+export const IDEMPOTENCY_MECHANISMS: readonly IdempotencyMechanism[] = [
+  'none',
+  'platform_key',
+  'upstream_ledger',
+];
+
+/**
  * Optional per-target capability overrides. Authored in config; numbers and
  * flags that are absent fall back to the platform type's defaults.
  */
@@ -50,6 +70,12 @@ export interface DeliveryCapabilityOverrides {
   albumMax?: number;
   /** One upload call returns a handle, then a second call references it (Feishu/Satori). */
   requiresTwoPhaseUpload?: boolean;
+  /** Minimum spacing between two messages to this target, in milliseconds (0 = unthrottled). */
+  minSendIntervalMs?: number;
+  /** What to do when text exceeds `maxTextLength`. */
+  truncatePolicy?: TruncatePolicy;
+  /** Where duplicate suppression can happen for this platform. */
+  idempotencyMechanism?: IdempotencyMechanism;
 }
 
 /** A target's fully resolved capabilities: booleans + hard limits. */
@@ -69,6 +95,12 @@ export interface TargetCapabilities {
   album: { min: number; max: number } | null;
   /** Upload-then-reference platforms (Feishu image_key/file_key, Satori createUpload). */
   requiresTwoPhaseUpload: boolean;
+  /** Minimum spacing between two messages to this target, in milliseconds (0 = unthrottled). */
+  minSendIntervalMs: number;
+  /** What the delivery engine does when text exceeds `maxTextLength`. */
+  truncatePolicy: TruncatePolicy;
+  /** Where duplicate suppression can happen for this platform. */
+  idempotencyMechanism: IdempotencyMechanism;
 }
 
 /** Capabilities assumed for a platform type PixivFlow does not know yet. */
@@ -83,6 +115,9 @@ export const UNKNOWN_PLATFORM_CAPABILITIES: TargetCapabilities = {
   maxAttachmentsPerMessage: 0,
   album: null,
   requiresTwoPhaseUpload: false,
+  minSendIntervalMs: 0,
+  truncatePolicy: 'error',
+  idempotencyMechanism: 'upstream_ledger',
 };
 
 /** Platform-type capability defaults, keyed by `delivery.targets.<name>.type`. */
@@ -101,6 +136,11 @@ const PLATFORM_CAPABILITIES: Record<string, TargetCapabilities> = {
     maxAttachmentsPerMessage: 0,
     album: null,
     requiresTwoPhaseUpload: false,
+    // An opaque endpoint owns its own pacing and its own truncation behaviour;
+    // PixivFlow must not impose either on a contract it cannot see.
+    minSendIntervalMs: 0,
+    truncatePolicy: 'error',
+    idempotencyMechanism: 'upstream_ledger',
   },
   /**
    * Telegram review chain. The existing provider posts media with a caption and
@@ -116,6 +156,15 @@ const PLATFORM_CAPABILITIES: Record<string, TargetCapabilities> = {
     maxAttachmentsPerMessage: 10,
     album: { min: 2, max: 10 },
     requiresTwoPhaseUpload: false,
+    // Telegram's documented soft ceiling is ~30 messages/second; pacing below
+    // that is an operator decision, so the default stays unthrottled.
+    minSendIntervalMs: 0,
+    // Captions that do not fit are sent as their own message rather than
+    // clipped — the review chain already relies on the full title surviving.
+    truncatePolicy: 'split',
+    // Telegram exposes no client-supplied idempotency key; the durable ledger
+    // in `deliveries` is what prevents a resend from duplicating.
+    idempotencyMechanism: 'upstream_ledger',
   },
 };
 
@@ -157,6 +206,13 @@ export function applyCapabilityOverrides(
     return Math.min(fallback, Math.trunc(limit));
   };
 
+  // Pacing is the mirror image: an operator may ADD a delay but never remove one
+  // a platform needs, so the slower of the two wins.
+  const relax = (interval: number | undefined, fallback: number): number => {
+    if (interval === undefined || !Number.isFinite(interval) || interval < 0) return fallback;
+    return Math.max(fallback, Math.trunc(interval));
+  };
+
   const albumSupported = supported.has('album');
   const album = albumSupported
     ? {
@@ -178,6 +234,11 @@ export function applyCapabilityOverrides(
     album,
     requiresTwoPhaseUpload:
       overrides.requiresTwoPhaseUpload ?? base.requiresTwoPhaseUpload,
+    // Pacing may only ever get SAFER: an operator can add a delay, never remove
+    // one the platform requires.
+    minSendIntervalMs: relax(overrides.minSendIntervalMs, base.minSendIntervalMs),
+    truncatePolicy: overrides.truncatePolicy ?? base.truncatePolicy,
+    idempotencyMechanism: overrides.idempotencyMechanism ?? base.idempotencyMechanism,
   };
 }
 
@@ -264,6 +325,19 @@ export function collectCapabilityOverrideErrors(
   integerAtLeast('maxCaptionLength', 0);
   integerAtLeast('maxUploadBytes', 0);
   integerAtLeast('maxAttachmentsPerMessage', 0);
+  integerAtLeast('minSendIntervalMs', 0);
+  const enumAt = (name: string, allowed: readonly string[]): void => {
+    const raw = value[name];
+    if (raw === undefined) return;
+    if (typeof raw !== 'string' || !allowed.includes(raw)) {
+      errors.push({
+        field: `${prefix}.capabilities.${name}`,
+        message: `Must be one of: ${allowed.join(', ')}`,
+      });
+    }
+  };
+  enumAt('truncatePolicy', TRUNCATE_POLICIES);
+  enumAt('idempotencyMechanism', IDEMPOTENCY_MECHANISMS);
   const albumMin = integerAtLeast('albumMin', 1);
   const albumMax = integerAtLeast('albumMax', 1);
   if (albumMin !== undefined && albumMax !== undefined && albumMin > albumMax) {

@@ -217,9 +217,13 @@ album 2–10 条）。投递引擎按能力而不是平台名决定投递形态�
 | `maxTextLength` / `maxCaptionLength` / `maxUploadBytes` / `maxAttachmentsPerMessage` | integer ≥ 0 | 硬上限，单位：字符 / 字节 / 条 |
 | `albumMin` / `albumMax` | integer ≥ 1 | 相册条目数区间 |
 | `requiresTwoPhaseUpload` | boolean | 先上传取句柄、再引用句柄发送（飞书 image_key/file_key） |
+| `minSendIntervalMs` | integer ≥ 0 | 同一目标的最小发送间隔（节流），0 = 不限 |
+| `truncatePolicy` | `split` / `truncate` / `error` | 超长文本怎么处理：切分、截断，或宁失败不静默截断 |
+| `idempotencyMechanism` | `none` / `platform_key` / `upstream_ledger` | 平台自身能否幂等；不能则由 PixivFlow 账本兜住 |
 
 数值型上限**只能收紧、不能放宽**平台默认值：写一个比平台更大的数字不会生效（那只会
-在平台 API 处失败），PixivFlow 会保留平台档案里的更小值。
+在平台 API 处失败），PixivFlow 会保留平台档案里的更小值。节流相反——**只能加严**
+（`minSendIntervalMs` 取更大值，慢者胜），因为把节流放宽等于冒封号风险。
 
 ```json
 {

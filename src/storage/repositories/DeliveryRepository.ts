@@ -268,6 +268,49 @@ export class DeliveryRepository extends BaseRepository {
     return rows.map((r) => this.toRow(r));
   }
 
+  /**
+   * Most recent delivery facts for one delivery route, newest first.
+   *
+   * Read-only projection for the WebUI Gateway panel / `delivery status` CLI:
+   * it never mutates a row and never re-enters the candidate pipeline, so it
+   * cannot violate "an outbox replay never re-runs candidate selection".
+   */
+  listRecentByTarget(
+    deliveryTarget: string,
+    options: { limit?: number; status?: DeliveryStatus; workType?: string } = {}
+  ): DeliveryRow[] {
+    const limit = Math.min(Math.max(Math.trunc(options.limit ?? 50), 1), 500);
+    const clauses: string[] = ['delivery_target = @deliveryTarget'];
+    const params: Record<string, unknown> = { deliveryTarget, limit };
+    if (options.status) {
+      clauses.push('status = @status');
+      params.status = options.status;
+    }
+    if (options.workType) {
+      clauses.push('work_type = @workType');
+      params.workType = options.workType;
+    }
+    const rows = this.db
+      .prepare(
+        `SELECT * FROM deliveries
+          WHERE ${clauses.join(' AND ')}
+          ORDER BY updated_at DESC, created_at DESC
+          LIMIT @limit`
+      )
+      .all(params) as any[];
+    return rows.map((r) => this.toRow(r));
+  }
+
+  /** Counts per status for one route (used by the Gateway panel summary). */
+  countByStatusForTarget(deliveryTarget: string): Record<DeliveryStatus, number> {
+    const rows = this.db
+      .prepare(`SELECT status, COUNT(*) AS n FROM deliveries WHERE delivery_target = ? GROUP BY status`)
+      .all(deliveryTarget) as Array<{ status: DeliveryStatus; n: number }>;
+    const out: Record<DeliveryStatus, number> = { pending: 0, delivered: 0, duplicate: 0, failed: 0 };
+    for (const r of rows) out[r.status] = r.n;
+    return out;
+  }
+
   countByStatus(): Record<DeliveryStatus, number> {
     const rows = this.db
       .prepare(`SELECT status, COUNT(*) AS n FROM deliveries GROUP BY status`)

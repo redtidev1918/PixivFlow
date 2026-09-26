@@ -244,6 +244,7 @@ Pixiv 登录流程涉及的端点:`GET /api/auth/status` 检查令牌是否有�
 | GET | `/preview` | 文件预览:图片按 MIME 返回,文本内联 | query:`path`(必填,绝对或相对)、`type?` |
 | DELETE | `/:id` | 删除单个已下载文件(不删数据库记录) | 路径参数 id;query:`path?`(相对路径)、`type?` |
 | POST | `/normalize` | 规范化/重排文件并同步数据库路径 | body:`dryRun?(false)`、`normalizeNames?(true)`、`reorganize?(true)`、`updateDatabase?(true)`、`type?('all')` |
+| POST | `/reveal` | 在系统文件管理器中显示下载目录(或某个文件的所在目录) | body:`path?`(省略即目录本身)、`type?`(`illustration`)、`resolveOnly?`(只解析不打开) |
 
 ```json
 // GET /api/files/recent?filter=today&type=illustration(节选)
@@ -272,6 +273,16 @@ Pixiv 登录流程涉及的端点:`GET /api/auth/status` 检查令牌是否有�
 // POST /api/files/normalize { "dryRun": true }
 { "data": { "success": true, "result": { "totalFiles": 120, "processedFiles": 118, "movedFiles": 10, "renamedFiles": 4, "updatedDatabase": 0, "errors": [], "skippedFiles": 2 } } }
 ```
+
+```json
+// POST /api/files/reveal { "type": "illustration", "resolveOnly": true }
+{ "success": true, "errorCode": "FILE_REVEAL_SUCCESS", "path": "/app/downloads/illustrations", "exists": true }
+
+// 该主机没有文件管理器(容器/无 DISPLAY 的 Linux):HTTP 200,不是错误
+{ "success": false, "errorCode": "FILE_REVEAL_UNSUPPORTED", "path": "/app/downloads/illustrations" }
+```
+
+`POST /api/files/reveal` 的语义:路径先经目录穿越检查(越界 → 400 `FILE_PATH_INVALID`,不存在 → 404 `FILE_NOT_FOUND`),再交给平台打开器(macOS `open` / Windows `explorer` / Linux `xdg-open`)。`resolveOnly: true` 只返回"会打开哪个目录",不触碰操作系统 —— WebUI 借此先拿到后端已收敛的目录,让桌面宿主在前台打开本机文件夹;宿主不可用或后端所在机器没有文件管理器时,前端改为把路径复制到剪贴板。打开目录不校验 Pixiv 凭据:配置里只有占位 token 的机器同样能打开下载目录。
 
 注意:`GET /files/list` 的响应包裹在 `data` 中(`{ files, directories, currentPath }`,文件项额外带 `downloadedAt`);`GET /files/recent` 则不带 `data` 包裹(`{ files, total, filter, type }`),前端消费时留意差异。
 

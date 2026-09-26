@@ -95,7 +95,15 @@ export class WebUIServer {
         createBasicAuthMiddleware({
           username: authUser,
           password: authPass,
-          exemptPaths: ['/api/health', '/health'],
+          exemptPaths: [
+            '/api/health',
+            '/health',
+            // Runtime Contract probe endpoints (non-sensitive process facts).
+            '/api/status',
+            '/status',
+            '/api/version',
+            '/version',
+          ],
         })
       );
     } else {

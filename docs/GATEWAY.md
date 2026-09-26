@@ -199,6 +199,27 @@ PixivFlow --HTTP POST(统一消息 JSON)--> 你的网关 --OneBot v11 HTTP--> Na
   （`GET /api/gateways/:name/pairing`，透传，不落库）——见 [API 文档](../API.md#配对透传-get-apigatewaysnamepairing)。
 - **不要把 WebUI 暴露到公网**：见 [部署文档](../DOCKER.md) 的鉴权说明。
 
+### 容器 / Fly.io 里的网关地址
+
+PixivFlow 常跑在容器里，而网关往往在宿主机或另一个服务上，`url` 必须用**容器视角**可达的地址：
+
+| 部署形态 | 网关地址怎么写 |
+| --- | --- |
+| Docker Compose，网关在宿主机 | `http://host.docker.internal:<port>/...`（compose 已加 `extra_hosts: host.docker.internal:host-gateway`，Linux 同样可用）；Linux 也可用 `http://172.17.0.1:<port>/...` |
+| Docker Compose，网关是同一网络里的另一个服务 | 用服务名，如 `http://gateway:8080/...` |
+| 网关只监听 `127.0.0.1` | **容器不可达** —— 让它监听 `0.0.0.0` 或对应网桥地址 |
+| Fly.io | 同机进程用 `http://127.0.0.1:<port>`；网关是**另一个 Fly app** 时用 `http://<app>.internal:<port>`（同组织的 6PN 内网）。本仓库不带 `fly.toml`，部署拓扑以 `pixivflow-telepost-deploy` 的 deployment manifest 为准 |
+
+另见 [DOCKER.md](../DOCKER.md) 的代理与网络约定（同文件里 `HTTP_PROXY`/`ALL_PROXY` 的规则同样适用于投递请求）。
+
+### `reference` 传输的文件可见性（最容易踩的坑）
+
+`mediaTransport: "reference"` 发的是**绝对路径**，只有在网关与 PixivFlow **看到同一份文件系统**时才有意义：
+
+- 同一容器 / 同一主机 / 同一挂载卷：直接可用（注意 `PIXIV_DOWNLOAD_DIR` 在两侧的挂载点要一致）。
+- 网关在另一台主机或另一个容器且**没有共享卷**：改用 `mediaTransport: "base64"`，并设置 `maxInlineBytes` 兜住大文件（超限会直接拒绝，不会发半个包）。
+- 网关和 PixivFlow 能共享卷、但路径不同（例如宿主机 `/srv/downloads` 挂到容器 `/app/downloads`）：让网关按**容器内路径**读，或改成 base64 —— 路径不会自动翻译。
+
 ## 7. 运维与排障
 
 ```bash

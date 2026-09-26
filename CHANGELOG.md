@@ -1,5 +1,27 @@
 # Changelog
 
+## [3.0.0](https://github.com/redtidev1918/PixivFlow/compare/v2.47.0...v3.0.0) (2026-09-26)
+
+
+### ⚠ BREAKING CHANGES
+
+* **webui:** answer where a file is instead of opening the file manager
+
+### Features
+
+* **webui:** reveal downloaded files in the system file manager ([77953c9](https://github.com/redtidev1918/PixivFlow/commit/77953c9d48c407c454a188ec0bd5ad80f077cfb8))
+
+
+### Bug Fixes
+
+* **cli:** print the result a command returns, and take `delivery <id>` positionally ([ef71cb7](https://github.com/redtidev1918/PixivFlow/commit/ef71cb79050b099be5dd6b5d52bf4fbcbbff7f32))
+* **webui:** the no-auth security notice must not cover the app or shift the layout ([de443ba](https://github.com/redtidev1918/PixivFlow/commit/de443bac370eb9e65a171120877a0be03ddaae67))
+
+
+### Code Refactoring
+
+* **webui:** answer where a file is instead of opening the file manager ([3c24465](https://github.com/redtidev1918/PixivFlow/commit/3c24465c192d19f71b90eb7da14403a4c2bab3b5))
+
 ## [2.47.0](https://github.com/redtidev1918/PixivFlow/compare/v2.46.0...v2.47.0) (2026-09-26)
 
 

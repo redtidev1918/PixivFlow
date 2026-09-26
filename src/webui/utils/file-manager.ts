@@ -1,164 +1,82 @@
-import { spawnSync } from 'child_process';
-import { dirname, resolve, relative, isAbsolute } from 'path';
+import { dirname, resolve, relative, isAbsolute, sep } from 'path';
 import { existsSync, statSync } from 'fs';
 
 /**
- * "Show this file in the system file manager" — the narrow OS integration the
- * file browser and the task history need.
+ * Where a downloaded file actually lives.
  *
- * This module owns exactly one shell-out, so it also owns the rules that keep
- * that shell-out safe:
+ * PixivFlow answers *where*, never "opens" anything: revealing a path is a
+ * capability of the device in front of the user (the desktop host, or the
+ * machine running a browser), not of the PixivFlow runtime. A container on
+ * Fly.io has no Finder to open, so a spawned `xdg-open` there would be a lie
+ * with a side effect. The runtime's whole job is to resolve, normalize and
+ * confine the path, and to answer honestly about whether it exists.
  *
- *  - the path is never taken from a request verbatim: the caller resolves it
- *    against a configured download directory first (`resolveWithinBaseDir`),
- *    so a crafted `../../..` path is rejected before anything is opened;
- *  - the platform opener is invoked with an argument array and `shell: false`,
- *    never through a shell string, so a path can never be parsed as a command;
- *  - "unsupported" and "failed" stay distinct results, because the UI must be
- *    able to tell "this host has no file manager" (offer the path to copy)
- *    apart from "the opener refused this path".
+ * This module therefore owns no shell-out and no platform branch.
  */
 
-/** Why a reveal attempt did not open a file manager. */
-export type RevealFailure = 'unsupported' | 'failed';
-
-export interface RevealResult {
-  ok: boolean;
-  /** Directory that was (or would have been) revealed; absolute. */
+export interface FileLocation {
+  /** Absolute, confined path of the file (or directory) that was asked about. */
   path: string;
-  reason?: RevealFailure;
-  /** Opener stderr/stdout excerpt, already truncated. Never contains a secret. */
-  detail?: string;
+  /** The directory to show in a file manager. Equals `path` for a directory. */
+  directory: string;
+  exists: boolean;
+  isDirectory: boolean;
 }
 
 /**
- * Whether this process can hand a path to a file manager at all.
- *
- * A server-side deployment (Linux container, headless VPS, Fly.io) has no
- * desktop session, so revealing there would be meaningless — the UI must fall
- * back to copying the path. `darwin` / `win32` always have an opener; a Linux
- * host is only usable when `xdg-open` is actually installed and a display is
- * present.
- */
-export function isFileManagerAvailable(): boolean {
-  if (process.platform === 'darwin' || process.platform === 'win32') return true;
-  if (process.platform !== 'linux') return false;
-  if (!process.env.DISPLAY && !process.env.WAYLAND_DISPLAY) return false;
-  return whichSync('xdg-open') !== null;
-}
-
-/** Resolve an executable on PATH without spawning a shell. */
-function whichSync(binary: string): string | null {
-  const probe = process.platform === 'win32' ? 'where' : 'which';
-  const result = spawnSync(probe, [binary], { encoding: 'utf-8', shell: false });
-  if (result.status !== 0) return null;
-  const first = (result.stdout ?? '').split('\n')[0]?.trim();
-  return first ? first : null;
-}
-
-/**
- * The directory a file manager should open for `target`: the parent directory
+ * The directory a file manager would show for `target`: the parent directory
  * for a file, the directory itself for a directory.
+ *
+ * A missing target answers with its parent, so a stale database row still
+ * produces a usable directory instead of an error.
  */
-export function directoryToReveal(target: string): string {
+export function parentDirectory(target: string): string {
   try {
     return statSync(target).isDirectory() ? target : dirname(target);
   } catch {
-    // Missing target: still answer with the parent, so the caller can report
-    // the path it would have opened instead of failing on a stat race.
     return dirname(target);
   }
 }
 
-/** First non-empty line of a child process buffer, clipped. */
-function clipDetail(value: string | undefined | null): string | undefined {
-  const first = (value ?? '').split('\n').map((line) => line.trim()).filter(Boolean)[0];
-  if (!first) return undefined;
-  return first.length > 200 ? `${first.slice(0, 200)}...` : first;
-}
-
 /**
- * Open `dirPath` in the platform file manager.
+ * Resolve a caller-supplied path inside the configured download directory.
  *
- * The call waits for the opener to exit: `open`/`xdg-open` return immediately
- * (they hand the request to the desktop session), so a non-zero status is a
- * real "this could not be opened" signal rather than a timing artifact.
+ * Returns `null` for anything that must not be answered: a path escaping the
+ * base directory, a sibling whose name merely starts with the base name
+ * (`/data` vs `/data-out`), a NUL byte, or a malformed argument. Existence is
+ * deliberately *not* part of this decision — a file deleted behind the app's
+ * back should still answer where it used to be, with `exists: false`.
  */
-export function revealInFileManager(dirPath: string): RevealResult {
-  const path = resolve(dirPath);
-
-  if (!isFileManagerAvailable()) {
-    return { ok: false, path, reason: 'unsupported' };
-  }
-
-  try {
-    const result =
-      process.platform === 'darwin'
-        ? spawnSync('open', [path], { encoding: 'utf-8', shell: false, timeout: 10_000 })
-        : process.platform === 'win32'
-          ? spawnSync('explorer', [path], { encoding: 'utf-8', shell: false, timeout: 10_000 })
-          : spawnSync('xdg-open', [path], { encoding: 'utf-8', shell: false, timeout: 10_000 });
-
-    if (result.error) {
-      return { ok: false, path, reason: 'failed', detail: clipDetail(result.error.message) };
-    }
-
-    if (result.status !== 0) {
-      return {
-        ok: false,
-        path,
-        reason: 'failed',
-        detail: clipDetail(result.stderr) ?? clipDetail(result.stdout),
-      };
-    }
-
-    return { ok: true, path };
-  } catch (error) {
-    return {
-      ok: false,
-      path,
-      reason: 'failed',
-      detail: clipDetail(error instanceof Error ? error.message : String(error)),
-    };
-  }
-}
-
-/**
- * Resolve a caller-supplied path against one or more allowed base directories.
- *
- * Returns the absolute, existing path when it is inside a base directory, and
- * `null` for anything else: a missing path, a path escaping every base, or a
- * path that does not exist. Callers turn `null` into their own error code, so
- * this stays a pure decision function.
- */
-export function resolveWithinBaseDir(
+export function confineToBaseDir(
   filePath: string,
-  baseDirs: string[]
-): string | null {
-  if (filePath.includes('\0')) return null;
+  baseDir: string
+): { path: string; directory: string; exists: boolean; isDirectory: boolean } | null {
+  if (typeof filePath !== 'string' || filePath.includes('\0')) return null;
+  if (typeof baseDir !== 'string' || baseDir.length === 0) return null;
 
-  const bases = baseDirs
-    .filter((dir): dir is string => typeof dir === 'string' && dir.length > 0)
-    .map((dir) => resolve(dir));
-  if (bases.length === 0) return null;
+  const base = resolve(baseDir);
+  const candidate = isAbsolute(filePath)
+    ? resolve(filePath)
+    : resolve(base, filePath);
 
-  const candidates: string[] = [];
-  if (isAbsolute(filePath)) {
-    candidates.push(resolve(filePath));
-  } else {
-    for (const base of bases) candidates.push(resolve(base, filePath));
+  // Confinement compares against `base + separator`: a prefix check alone would
+  // accept `/downloads-out` for a base of `/downloads`.
+  if (candidate !== base && !candidate.startsWith(base + sep)) return null;
+
+  let exists = false;
+  let isDirectory = false;
+  try {
+    const stat = statSync(candidate);
+    exists = true;
+    isDirectory = stat.isDirectory();
+  } catch {
+    exists = false;
   }
 
-  for (const candidate of candidates) {
-    const inside = bases.some((base) => {
-      const rel = relative(base, candidate);
-      // Empty rel = the base itself; a leading '..' = outside the base.
-      return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
-    });
-    if (!inside) continue;
-    if (!existsSync(candidate)) continue;
-    return candidate;
-  }
-
-  return null;
+  return {
+    path: candidate,
+    directory: isDirectory ? candidate : parentDirectory(candidate),
+    exists,
+    isDirectory,
+  };
 }

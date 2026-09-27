@@ -1,0 +1,26 @@
+{
+  "job_id": "job-c78dd065",
+  "events": [
+    {
+      "protocol_version": "1",
+      "event_id": "evt-1790481174570-c78dd065",
+      "job_id": "job-c78dd065",
+      "type": "job.accepted",
+      "at": 1790481174570,
+      "correlation_id": "review-chain:135",
+      "labels": { "origin": "moderation", "tenant": "bot1" }
+    },
+    {
+      "protocol_version": "1",
+      "event_id": "evt-1790481179130-c78dd065",
+      "job_id": "job-c78dd065",
+      "type": "job.started",
+      "at": 1790481179130,
+      "correlation_id": "review-chain:135",
+      "labels": { "origin": "moderation", "tenant": "bot1" }
+    }
+  ],
+  "next_after": "",
+  "unacked": 2,
+  "server_time": 1790481290000
+}

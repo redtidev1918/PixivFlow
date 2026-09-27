@@ -36,6 +36,7 @@
     "telegram_failed": "delivery_failed",
     "telepost_rejected": "delivery_rejected",
     "delivery_abandoned": "delivery_abandoned",
+    "cancelled_by_consumer": "cancelled_by_consumer",
     "queued_too_long": "queued_too_long",
     "stalled_no_heartbeat": "stalled_no_progress",
     "execution_timeout": "deadline_exceeded",

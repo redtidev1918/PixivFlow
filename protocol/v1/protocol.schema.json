@@ -100,9 +100,9 @@
         "lease_active": { "type": "boolean", "description": "True when a live worker holds the job." },
         "lease_expires_at": { "type": ["integer", "null"], "minimum": 0 },
         "attempt": { "type": "integer", "minimum": 0 },
-        "progress": { "$ref": "#/$defs/Progress" },
-        "result": { "type": "object", "description": "Present on succeeded; shape follows the job_type Result schema." },
-        "error": { "$ref": "#/$defs/Error" },
+        "progress": { "anyOf": [{ "$ref": "#/$defs/Progress" }, { "type": "null" }] },
+        "result": { "anyOf": [{ "type": "object" }, { "type": "null" }], "description": "Present on succeeded; shape follows the job_type Result schema. Producers may send null instead of omitting it." },
+        "error": { "anyOf": [{ "$ref": "#/$defs/Error" }, { "type": "null" }], "description": "Absent or null when the job has not failed." },
         "events_url": { "type": "string" }
       }
     },
@@ -133,11 +133,40 @@
           "type": "object",
           "description": "Terminal events carry result or error.",
           "properties": {
-            "job": { "$ref": "#/$defs/Job" },
-            "result": { "type": "object" },
-            "error": { "$ref": "#/$defs/Error" }
+            "job": { "anyOf": [{ "$ref": "#/$defs/Job" }, { "type": "null" }] },
+            "result": { "anyOf": [{ "type": "object" }, { "type": "null" }] },
+            "error": { "anyOf": [{ "$ref": "#/$defs/Error" }, { "type": "null" }] }
           }
         }
+      }
+    },
+    "JobPage": {
+      "type": "object",
+      "description": "GET /jobs?…: list envelope. Paging must be driven by these opaque cursors, never by producer table ids.",
+      "required": ["jobs"],
+      "properties": {
+        "jobs": { "type": "array", "items": { "$ref": "#/$defs/Job" } },
+        "next_cursor": { "type": "string", "description": "Opaque; empty/absent means the last page." },
+        "server_time": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "EventPage": {
+      "type": "object",
+      "description": "GET /jobs/{job_id}/events?after=…: ascending replay of a job's events for reconcile. A consumer that sees no event must never conclude failure -- it reconciles through this envelope (Job plus its events are the only liveness truth).",
+      "required": ["job_id", "events"],
+      "properties": {
+        "job_id": { "type": "string", "minLength": 1 },
+        "events": { "type": "array", "items": { "$ref": "#/$defs/Event" } },
+        "next_after": {
+          "type": "string",
+          "description": "Pass back as ?after=… to continue; absent means fully caught up."
+        },
+        "unacked": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "How many events the consumer has not acknowledged (0 or absent when not tracked)."
+        },
+        "server_time": { "type": "integer", "minimum": 0 }
       }
     },
     "Locator": {

@@ -467,5 +467,37 @@ describe('DownloadManager', () => {
       expect(mockClient.getIllustDetailWithTags).toHaveBeenCalledWith(2);
     });
   });
+
+  describe('novel cover policy plumbing (§novel-cover)', () => {
+    // `download.novelCover` is only a switch: if DownloadManager did not carry
+    // the key into the policy object, setting it in config would silently do
+    // nothing and the downloader would keep using the default.
+    const policyOf = (instance: DownloadManager) =>
+      (instance as unknown as {
+        novelDownloader: { novelCoverPolicy: { unknownCover: string; probeFailed: string } };
+      }).novelDownloader.novelCoverPolicy;
+
+    it('defaults probeFailed to skip when config omits the key', () => {
+      expect(policyOf(manager)).toEqual({ unknownCover: 'skip', probeFailed: 'skip' });
+    });
+
+    it('carries download.novelCover.probeFailed into the downloader policy', () => {
+      const custom = {
+        ...createMockConfig(),
+        download: { novelCover: { probeFailed: 'keep' } },
+      } as StandaloneConfig;
+      const customManager = new DownloadManager(custom, mockClient, mockDatabase, mockFileService);
+      expect(policyOf(customManager)).toEqual({ unknownCover: 'skip', probeFailed: 'keep' });
+    });
+
+    it('carries download.novelCover.unknown into the downloader policy', () => {
+      const custom = {
+        ...createMockConfig(),
+        download: { novelCover: { unknown: 'keep' } },
+      } as StandaloneConfig;
+      const customManager = new DownloadManager(custom, mockClient, mockDatabase, mockFileService);
+      expect(policyOf(customManager)).toEqual({ unknownCover: 'keep', probeFailed: 'skip' });
+    });
+  });
 });
 

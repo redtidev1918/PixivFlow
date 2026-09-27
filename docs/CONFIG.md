@@ -784,7 +784,8 @@ kill -HUP <pixivflow-pid>
 | `retryDelay` | 2000 | 文件级重试间隔(ms) |
 | `timeout` | 60000 | 单文件下载超时(ms) |
 | `materializationPolicy` | `eager` | novel 预览媒体物化策略：`eager` 提前下载本地图片（旧行为）；`on-demand` 预览路径只保留 MediaReference（`assetId`/`sourceUrl`），ZIP/归档仍按需物化 |
-| `novelCover.unknown` | `skip` | 小说封面**内容类型无法识别**时的策略：`skip` 安全模式，不把无法判别的封面当作 Telegram 媒体投递（只是不发送，不会丢文档）；`keep` 优先可用性。Pixiv 生成的设计封面（恰好 640x900）无论如何都不会投递；取图失败（网络/鉴权/限流）仍然保留封面 |
+| `novelCover.unknown` | `skip` | 小说封面**内容类型无法识别**时的策略：`skip` 安全模式，不把无法判别的封面当作 Telegram 媒体投递（只是不发送，不会丢文档）；`keep` 优先可用性。Pixiv 生成的设计封面（恰好 640x900）无论如何都不会投递 |
+| `novelCover.probeFailed` | `skip` | **取图失败**（网络/鉴权/限流，从未看到字节）时的策略：`skip` 安全模式——绝大多数小说封面本身就是 Pixiv 生成的设计封面，保留未判别的封面等于重新投递分类器本要拦下的设计；`keep` 优先可用性（一次取图失败不丢作者封面）。两种取值都会记录 `coverType=probe_failed` 告警 |
 
 ### `download.novelCover`：小说封面内容类型
 
@@ -795,16 +796,17 @@ Pixiv 把作者封面和它自己现场渲染的**设计封面**放在同一条 
 | `custom` | 作者封面（任意非 640x900 画布） | 正常投递：`cover_url` + `:novelcover` 媒体资产 |
 | `pixiv_generated` | 恰好 640x900 | 丢弃：`cover_url: null`，不产出 `:novelcover` 资产 |
 | `unknown` | 图片头无法识别 | 按 `download.novelCover.unknown`（默认 `skip`，即不发送），并记录 `coverType=unknown` 告警 |
+| `probe_failed` | 取图失败（网络/鉴权/限流），从未看到字节 | 按 `download.novelCover.probeFailed`（默认 `skip`，即不发送），并记录 `coverType=probe_failed` 告警 |
 
 ```json
 {
   "download": {
-    "novelCover": { "unknown": "skip" }
+    "novelCover": { "unknown": "skip", "probeFailed": "skip" }
   }
 }
 ```
 
-诊断：日志里 `Novel <id> cover classified (coverType=custom)` 表示正常投递，`coverType=pixiv_generated` 表示丢弃了 Pixiv 设计封面，`coverType=probe_failed` 表示取图失败（此时保留封面），`coverType=unknown` 表示结构可能变化——请检查 Pixiv 的封面格式是否改变，而不是把 `unknown` 改成 `keep` 了事。
+诊断：日志里 `Novel <id> cover classified (coverType=custom)` 表示正常投递，`coverType=pixiv_generated` 表示丢弃了 Pixiv 设计封面，`coverType=probe_failed` 表示取图失败（按 `novelCover.probeFailed` 决定保留或跳过），`coverType=unknown` 表示结构可能变化——请检查 Pixiv 的封面格式是否改变，而不是把 `unknown` 改成 `keep` 了事。
 
 调大并发不一定会更快——Pixiv 服务端限流很敏感,遇到大量
 429 时优先增大 `requestDelay` 而不是堆并发。

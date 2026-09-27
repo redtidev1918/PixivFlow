@@ -426,7 +426,7 @@ describe('NovelDownloader cover semantics (§novel-cover)', () => {
     expect(artifact!.mediaAssets![0]).toMatchObject({ id: 'pixiv:789:novelcover' });
   });
 
-  it('fails open and keeps the cover when the probe cannot be fetched', async () => {
+  it('skips the cover when the probe cannot be fetched (default policy)', async () => {
     const coverUrl = 'https://i.pximg.net/novel-cover-master/img/unreachable_master1200.jpg';
     const { downloader, fileService } = build(
       { novel_text: 'body', coverUrl },
@@ -435,7 +435,25 @@ describe('NovelDownloader cover semantics (§novel-cover)', () => {
     const artifact = await downloader.download(
       novel, 'bg', { type: 'novel', detectLanguage: false } as TargetConfig
     );
-    // A failed probe must never cost a real cover.
+    // Most novel covers ARE Pixiv's generated designs, so an unseen probe
+    // failure must not re-ship them: the novel still delivers, without a cover.
+    expect(fileService.saveMetadata.mock.calls[0][1].cover_url).toBeNull();
+    expect(artifact!.mediaAssets!.some((a) => a.id === 'pixiv:789:novelcover')).toBe(false);
+    expect(artifact).toBeDefined();
+  });
+
+  it('keeps the cover on a failed probe when the policy prefers availability', async () => {
+    const policy: NovelCoverPolicy = { unknownCover: 'skip', probeFailed: 'keep' };
+    const coverUrl = 'https://i.pximg.net/novel-cover-master/img/unreachable_master1200.jpg';
+    const { downloader, fileService } = build(
+      { novel_text: 'body', coverUrl },
+      new Error('429 Too Many Requests'),
+      policy
+    );
+    const artifact = await downloader.download(
+      novel, 'bg', { type: 'novel', detectLanguage: false } as TargetConfig
+    );
+    // Opt-in behaviour: a transient fetch error must never cost a real cover.
     expect(fileService.saveMetadata.mock.calls[0][1].cover_url).toBe(coverUrl);
     expect(artifact!.mediaAssets!.some((a) => a.id === 'pixiv:789:novelcover')).toBe(true);
   });
@@ -457,7 +475,7 @@ describe('NovelDownloader cover semantics (§novel-cover)', () => {
   });
 
   it('keeps an unclassifiable cover when the policy opts into availability', async () => {
-    const policy: NovelCoverPolicy = { unknownCover: 'keep' };
+    const policy: NovelCoverPolicy = { unknownCover: 'keep', probeFailed: 'skip' };
     const coverUrl = 'https://i.pximg.net/novel-cover-master/img/weird_master1200.bin';
     const { downloader, fileService } = build(
       { novel_text: 'body', coverUrl },
@@ -472,7 +490,7 @@ describe('NovelDownloader cover semantics (§novel-cover)', () => {
   });
 
   it('never delivers a generated design even when unknown covers are kept', async () => {
-    const policy: NovelCoverPolicy = { unknownCover: 'keep' };
+    const policy: NovelCoverPolicy = { unknownCover: 'keep', probeFailed: 'keep' };
     const { downloader, fileService } = build(
       {
         novel_text: 'body',

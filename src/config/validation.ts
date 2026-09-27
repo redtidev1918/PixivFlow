@@ -730,6 +730,15 @@ export function validateConfig(config: Partial<StandaloneConfig>, location: stri
         `download.novelCover.unknown: Must be "skip" or "keep" (got ${String(config.download.novelCover.unknown)})`
       );
     }
+    if (
+      config.download.novelCover?.probeFailed !== undefined &&
+      config.download.novelCover.probeFailed !== 'skip' &&
+      config.download.novelCover.probeFailed !== 'keep'
+    ) {
+      errors.push(
+        `download.novelCover.probeFailed: Must be "skip" or "keep" (got ${String(config.download.novelCover.probeFailed)})`
+      );
+    }
   }
 
   // The bounded candidate scan is what stops a page full of duplicates from

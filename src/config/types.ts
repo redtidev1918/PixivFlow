@@ -987,10 +987,19 @@ export interface StandaloneConfig {
      * classified. 'skip' (default) is safe mode: never ship an unclassifiable
      * cover, and log `coverType=unknown` so a future Pixiv format change is
      * visible instead of silently leaking designs again. 'keep' prefers
-     * availability over certainty. A failed probe always keeps the cover.
+     * availability over certainty.
+     *
+     * `probeFailed` governs the separate case where the cover probe itself
+     * failed (network / auth / rate limit) and the bytes were never seen.
+     * 'skip' (default) is safe mode for the same reason: most novel covers ARE
+     * generated designs, so keeping an unseen cover re-ships what the 640x900
+     * classifier exists to suppress; the cost is one illustration when a real
+     * cover is transiently unreachable. 'keep' restores availability-first.
+     * Either way the `coverType=probe_failed` warning stays visible.
      */
     novelCover?: {
       unknown?: 'skip' | 'keep';
+      probeFailed?: 'skip' | 'keep';
     };
   };
 }

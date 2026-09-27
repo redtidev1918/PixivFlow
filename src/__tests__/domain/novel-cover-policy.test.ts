@@ -55,17 +55,25 @@ describe('NovelCoverPolicy (§media-asset-pipeline)', () => {
   });
 
   it('never delivers a generated design, whatever the unknown policy says', () => {
-    expect(coverDeliveryDecision({ unknownCover: 'skip' }, 'pixiv_generated')).toBe('skip');
-    expect(coverDeliveryDecision({ unknownCover: 'keep' }, 'pixiv_generated')).toBe('skip');
+    expect(coverDeliveryDecision({ unknownCover: 'skip', probeFailed: 'skip' }, 'pixiv_generated')).toBe('skip');
+    expect(coverDeliveryDecision({ unknownCover: 'keep', probeFailed: 'keep' }, 'pixiv_generated')).toBe('skip');
   });
 
   it('delivers custom covers and applies the policy to unknown ones', () => {
     expect(coverDeliveryDecision(DEFAULT_NOVEL_COVER_POLICY, 'custom')).toBe('deliver');
     expect(coverDeliveryDecision(DEFAULT_NOVEL_COVER_POLICY, 'unknown')).toBe('skip');
-    expect(coverDeliveryDecision({ unknownCover: 'keep' }, 'unknown')).toBe('deliver');
+    expect(coverDeliveryDecision({ unknownCover: 'keep', probeFailed: 'skip' }, 'unknown')).toBe('deliver');
   });
 
-  it('defaults to safe mode: an unclassifiable cover is not shipped', () => {
-    expect(DEFAULT_NOVEL_COVER_POLICY).toEqual({ unknownCover: 'skip' });
+  it('applies the probeFailed policy to a failed probe', () => {
+    // The probe never produced bytes, so there is no content type to trust:
+    // the production default is to skip, and 'keep' is the availability opt-in.
+    expect(coverDeliveryDecision(DEFAULT_NOVEL_COVER_POLICY, 'probe_failed')).toBe('skip');
+    expect(coverDeliveryDecision({ unknownCover: 'skip', probeFailed: 'keep' }, 'probe_failed')).toBe('deliver');
+    expect(coverDeliveryDecision({ unknownCover: 'keep', probeFailed: 'keep' }, 'probe_failed')).toBe('deliver');
+  });
+
+  it('defaults to safe mode: neither an unclassifiable cover nor a failed probe is shipped', () => {
+    expect(DEFAULT_NOVEL_COVER_POLICY).toEqual({ unknownCover: 'skip', probeFailed: 'skip' });
   });
 });

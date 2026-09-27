@@ -647,6 +647,18 @@ export function validateConfig(config: Partial<StandaloneConfig>, location: stri
     if (queueLimit !== undefined && (!Number.isInteger(queueLimit) || queueLimit < 0 || queueLimit > 100)) {
       errors.push('schedulerRuntime.queueLimit: Must be an integer between 0 and 100');
     }
+    // Liveness budgets (§liveness): a WARNING, never an error. A bad value must
+    // not stop the daemon from starting; the sweep clamps to its own default so
+    // the behaviour stays safe either way.
+    for (const key of ['queuedTimeoutMs', 'stallTimeoutMs'] as const) {
+      const value = rt[key];
+      if (value === undefined) continue;
+      if (typeof value !== 'number' || !Number.isInteger(value) || value < 60000) {
+        warnings.push(
+          `schedulerRuntime.${key}: Should be an integer of at least 60000 (milliseconds); the liveness sweep uses its default instead`
+        );
+      }
+    }
     if (rt.exitWhenIdle !== undefined && typeof rt.exitWhenIdle !== 'boolean') {
       errors.push('schedulerRuntime.exitWhenIdle: Must be a boolean');
     }

@@ -15,6 +15,7 @@ import {
   scheduleTimezone,
 } from './OccurrenceResolver';
 import { TERMINAL_REASON_MESSAGES, TargetOutcome, terminalReasonFor } from './TargetOutcome';
+import { sqliteUtcMs } from './ledger-time';
 import { SlotBusinessStatus, classifySlotBusinessStatus } from './SlotBusinessStatus';
 import { TargetExecutionContext, WorkBinding, isSingleWorkCell } from './WorkIdentity';
 import { targetDeliveryNames } from '../delivery/targetRoutes';
@@ -204,20 +205,6 @@ export interface SchedulerDeliveryPort {
 function deliveryTargetsOf(target: TargetConfig): string[] {
   if (target.storageMode !== 'cache') return [];
   return targetDeliveryNames(target);
-}
-
-/**
- * SQLite `CURRENT_TIMESTAMP` is UTC "YYYY-MM-DD HH:MM:SS". It carries no zone
- * marker, and `Date.parse` reads that shape as LOCAL time — so the zone is
- * added explicitly instead of being trusted to the engine.
- */
-function sqliteUtcMs(value: string | null | undefined): number | undefined {
-  if (!value) return undefined;
-  const normalized = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value)
-    ? `${value.replace(' ', 'T')}Z`
-    : value;
-  const ms = Date.parse(normalized);
-  return Number.isNaN(ms) ? undefined : ms;
 }
 
 /**
@@ -629,15 +616,89 @@ export class SlotCoordinator {
     return next;
   }
 
-  finish(slot: SlotContext, schedule: ScheduleConfig, targets: TargetConfig[]): SlotRunSummary {
+  /**
+   * True when the cell's durable delivery intent can no longer be completed by
+   * any worker: at least one intent row exists (so this IS a delivery that was
+   * handed off, not an unstarted cell), none is confirmed, and none still has an
+   * actionable outbox row (dead / cancelled / lost with the process).
+   *
+   * Answered from the LEDGER rather than from the injected delivery port on
+   * purpose: `finish` is also called by the schedule-summary reconciler, which
+   * has no port, and "will anything still deliver this?" is a durable fact.
+   * `unknown` (no intent at all) must never converge a cell — an unstarted or
+   * port-less rollup keeps today's behaviour.
+   */
+  private abandonedDelivery(slotId: string, targetId: string): boolean {
+    const intents = this.database.deliveries.listForSlotCell(slotId, targetId);
+    if (intents.length === 0) return false;
+    if (intents.some((row) => row.status === 'delivered' || row.status === 'duplicate')) return false;
+    return !intents.some(
+      (row) => row.status === 'pending' && this.database.outbox.hasActionableDelivery(row.id)
+    );
+  }
+
+  /**
+   * A LIVE lease owned by someone other than the finishing run. Blocking on it
+   * is what stops a rollup (or the reconciler, which passes no owner) from
+   * converging cells that a concurrently running worker still owns.
+   */
+  private foreignLiveLease(slotId: string, ownOwner?: string): boolean {
+    const lease = this.database.slots.getSlotLease(slotId);
+    if (lease.owner === null || lease.until === null || lease.until <= Date.now()) return false;
+    return ownOwner === undefined || lease.owner !== ownOwner;
+  }
+
+  /**
+   * @param options.leaseOwner the lease owner of the run that is finishing.
+   *   A LIVE lease held by a DIFFERENT owner means another worker owns this slot
+   *   right now, so an abandoned-looking cell must be left to that worker
+   *   instead of being converged from here (the reconciler path passes nothing,
+   *   so any live lease blocks convergence for it).
+   */
+  finish(
+    slot: SlotContext,
+    schedule: ScheduleConfig,
+    targets: TargetConfig[],
+    options: { leaseOwner?: string } = {}
+  ): SlotRunSummary {
     const membership = this.database.slots.getSlotTargetIds(slot.slotId);
     const ids = membership.length > 0 ? membership : targets.map((t) => t.id).filter(Boolean) as string[];
+    const foreignLiveLease = this.foreignLiveLease(slot.slotId, options.leaseOwner);
     for (const targetId of ids) {
       const cell = this.database.slots.getCell(slot.slotId, targetId);
       if (!cell) continue;
       // delivery_pending / artifact_ready are recoverable: the OutboxWorker (or
-      // the next trigger) resumes the SAME work, so the slot stays running.
-      if (cell.status === 'delivery_pending' || cell.status === 'artifact_ready') continue;
+      // the next trigger) resumes the SAME work, so the slot stays running — but
+      // ONLY while a durable delivery intent still has an actionable outbox row.
+      // A dead-lettered/cancelled intent (or one lost with the process) has no
+      // worker left to converge it, so the cell would stay non-terminal forever
+      // and `deriveSlotStatus` would keep reporting `running`.
+      if (cell.status === 'delivery_pending' || cell.status === 'artifact_ready') {
+        if (foreignLiveLease) continue;
+        if (!this.abandonedDelivery(slot.slotId, targetId)) continue;
+        const error = cell.lastError ?? TERMINAL_REASON_MESSAGES.delivery_abandoned;
+        try {
+          this.database.slots.transitionCell(slot.slotId, targetId, 'failed', error);
+          this.database.slots.setCellTerminalReason(
+            slot.slotId,
+            targetId,
+            'delivery_abandoned',
+            TERMINAL_REASON_MESSAGES.delivery_abandoned
+          );
+        } catch (reasonError) {
+          logger.debug('Failed to converge an abandoned delivery cell', {
+            slot: slot.slotId, target: targetId,
+            error: reasonError instanceof Error ? reasonError.message : String(reasonError),
+          });
+          continue;
+        }
+        logger.warn('Converged an abandoned delivery cell: no actionable outbox row remained', {
+          slot: slot.slotId,
+          target: targetId,
+          manualRequestId: slot.manualRequestId ?? null,
+        });
+        continue;
+      }
       if (cell.status === 'pending' || cell.status === 'selected') {
         // Ran but never reached a terminal state (target threw before delivery).
         // Persist a normalized reason so the operator sees a first-level cause,

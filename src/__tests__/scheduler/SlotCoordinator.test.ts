@@ -377,4 +377,128 @@ describe('SlotCoordinator terminal schedule outcome', () => {
       expect(outcomeCalls()).toHaveLength(0);
     });
   });
+
+  /**
+   * Delivery convergence (A3). A cell that was handed to the delivery ledger is
+   * only recoverable while SOME worker can still settle it. Once its outbox row
+   * is dead-lettered or cancelled by an operator, nothing may ever converge it —
+   * so `finish` must, otherwise the slot reports `running` forever and the
+   * ledger keeps owing work that will never happen.
+   */
+  function seedDeliveryIntent(
+    db: Database,
+    slotId: string,
+    targetId: string,
+    deliveryId = 'd-1'
+  ): { deliveryId: string; outboxId: string } {
+    const { row } = db.deliveries.insertIntent({
+      id: deliveryId,
+      deliveryTarget: 'telepost',
+      workType: 'illustration',
+      pixivId: '101',
+      slotId,
+      targetId,
+      idempotencyKey: `idem:${slotId}:${targetId}`,
+    });
+    const outbox = db.outbox.enqueue({
+      kind: 'delivery',
+      idempotencyKey: `outbox:${row.idempotencyKey}`,
+      deliveryId: row.id,
+      deliveryTarget: 'telepost',
+      payload: { hello: 'world' },
+    });
+    return { deliveryId: row.id, outboxId: outbox.id };
+  }
+
+  it('converges an abandoned delivery cell whose outbox row is dead', async () => {
+    await withDb(async (db) => {
+      const coord = new SlotCoordinator(db);
+      const slot = coord.resolveOccurrence(schedule, config, 'http', AT).context!;
+      coord.prepare(slot, schedule, [target('a')]);
+      coord.applyOutcome(slot.slotId, 'a', {
+        kind: 'delivery_pending', workId: '101', workType: 'illustration', deliveryId: 'd-1',
+      });
+      const { outboxId } = seedDeliveryIntent(db, slot.slotId, 'a');
+      db.outbox.markDead(outboxId, 'receiver refused permanently');
+
+      const summary = coord.finish(slot, schedule, [target('a')]);
+
+      expect(summary.status).toBe('failed');
+      const cell = db.slots.getCell(slot.slotId, 'a')!;
+      expect(cell.status).toBe('failed');
+      expect(cell.terminalReasonCode).toBe('delivery_abandoned');
+      expect(cell.terminalReasonMessage).toBe('投稿未被处理，已放弃');
+    });
+  });
+
+  it('converges a delivery cell an operator cancelled (no dead-letter hook ever fires)', async () => {
+    await withDb(async (db) => {
+      const coord = new SlotCoordinator(db);
+      const slot = coord.resolveOccurrence(schedule, config, 'http', AT).context!;
+      coord.prepare(slot, schedule, [target('a')]);
+      coord.applyOutcome(slot.slotId, 'a', {
+        kind: 'delivery_pending', workId: '101', workType: 'illustration', deliveryId: 'd-1',
+      });
+      const { outboxId } = seedDeliveryIntent(db, slot.slotId, 'a');
+      expect(db.outbox.cancel(outboxId)).toBe(true);
+
+      coord.finish(slot, schedule, [target('a')]);
+
+      expect(db.slots.getCell(slot.slotId, 'a')!.terminalReasonCode).toBe('delivery_abandoned');
+    });
+  });
+
+  it('leaves a delivery cell alone while its outbox row can still be delivered', async () => {
+    await withDb(async (db) => {
+      const coord = new SlotCoordinator(db);
+      const slot = coord.resolveOccurrence(schedule, config, 'http', AT).context!;
+      coord.prepare(slot, schedule, [target('a')]);
+      coord.applyOutcome(slot.slotId, 'a', {
+        kind: 'delivery_pending', workId: '101', workType: 'illustration', deliveryId: 'd-1',
+      });
+      seedDeliveryIntent(db, slot.slotId, 'a');
+
+      const summary = coord.finish(slot, schedule, [target('a')]);
+
+      expect(summary.status).toBe('running');
+      expect(db.slots.getCell(slot.slotId, 'a')!.status).toBe('delivery_pending');
+    });
+  });
+
+  it('does not converge a dead-lettered delivery cell owned by ANOTHER live run', async () => {
+    await withDb(async (db) => {
+      const coord = new SlotCoordinator(db);
+      const slot = coord.resolveOccurrence(schedule, config, 'http', AT).context!;
+      coord.prepare(slot, schedule, [target('a')]);
+      coord.applyOutcome(slot.slotId, 'a', {
+        kind: 'delivery_pending', workId: '101', workType: 'illustration', deliveryId: 'd-1',
+      });
+      const { outboxId } = seedDeliveryIntent(db, slot.slotId, 'a');
+      db.outbox.markDead(outboxId, 'receiver refused permanently');
+      // A different worker holds the live lease and owns the slot right now.
+      db.slots.claimSlotLease(slot.slotId, 'other-worker', Date.now() + 60_000, Date.now());
+
+      coord.finish(slot, schedule, [target('a')], { leaseOwner: 'this-run' });
+
+      expect(db.slots.getCell(slot.slotId, 'a')!.status).toBe('delivery_pending');
+    });
+  });
+
+  it('converges the dead delivery cell of the finishing run itself (own lease is not a blocker)', async () => {
+    await withDb(async (db) => {
+      const coord = new SlotCoordinator(db);
+      const slot = coord.resolveOccurrence(schedule, config, 'http', AT).context!;
+      coord.prepare(slot, schedule, [target('a')]);
+      coord.applyOutcome(slot.slotId, 'a', {
+        kind: 'delivery_pending', workId: '101', workType: 'illustration', deliveryId: 'd-1',
+      });
+      const { outboxId } = seedDeliveryIntent(db, slot.slotId, 'a');
+      db.outbox.markDead(outboxId, 'receiver refused permanently');
+      expect(db.slots.claimSlotLease(slot.slotId, 'this-run', Date.now() + 60_000)).toBe(true);
+
+      coord.finish(slot, schedule, [target('a')], { leaseOwner: 'this-run' });
+
+      expect(db.slots.getCell(slot.slotId, 'a')!.terminalReasonCode).toBe('delivery_abandoned');
+    });
+  });
 });

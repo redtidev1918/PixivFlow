@@ -581,6 +581,26 @@ export interface SchedulerRuntimeConfig {
    */
   queueLimit?: number;
   /**
+   * Liveness budget for admitted work that never started (§liveness). A Slot
+   * that is still `pending` with no live lease after this long is terminalised
+   * as `queued_too_long` (its cells fail with that reason) instead of being
+   * re-dispatched forever and reporting an eternal "unfinished" job. Values
+   * below one minute are ignored (the sweep then uses its default) and warned
+   * about at config validation; nothing here is fatal.
+   * Default: 1800000ms (30 minutes).
+   */
+  queuedTimeoutMs?: number;
+  /**
+   * Liveness budget for a claimed run that stopped progressing (§liveness). A
+   * `running` Slot whose lease expired AND whose last heartbeat is older than
+   * this is terminalised as `stalled_no_heartbeat`. A LIVE lease is never
+   * eligible, so a genuinely long search is never killed. Values below one
+   * minute are ignored (the sweep then uses its default) and warned about at
+   * config validation; nothing here is fatal.
+   * Default: 900000ms (15 minutes).
+   */
+  stallTimeoutMs?: number;
+  /**
    * External-mode run-to-completion lifecycle. When true, the daemon exits the
    * process once its OWN durable ledger says there is nothing left to do, so a
    * machine that was woken by an external clock returns to `stopped` by itself

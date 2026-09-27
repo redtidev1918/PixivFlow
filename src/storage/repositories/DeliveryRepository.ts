@@ -93,6 +93,22 @@ export class DeliveryRepository extends BaseRepository {
   }
 
   /**
+   * Every delivery intent recorded for one Slot CELL, across ALL delivery
+   * routes. The Slot rollup asks this before it is allowed to converge a cell
+   * that was never ACKed; see `SlotCoordinator.finish`.
+   */
+  listForSlotCell(slotId: string, targetId: string): DeliveryRow[] {
+    const rows = this.db
+      .prepare(
+        `SELECT * FROM deliveries
+         WHERE slot_id = ? AND target_id = ?
+         ORDER BY created_at ASC`
+      )
+      .all(slotId, targetId) as any[];
+    return rows.map((r) => this.toRow(r));
+  }
+
+  /**
    * True when this exact work is already CONFIRMED (delivered, or an attested
    * historical duplicate) for this target. Pending/failed intents do not block
    * selection — they are retried, not treated as a delivered fact.

@@ -4,6 +4,7 @@ import { Server } from 'node:http';
 
 import { logger } from '../logger';
 import { SlotContext } from './SlotCoordinator';
+import { JobStatusProjection } from './JobProjection';
 import { TriggerSource } from './OccurrenceResolver';
 import { BUILD } from '../version';
 
@@ -164,7 +165,12 @@ export interface TriggerHandlers {
     requestId: string,
     correlationId?: string
   ): Promise<{ slotId: string; disposition: string }>;
-  refetchStatus?(targetId: string, requestId: string): { requestId: string; slotId: string; state: string; slotStatus: string } | null;
+  /**
+   * Generic Job projection for one manual job. The four legacy identity fields
+   * keep their exact meaning; the rest is additive liveness + terminal-cause
+   * detail (see `JobStatusProjection`). Null means "no such job" -> 404.
+   */
+  refetchStatus?(targetId: string, requestId: string): JobStatusProjection | null;
   /**
    * Admit one manual RECOVERY of a failed target (§manual-recovery). `retryMode`
    * selects a SERVER-DEFINED acquisition policy preset ('normal' | 'relaxed');

@@ -1,5 +1,5 @@
 /**
- * Workflow Protocol v1 contract tests (consumer side: PixivFlow).
+ * Workflow Protocol v1 contract tests (producer side: PixivFlow).
  *
  * The machine-checkable half of the PixivFlow <-> TelePost protocol is vendored under
  * `protocol/v1/` (schema + fixtures + SOURCES.sha256) by
@@ -148,10 +148,11 @@ function hasTerm(name: string, term: string): boolean {
   return false;
 }
 
-describe('workflow protocol v1 (PixivFlow consumer side)', () => {
+describe('workflow protocol v1 (producer side: PixivFlow)', () => {
   it('vendors the protocol assets', () => {
     expect(existsSync(SCHEMA_PATH)).toBe(true);
     expect(existsSync(join(PROTOCOL_DIR, 'SOURCES.sha256'))).toBe(true);
+    expect(existsSync(join(PROTOCOL_DIR, 'error-mapping.json'))).toBe(true);
     expect(fixtures().length).toBeGreaterThanOrEqual(5);
     expect(schema.$defs && Object.keys(schema.$defs).length).toBeGreaterThan(5);
   });
@@ -198,6 +199,35 @@ describe('workflow protocol v1 (PixivFlow consumer side)', () => {
       if (actual !== digest) mismatches.push(`${rel}: ${actual} != recorded ${digest}`);
     }
     expect(mismatches).toEqual([]);
+  });
+
+  it('keeps the error vocabulary closed and maps every internal reason code', () => {
+    const mapping = JSON.parse(readFileSync(join(PROTOCOL_DIR, 'error-mapping.json'), 'utf8'));
+    const enumValues: string[] = schema.$defs.Error.properties.code.enum;
+    // The tables may carry $comment documentation alongside the codes.
+    const producerInternal: Record<string, string> = Object.fromEntries(
+      Object.entries(mapping.producer_internal as Record<string, string>).filter(([code]) => !code.startsWith('$')),
+    );
+    const protocolCodes = Object.keys(mapping.protocol_codes);
+
+    expect(protocolCodes.sort()).toEqual([...enumValues].sort());
+    for (const [code, spec] of Object.entries(mapping.protocol_codes as Record<string, Json>)) {
+      expect(typeof (spec as { retryable?: unknown }).retryable).toBe('boolean');
+      expect(code.length).toBeGreaterThan(0);
+    }
+    for (const target of Object.values(producerInternal)) {
+      expect(enumValues).toContain(target);
+    }
+
+    // The producer owns both vocabularies here: a new TerminalReasonCode without a
+    // protocol mapping would leak the private vocabulary to the consumer.
+    const source = readFileSync(resolve(__dirname, '../../scheduler/TargetOutcome.ts'), 'utf8');
+    const union = /export type TerminalReasonCode\s*=\s*([\s\S]*?);/.exec(source);
+    expect(union).not.toBeNull();
+    const internal = [...(union as RegExpExecArray)[1].matchAll(/'([a-z0-9_]+)'/g)].map((m) => m[1]);
+    expect(internal.length).toBeGreaterThan(0);
+    expect(internal.filter((code) => !(code in producerInternal))).toEqual([]);
+    expect(Object.keys(producerInternal).filter((code) => !internal.includes(code))).toEqual([]);
   });
 
   it('tolerates unknown fields (additive-only evolution)', () => {

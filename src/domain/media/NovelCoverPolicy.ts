@@ -26,8 +26,15 @@
  * shipping generated covers again.
  *
  * A FAILED probe (network / auth / rate limit) is deliberately NOT `unknown`:
- * it is `probe_failed` and always keeps the cover, because a transient fetch
- * error must never cost a real one.
+ * it is `probe_failed` — the bytes were never seen, so no content type exists.
+ * It is a policy decision like `unknown` (`download.novelCover.probeFailed`),
+ * and the production-safe default is `skip`: the majority of novel covers ARE
+ * Pixiv's generated designs, so a probe failure that keeps the cover re-ships
+ * exactly the payloads the 640x900 classifier exists to suppress. `keep` stays
+ * available for an operator who prefers availability over certainty (a
+ * transient fetch error must never cost a real cover). Either way the loud
+ * `coverType=probe_failed` log line stays, so the decision is observable
+ * instead of silent.
  */
 import { readImageDimensions } from '../../utils/imageDimensions';
 
@@ -50,10 +57,30 @@ export interface NovelCoverPolicy {
    * 'keep': prefer availability over certainty.
    */
   unknownCover: 'skip' | 'keep';
+  /**
+   * What to do when the cover probe itself failed (network / auth / rate
+   * limit), so the bytes were never fetched and no content type exists.
+   *
+   * 'skip' (default): safe mode — most novel covers ARE Pixiv's generated
+   * designs, so keeping an unseen probe failure re-ships exactly the covers
+   * the 640x900 classifier exists to suppress. The cost is one illustration
+   * when a real author cover happens to be transiently unreachable.
+   * 'keep': prefer availability over certainty — a failed probe never costs a
+   * cover, at the price of re-shipping generated designs whenever the CDN or
+   * the account is unreachable.
+   */
+  probeFailed: 'skip' | 'keep';
 }
 
-/** Production-safe default: an unclassifiable cover is never shipped. */
-export const DEFAULT_NOVEL_COVER_POLICY: NovelCoverPolicy = { unknownCover: 'skip' };
+/**
+ * Production-safe default: an unclassifiable cover is never shipped, and a
+ * probe that never produced bytes is not treated as evidence that the cover is
+ * real content.
+ */
+export const DEFAULT_NOVEL_COVER_POLICY: NovelCoverPolicy = {
+  unknownCover: 'skip',
+  probeFailed: 'skip',
+};
 
 /**
  * Classify fetched cover bytes. Returns `unknown` when the image header cannot
@@ -73,12 +100,19 @@ export function classifyNovelCover(
   return 'custom';
 }
 
-/** The delivery decision for one classified cover under a policy. */
+/**
+ * Everything `coverDeliveryDecision` can be asked about: the three results
+ * `classifyNovelCover` returns, plus the probe that never produced bytes.
+ */
+export type NovelCoverOutcome = NovelCoverType | 'probe_failed';
+
+/** The delivery decision for one cover outcome under a policy. */
 export function coverDeliveryDecision(
   policy: NovelCoverPolicy,
-  type: NovelCoverType
+  outcome: NovelCoverOutcome
 ): 'deliver' | 'skip' {
-  if (type === 'pixiv_generated') return 'skip';
-  if (type === 'unknown') return policy.unknownCover === 'keep' ? 'deliver' : 'skip';
+  if (outcome === 'pixiv_generated') return 'skip';
+  if (outcome === 'unknown') return policy.unknownCover === 'keep' ? 'deliver' : 'skip';
+  if (outcome === 'probe_failed') return policy.probeFailed === 'keep' ? 'deliver' : 'skip';
   return 'deliver';
 }

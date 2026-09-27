@@ -129,8 +129,9 @@ executeCommand():command.validate?(args) → command.execute(context, args)
 | `custom` | 作者封面，画布不是 640x900 | 投递（`cover_url` + `:novelcover` 资产） |
 | `pixiv_generated` | 恰好 640x900 的 Pixiv 设计画布 | **丢弃**（`cover_url: null`，不产出 `:novelcover`） |
 | `unknown` | 图片头无法识别（Pixiv 结构变化的信号） | 按 `download.novelCover.unknown`，默认 `skip`（安全模式，不发送） |
+| `probe_failed` | 取图失败（网络/鉴权/限流），从未看到字节 | 按 `download.novelCover.probeFailed`，默认 `skip`（安全模式，不发送） |
 
-两类失败被刻意分开：**探测失败**（网络/鉴权/限流，`coverType=probe_failed`）一律**保留**封面——一次取图失败不能复刻成丢图；**内容未知**则默认不发送，并留下 `coverType=unknown` 的告警日志，让 Pixiv 未来的封面格式变化以可见日志暴露，而不是静默地把设计封面再次投递出去。
+两类失败被刻意分开，但**都由策略决定、默认都不发送**：**内容未知**（`coverType=unknown`）与**探测失败**（`coverType=probe_failed`）都留下告警日志。绝大多数小说封面本身就是 Pixiv 生成的设计封面，所以「没看到字节就保留」等于把分类器本要拦下的设计封面重新投递出去；默认 `skip` 让 Pixiv 未来的封面格式变化或取图故障以可见日志暴露，而不是静默泄漏设计封面。需要可用性优先时可显式设置 `download.novelCover.unknown` / `download.novelCover.probeFailed: keep`。
 
 
 ### 计划与去重

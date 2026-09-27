@@ -445,8 +445,11 @@ export class NovelDownloader {
    *  - unknown         → policy decision, default 'skip' (safe mode), so a future
    *                      Pixiv cover-format change surfaces as a loud
    *                      `coverType=unknown` log instead of leaking silently
-   * A FAILED probe (network / auth / rate limit) is a separate case and always
-   * keeps the cover: a transient fetch error must never cost a real one.
+   *  - probe_failed    → policy decision, default 'skip': the bytes were never
+   *                      seen, and most novel covers are generated designs, so
+   *                      keeping an unseen cover re-ships what this classifier
+   *                      exists to suppress. `download.novelCover.probeFailed:
+   *                      keep` restores the availability-first behaviour.
    */
   private async resolveCoverUrl(
     novelId: number | string,
@@ -459,13 +462,35 @@ export class NovelDownloader {
     try {
       cover = await this.client.downloadImage(normalized);
     } catch (error) {
-      logger.warn(`Novel ${novelId} cover probe failed; keeping the cover (coverType=probe_failed)`, {
-        novelId,
-        coverUrl: normalized,
-        coverType: 'probe_failed',
-        reason: error instanceof Error ? error.message : String(error),
-      });
-      return normalized;
+      const reason = error instanceof Error ? error.message : String(error);
+      // A failed probe is a policy decision, not an automatic keep: most novel
+      // covers ARE Pixiv's generated designs, so silently shipping an unseen
+      // cover re-ships exactly what the 640x900 classifier exists to suppress.
+      const probeDecision = coverDeliveryDecision(this.novelCoverPolicy, 'probe_failed');
+      if (probeDecision === 'deliver') {
+        logger.warn(
+          `Novel ${novelId} cover probe failed; keeping the cover per novelCover.probeFailed=keep (coverType=probe_failed)`,
+          {
+            novelId,
+            coverUrl: normalized,
+            coverType: 'probe_failed',
+            policy: this.novelCoverPolicy.probeFailed,
+            reason,
+          }
+        );
+        return normalized;
+      }
+      logger.warn(
+        `Novel ${novelId} cover probe failed; skipping the cover per novelCover.probeFailed=skip (coverType=probe_failed)`,
+        {
+          novelId,
+          coverUrl: normalized,
+          coverType: 'probe_failed',
+          policy: this.novelCoverPolicy.probeFailed,
+          reason,
+        }
+      );
+      return null;
     }
 
     const coverType = classifyNovelCover(cover);

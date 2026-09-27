@@ -5,7 +5,14 @@ import { Server } from 'node:http';
 import { logger } from '../logger';
 import { SlotContext } from './SlotCoordinator';
 import { JobStatusProjection } from './JobProjection';
-import { ProtocolCapabilities, ProtocolJob } from './JobFacade';
+import {
+  parseEventQuery,
+  ProtocolAckResult,
+  ProtocolCapabilities,
+  ProtocolEventPage,
+  ProtocolJob,
+} from './JobFacade';
+import type { JobEventQuery } from './JobEventStream';
 import { ProtocolRequestError, protocolErrorBody, protocolErrorResponse } from './ProtocolErrors';
 import { TriggerSource } from './OccurrenceResolver';
 import { BUILD } from '../version';
@@ -222,6 +229,13 @@ export interface JobHandlers {
   jobsByIdempotencyKey(idempotencyKey: string): ProtocolJob[];
   /** `POST /jobs/{job_id}/cancel`: idempotent; always returns the current job. */
   cancelJob(jobId: string): ProtocolJob;
+  /** `GET /jobs/{job_id}/events` (`$defs/EventPage`); throws 404 for an unknown job. */
+  jobEvents(jobId: string, query: JobEventQuery): ProtocolEventPage;
+  /**
+   * `POST /jobs/{job_id}/events/ack` (`$defs/AckResult`): monotonic, idempotent,
+   * and never a job mutation. An unknown or older cursor is a no-op.
+   */
+  ackJobEvents(jobId: string, body: unknown): ProtocolAckResult;
 }
 
 export class ScheduleTriggerServer {
@@ -355,6 +369,38 @@ export class ScheduleTriggerServer {
         res.json(job);
       } catch (error) {
         this.jobFailure(req, res, error, 'job cancel failed');
+      }
+    });
+
+    // The durable event stream (§events). Read-only projection of the ledger the
+    // cancel/status routes already read, so a consumer can follow a job to its
+    // terminal event instead of polling status.
+    app.get('/jobs/:jobId/events', this.refetchAuth, (req: Request, res: Response) => {
+      const jobs = this.handlers.jobs;
+      if (!jobs) {
+        res.status(503).json(this.jobUnavailableResponse());
+        return;
+      }
+      try {
+        const query = parseEventQuery(req.query as { after?: unknown; unacked?: unknown });
+        res.json(jobs.jobEvents(req.params.jobId, query));
+      } catch (error) {
+        this.jobFailure(req, res, error, 'job events failed');
+      }
+    });
+
+    // Ack is a cursor write, never a job mutation: the body carries only
+    // `ack_through`, and an unknown or older cursor is accepted as a no-op.
+    app.post('/jobs/:jobId/events/ack', this.refetchAuth, (req: Request, res: Response) => {
+      const jobs = this.handlers.jobs;
+      if (!jobs) {
+        res.status(503).json(this.jobUnavailableResponse());
+        return;
+      }
+      try {
+        res.json(jobs.ackJobEvents(req.params.jobId, req.body));
+      } catch (error) {
+        this.jobFailure(req, res, error, 'job ack failed');
       }
     });
 

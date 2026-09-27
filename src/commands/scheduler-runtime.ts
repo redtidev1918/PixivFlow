@@ -38,6 +38,7 @@ import { settleDeliveryTerminal } from '../delivery/settleDeliveryTerminal';
 import { migrateLegacyOutbox } from '../delivery/LegacyOutboxMigration';
 import { DeliveryAck } from '../delivery/DeliveryAck';
 import { NotificationPolicy } from '../notification/NotificationPolicy';
+import { JobEventStream } from '../scheduler/JobEventStream';
 import { randomUUID } from 'node:crypto';
 import { ScheduleRunOptions, TriggerSource } from '../scheduler/OccurrenceResolver';
 import { JobFailure } from '../scheduler/Scheduler';
@@ -418,8 +419,20 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
   // the long-running scheduler daemon; run-once drains explicitly before exit.
   const deliveryDispatcher = new DeliveryDispatcher(config.delivery, buildProxyUrl(config.network));
   const notificationPolicy = new NotificationPolicy(database, config);
+  // Consumer-facing job events (§events). The stream is a projection of the same
+  // `delivery_events` log; this sweep repairs a declared `callback_url` whose
+  // terminal event was lost with the process, exactly like
+  // reconcileScheduleSummaries repairs a terminal slot that was never notified.
+  const jobEvents = new JobEventStream({
+    database,
+    config: () => config,
+    now: () => Date.now(),
+  });
   const outboxWorker = new OutboxWorker(database, deliveryDispatcher, {
-    beforeDrain: () => notificationPolicy.reconcileScheduleSummaries(),
+    beforeDrain: () => {
+      notificationPolicy.reconcileScheduleSummaries();
+      jobEvents.reconcileOutstanding();
+    },
     retryBaseMs: config.delivery?.outboxRetryBaseMs,
     retryMaxMs: config.delivery?.outboxRetryMaxMs,
     // A confirmed ACK settles the owning Slot cell (submitted / duplicate /

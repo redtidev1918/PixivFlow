@@ -279,6 +279,17 @@ export class DatabaseMigration {
         `CREATE INDEX IF NOT EXISTS idx_system_errors_bot_created ON system_errors(bot_id, created_at)`,
         `CREATE INDEX IF NOT EXISTS idx_cinventory_pending ON candidate_inventory(status, first_seen_date, expires_at)`,
         `CREATE INDEX IF NOT EXISTS idx_gateway_connections_type ON gateway_connections(type)`,
+        // Durable consumer ack cursor for the Workflow Protocol v1 event stream
+        // (§events). One row per job: the newest `delivery_events` row the
+        // consumer attests it has persisted. This is a cursor, NOT state — acking
+        // never touches the slot ledger, and `unacked` is derived by counting the
+        // job's projected events after this position. Monotonic by construction.
+        `CREATE TABLE IF NOT EXISTS job_event_cursors (
+            job_id TEXT PRIMARY KEY,
+            acked_at INTEGER NOT NULL,
+            acked_row_id INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+          )`,
       ];
 
       // Phase 1: create tables (idempotent). Must run before any PRAGMA-based
@@ -356,6 +367,7 @@ export class DatabaseMigration {
         `CREATE INDEX IF NOT EXISTS idx_delivery_events_execution ON delivery_events(execution_id)`,
         `CREATE INDEX IF NOT EXISTS idx_delivery_events_outbox ON delivery_events(outbox_id)`,
         `CREATE INDEX IF NOT EXISTS idx_delivery_events_ts ON delivery_events(ts)`,
+        `CREATE INDEX IF NOT EXISTS idx_delivery_events_slot_event ON delivery_events(slot_id, event)`,
       ];
 
       const postMigration = this.db.transaction((stmts: string[]) => {

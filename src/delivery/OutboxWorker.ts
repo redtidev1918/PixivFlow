@@ -3,6 +3,7 @@ import { unlink } from 'node:fs/promises';
 import { Database } from '../storage/Database';
 import { OutboxRow, OutboxStatus, RecordEventInput } from '../storage/repositories/OutboxRepository';
 import { DeliveryDispatcher } from './DeliveryDispatcher';
+import { EventCallbackPayload } from './EventCallbackDelivery';
 import { DeliveryNotificationRequest, DeliveryRequest } from './types';
 import { DeliveryAck } from './DeliveryAck';
 import { classifyError, DeliveryErrorClass } from './errorClass';
@@ -304,6 +305,15 @@ export class OutboxWorker {
               ? (payload.scheduleOutcome as DeliveryNotificationRequest['scheduleOutcome'])
               : undefined,
         });
+      } else if (row.kind === 'event_callback') {
+        // A `$defs/Event` posted to the Task's declared callback_url. It reuses
+        // the whole outbox contract: the idempotency key is the event_id, so a
+        // duplicate intent dedupes here and a retry re-sends the same event.
+        const payload = JSON.parse(row.payloadJson) as EventCallbackPayload;
+        await this.dispatcher.deliverEventCallback(row.deliveryTarget, {
+          payload,
+          idempotencyKey: row.idempotencyKey ?? row.id,
+        });
       } else {
         const payload = JSON.parse(row.payloadJson) as DeliveryPayload;
         const result = await this.dispatcher.deliver(row.deliveryTarget, {
@@ -313,7 +323,8 @@ export class OutboxWorker {
           content: payload.content,
           fields: payload.fields as DeliveryRequest['fields'],
           context: payload.context as unknown as DeliveryRequest['context'],
-        });        const ack: DeliveryAck = result.ack ?? {
+        });
+        const ack: DeliveryAck = result.ack ?? {
           kind: result.status && result.status >= 200 && result.status < 300 ? 'accepted' : 'retryable_failure',
           error: `no ack (HTTP ${result.status})`,
         };
@@ -336,7 +347,10 @@ export class OutboxWorker {
       return 'done';
     } catch (error) {
       const message = redactError(error).slice(0, 1000);
-      const { errorClass, retryable } = classifyError(error);
+      // A provider that answers with an HTTP status is classified by that status
+      // (429/5xx retry, other 4xx dead-letter); transport errors classify from
+      // their message as before.
+      const { errorClass, retryable } = classifyError(error, (error as { status?: number } | null)?.status);
 
       // Deterministic failures cannot improve under the same idempotent intent.
       // Retrying them only leaves the owning Slot running until the budget expires.

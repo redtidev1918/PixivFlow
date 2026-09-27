@@ -1,5 +1,14 @@
 # Changelog
 
+## [3.3.0](https://github.com/redtidev1918/PixivFlow/compare/v3.2.0...v3.3.0) (2026-09-27)
+
+
+### Features
+
+* **jobs:** project real liveness and terminalise slots that stop progressing ([04ddab6](https://github.com/redtidev1918/PixivFlow/commit/04ddab6c7bb77c5c01d01aae43285e675985e132))
+* **protocol:** add job events, ack and callback delivery ([c0c6765](https://github.com/redtidev1918/PixivFlow/commit/c0c6765a3beca9bca5ec84503db40829f595be21))
+* **protocol:** introduce the PixivFlow↔TelePost workflow protocol ([21d8982](https://github.com/redtidev1918/PixivFlow/commit/21d89827506afdfa3c44de88eb408cf7594d2a37))
+
 ## [3.2.0](https://github.com/redtidev1918/PixivFlow/compare/v3.1.0...v3.2.0) (2026-09-27)
 
 

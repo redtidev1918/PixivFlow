@@ -164,6 +164,7 @@ export class DownloadManager implements IDownloadManager {
       : DEFAULT_MATERIALIZATION_POLICY;
     const novelCoverPolicy: NovelCoverPolicy = {
       unknownCover: config.download?.novelCover?.unknown ?? DEFAULT_NOVEL_COVER_POLICY.unknownCover,
+      probeFailed: config.download?.novelCover?.probeFailed ?? DEFAULT_NOVEL_COVER_POLICY.probeFailed,
     };
     this.novelDownloader = new NovelDownloader(
       client,

@@ -85,6 +85,10 @@ npx jest src/__tests__/delivery/gateway-reference-e2e.test.ts
 重启后带同一个 `idempotencyKey` 收敛；一条坏路由的失败不会影响另一条。写自己的网关时，
 让这个文件继续通过就是「你接对了」的最强证据。
 
+接平台那一步请用 [`examples/onebot-adapter/`](../onebot-adapter/README.md)：它是本节所述
+「最小转换进程」的可运行实例（QQ / OneBot v11），同样零依赖、同样不实现 QQ 协议。本参考网关
+与它是**互补**关系：一个证明「契约本身通不通」，另一个证明「平台映射写对了没有」。
+
 ## 它有意不做什么
 
 - 不保存任何东西到磁盘（去重表在内存里，进程重启即丢）—— 生产网关必须持久化，

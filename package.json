@@ -139,6 +139,7 @@
     "!dist/**/*.map",
     "config/examples/",
     "examples/gateway/",
+    "examples/onebot-adapter/",
     "config/fly-two-bots.example.json",
     "README.md",
     "README.en.md",

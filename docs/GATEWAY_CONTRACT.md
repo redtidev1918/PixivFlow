@@ -329,6 +329,7 @@ WebUI 暴露的、与网关相关的错误码：
 ## 相关文档
 
 - [`examples/gateway/`](../examples/gateway/README.md) —— 本文档的零依赖参考实现（`server.mjs`），被测试直接启动验证
+- [`examples/onebot-adapter/`](../examples/onebot-adapter/README.md) —— 零依赖的 OneBot v11 适配器实例（QQ 场景）：契约消息 → OneBot 消息段，OneBot `retcode` → 契约 ACK 词；不实现 QQ 协议、不做扫码
 - [GATEWAY.md](GATEWAY.md) —— 面向网关作者的实现指南与配置样例
 - [delivery-runtime.md](architecture/delivery-runtime.md) —— PixivFlow 侧的投递运行时
 - [API.md](API.md) —— 只读投影端点（`/api/gateways`、`/api/deliveries`）
@@ -343,6 +344,7 @@ WebUI 暴露的、与网关相关的错误码：
 | `src/__tests__/delivery/gateway-contract.test.ts` | 本文档的表格与 `src/delivery/gatewayContract.ts` 的词汇表逐行一致；参考实现 `server.mjs` 的应答形状符合文档 |
 | `src/__tests__/delivery/gateway-delivery-e2e.test.ts` | 投递运行时（outbox → worker → 账本）在真实 HTTP 上的语义：ACK 分类、传输失败保持欠账、重试用同一个键 |
 | `src/__tests__/delivery/gateway-reference-e2e.test.ts` | **两半合起来**：真实运行时驱动真实参考网关（独立进程），一次投递落成 `delivered` 并带回网关签发的 `example-<uuid>`，停掉网关时保持欠账、重启后带同一个 `idempotencyKey` 收敛，且一条坏路由不会拖累另一条 |
+| `src/__tests__/delivery/onebot-adapter-e2e.test.ts` | **平台映射这一层**：真实运行时驱动真实 OneBot 适配器（独立进程）打到假 OneBot API —— 段序与 `file://` 引用、`remote_id` 取平台消息号、`pending` 保持欠账、确定性 `retcode` 进死信、无状态词的 401 保持可重试、重放返回 `duplicate_existing` |
 
 第三层是「外部系统能否作为网关接入」这个产品主张唯一的直接证据：前两层各自的替身都无法反驳自己。
 

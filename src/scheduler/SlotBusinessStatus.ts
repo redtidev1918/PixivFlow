@@ -6,6 +6,8 @@
  * - System failures (pixiv/network/download/processing/delivery) must be kept
  *   disjoint from business no-content states so monitoring and Mini App never
  *   show "internal_error" for an empty but healthy run.
+ * - A CONSUMER CANCEL is an intentional stop, not a system failure: it must
+ *   never be alertable, or every cancel would page an operator.
  *
  * This is a DERIVED verdict over the existing terminal cell ledger; it does not
  * change the persisted slot phase machine (pending/running/success/partial/
@@ -16,6 +18,7 @@ export type SlotBusinessStatus =
   | 'partial_success'
   | 'no_candidate'
   | 'duplicate_only'
+  | 'cancelled'
   | 'failed';
 
 export interface SlotBusinessCounts {
@@ -27,6 +30,8 @@ export interface SlotBusinessCounts {
   duplicate_exhausted?: number;
   executor_failed: number;
   delivery_failed: number;
+  /** Cells terminalised by a consumer/operator cancel (`cancelled_by_consumer`). */
+  cancelled?: number;
 }
 
 /** Pure projection: durable cell counts -> one business verdict. No I/O. */
@@ -39,6 +44,9 @@ export function classifySlotBusinessStatus(counts: SlotBusinessCounts): SlotBusi
   if (counts.submitted > 0 && nonSubmitted === 0) return 'success';
   if (counts.submitted > 0) return 'partial_success';
   if (nonSubmitted === 0) return 'success'; // defensive: 0 targets / all submitted
+  // A cancel is deliberate. It is only reported as such while nothing else in
+  // the occurrence actually failed — a real failure must stay visible.
+  if ((counts.cancelled ?? 0) > 0 && !systemFailed) return 'cancelled';
   if (!systemFailed) {
     // Every non-submitted cell was a BUSINESS no-content verdict; all of them
     // came from already-delivered candidates => duplicate_only.
@@ -62,6 +70,8 @@ export function userMessageForSlotBusinessStatus(status: SlotBusinessStatus): st
       return '本轮没有发现新的可发布作品。任务已正常完成。';
     case 'duplicate_only':
       return '本轮没有发现新的可发布作品。任务已正常完成。';
+    case 'cancelled':
+      return '本轮任务已被取消，不会继续发布。';
     case 'failed':
       return '本轮任务遇到系统异常，请稍后重试或检查日志。';
   }

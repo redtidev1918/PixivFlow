@@ -9,7 +9,9 @@ import { getConfigPath, loadConfig, StandaloneConfig } from '../config';
 import { MultiScheduleManager } from '../scheduler/MultiScheduleManager';
 import { ScheduleTriggerServer, TriggerRunResult } from '../scheduler/ScheduleTriggerServer';
 import { SlotCoordinator } from '../scheduler/SlotCoordinator';
-import { buildJobProjection } from '../scheduler/JobProjection';
+import { ManualJobAdmission } from '../scheduler/ManualJobAdmission';
+import { ManualJobService } from '../scheduler/ManualJobService';
+import { legacyRefetchStatus, legacyRefetchSubmit } from '../scheduler/ManualRefetchAdapter';
 import { selectScheduleTargets } from '../scheduler/schedules';
 import { primaryDeliveryName } from '../delivery/targetRoutes';
 import { createSchedulerRuntime } from './scheduler-runtime';
@@ -92,6 +94,24 @@ export class SchedulerCommand extends BaseCommand {
         const findPlan = (cfg: StandaloneConfig, scheduleId: string) =>
           cfg.schedules?.find((s) => s.id === scheduleId && s.enabled !== false);
 
+        // The ONE admission path for consumer-initiated candidate search. Both
+        // the legacy refetch endpoint (below) and the generic protocol job
+        // surface (`jobs`, below) translate their request into this call, so
+        // they share one identity space, one target resolution and one durable
+        // work item per idempotency key.
+        const admission = new ManualJobAdmission({
+          database: runtime.database,
+          coordinator,
+          config: resolveConfig,
+          admit: (planId, slot, targetId) =>
+            manager.triggerSchedule(planId, { slot, onlyTarget: targetId, triggerSource: 'manual' }),
+        });
+        const jobService = new ManualJobService({
+          database: runtime.database,
+          config: resolveConfig,
+          admission,
+        });
+
         // Durable dispatch. The trigger endpoint records the occurrence FIRST,
         // then hands it to the shared scheduler and answers immediately. It must
         // never await the download itself: a 10-40 minute run outlives the
@@ -173,57 +193,18 @@ export class SchedulerCommand extends BaseCommand {
               };
             },
             drainOutbox: () => runtime.drainOutbox(),
-            refetch: async (targetId, requestId, correlationId) => {
-              const cfg = resolveConfig();
-              const plans = (cfg.schedules ?? []).filter((plan) =>
-                plan.enabled !== false && selectScheduleTargets(cfg.targets, plan).some((target) => target.id === targetId)
-              );
-              if (plans.length === 0) throw new Error('unknown target');
-              if (plans.length !== 1) throw new Error('ambiguous target');
-              const plan = plans[0];
-              const target = selectScheduleTargets(cfg.targets, plan).find((item) => item.id === targetId)!;
-              const deliveryName = primaryDeliveryName(target);
-              const delivery = deliveryName ? cfg.delivery?.targets?.[deliveryName] : undefined;
-              if (delivery?.type !== 'httpMultipart' || !delivery.refetchOutcomeUrl?.trim()) {
-                throw new Error('refetch outcome endpoint not configured');
-              }
-              if ((target.delivery?.fields?.refetch_request_id ?? delivery.fields?.refetch_request_id) !== '{{refetchRequestId}}') {
-                throw new Error('refetch_request_id delivery field not configured');
-              }
-              const now = new Date();
-              const date = new Intl.DateTimeFormat('en-CA', {
-                timeZone: plan.timezone ?? 'UTC', year: 'numeric', month: '2-digit', day: '2-digit',
-              }).format(now);
-              const slot = {
-                slotId: `${plan.id}@manual-${requestId.toLowerCase()}`,
-                scheduleId: plan.id,
-                occurrenceAt: now.getTime(),
-                occurrenceDate: date,
-                occurrenceLabel: 'manual',
-                timezone: plan.timezone ?? 'UTC',
-                triggerSource: 'manual' as const,
-                slotName: '审核群重抓',
-                slotDate: date,
-                manualRequestId: requestId,
-                correlationId: correlationId || undefined,
-              };
-              const existing = runtime.database.slots.getSlot(slot.slotId);
-              if (existing && (existing.scheduleId !== plan.id || existing.targetIds.length !== 1 || existing.targetIds[0] !== targetId)) {
-                throw new Error('ambiguous target');
-              }
-              const prepared = coordinator.prepare(slot, plan, [target]);
-              if (prepared.alreadyCompleted) return { slotId: slot.slotId, disposition: 'already_completed' };
-              const started = manager.triggerSchedule(plan.id, { slot, onlyTarget: targetId, triggerSource: 'manual' });
-              return { slotId: slot.slotId, disposition: started ? 'accepted' : 'queued' };
-            },
-            refetchStatus: (targetId, requestId) => {
-              const slot = runtime.database.slots.findManualSlot(requestId, targetId);
-              const cell = slot && runtime.database.slots.getCell(slot.id, targetId);
-              // Legacy aliases (requestId/slotId/state/slotStatus) stay exactly as
-              // they were; everything else is additive liveness/cause detail so a
-              // caller can run a heartbeat watchdog instead of polling forever.
-              return slot && cell ? buildJobProjection(requestId, slot, cell) : null;
-            },
+            /**
+             * The generic Workflow Protocol v1 job surface (`/capabilities`,
+             * `/jobs`). It answers from the same ledger as the legacy endpoints
+             * and submits through the same admission path, so a job submitted
+             * here IS the work item a legacy refetch would have created.
+             */
+            jobs: jobService,
+            // Legacy adapters (protocol §3.1): the historic refetch shape over
+            // the same shared admission, so `requestId` and `idempotency_key`
+            // are one identity space.
+            refetch: legacyRefetchSubmit(admission),
+            refetchStatus: legacyRefetchStatus(runtime.database),
             /**
              * Manual recovery of a FAILED target (§manual-recovery). Distinct
              * from refetch: there is no review chain to replace and no

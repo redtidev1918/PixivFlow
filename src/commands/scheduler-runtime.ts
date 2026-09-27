@@ -25,6 +25,11 @@ import {
 } from '../scheduler/SlotCoordinator';
 import { TargetOutcome } from '../scheduler/TargetOutcome';
 import { applyAcquisitionPolicy } from '../scheduler/RecoveryPolicy';
+import {
+  applyCandidateSearchParams,
+  excludedWorkIdsFromParams,
+  parseCandidateSearchParamsJson,
+} from '../scheduler/CandidateSearchParams';
 import { DeliveryService } from '../delivery/DeliveryService';
 import { primaryDeliveryName } from '../delivery/targetRoutes';
 import { createDeliveryLedgerPort } from '../delivery/DeliveryLedgerPort';
@@ -468,6 +473,31 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
       });
     }
 
+    // Occurrence-scoped RETRIEVAL view of a generic `candidate_search` job (§6).
+    // Same pattern as the recovery policy above: a pure map over THIS
+    // occurrence's target snapshot, never a write to the global config. A slot
+    // with no stored view (every scheduled occurrence, and every slot written
+    // before the column existed) keeps the configured behaviour untouched.
+    const requestedSearch = parseCandidateSearchParamsJson(providedSlot?.paramsJson);
+    if (requestedSearch) {
+      targets = targets.map((target) => applyCandidateSearchParams(target, requestedSearch));
+      logger.info('Generic job retrieval view applied to this occurrence', {
+        scheduleId: schedule.id,
+        slot: providedSlot?.slotId,
+        targets: targets.map((t) => t.id),
+      });
+    }
+    // `constraints.exclude` is a run-level duplicate filter, so it joins the
+    // history the runner already refuses to select from instead of inventing a
+    // second exclusion mechanism.
+    const requestedExclusions = requestedSearch ? excludedWorkIdsFromParams(requestedSearch) : null;
+    const excludedWorkIds = requestedExclusions
+      ? {
+          illustration: [...(options.excludedWorkIds?.illustration ?? []), ...requestedExclusions.illustration],
+          novel: [...(options.excludedWorkIds?.novel ?? []), ...requestedExclusions.novel],
+        }
+      : options.excludedWorkIds;
+
     if (targets.length === 0) {
       logger.warn('Scheduled plan has no selected targets; skipping', {
         scheduleId: schedule.id,
@@ -688,7 +718,7 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
       };
       const manager = new DownloadManager(scoped, pixivClient, database, fileService);
       if (targetExecutionContexts) manager.setTargetExecutionContexts(targetExecutionContexts);
-      if (options.excludedWorkIds) manager.setProcessedWorkIds(options.excludedWorkIds);
+      if (excludedWorkIds) manager.setProcessedWorkIds(excludedWorkIds);
       manager.setTargetOutcomeHook(outcomeHook);
       if (scheduleSlot) {
         manager.slotContext = {

@@ -17,6 +17,7 @@ import {
 import { TERMINAL_REASON_MESSAGES, TargetOutcome, terminalReasonFor } from './TargetOutcome';
 import { sqliteUtcMs } from './ledger-time';
 import { SlotBusinessStatus, classifySlotBusinessStatus } from './SlotBusinessStatus';
+import { CANCELLED_BY_CONSUMER } from './ProtocolErrors';
 import { TargetExecutionContext, WorkBinding, isSingleWorkCell } from './WorkIdentity';
 import { targetDeliveryNames } from '../delivery/targetRoutes';
 
@@ -73,6 +74,13 @@ export interface SlotContext {
   recoveryRequestId?: string;
   /** Recovery policy preset ('normal' | 'relaxed'); null for non-recovery slots. */
   recoveryMode?: 'normal' | 'relaxed';
+  /**
+   * Occurrence-scoped retrieval view of a generic `candidate_search` job (§6),
+   * serialized as JSON. Persisted with the slot so a worker that recovers the
+   * occurrence re-applies the requester's retrieval instead of quietly falling
+   * back to the plan defaults. Absent for scheduled occurrences.
+   */
+  paramsJson?: string;
 }
 
 export interface SlotCellSummary {
@@ -115,10 +123,13 @@ export interface ScheduleOutcomeTarget {
  * healthy run look broken, and a broken one look routine.
  *
  * Each cell lands in exactly ONE category, in this precedence:
- * submitted -> no_match -> duplicate -> delivery_failed -> executor_failed.
+ * submitted -> no_match -> duplicate -> delivery_failed -> cancelled -> executor_failed.
  * `delivery_failed` is checked before `executor_failed` because a terminally
  * lost delivery ALSO leaves the cell in the `failed` state — counting it twice
- * would invent a second failure that does not exist.
+ * would invent a second failure that does not exist. `cancelled` comes before
+ * `executor_failed` for the same reason: a consumer cancel also ends as a
+ * `failed` cell, and counting it as an executor failure would page an operator
+ * for a deliberate stop.
  */
 export interface ScheduleOutcomeCells {
   total: number;
@@ -129,6 +140,8 @@ export interface ScheduleOutcomeCells {
   all_duplicates: boolean;
   executor_failed: number;
   delivery_failed: number;
+  /** Cells stopped by a consumer/operator cancel — deliberate, never alertable. */
+  cancelled: number;
   targets: ScheduleOutcomeTarget[];
 }
 
@@ -141,13 +154,13 @@ export interface ScheduleOutcomeCells {
 export interface ScheduleOutcomeRecord {
   event: 'schedule.outcome';
   /** Outcome taxonomy version; bump when business_status/reason gains codes. */
-  outcome_version: 1;
+  outcome_version: 2;
   schedule_id: string;
   slot_id: string;
   occurrence_at: string | undefined;
   occurrence_date: string;
   status: ScheduleOutcomeStatus;
-  /** Derived business verdict: success / partial_success / no_candidate / duplicate_only / failed. */
+  /** Derived business verdict: success / partial_success / no_candidate / duplicate_only / cancelled / failed. */
   business_status: SlotBusinessStatus;
   /** Monitoring gate: true only for system failures (business_status === 'failed'). */
   alertable: boolean;
@@ -304,6 +317,7 @@ export class SlotCoordinator {
       slotName: slot.slotName,
       manualRequestId: slot.manualRequestId ?? null,
       correlationId: slot.correlationId ?? null,
+      paramsJson: slot.paramsJson ?? null,
       recoveryRequestId: slot.recoveryRequestId ?? null,
       recoveryMode: slot.recoveryMode ?? null,
     });
@@ -776,13 +790,15 @@ export class SlotCoordinator {
     let duplicate = 0;
     let executor_failed = 0;
     let delivery_failed = 0;
+    let cancelled = 0;
 
     const targetsDetail = cellRows.map((cell) => {
-      const classified = this.classifyCell(cell.status, slot.slotId, cell.targetId, deliveryTargetsByTargetId);
+      const classified = this.classifyCell(cell, slot.slotId, deliveryTargetsByTargetId);
       if (classified === 'submitted') submitted += 1;
       else if (classified === 'no_match') no_match += 1;
       else if (classified === 'duplicate') duplicate += 1;
       else if (classified === 'delivery_failed') delivery_failed += 1;
+      else if (classified === 'cancelled') cancelled += 1;
       else if (classified === 'executor_failed') executor_failed += 1;
       return {
         target_id: cell.targetId,
@@ -817,11 +833,12 @@ export class SlotCoordinator {
       duplicate_exhausted: targetsDetail.filter((t) => t.terminal_reason_code === 'duplicate_exhausted').length,
       executor_failed,
       delivery_failed,
+      cancelled,
     });
 
     return {
       event: 'schedule.outcome',
-      outcome_version: 1,
+      outcome_version: 2,
       schedule_id: slotRec?.scheduleId ?? slot.scheduleId,
       slot_id: slot.slotId,
       occurrence_at: isoUtcOrUndefined(occurrenceAt),
@@ -838,6 +855,7 @@ export class SlotCoordinator {
         all_duplicates,
         executor_failed,
         delivery_failed,
+        cancelled,
         targets: targetsDetail,
       },
     };
@@ -848,16 +866,22 @@ export class SlotCoordinator {
    * durable delivery ledger through the SAME port the FSM already uses, never
    * from an error string, and it is decided BEFORE `executor_failed` because a
    * terminally lost delivery also leaves the cell `failed`: one cause, one count.
+   *
+   * A consumer cancel is decided before both: it also ends as a `failed` cell,
+   * but it is a deliberate stop rather than a system failure, so it must not be
+   * counted as an executor failure (which would make it alertable).
    */
   private classifyCell(
-    cellStatus: CellStatus,
+    cell: SlotItemRecord,
     slotId: string,
-    targetId: string,
     deliveryTargetsByTargetId: Map<string, string[]>
-  ): 'submitted' | 'no_match' | 'duplicate' | 'delivery_failed' | 'executor_failed' | 'other' {
+  ): 'submitted' | 'no_match' | 'duplicate' | 'delivery_failed' | 'cancelled' | 'executor_failed' | 'other' {
+    const cellStatus = cell.status;
+    const targetId = cell.targetId;
     if (cellStatus === 'submitted') return 'submitted';
     if (cellStatus === 'no_candidate') return 'no_match';
     if (cellStatus === 'duplicate') return 'duplicate';
+    if (cellStatus === 'failed' && cell.terminalReasonCode === CANCELLED_BY_CONSUMER) return 'cancelled';
     const deliveryTargets = deliveryTargetsByTargetId.get(targetId);
     if (deliveryTargets && deliveryTargets.length > 0 && this.delivery) {
       try {

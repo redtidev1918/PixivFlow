@@ -49,6 +49,11 @@ export interface SlotRecord {
   recoveryRequestId: string | null;
   /** Recovery policy preset ('normal'|'relaxed'); null for non-recovery slots. */
   recoveryMode: string | null;
+  /**
+   * Occurrence-scoped retrieval view of a generic `candidate_search` job (JSON,
+   * §6); null means "run the plan exactly as configured".
+   */
+  paramsJson: string | null;
 }
 
 export interface SlotItemRecord {
@@ -100,6 +105,22 @@ export class SlotRepository extends BaseRepository {
     return rows.map((row) => this.toSlot(row)).find((slot) => slot.targetIds.includes(targetId)) ?? null;
   }
 
+  /**
+   * Manual request lookup WITHOUT a target id — the generic job surface resolves
+   * a job from its consumer-supplied idempotency key alone.
+   *
+   * A non-empty `manual_request_id` is unique per slot (partial unique index
+   * `idx_slots_manual_request`), so the first row IS the job; the ordering only
+   * makes the answer deterministic on a ledger that still holds historical
+   * duplicates.
+   */
+  public findManualSlotByKey(requestId: string): SlotRecord | null {
+    const row = this.db
+      .prepare(`SELECT * FROM schedule_slots WHERE manual_request_id = ? ORDER BY created_at, id LIMIT 1`)
+      .get(requestId) as any;
+    return row ? this.toSlot(row) : null;
+  }
+
   /** Exact manual RECOVERY request/target lookup (§manual-recovery). */
   public findRecoverySlot(requestId: string, targetId: string): SlotRecord | null {
     const rows = this.db.prepare(`SELECT * FROM schedule_slots WHERE recovery_request_id = ?`).all(requestId) as any[];
@@ -133,17 +154,19 @@ export class SlotRepository extends BaseRepository {
       recoveryRequestId?: string | null;
       /** Manual recovery policy preset ('normal' | 'relaxed'). */
       recoveryMode?: string | null;
+      /** Generic-job retrieval view (§6), stored as JSON; null = as configured. */
+      paramsJson?: string | null;
     }
   ): { slot: SlotRecord; created: boolean } {
     const insert = this.db.prepare(
       `INSERT INTO schedule_slots
          (id, schedule_id, occurrence_at, occurrence_date, occurrence_label, timezone, target_ids,
           status, trigger_source, slot_date, slot_name, manual_request_id, correlation_id,
-          recovery_request_id, recovery_mode)
+          recovery_request_id, recovery_mode, params_json)
        VALUES
          (@id, @scheduleId, @occurrenceAt, @occurrenceDate, @occurrenceLabel, @timezone, @targetIds,
           'pending', @triggerSource, @slotDate, @slotName, @manualRequestId, @correlationId,
-          @recoveryRequestId, @recoveryMode)
+          @recoveryRequestId, @recoveryMode, @paramsJson)
        ON CONFLICT(id) DO NOTHING`
     );
     const info = insert.run({
@@ -161,6 +184,7 @@ export class SlotRepository extends BaseRepository {
       correlationId: data.correlationId ?? null,
       recoveryRequestId: data.recoveryRequestId ?? null,
       recoveryMode: data.recoveryMode ?? null,
+      paramsJson: data.paramsJson ?? null,
     });
     const created = info.changes > 0;
     return { slot: this.getSlot(id)!, created };
@@ -665,6 +689,7 @@ export class SlotRepository extends BaseRepository {
       correlationId: row.correlation_id ?? null,
       recoveryRequestId: row.recovery_request_id ?? null,
       recoveryMode: row.recovery_mode ?? null,
+      paramsJson: row.params_json ?? null,
     };
   }
 

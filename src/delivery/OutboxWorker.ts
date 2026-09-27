@@ -7,6 +7,7 @@ import { DeliveryNotificationRequest, DeliveryRequest } from './types';
 import { DeliveryAck } from './DeliveryAck';
 import { classifyError, DeliveryErrorClass } from './errorClass';
 import { redactError } from '../utils/redact';
+import { CANCELLED_BY_CONSUMER } from '../scheduler/ProtocolErrors';
 import { logger } from '../logger';
 
 export interface OutboxWorkerOptions {
@@ -127,6 +128,10 @@ export class OutboxWorker {
       if (rows.length === 0) break;
       let deferred = false;
       for (const row of rows) {
+        if (this.stopCancelledWork(row)) {
+          dead++;
+          continue;
+        }
         const readiness = await this.checkReadiness(row);
         if (!readiness.ready) {
           this.database.outbox.release(row.id);
@@ -156,6 +161,7 @@ export class OutboxWorker {
           this.database.outbox.release(row.id);
           continue;
         }
+        if (this.stopCancelledWork(row)) continue;
         const readiness = await this.checkReadiness(row);
         if (!readiness.ready) {
           this.database.outbox.release(row.id);
@@ -180,6 +186,35 @@ export class OutboxWorker {
       return dispatcher.readinessProbe(row.deliveryTarget);
     }
     return { ready: await this.dispatcher.isReady(row.deliveryTarget) };
+  }
+
+  /**
+   * Honour a consumer cancel.
+   *
+   * A job cancelled while a delivery attempt was in flight (or waiting to
+   * retry) must not be delivered afterwards: the ledger's cell already carries
+   * the terminal `cancelled_by_consumer` verdict, so the intent behind this row
+   * is void. The row is dead-lettered rather than retried — no amount of
+   * retrying can make a cancelled delivery correct — and the skip is logged so
+   * the operator can see what did NOT happen.
+   */
+  private stopCancelledWork(row: OutboxRow): boolean {
+    if (!row.deliveryId) return false;
+    const delivery = this.database.deliveries.getById(row.deliveryId);
+    if (!delivery?.slotId || !delivery.targetId) return false;
+    const cell = this.database.slots.getCell(delivery.slotId, delivery.targetId);
+    if (!cell || cell.status !== 'failed' || cell.terminalReasonCode !== CANCELLED_BY_CONSUMER) {
+      return false;
+    }
+    const reason = 'work cancelled by consumer';
+    this.database.outbox.markDead(row.id, reason, Date.now());
+    logger.warn('Delivery skipped: work cancelled by consumer', {
+      outboxId: row.id,
+      deliveryId: delivery.id,
+      slot: delivery.slotId,
+      target: delivery.targetId,
+    });
+    return true;
   }
 
   /** Record at most one deferral per outbox row per 60s (cold-start poll guard). */

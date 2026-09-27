@@ -309,6 +309,11 @@ export class DatabaseMigration {
         correlation_id: 'ALTER TABLE schedule_slots ADD COLUMN correlation_id TEXT',
         recovery_request_id: 'ALTER TABLE schedule_slots ADD COLUMN recovery_request_id TEXT',
         recovery_mode: 'ALTER TABLE schedule_slots ADD COLUMN recovery_mode TEXT',
+        // Occurrence-scoped retrieval view of a generic `candidate_search` job
+        // (§6). Stored as JSON so a resumed worker re-applies exactly the
+        // retrieval the requester asked for; NULL means "as configured", which is
+        // every slot written before this column existed.
+        params_json: 'ALTER TABLE schedule_slots ADD COLUMN params_json TEXT',
       };
       const columnAlters: string[] = [];
       for (const [col, sql] of Object.entries(slotColumnMigrations)) {
@@ -359,6 +364,44 @@ export class DatabaseMigration {
         }
       });
       postMigration([...columnAlters, ...indexes]);
+
+      // Manual-work IDENTITY (§identity): `manual_request_id` is the protocol's
+      // `idempotency_key`, and one key MUST resolve to exactly one durable slot.
+      // Partial unique index, following the `idx_outbox_key` precedent above:
+      // every scheduled row is NULL here, so it is unaffected.
+      //
+      // Guarded on purpose. A ledger written before this migration may hold two
+      // rows for one key (the same request id admitted under two plans), and
+      // throwing would abort the WHOLE migration and brick startup over
+      // historical data. So the conflict is reported loudly and the unique index
+      // is skipped; the admission path still refuses to create a second slot, and
+      // an operator can resolve the historical rows and restart.
+      try {
+        const duplicateKeys = this.db
+          .prepare(
+            `SELECT manual_request_id AS key, COUNT(*) AS rows FROM schedule_slots
+               WHERE manual_request_id IS NOT NULL AND manual_request_id <> ''
+               GROUP BY manual_request_id HAVING COUNT(*) > 1 LIMIT 5`
+          )
+          .all() as Array<{ key: string; rows: number }>;
+        const manualIdentityIndex =
+          `CREATE UNIQUE INDEX IF NOT EXISTS idx_slots_manual_request ON schedule_slots(manual_request_id) WHERE manual_request_id IS NOT NULL`;
+        if (duplicateKeys.length > 0) {
+          logger.warn(
+            'Duplicate manual_request_id rows prevent the unique identity index; deduplicate them and restart',
+            { duplicates: duplicateKeys.map((row) => ({ key: row.key, rows: row.rows })) }
+          );
+          this.db
+            .prepare(
+              `CREATE INDEX IF NOT EXISTS idx_slots_manual_request ON schedule_slots(manual_request_id) WHERE manual_request_id IS NOT NULL`
+            )
+            .run();
+        } else {
+          this.db.prepare(manualIdentityIndex).run();
+        }
+      } catch (error) {
+        logger.warn('Failed to create the manual identity index', { error });
+      }
 
       // Add is_active column to config_history if it doesn't exist
       try {

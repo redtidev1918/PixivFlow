@@ -67,6 +67,7 @@ misleading `OperationCancelledError`/`internal_error`. See
 | `partial_success` | 任务部分完成，部分内容已发布。 |
 | `no_candidate` | 本轮没有找到符合条件的新作品，任务已正常结束。 |
 | `duplicate_only` | 本轮没有找到新的作品：搜索结果中的候选均已发布过。任务已正常结束。 |
+| `cancelled` | 本轮任务已被取消，不会继续发布。 |
 | `failed` | 本轮任务遇到系统异常，请稍后重试或检查日志。 |
 
 Admin still sees full stack / trace_id / pixiv_id / stage / retryable in logs and
@@ -91,10 +92,28 @@ submitted cell 不改写；终结后用同一条 `deriveSlotStatus` 投影派生
 空结果严格分开。对外只暴露**封闭的协议错误码**（见
 `pixivflow-telepost-deploy/docs/protocol/v1/error-mapping.json`），内部原因码仅用于诊断。
 
+## Consumer cancel（`cancelled_by_consumer`）
+
+消费者（TelePost / 人工）主动停止一个 job 时，ledger 用**同一个** FSM 状态 `failed`
+终结该 cell（协议明确禁止发明新的 cell 状态），但带上专门的内部原因码
+`cancelled_by_consumer`，与「系统/上游失败」严格区分：
+
+| reason code | 触发条件 | 用户文案 |
+| --- | --- | --- |
+| `cancelled_by_consumer` | `POST /jobs/{job_id}/cancel`（或运维主动取消）：同一事务里终结未完成的 cell 并取消其可执行的 outbox 投递 | 任务已被取消 |
+
+规则：
+- **不是故障**：`retryable: false`，`business_status = cancelled`（仅当该 occurrence 没有
+  其它真实失败时才这样报；有真实失败仍报 `failed`），因此 **绝不 alertable**——否则每次
+  取消都会叫醒运维。`userMessageForSlotBusinessStatus('cancelled')` 给出上面那句文案。
+- **幂等**：重复取消返回当前投影（HTTP 200），不会重复终结、不会报错；已终结的 cell 不改写。
+- 对外映射为协议 `Job.status = cancelled` + `error.code = cancelled_by_consumer`，
+  内部原因码只出现在 `error.detail.internal_code`。
+
 ## 告警规则（alertable）
 
 `alertable` 只在 `business_status === 'failed'` 为 true。监控只对 `failed`
-报警；`success / partial_success / duplicate_only / no_candidate` 都不是故障。
+报警；`success / partial_success / duplicate_only / no_candidate / cancelled` 都不是故障。
 
 | business_status | alertable | 说明 |
 | --- | --- | --- |
@@ -102,6 +121,7 @@ submitted cell 不改写；终结后用同一条 `deriveSlotStatus` 投影派生
 | partial_success | false | 部分投递成功，其余为无内容（不报警） |
 | duplicate_only | false | 无新内容，业务正常 |
 | no_candidate | false | 无新内容，业务正常 |
+| cancelled | false | 消费者主动取消，无故障（不报警） |
 | failed | true | 含 pixiv/network/download/processing/delivery 失败 |
 
 ## Events
@@ -110,7 +130,7 @@ submitted cell 不改写；终结后用同一条 `deriveSlotStatus` 投影派生
   scheduled target terminates `no_candidate`:
   `{stage, result, reason, searched, duplicates, filtered, attempted, slot_ids}`.
 - `schedule.outcome` adds:
-  - `outcome_version: 1`（taxonomy version; bump when new business codes are added）
+  - `outcome_version: 2`（taxonomy version; v2 = `business_status` 增加 `cancelled`；无消费者读取该字段，升级不影响既有消费者）
   - `business_status` derived verdict
   - `alertable: boolean`（only `failed` = system failure）
 - `system_errors` is reserved for SYSTEM failures; `duplicate_exhausted` /

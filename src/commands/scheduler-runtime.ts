@@ -98,8 +98,14 @@ export function withDeliveryMode<T extends { delivery?: unknown }>(
  *  - `shutdown`: the process is going away. The Slot is deliberately left
  *    non-terminal so recovery resumes the same occurrence after restart; no
  *    worker survives to duplicate it.
+ *  - `consumer`: an operator/consumer cancelled THIS job through the protocol
+ *    `POST /jobs/{job_id}/cancel`. The ledger already took the Slot terminal in
+ *    one transaction (`cancelConsumerJob`, reason `cancelled_by_consumer`), so
+ *    the abort path must not roll it up a second time — doing so would overwrite
+ *    the cancel verdict with a generic failure and flip the protocol status from
+ *    `cancelled` back to `failed`.
  */
-export type CancelOrigin = 'timeout' | 'shutdown';
+export type CancelOrigin = 'timeout' | 'shutdown' | 'consumer';
 
 /**
  * Decide a scheduled run's Slot fate when `runAllTargets()` aborts abnormally
@@ -117,6 +123,10 @@ export function shouldTerminaliseAbortedSlot(
   // The abandon path already wrote a terminal `failed`; rolling up again would
   // only overwrite it when the wedged job finally settles.
   if (slotAbandoned) return false;
+  // A consumer cancel is already terminal in the ledger (`cancelled_by_consumer`,
+  // written by cancelConsumerJob in one transaction). Finishing it again would
+  // replace that verdict with a generic failure.
+  if (origin === 'consumer') return false;
   // Shutdown is not a failure: recovery is meant to resume this occurrence.
   return origin !== 'shutdown';
 }
@@ -137,6 +147,21 @@ export interface SchedulerRuntime {
    * (`shutdown`: leave the Slot non-terminal so recovery resumes it).
    */
   cancelActive(reason: string, origin?: CancelOrigin): void;
+  /**
+   * Cancel the in-flight run **only if it is the one owning `slotId`**.
+   *
+   * This is what makes a protocol consumer cancel bite: `cancelConsumerJob`
+   * terminalises the ledger in one transaction, but the work itself is an
+   * in-process download loop that knows nothing about the ledger. Without this
+   * call the cancelled job keeps consuming until it finishes on its own, and the
+   * holding `Scheduler.running` keeps refusing every later admission for that
+   * schedule (`scheduler_busy`) for the whole remaining run.
+   *
+   * Returns true when this call cancelled that Slot's live run. A slot another
+   * run owns (or a job that is only queued) is untouched — its ledger terminal is
+   * all there is to do.
+   */
+  cancelSlot(slotId: string, reason: string): boolean;
   /**
    * The active run never settled after its timeout and drain window. Stop
    * renewing its lease and take its Slot terminal so recovery cannot re-dispatch
@@ -414,6 +439,12 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
    * `null` while no cancellation has been requested for the current run.
    */
   let activeAbortOrigin: CancelOrigin | null = null;
+  /**
+   * The Slot the in-flight run owns, if any. Set where the lease is claimed and
+   * cleared where it is released, so `cancelSlot()` can tell "this job is the one
+   * running right now" from "this job is merely queued behind another run".
+   */
+  let activeSlotId: string | null = null;
 
   // Independently-pumped durable outbox (content + notifications). Started in
   // the long-running scheduler daemon; run-once drains explicitly before exit.
@@ -585,6 +616,7 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
       // This run owns the Slot now: any cancellation recorded against a previous
       // run must not decide how THIS run's abort is handled.
       activeAbortOrigin = null;
+      activeSlotId = activeSlot.slotId;
       let cancelled = false;
       const heartbeat = setInterval(() => {
         // A cancelled/timed-out run must stop renewing its lease. An infinitely
@@ -601,6 +633,7 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
       varReleaseLease = () => {
         clearInterval(heartbeat);
         activeLeaseHooks = null;
+        activeSlotId = null;
         coordinator.releaseRunLease(activeSlot.slotId, runOwner);
       };
       activeLeaseHooks = {
@@ -632,6 +665,7 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
           );
           coordinator.releaseRunLease(activeSlot.slotId, runOwner);
           activeLeaseHooks = null;
+          activeSlotId = null;
         },
       };
     }
@@ -946,6 +980,15 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
     activeLeaseHooks?.stopHeartbeat();
   };
 
+  const cancelSlot = (slotId: string, reason: string): boolean => {
+    // A cancellation is only meaningful for the run that owns THIS Slot. Every
+    // other case (queued behind another run, or already terminal) has nothing to
+    // abort: the durable ledger write is the whole effect.
+    if (!activeSlotId || activeSlotId !== slotId) return false;
+    cancelActive(reason, 'consumer');
+    return true;
+  };
+
   const abandonActiveRun = (reason: string): void => {
     // Cancellation did not take effect inside the drain window — a request that
     // ignores the abort. This run will never settle, so finish the lease
@@ -970,6 +1013,7 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
     tokenMaintenance,
     runJob,
     cancelActive,
+    cancelSlot,
     abandonActiveRun,
     activeExecutionCount: () => activeExecutions,
     startOutboxWorker: () => outboxWorker.start(),

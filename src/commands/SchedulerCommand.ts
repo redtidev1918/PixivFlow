@@ -11,6 +11,7 @@ import { ScheduleTriggerServer, TriggerRunResult } from '../scheduler/ScheduleTr
 import { SlotCoordinator } from '../scheduler/SlotCoordinator';
 import { ManualJobAdmission } from '../scheduler/ManualJobAdmission';
 import { ManualJobService } from '../scheduler/ManualJobService';
+import { CANCELLED_BY_CONSUMER_MESSAGE } from '../scheduler/JobCancellation';
 import { legacyRefetchStatus, legacyRefetchSubmit } from '../scheduler/ManualRefetchAdapter';
 import { selectScheduleTargets } from '../scheduler/schedules';
 import { primaryDeliveryName } from '../delivery/targetRoutes';
@@ -110,6 +111,13 @@ export class SchedulerCommand extends BaseCommand {
           database: runtime.database,
           config: resolveConfig,
           admission,
+          // A consumer cancel must bite the WORK, not only the ledger: the ledger
+          // write already happened inside `cancelJob`, so this only stops the
+          // in-flight download loop (and the `Scheduler.running` it holds, which
+          // otherwise refuses every later admission for the same schedule).
+          onCancel: (slotId) => {
+            runtime.cancelSlot(slotId, CANCELLED_BY_CONSUMER_MESSAGE);
+          },
         });
 
         // Durable dispatch. The trigger endpoint records the occurrence FIRST,

@@ -36,6 +36,16 @@ export interface ManualJobServiceDeps {
   config(): StandaloneConfig;
   /** The shared admission path — the same instance the legacy shim uses. */
   admission: ManualJobAdmission;
+  /**
+   * Ask the runtime to abort the in-flight run when the cancelled job is the one
+   * executing right now.
+   *
+   * The ledger write is the source of truth and happens first; this only stops
+   * the in-process download loop from running to completion after it has been
+   * cancelled. A job that is merely queued behind another run has no live run to
+   * abort, and the hook is then never called.
+   */
+  onCancel?(slotId: string): void;
   /** Injected clock, for tests. */
   now?(): number;
 }
@@ -106,10 +116,14 @@ export class ManualJobService implements JobHandlers {
    * that terminalises the work and stops further deliveries.
    */
   cancelJob(jobId: string): ProtocolJob {
-    cancelConsumerJob(this.deps.database, jobId, this.now());
+    const result = cancelConsumerJob(this.deps.database, jobId, this.now());
     // The cancellation is now durable, so its terminal event must be too — a
     // consumer that polls after cancelling must never see an unterminated stream.
     this.events.reconcile(jobId);
+    // Only a cancel that actually transitioned the ledger has a live run worth
+    // aborting. The ledger write came first, so the abort path cannot resurrect
+    // the job; it only makes the running download loop stop consuming.
+    if (result.cancelled) this.deps.onCancel?.(jobId);
     return this.viewBySlotId(jobId);
   }
 

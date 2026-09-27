@@ -169,6 +169,29 @@
         "server_time": { "type": "integer", "minimum": 0 }
       }
     },
+    "AckRequest": {
+      "type": "object",
+      "description": "POST /jobs/{job_id}/events/ack: the consumer reports the newest event it has durably recorded. ack_through is monotonic and idempotent; an older or unknown event_id must be accepted as a no-op (never an error), and acking must never change the job's state or its events.",
+      "required": ["ack_through"],
+      "properties": {
+        "ack_through": {
+          "type": "string",
+          "minLength": 1,
+          "description": "event_id of the newest event the consumer has persisted. Consumers acknowledge only after durable storage, never before."
+        }
+      }
+    },
+    "AckResult": {
+      "type": "object",
+      "description": "Result of an ack. unacked=0 means the consumer is caught up; a callback that failed is therefore discoverable instead of silent.",
+      "required": ["job_id", "acked", "unacked"],
+      "properties": {
+        "job_id": { "type": "string", "minLength": 1 },
+        "acked": { "type": "integer", "minimum": 0, "description": "Accepted ack cursor position (0 when nothing was acknowledged)." },
+        "unacked": { "type": "integer", "minimum": 0 },
+        "server_time": { "type": "integer", "minimum": 0 }
+      }
+    },
     "Locator": {
       "type": "object",
       "required": ["kind", "value"],

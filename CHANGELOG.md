@@ -1,5 +1,13 @@
 # Changelog
 
+## [3.1.0](https://github.com/redtidev1918/PixivFlow/compare/v3.0.3...v3.1.0) (2026-09-27)
+
+
+### Features
+
+* **novel:** classify the cover content type and gate delivery by policy ([661964c](https://github.com/redtidev1918/PixivFlow/commit/661964c000136d299e1559075577d4e82d38b888))
+* **topic:** carry provenance and weight through tag expansion ([d23fed2](https://github.com/redtidev1918/PixivFlow/commit/d23fed2b31c4093bb2561931ae4645c6fdcc2c01))
+
 ## [3.0.3](https://github.com/redtidev1918/PixivFlow/compare/v3.0.2...v3.0.3) (2026-09-27)
 
 

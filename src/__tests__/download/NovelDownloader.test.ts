@@ -5,6 +5,7 @@ import { IPixivClient } from '../../interfaces/IPixivClient';
 import { IDatabase } from '../../interfaces/IDatabase';
 import { IFileService } from '../../interfaces/IFileService';
 import { PixivNovel } from '@redtidev/pixiv-client';
+import type { NovelCoverPolicy } from '../../domain/media/NovelCoverPolicy';
 
 jest.mock('../../utils/directory-info', () => ({
   displayDownloadPath: jest.fn(),
@@ -303,7 +304,8 @@ describe('NovelDownloader cover semantics (§novel-cover)', () => {
 
   function build(
     textResponse: Record<string, unknown>,
-    cover: ArrayBuffer | Uint8Array | Error = new Uint8Array(4)
+    cover: ArrayBuffer | Uint8Array | Error = jpeg(800, 1200),
+    policy?: NovelCoverPolicy
   ) {
     const downloadImage =
       cover instanceof Error
@@ -320,7 +322,18 @@ describe('NovelDownloader cover semantics (§novel-cover)', () => {
       saveText: jest.fn().mockResolvedValue('/tmp/novels/789_Covered novel.txt'),
       saveMetadata: jest.fn().mockResolvedValue('/tmp/789_Covered novel.txt.json'),
     } as unknown as jest.Mocked<IFileService>;
-    return { downloader: new NovelDownloader(client, database, fileService), fileService };
+    return {
+      downloader: new NovelDownloader(
+        client,
+        database,
+        fileService,
+        undefined,
+        undefined,
+        undefined,
+        policy
+      ),
+      fileService,
+    };
   }
 
   it('emits a novelcover media asset ahead of inline art and records cover_url', async () => {
@@ -425,5 +438,53 @@ describe('NovelDownloader cover semantics (§novel-cover)', () => {
     // A failed probe must never cost a real cover.
     expect(fileService.saveMetadata.mock.calls[0][1].cover_url).toBe(coverUrl);
     expect(artifact!.mediaAssets!.some((a) => a.id === 'pixiv:789:novelcover')).toBe(true);
+  });
+
+  it('skips an unclassifiable cover in safe mode (default policy)', async () => {
+    const { downloader, fileService } = build(
+      {
+        novel_text: 'body',
+        coverUrl: 'https://i.pximg.net/novel-cover-master/img/weird_master1200.bin',
+      },
+      new Uint8Array(4)
+    );
+    const artifact = await downloader.download(
+      novel, 'bg', { type: 'novel', detectLanguage: false } as TargetConfig
+    );
+    // Unknown content type: never ship it, and let the log carry coverType.
+    expect(fileService.saveMetadata.mock.calls[0][1].cover_url).toBeNull();
+    expect(artifact!.mediaAssets!.some((a) => a.id === 'pixiv:789:novelcover')).toBe(false);
+  });
+
+  it('keeps an unclassifiable cover when the policy opts into availability', async () => {
+    const policy: NovelCoverPolicy = { unknownCover: 'keep' };
+    const coverUrl = 'https://i.pximg.net/novel-cover-master/img/weird_master1200.bin';
+    const { downloader, fileService } = build(
+      { novel_text: 'body', coverUrl },
+      new Uint8Array(4),
+      policy
+    );
+    const artifact = await downloader.download(
+      novel, 'bg', { type: 'novel', detectLanguage: false } as TargetConfig
+    );
+    expect(fileService.saveMetadata.mock.calls[0][1].cover_url).toBe(coverUrl);
+    expect(artifact!.mediaAssets![0]).toMatchObject({ id: 'pixiv:789:novelcover' });
+  });
+
+  it('never delivers a generated design even when unknown covers are kept', async () => {
+    const policy: NovelCoverPolicy = { unknownCover: 'keep' };
+    const { downloader, fileService } = build(
+      {
+        novel_text: 'body',
+        coverUrl: 'https://i.pximg.net/novel-cover-master/img/sci16561761_design_master1200.jpg',
+      },
+      jpeg(640, 900),
+      policy
+    );
+    const artifact = await downloader.download(
+      novel, 'bg', { type: 'novel', detectLanguage: false } as TargetConfig
+    );
+    expect(fileService.saveMetadata.mock.calls[0][1].cover_url).toBeNull();
+    expect(artifact!.mediaAssets!.some((a) => a.id === 'pixiv:789:novelcover')).toBe(false);
   });
 });

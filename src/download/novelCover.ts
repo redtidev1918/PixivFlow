@@ -26,7 +26,11 @@
  * positional guessing.
  */
 import { buildMediaAsset, MediaAsset } from '../domain/media/MediaAsset';
-import { readImageDimensions } from '../utils/imageDimensions';
+import {
+  classifyNovelCover,
+  PIXIV_GENERATED_COVER_HEIGHT,
+  PIXIV_GENERATED_COVER_WIDTH,
+} from '../domain/media/NovelCoverPolicy';
 
 const DEFAULT_COVER_PATTERN = /novel-cover-(master-)?default/i;
 
@@ -34,27 +38,22 @@ const DEFAULT_COVER_PATTERN = /novel-cover-(master-)?default/i;
 const RESIZED_COVER_PATTERN = /\/c\/[^/]+\/(novel-cover-master\/)/;
 
 /**
- * The canvas Pixiv renders its built-in novel cover designs on. Every design
- * observed in production (floral, seasonal sweets, treasure map, genre label)
- * is delivered at exactly this size, while author covers keep their own
- * dimensions (512x512, 768x768, 800x1200, 822x1200, 826x1169, 1024x1024 …).
+ * Historical names for the generated-cover canvas; the classification and the
+ * policy live in `src/domain/media/NovelCoverPolicy.ts` (§media-asset-pipeline).
  */
-export const PIXIV_DESIGN_COVER_WIDTH = 640;
-export const PIXIV_DESIGN_COVER_HEIGHT = 900;
+export const PIXIV_DESIGN_COVER_WIDTH = PIXIV_GENERATED_COVER_WIDTH;
+export const PIXIV_DESIGN_COVER_HEIGHT = PIXIV_GENERATED_COVER_HEIGHT;
 
 /**
  * True when the fetched cover bytes are one of Pixiv's generated designs.
- * Unknown formats / unreadable payloads return false so callers fail open and
- * keep the cover rather than dropping a real one.
+ * Unknown formats / unreadable payloads return false — this predicate is the
+ * raw classification only; whether an unclassifiable cover is delivered is the
+ * caller's policy (`coverDeliveryDecision`, default: skipped).
  */
 export function isPixivDesignCoverImage(
   cover: ArrayBuffer | Uint8Array | null | undefined
 ): boolean {
-  const dimensions = readImageDimensions(cover);
-  return (
-    dimensions?.width === PIXIV_DESIGN_COVER_WIDTH &&
-    dimensions?.height === PIXIV_DESIGN_COVER_HEIGHT
-  );
+  return classifyNovelCover(cover) === 'pixiv_generated';
 }
 
 export function normalizeNovelCoverUrl(coverUrl?: string | null): string | null {

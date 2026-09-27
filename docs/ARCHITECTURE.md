@@ -122,7 +122,16 @@ executeCommand():command.validate?(args) → command.execute(context, args)
 
 小说目标由 `NovelTargetHandler` 处理,同样经过 plan → pipeline → downloader 链路。
 
-小说封面的处理遵循 §novel-cover 契约(`src/download/NovelDownloader.ts` + `src/download/novelCover.ts` + `src/utils/imageDimensions.ts`):Pixiv 现在会为**没有自定义封面**的小说现场渲染一张设计封面(标题排版 + 每篇小说独立的日期与哈希,CDN 路径与作者封面完全一致,`novel-cover-master-default` 占位图已基本不再出现),因此仅凭 URL 无法区分两者。`normalizeNovelCoverUrl()` 只做 URL 归一化(空值/非 http/占位图 → `null`,去掉 `/c/<size>/` 缩放段);真正的判别在下载阶段——`resolveCoverUrl()` 取回封面字节后用 `isPixivDesignCoverImage()` 判断是否为 Pixiv 的 640x900 设计画布(只读图片头,不引入图像解码器):**是则丢弃封面**(`cover_url: null`,不产出 `:novelcover` 资产,TelePost 侧只发文档或自有兜底卡片);探测失败(网络/鉴权/限流)一律**保留**封面——失败不能复刻成丢图。
+小说封面的处理遵循 §novel-cover / §media-asset-pipeline（`src/download/NovelDownloader.ts` + `src/download/novelCover.ts` + `src/domain/media/NovelCoverPolicy.ts` + `src/utils/imageDimensions.ts`）：Pixiv 现在会为**没有自定义封面**的小说现场渲染一张设计封面（标题排版 + 每篇小说独立的日期与哈希，CDN 路径与作者封面完全一致，`novel-cover-master-default` 占位图已基本不再出现），因此仅凭 URL 无法区分两者。`normalizeNovelCoverUrl()` 只做 URL 归一化（空值/非 http/占位图 → `null`，去掉 `/c/<size>/` 缩放段）；真正的判别在下载阶段——`resolveCoverUrl()` 取回封面字节后由 `classifyNovelCover()` 从图片头（JPEG/PNG/GIF，不引入图像解码器）得出内容类型，`coverDeliveryDecision()` 再按策略决定投递：
+
+| 内容类型 | 判别 | 默认投递 |
+| --- | --- | --- |
+| `custom` | 作者封面，画布不是 640x900 | 投递（`cover_url` + `:novelcover` 资产） |
+| `pixiv_generated` | 恰好 640x900 的 Pixiv 设计画布 | **丢弃**（`cover_url: null`，不产出 `:novelcover`） |
+| `unknown` | 图片头无法识别（Pixiv 结构变化的信号） | 按 `download.novelCover.unknown`，默认 `skip`（安全模式，不发送） |
+
+两类失败被刻意分开：**探测失败**（网络/鉴权/限流，`coverType=probe_failed`）一律**保留**封面——一次取图失败不能复刻成丢图；**内容未知**则默认不发送，并留下 `coverType=unknown` 的告警日志，让 Pixiv 未来的封面格式变化以可见日志暴露，而不是静默地把设计封面再次投递出去。
+
 
 ### 计划与去重
 

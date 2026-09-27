@@ -916,6 +916,21 @@ export interface StandaloneConfig {
      * Default: 'eager'
      */
     materializationPolicy?: 'eager' | 'on-demand';
+    /**
+     * Novel cover content policy (§media-asset-pipeline / §novel-cover).
+     *
+     * Pixiv serves author covers and its own generated design covers from the
+     * same URL shape, so the content type is classified from the fetched bytes:
+     * a generated design (exactly 640x900) is never delivered as Telegram media.
+     * This key governs the UNCERTAIN case only — a cover whose header cannot be
+     * classified. 'skip' (default) is safe mode: never ship an unclassifiable
+     * cover, and log `coverType=unknown` so a future Pixiv format change is
+     * visible instead of silently leaking designs again. 'keep' prefers
+     * availability over certainty. A failed probe always keeps the cover.
+     */
+    novelCover?: {
+      unknown?: 'skip' | 'keep';
+    };
   };
 }
 

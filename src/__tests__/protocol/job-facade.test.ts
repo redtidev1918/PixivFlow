@@ -17,6 +17,7 @@ import { join } from 'node:path';
 
 import { StandaloneConfig } from '../../config';
 import { Database } from '../../storage/Database';
+import { parseCandidateSearchParamsJson } from '../../scheduler/CandidateSearchParams';
 import { ManualJobAdmission } from '../../scheduler/ManualJobAdmission';
 import { ManualJobService } from '../../scheduler/ManualJobService';
 import { legacyRefetchStatus, legacyRefetchSubmit } from '../../scheduler/ManualRefetchAdapter';
@@ -66,6 +67,63 @@ function makeConfig(): StandaloneConfig {
   } as unknown as StandaloneConfig;
 }
 
+/**
+ * The shape that actually breaks the generic face: several targets that each
+ * wire manual candidate search, spread over two plans. Production runs exactly
+ * this (2 bots × illustration/novel), which is why "discover the unique eligible
+ * target" can never be satisfied there and an explicit selector is required.
+ */
+function makeMultiTargetConfig(): StandaloneConfig {
+  const all = ['bot1-illust-botefuku', 'bot1-novel-botefuku', 'bot2-illust-marunomi', 'bot2-novel-marunomi'];
+  return {
+    pixiv: { accountId: 'default' },
+    schedules: [
+      {
+        id: 'bot1-daily',
+        name: 'Bot1 每日',
+        enabled: true,
+        timezone: 'Asia/Shanghai',
+        timeout: PLAN_TIMEOUT_MS,
+        targetIds: ['bot1-illust-botefuku', 'bot1-novel-botefuku'],
+      },
+      {
+        id: 'bot2-daily',
+        name: 'Bot2 每日',
+        enabled: true,
+        timezone: 'Asia/Shanghai',
+        timeout: PLAN_TIMEOUT_MS,
+        targetIds: ['bot2-illust-marunomi', 'bot2-novel-marunomi'],
+      },
+    ],
+    targets: all.map((id) => ({
+      id,
+      type: id.includes('novel') ? 'novel' : 'illustration',
+      tag: id.startsWith('bot1') ? 'ボテ腹' : '丸呑み',
+      delivery: { target: id.startsWith('bot1') ? 'bot1-submit' : 'bot2-submit' },
+    })),
+    delivery: {
+      targets: {
+        'bot1-submit': {
+          type: 'httpMultipart',
+          url: 'https://telepost.example/api/bot1/v1/submissions',
+          refetchOutcomeUrl: 'https://telepost.example/api/bot1/v1/refetch-outcome',
+          fields: { refetch_request_id: '{{refetchRequestId}}' },
+        },
+        'bot2-submit': {
+          type: 'httpMultipart',
+          url: 'https://telepost.example/api/bot2/v1/submissions',
+          refetchOutcomeUrl: 'https://telepost.example/api/bot2/v1/refetch-outcome',
+          fields: { refetch_request_id: '{{refetchRequestId}}' },
+        },
+      },
+    },
+    schedulerRuntime: {
+      queuedTimeoutMs: 30 * 60 * 1000,
+      stallTimeoutMs: 15 * 60 * 1000,
+    },
+  } as unknown as StandaloneConfig;
+}
+
 /** `$defs/Task`, shaped like the canonical fixture. */
 function taskBody(over: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -90,6 +148,22 @@ function taskBody(over: Record<string, unknown> = {}): Record<string, unknown> {
   };
 }
 
+/**
+ * The exact body TelePost's port sends today: no `query`, no `constraints`,
+ * nothing but the target it wants (`telepost/application/pixivflow_jobs.py`
+ * `_protocol_submit`). It is the request the live acceptance run once answered
+ * with `400 params.query must be a JSON object`.
+ */
+function telepostShapedBody(targetId: string, key: string): Record<string, unknown> {
+  return {
+    protocol_version: '1',
+    job_type: 'candidate_search',
+    idempotency_key: key,
+    correlation_id: 'refetch-42',
+    params: { target_id: targetId },
+  };
+}
+
 interface Harness {
   db: Database;
   config: StandaloneConfig;
@@ -99,11 +173,11 @@ interface Harness {
 
 const auth = { Authorization: `Bearer ${REFETCH_TOKEN}`, 'Content-Type': 'application/json' };
 
-async function boot(): Promise<Harness> {
+async function boot(overrides: StandaloneConfig = makeConfig()): Promise<Harness> {
   const dir = mkdtempSync(join(tmpdir(), 'pixivflow-jobfacade-'));
   const db = new Database(join(dir, 'test.db'));
   db.migrate();
-  const config = makeConfig();
+  const config = overrides;
   const admission = new ManualJobAdmission({
     database: db,
     coordinator: new SlotCoordinator(db),
@@ -507,6 +581,154 @@ describe('protocol v1 job facade (job API disabled)', () => {
       expect(body.error.retryable).toBe(false);
     } finally {
       server.stop();
+    }
+  });
+});
+
+/**
+ * §3.2 — the explicit target selector, and the exact reason it exists.
+ *
+ * Production runs FOUR targets that all wire manual candidate search, so v1's
+ * "discover the unique eligible target" rule can never be satisfied there: the
+ * generic face could only answer `409 ambiguous_target`, while the legacy route
+ * (target in the URL) worked. That made the two entry points unable to share one
+ * identity space. v1.1 makes the target nameable again — as a SELECTOR.
+ */
+describe('protocol v1.1 target selector (params.target_id)', () => {
+  const SELECTOR_KEY = '0f6d5a3f-1b7e-4f2a-9c3d-7a1e5b9c2d40';
+
+  it("accepts TelePost's exact production body in a deployment with four manual targets", async () => {
+    const h = await boot(makeMultiTargetConfig());
+    try {
+      // `{params: {target_id}}` — no query, no constraints: the literal body
+      // `telepost/application/pixivflow_jobs.py:_protocol_submit` builds.
+      const response = await post(h.base, '/jobs', telepostShapedBody('bot2-novel-marunomi', SELECTOR_KEY));
+      expect(response.status).toBe(202);
+      const body = (await response.json()) as { job: Record<string, unknown> };
+      expect(validateEntry('Job', body.job)).toEqual([]);
+
+      const slot = h.db.slots.findManualSlotByKey(SELECTOR_KEY)!;
+      expect(slot.targetIds).toEqual(['bot2-novel-marunomi']);
+      expect(slot.scheduleId).toBe('bot2-daily');
+    } finally {
+      h.close();
+    }
+  });
+
+  it('keeps the selector out of the stored retrieval view, so the target runs as configured', async () => {
+    const h = await boot(makeMultiTargetConfig());
+    try {
+      await post(h.base, '/jobs', telepostShapedBody('bot1-illust-botefuku', SELECTOR_KEY));
+      const slot = h.db.slots.findManualSlotByKey(SELECTOR_KEY)!;
+      expect(slot.paramsJson ?? '').not.toContain('target_id');
+      // "No retrieval override" is exactly how a pre-protocol refetch behaved.
+      expect(parseCandidateSearchParamsJson(slot.paramsJson)).toBeNull();
+    } finally {
+      h.close();
+    }
+  });
+
+  it('still refuses an unhinted request when more than one target is eligible', async () => {
+    const h = await boot(makeMultiTargetConfig());
+    try {
+      const response = await post(h.base, '/jobs', { ...taskBody(), idempotency_key: SELECTOR_KEY });
+      expect(response.status).toBe(409);
+      const body = (await response.json()) as { error: Record<string, unknown> };
+      expect(validateEntry('Error', body.error)).toEqual([]);
+      expect(body.error.code).toBe('invalid_params');
+      expect((body.error.detail as Record<string, unknown>).reason).toBe('ambiguous_target');
+      expect((body.error.detail as Record<string, unknown>).targets).toEqual([
+        'bot1-illust-botefuku',
+        'bot1-novel-botefuku',
+        'bot2-illust-marunomi',
+        'bot2-novel-marunomi',
+      ]);
+    } finally {
+      h.close();
+    }
+  });
+
+  it('answers an unknown selector with unknown_target instead of inventing a target', async () => {
+    const h = await boot(makeMultiTargetConfig());
+    try {
+      const response = await post(h.base, '/jobs', telepostShapedBody('bot9-illust-nope', SELECTOR_KEY));
+      expect(response.status).toBe(404);
+      const body = (await response.json()) as { error: Record<string, unknown> };
+      expect(validateEntry('Error', body.error)).toEqual([]);
+      expect((body.error.detail as Record<string, unknown>).reason).toBe('unknown_target');
+      expect(h.db.slots.findManualSlotByKey(SELECTOR_KEY)).toBeNull();
+    } finally {
+      h.close();
+    }
+  });
+
+  it('selects a target that does not wire manual delivery only by refusing it', async () => {
+    const config = makeMultiTargetConfig();
+    // `bot2-novel-marunomi` keeps its target entry but loses the outcome wiring:
+    // a selector picks an existing target, it never upgrades one.
+    delete (config.delivery as { targets: Record<string, unknown> }).targets['bot2-submit'];
+    const h = await boot(config);
+    try {
+      const response = await post(h.base, '/jobs', telepostShapedBody('bot2-novel-marunomi', SELECTOR_KEY));
+      expect(response.status).toBe(500);
+      const body = (await response.json()) as { error: Record<string, unknown> };
+      expect((body.error.detail as Record<string, unknown>).reason).toBe('delivery_outcome_not_configured');
+    } finally {
+      h.close();
+    }
+  });
+
+  it('rejects a malformed selector instead of silently ignoring it', async () => {
+    const h = await boot(makeMultiTargetConfig());
+    try {
+      for (const bad of [42, '', '   ']) {
+        const response = await post(h.base, '/jobs', {
+          ...telepostShapedBody('bot1-illust-botefuku', SELECTOR_KEY),
+          params: { target_id: bad },
+        });
+        expect(response.status).toBe(400);
+        const body = (await response.json()) as { error: Record<string, unknown> };
+        expect(body.error.code).toBe('invalid_params');
+      }
+    } finally {
+      h.close();
+    }
+  });
+
+  it('lets the legacy endpoint and the generic face resolve one identity space', async () => {
+    const h = await boot(makeMultiTargetConfig());
+    try {
+      const viaJobs = (await (
+        await post(h.base, '/jobs', telepostShapedBody('bot1-novel-botefuku', SELECTOR_KEY))
+      ).json()) as { job: Record<string, unknown> };
+      const viaJobsId = String(viaJobs.job.job_id);
+
+      // The same key arriving through the legacy URL must be the SAME job, not a
+      // second one — this is what §3.1's mapping table promises and what a lost
+      // target in the mapping broke.
+      const legacy = await post(h.base, '/internal/targets/bot1-novel-botefuku/refetch', {
+        requestId: SELECTOR_KEY,
+        correlationId: 'refetch-42',
+      });
+      expect(legacy.status).toBe(202);
+      const legacyBody = (await legacy.json()) as Record<string, unknown>;
+      expect(String(legacyBody.slotId)).toBe(viaJobsId);
+      expect(h.db.slots.getRecentSlots(50).filter((row) => row.manualRequestId === SELECTOR_KEY)).toHaveLength(1);
+    } finally {
+      h.close();
+    }
+  });
+
+  it('declares the selector in /capabilities so consumers can negotiate it', async () => {
+    const h = await boot(makeMultiTargetConfig());
+    try {
+      const capabilities = (await (await get(h.base, '/capabilities')).json()) as {
+        job_types: { name: string; features: string[] }[];
+      };
+      const candidateSearch = capabilities.job_types.find((entry) => entry.name === 'candidate_search')!;
+      expect(candidateSearch.features).toEqual(expect.arrayContaining(['target_selector', 'events']));
+    } finally {
+      h.close();
     }
   });
 });

@@ -32,6 +32,7 @@ const MAX_CALLBACK_URL_LENGTH = 2000;
 const MAX_TAG_LENGTH = 100;
 const MAX_TAGS = 20;
 const MAX_EXCLUSIONS = 100;
+const MAX_TARGET_ID_LENGTH = 200;
 
 /** The only job type this producer serves today. */
 export const JOB_TYPE_CANDIDATE_SEARCH = 'candidate_search';
@@ -277,6 +278,13 @@ export interface ParsedTask {
   correlationId?: string;
   /** `params.source.account` — the Pixiv resource identity to assert. */
   account?: string;
+  /**
+   * `params.target_id` — which CONFIGURED target this job runs for. A selector,
+   * never an override: the admission resolves it against the same enabled plans
+   * and targets the legacy path used. Absent means "the deployment must have
+   * exactly one manual-eligible target".
+   */
+  targetSelector?: string;
   /** `params` — the occurrence-scoped retrieval view. */
   params: CandidateSearchParams;
   /**
@@ -385,14 +393,42 @@ export function parseTaskBody(body: unknown): ParsedTask {
   }
 
   const params = parseCandidateSearchParams(body.params);
+  // `params.target_id` is a SCOPE selector, not part of the retrieval view: it
+  // selects one of the targets this deployment already configures and never
+  // rewrites the target's delivery wiring or plan identity. It is lifted out
+  // here so the stored `paramsJson` stays a pure retrieval view — a job carrying
+  // only a selector therefore behaves exactly like the legacy refetch route,
+  // which ran the target as configured.
+  const targetSelector = parseTargetSelector(body.params);
   return {
     idempotencyKey,
     ...(correlationId !== undefined ? { correlationId } : {}),
     ...(params.source?.account !== undefined ? { account: params.source.account } : {}),
+    ...(targetSelector !== undefined ? { targetSelector } : {}),
     params,
     ...(deadlineMs !== undefined ? { deadlineMs } : {}),
     ...(callbackUrl !== undefined ? { callbackUrl } : {}),
   };
+}
+
+/**
+ * `params.target_id` — the explicit target scope of a generic `candidate_search`.
+ *
+ * Optional and additive: absent means "the deployment must have exactly one
+ * manual-eligible target", which is the pre-existing behaviour.
+ */
+function parseTargetSelector(raw: unknown): string | undefined {
+  if (!isPlainObject(raw)) return undefined;
+  const value = raw.target_id;
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== 'string' || value.trim() === '') {
+    throw invalid('params.target_id must be a non-empty string');
+  }
+  const selector = value.trim();
+  if (selector.length > MAX_TARGET_ID_LENGTH) {
+    throw invalid(`params.target_id must be at most ${MAX_TARGET_ID_LENGTH} characters`);
+  }
+  return selector;
 }
 
 /** `$defs/CandidateSearchParams`, validated field by field. */
@@ -421,33 +457,40 @@ function parseCandidateSearchParams(raw: unknown): CandidateSearchParams {
     }
   }
 
-  const query = raw.query;
-  if (!isPlainObject(query)) {
-    throw invalid('params.query must be a JSON object');
-  }
-  const tags = query.tags;
-  if (!Array.isArray(tags) || tags.length === 0) {
-    throw invalid('params.query.tags must be a non-empty array of strings');
-  }
-  if (tags.length > MAX_TAGS) {
-    throw invalid(`params.query.tags must contain at most ${MAX_TAGS} tags`);
-  }
-  for (const tag of tags) {
-    if (typeof tag !== 'string' || tag.trim() === '' || tag.length > MAX_TAG_LENGTH) {
+  // `query` is optional: a job may carry only a scope selector
+  // (`params.target_id`) and/or constraints, in which case the resolved target
+  // runs exactly as configured — the same semantics the legacy refetch route
+  // always had. When present it is validated exactly as before.
+  let query: CandidateSearchParams['query'];
+  if (raw.query !== undefined && raw.query !== null) {
+    if (!isPlainObject(raw.query)) {
+      throw invalid('params.query must be a JSON object');
+    }
+    const tags = raw.query.tags;
+    if (!Array.isArray(tags) || tags.length === 0) {
       throw invalid('params.query.tags must be a non-empty array of strings');
     }
-  }
-  if (query.expand !== undefined && query.expand !== null && typeof query.expand !== 'boolean') {
-    throw invalid('params.query.expand must be a boolean');
+    if (tags.length > MAX_TAGS) {
+      throw invalid(`params.query.tags must contain at most ${MAX_TAGS} tags`);
+    }
+    for (const tag of tags) {
+      if (typeof tag !== 'string' || tag.trim() === '' || tag.length > MAX_TAG_LENGTH) {
+        throw invalid('params.query.tags must be a non-empty array of strings');
+      }
+    }
+    if (raw.query.expand !== undefined && raw.query.expand !== null && typeof raw.query.expand !== 'boolean') {
+      throw invalid('params.query.expand must be a boolean');
+    }
+    query = {
+      tags: tags.map((tag) => (tag as string).trim()),
+      ...(raw.query.expand === true ? { expand: true } : {}),
+    };
   }
 
   const constraints = parseConstraints(raw.constraints);
   return {
     ...(source !== undefined ? { source } : {}),
-    query: {
-      tags: tags.map((tag) => (tag as string).trim()),
-      ...(query.expand === true ? { expand: true } : {}),
-    },
+    ...(query !== undefined ? { query } : {}),
     ...(constraints !== undefined ? { constraints } : {}),
   };
 }
@@ -523,7 +566,18 @@ export function buildCapabilities(
         // durable stream and `POST /jobs/:id/events/ack` persists the cursor
         // (`src/scheduler/JobEventStream.ts`), and a Task's `callback_url`
         // receives `$defs/Event` bodies through the existing outbox.
-        features: ['events', 'progress', 'cancel', 'idempotency', 'exclude', 'tag_expansion'],
+        // `target_selector` declares `params.target_id`: a job may name which
+        // configured target it runs for, and may omit `params.query` entirely —
+        // both are what makes this face a drop-in for the legacy refetch route.
+        features: [
+          'events',
+          'progress',
+          'cancel',
+          'idempotency',
+          'exclude',
+          'tag_expansion',
+          'target_selector',
+        ],
         queued_timeout_ms: budgets.queuedTimeoutMs,
         stall_timeout_ms: budgets.stallTimeoutMs,
         heartbeat_interval_ms: SLOT_HEARTBEAT_MS,

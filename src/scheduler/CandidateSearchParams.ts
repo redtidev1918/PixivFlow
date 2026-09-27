@@ -28,7 +28,23 @@ export interface CandidateSearchParams {
     platform?: string;
     account?: string;
   };
-  query: {
+  /**
+   * Scope selector: which of the producer's CONFIGURED targets this job runs
+   * for. It selects an existing target — it never overrides that target's
+   * delivery wiring or plan identity (see `ManualJobAdmission.resolveTarget`).
+   * It is deliberately NOT part of the stored retrieval view: the admission
+   * lifts it into `CandidateSearchJobRequest.targetSelector`, so a job that only
+   * names a target runs that target exactly as configured. This is what makes
+   * the generic `POST /jobs` face equivalent to the legacy refetch entry point,
+   * whose target used to live in the request path.
+   */
+  target_id?: string;
+  /**
+   * Retrieval override. Optional: omitting it (with or without `target_id`)
+   * means "run the resolved target's own configured search", which is what every
+   * pre-protocol refetch did.
+   */
+  query?: {
     tags: string[];
     expand?: boolean;
   };
@@ -68,7 +84,7 @@ export function applyCandidateSearchParams(
   target: TargetConfig,
   params: CandidateSearchParams
 ): TargetConfig {
-  const tags = params.query.tags;
+  const tags = params.query?.tags;
   const limit =
     params.constraints?.limit !== undefined ? clamp(params.constraints.limit, 1, CANDIDATE_SEARCH_SCAN_LIMIT_MAX) : target.limit;
   const scanLimit =
@@ -76,12 +92,21 @@ export function applyCandidateSearchParams(
       ? clamp(params.constraints.scan_limit, limit ?? 1, CANDIDATE_SEARCH_SCAN_LIMIT_MAX)
       : target.candidateScanLimit;
 
-  return {
+  const constrained: TargetConfig = {
     ...target,
-    tag: tags.join(' '),
-    ...(tags.length > 1 && params.query.expand === true ? { tagRelation: 'or' as const } : {}),
     ...(limit !== undefined ? { limit } : {}),
     ...(scanLimit !== undefined ? { candidateScanLimit: scanLimit } : {}),
+  };
+  // `query` is optional: a job may carry only a scope selector and/or
+  // constraints, in which case the retrieval side stays exactly as the target is
+  // configured. (`parseCandidateSearchParamsJson` already yields `null` for such
+  // a stored view, so this is the belt to that braces.)
+  if (!tags || tags.length === 0) return constrained;
+
+  return {
+    ...constrained,
+    tag: tags.join(' '),
+    ...(tags.length > 1 && params.query?.expand === true ? { tagRelation: 'or' as const } : {}),
   };
 }
 

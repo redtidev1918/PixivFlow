@@ -14,7 +14,15 @@ import { DEFAULT_MATERIALIZATION_POLICY, shouldMaterialize, type Materialization
 import { artifactId, type Artifact } from '../domain/media/Artifact';
 import { PixivMediaMaterializer, type MediaMaterializer } from './materialization/MediaMaterializer';
 import { extractNovelAssets, NovelAsset, renderNovelMarkdown, renderNovelMarkdownReference } from './novelMarkers';
-import { normalizeNovelCoverUrl, novelCoverAsset, isPixivDesignCoverImage, PIXIV_DESIGN_COVER_WIDTH, PIXIV_DESIGN_COVER_HEIGHT } from './novelCover';
+import { normalizeNovelCoverUrl, novelCoverAsset } from './novelCover';
+import {
+  classifyNovelCover,
+  coverDeliveryDecision,
+  DEFAULT_NOVEL_COVER_POLICY,
+  PIXIV_GENERATED_COVER_HEIGHT,
+  PIXIV_GENERATED_COVER_WIDTH,
+  type NovelCoverPolicy,
+} from '../domain/media/NovelCoverPolicy';
 import { createZipArchive } from '../utils/zip';
 import type { Database } from '../storage/Database';
 
@@ -23,6 +31,7 @@ const LANGUAGE_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export class NovelDownloader {
   private readonly materializer: MediaMaterializer;
   private readonly materializationPolicy: MaterializationPolicy;
+  private readonly novelCoverPolicy: NovelCoverPolicy;
 
   constructor(
     private readonly client: IPixivClient,
@@ -30,10 +39,12 @@ export class NovelDownloader {
     private readonly fileService: IFileService,
     private readonly metadataDb?: Database,
     materializer?: MediaMaterializer,
-    materializationPolicy: MaterializationPolicy = DEFAULT_MATERIALIZATION_POLICY
+    materializationPolicy: MaterializationPolicy = DEFAULT_MATERIALIZATION_POLICY,
+    novelCoverPolicy: NovelCoverPolicy = DEFAULT_NOVEL_COVER_POLICY
   ) {
     this.materializer = materializer ?? new PixivMediaMaterializer(client, fileService);
     this.materializationPolicy = materializationPolicy;
+    this.novelCoverPolicy = novelCoverPolicy;
   }
 
   async download(novel: PixivNovel, tag: string, target: TargetConfig): Promise<DownloadedArtifact | undefined> {
@@ -424,9 +435,18 @@ export class NovelDownloader {
    * Pixiv's "author set no cover" case is invisible in the API: the design it
    * renders (title typeset on a template) is served from the same CDN path with
    * a unique hash as a real cover, so the URL cannot decide. The candidate cover
-   * is therefore fetched once and its header inspected; Pixiv's design canvas is
-   * exactly 640x900. Anything that cannot be classified keeps the cover — a
-   * failed probe must never cost a real cover.
+   * is therefore fetched once and classified from its header; Pixiv's design
+   * canvas is exactly 640x900.
+   *
+   * Policy (§media-asset-pipeline):
+   *  - custom          → deliver the cover
+   *  - pixiv_generated → never deliver (a design cover is not content and must
+   *                      not become Telegram media)
+   *  - unknown         → policy decision, default 'skip' (safe mode), so a future
+   *                      Pixiv cover-format change surfaces as a loud
+   *                      `coverType=unknown` log instead of leaking silently
+   * A FAILED probe (network / auth / rate limit) is a separate case and always
+   * keeps the cover: a transient fetch error must never cost a real one.
    */
   private async resolveCoverUrl(
     novelId: number | string,
@@ -435,24 +455,51 @@ export class NovelDownloader {
     const normalized = normalizeNovelCoverUrl(coverUrl);
     if (!normalized) return null;
 
+    let cover: ArrayBuffer | Uint8Array;
     try {
-      const cover = await this.client.downloadImage(normalized);
-      if (isPixivDesignCoverImage(cover)) {
-        logger.info(
-          `Novel ${novelId} cover is a Pixiv design cover (${PIXIV_DESIGN_COVER_WIDTH}x${PIXIV_DESIGN_COVER_HEIGHT}); delivering without a cover`,
-          { novelId, coverUrl: normalized, designCover: true }
-        );
-        return null;
-      }
-      return normalized;
+      cover = await this.client.downloadImage(normalized);
     } catch (error) {
-      logger.warn(`Novel ${novelId} cover probe failed; keeping the cover`, {
+      logger.warn(`Novel ${novelId} cover probe failed; keeping the cover (coverType=probe_failed)`, {
         novelId,
         coverUrl: normalized,
+        coverType: 'probe_failed',
         reason: error instanceof Error ? error.message : String(error),
       });
       return normalized;
     }
+
+    const coverType = classifyNovelCover(cover);
+    const decision = coverDeliveryDecision(this.novelCoverPolicy, coverType);
+    const canvas = `${PIXIV_GENERATED_COVER_WIDTH}x${PIXIV_GENERATED_COVER_HEIGHT}`;
+
+    if (decision === 'skip') {
+      if (coverType === 'pixiv_generated') {
+        logger.info(
+          `Novel ${novelId} cover is a Pixiv generated design (${canvas}); delivering without a cover (coverType=${coverType})`,
+          { novelId, coverUrl: normalized, coverType, canvas }
+        );
+      } else {
+        logger.warn(
+          `Novel ${novelId} cover could not be classified; skipping it per novelCover.unknown=skip (coverType=${coverType})`,
+          { novelId, coverUrl: normalized, coverType, policy: this.novelCoverPolicy.unknownCover }
+        );
+      }
+      return null;
+    }
+
+    if (coverType === 'unknown') {
+      logger.warn(
+        `Novel ${novelId} cover could not be classified; keeping it per novelCover.unknown=keep (coverType=${coverType})`,
+        { novelId, coverUrl: normalized, coverType, policy: this.novelCoverPolicy.unknownCover }
+      );
+    } else {
+      logger.debug(`Novel ${novelId} cover classified (coverType=${coverType})`, {
+        novelId,
+        coverUrl: normalized,
+        coverType,
+      });
+    }
+    return normalized;
   }
 }
 

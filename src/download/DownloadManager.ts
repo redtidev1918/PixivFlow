@@ -8,6 +8,7 @@ import { RankingService } from './RankingService';
 import { IllustrationDownloader } from './IllustrationDownloader';
 import { NovelDownloader } from './NovelDownloader';
 import { DEFAULT_MATERIALIZATION_POLICY, type MaterializationPolicy } from '../domain/media/MaterializationPolicy';
+import { DEFAULT_NOVEL_COVER_POLICY, type NovelCoverPolicy } from '../domain/media/NovelCoverPolicy';
 import { ProgressReporter } from './report/ProgressReporter';
 import { DownloadPlanner } from './plan/DownloadPlanner';
 import { DownloadExecutor } from './exec/DownloadExecutor';
@@ -161,13 +162,17 @@ export class DownloadManager implements IDownloadManager {
     const materialization: MaterializationPolicy = config.download?.materializationPolicy
       ? { mode: config.download?.materializationPolicy }
       : DEFAULT_MATERIALIZATION_POLICY;
+    const novelCoverPolicy: NovelCoverPolicy = {
+      unknownCover: config.download?.novelCover?.unknown ?? DEFAULT_NOVEL_COVER_POLICY.unknownCover,
+    };
     this.novelDownloader = new NovelDownloader(
       client,
       database,
       fileService,
       database as unknown as import('../storage/Database').Database,
       undefined,
-      materialization
+      materialization,
+      novelCoverPolicy
     );
     this.planner = new DownloadPlanner(database, {
       // `scope` is a single legacy target name, or the full fan-out array for a

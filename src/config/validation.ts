@@ -670,6 +670,15 @@ export function validateConfig(config: Partial<StandaloneConfig>, location: stri
     ) {
       warnings.push('download.candidateScanLimit: Should be an integer between 1 and 100');
     }
+    if (
+      config.download.novelCover?.unknown !== undefined &&
+      config.download.novelCover.unknown !== 'skip' &&
+      config.download.novelCover.unknown !== 'keep'
+    ) {
+      errors.push(
+        `download.novelCover.unknown: Must be "skip" or "keep" (got ${String(config.download.novelCover.unknown)})`
+      );
+    }
   }
 
   // The bounded candidate scan is what stops a page full of duplicates from

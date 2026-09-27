@@ -108,12 +108,29 @@ pixivflow setup
 | `topicDiscovery` | object | 可选高级覆盖，见下，均有默认值 |
 | `candidateCollection` | object | 可选高级覆盖，见下 |
 
-`topicDiscovery`：`maxTags`(默认 12)、`sampleWorks`(默认 100)、`cacheDays`(默认 7)、`minScore`(默认 0.22)、`refresh`(默认 false)、`includeR18`(默认 false，设为 `true` 时采样与采集均包含 R-18 作品——Pixiv 插画搜索默认会被 `filter=for_ios` 过滤掉 R-18；小说搜索本来就包含)。
+`topicDiscovery`：`maxTags`(默认 12)、`sampleWorks`(默认 100)、`cacheDays`(默认 7)、`minScore`(默认 0.22)、`refresh`(默认 false)、`includeR18`(默认 false，设为 `true` 时采样与采集均包含 R-18 作品——Pixiv 插画搜索默认会被 `filter=for_ios` 过滤掉 R-18；小说搜索本来就包含)、`relatedTags`(默认 `always`，见下)。
 `candidateCollection`：`maxPerTag`(默认 40)、`maxCandidates`(默认 250)、`minMetadataScore`(默认 0.35)。
 
 工作流：Topic →（Pixiv 标签联想 + 近期作品 Tag 共现，PMI 式特异性打分自动压低 R-18/オリジナル 等通用 Tag）→ 相关 Tag 空间 → 分别搜索当天作品 → PID 去重 → 仅用 Tag/标题/描述做轻量相关性过滤（**只作接受门槛**，过 `minMetadataScore` 即视为属于主题）→ 通过的候选之间**完全按本地热度 `calculatePopularityScore()` 排名** → 从有界热度候选池剔除下载历史 → 依次递补至 Top N。插画与小说使用各自独立的 Tag 空间，结果缓存到数据卷 `topic-cache/`（默认 7 天），刷新失败自动降级到旧缓存或仅用主题词本身，不中断调度。同一发布日期重复执行时，已经投稿的第一名不会让任务空跑；`limit=1` 默认保留 20 个插画候选，常规递补池上限 100（用户显式配置更大的 `limit` 时仍会尊重该数量），再由下载计划批量去重。**全程不使用任何 LLM/VLM/Embedding/本地模型。**
 
 能力边界：如果某作品没有任何与主题相关的 Tag/标题/描述（视觉上相关但元数据无关），在不使用视觉模型的前提下无法识别，这是设计取舍而非 Bug。
+
+#### `topicDiscovery.relatedTags`：相关 Tag 是否可以作为独立检索通道
+
+推导出的 Tag 空间是**有层级的**（主题词是操作者要的主题，其余 Tag 只是提示），不是一堆可互换的同级 Tag。默认 `always` 会每天把空间里每个 Tag 都当作一条检索通道，因此一个同级的高权重相关 Tag（例如抓 `西瓜肚` 时空间里的 `丸吞`）可能用自己当天的作品占满 `limit`：
+
+| 取值 | 语义 |
+| --- | --- |
+| `always`（默认） | 整个相关 Tag 空间都参与当天检索；通过 `minMetadataScore` 门槛后**纯按本地热度**排名（历史行为，向后兼容） |
+| `when_seed_insufficient` | 先只搜主题 Tag；只有当它当天**填不满 `limit`** 时才扩展到相关 Tag。选择时在热度之前先加一层「带主题 Tag 的作品优先」，相关 Tag 只是补位 |
+| `never` | 只搜主题 Tag（空间里没有主题词时退化为遍历整个空间，避免直接返回空） |
+
+```json
+{ "id": "bote-illust", "type": "illustration", "mode": "topic", "topic": "西瓜肚", "limit": 1,
+  "topicDiscovery": { "relatedTags": "when_seed_insufficient" } }
+```
+
+诊断：`pixivflow topic test "<主题>" --date YESTERDAY` 的日志会打印 `[TopicRecall] mode=... seedAccepted=... relatedTags=...` 与 `searchedTags=`（本次实际检索过的 Tag 数），可直接确认相关 Tag 有没有被搜。
 
 每日北京时间 10:00 下载昨天“ボテ腹”主题最热非 AI 插画 1 部、中文小说 1 部：
 

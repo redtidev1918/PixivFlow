@@ -18,12 +18,22 @@ export interface TopicDiscoveryConfig {
   sampleWorks?: number;
   /** Cache lifetime in days for the resolved tag space (default 7). */
   cacheDays?: number;
-  /** Minimum relatedness score for a tag to enter the space (default 0.18). */
+  /** Minimum relatedness score for a tag to enter the space (default 0.22). */
   minScore?: number;
   /** Ignore a fresh cache and re-discover now (default false). */
   refresh?: boolean;
   /** Include R-18 works in topic sampling and collection (default false). */
   includeR18?: boolean;
+  /**
+   * When related tags may be searched as their own recall channel (§topic-recall).
+   *
+   * - `'always'` (default): walk the whole resolved tag space every day.
+   * - `'when_seed_insufficient'`: search the topic tag first and only fall back
+   *   to related tags when it cannot fill `limit` for that day — a related tag
+   *   is a hint, never a substitute for the topic the operator asked for.
+   * - `'never'`: search the topic tag alone.
+   */
+  relatedTags?: 'always' | 'when_seed_insufficient' | 'never';
 }
 
 /** Candidate collection tuning for mode='topic'. */

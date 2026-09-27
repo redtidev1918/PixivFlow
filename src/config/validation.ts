@@ -202,6 +202,9 @@ export function validateConfig(config: Partial<StandaloneConfig>, location: stri
         if (td.includeR18 !== undefined && typeof td.includeR18 !== 'boolean') {
           errors.push(`targets[${index}].topicDiscovery.includeR18: Must be a boolean (got ${typeof td.includeR18})`);
         }
+        if (td.relatedTags !== undefined && !['always', 'when_seed_insufficient', 'never'].includes(td.relatedTags)) {
+          errors.push(`targets[${index}].topicDiscovery.relatedTags: Must be "always", "when_seed_insufficient" or "never" (got ${String(td.relatedTags)})`);
+        }
       }
       const cc = target.candidateCollection;
       if (cc) {

@@ -39,6 +39,9 @@ export interface TopicSpace {
   tags: ResolvedTag[];
 }
 
+/** When related tags may be used as their own recall channel (§topic-recall). */
+export type RelatedTagMode = 'always' | 'when_seed_insufficient' | 'never';
+
 export interface TopicDiscoveryOptions {
   /** Include R-18 works in topic sampling and collection (default false). */
   includeR18?: boolean;
@@ -47,6 +50,18 @@ export interface TopicDiscoveryOptions {
   cacheDays?: number;
   minScore?: number;
   refresh?: boolean;
+  /**
+   * Related-tag recall mode (default `'always'`).
+   *
+   * A resolved tag space is a hierarchy, not a bag of interchangeable tags: the
+   * seed tag is the topic the operator asked for and every other tag is a hint.
+   * Under `'always'` each resolved tag is searched for the day's works, so a
+   * second high-weight tag (丸吞) can occupy the only slot of a 西瓜肚 target.
+   * `'when_seed_insufficient'` searches the seed tag first and only walks the
+   * related channel when the seed cannot fill the limit for that day;
+   * `'never'` searches the seed tag alone.
+   */
+  relatedTags?: RelatedTagMode;
 }
 
 export interface TopicCollectOptions {

@@ -7,6 +7,7 @@ import { PaginationError, rethrowIfCancelled, throwIfAborted } from '../utils/er
 import type { TargetConfig } from '../config';
 import type { TopicResolver } from './TopicResolver';
 import type {
+  RelatedTagMode,
   TopicCandidate,
   TopicClient,
   TopicCollectOptions,
@@ -29,6 +30,12 @@ export interface TopicSelection {
   candidates: TopicCandidate[];
   selected: TopicCandidate[];
   resolvedTagCount: number;
+  /**
+   * Tags actually searched for the day. Under `relatedTags: 'always'` this is
+   * the whole resolved space; under the seed-first modes it is the seed tag and
+   * only the related tags that were really needed (§topic-recall).
+   */
+  searchedTags?: string[];
   rawCount: number;
   dedupedCount: number;
   acceptedCount: number;
@@ -74,19 +81,27 @@ export class TopicPipeline {
     const maxCandidates = this.bound(collect.maxCandidates, COLLECT_DEFAULTS.maxCandidates, 20, 500);
     const minMetadataScore = collect.minMetadataScore ?? COLLECT_DEFAULTS.minMetadataScore;
     const includeR18 = discovery.includeR18 === true;
+    // An unknown mode (hand-written config bypassing validation) falls back to
+    // the historical behaviour rather than silently narrowing recall.
+    const requestedMode = discovery.relatedTags;
+    const relatedMode: RelatedTagMode =
+      requestedMode === 'when_seed_insufficient' || requestedMode === 'never' ? requestedMode : 'always';
 
     const byId = new Map<number, { work: T; candidate: TopicCandidate }>();
     let rawCount = 0;
     let aiExcludedCount = 0;
     let duplicateRemovedCount = 0;
     const tagNames = space.tags.map((t) => t.name);
+    const seedKey = this.key(topic);
+    const seedTags = tagNames.filter((name) => this.key(name) === seedKey);
+    const relatedTags = tagNames.filter((name) => this.key(name) !== seedKey);
+    const searchedTags: string[] = [];
 
-    for (let i = 0; i < tagNames.length; i++) {
-      if (byId.size >= maxCandidates) break;
+    const collectTag = async (tag: string): Promise<void> => {
       // Cancellation is checked between tags, so a cancelled run stops issuing
       // new searches even when the aborted request itself had already returned.
       throwIfAborted(this.signal, 'topic collection cancelled');
-      const tag = tagNames[i];
+      searchedTags.push(tag);
       const works = await this.searchDay<T>(contentType, tag, day, maxPerTag, includeR18);
       rawCount += works.length;
       for (const work of works) {
@@ -102,27 +117,44 @@ export class TopicPipeline {
         if (byId.size >= maxCandidates) break;
       }
       logger.debug('[TopicCollector] type=' + contentType + ' tag=' + tag + ' day=' + day + ' fetched=' + works.length + ' pool=' + byId.size);
-      if (i < tagNames.length - 1 && this.requestDelayMs > 0) await delay(this.requestDelayMs);
+    };
+
+    const runTags = async (names: string[]): Promise<void> => {
+      for (let i = 0; i < names.length; i++) {
+        if (byId.size >= maxCandidates) break;
+        await collectTag(names[i]);
+        if (i < names.length - 1 && this.requestDelayMs > 0) await delay(this.requestDelayMs);
+      }
+    };
+
+    // §topic-recall: a resolved tag space is a hierarchy, not a bag of
+    // interchangeable tags. 'always' keeps the historical behaviour — every
+    // resolved tag is a recall channel for the day. The seed-first modes search
+    // the topic tag the operator actually asked for and only walk the related
+    // channel when that cannot fill the target, so a second high-weight tag
+    // (丸吞) cannot take the only slot of a 西瓜肚 target.
+    if (seedTags.length === 0 || relatedMode === 'always') {
+      // No seed tag in the space (hand-written space): keep walking everything
+      // rather than returning nothing.
+      await runTags(seedTags.length === 0 ? tagNames : [...seedTags, ...relatedTags]);
+    } else {
+      await runTags(seedTags);
+      const seedAccepted = this.acceptedWorks(byId, seedKey, tagScores, minMetadataScore, limit, contentType).length;
+      if (relatedMode === 'never') {
+        logger.info('[TopicRecall] mode=never tag=' + topic + ' day=' + day + ' accepted=' + seedAccepted);
+      } else if (seedAccepted < limit) {
+        logger.info('[TopicRecall] mode=when_seed_insufficient tag=' + topic + ' seedAccepted=' + seedAccepted + '/' + limit + ' relatedTags=' + relatedTags.length + '; expanding');
+        await runTags(relatedTags);
+      } else {
+        logger.info('[TopicRecall] mode=when_seed_insufficient tag=' + topic + ' seedAccepted=' + seedAccepted + '/' + limit + '; related tags not searched');
+      }
     }
 
     const dedupedCount = byId.size;
-    logger.info('[TopicCollector] type=' + contentType + ' raw=' + rawCount + ' deduplicated=' + dedupedCount + ' aiExcluded=' + aiExcludedCount);
+    logger.info('[TopicCollector] type=' + contentType + ' raw=' + rawCount + ' deduplicated=' + dedupedCount + ' aiExcluded=' + aiExcludedCount + ' searchedTags=' + searchedTags.length);
 
-    const seedKey = this.key(topic);
-    const accepted: Array<{ work: T; candidate: TopicCandidate }> = [];
-    for (const entry of byId.values()) {
-      entry.candidate.metadataScore = this.metadataScore(entry.candidate, seedKey, tagScores);
-      if (entry.candidate.metadataScore >= minMetadataScore) accepted.push(entry);
-    }
-    if (accepted.length === 0 && byId.size > 0) {
-      const fallback = [...byId.values()]
-        .filter((e) => e.candidate.tags.some((t) => this.key(t) === seedKey))
-        .sort((a, b) => b.candidate.popularity - a.candidate.popularity);
-      accepted.push(...fallback.slice(0, Math.max(limit, 1)));
-      logger.warn('[MetadataTopicFilter] type=' + contentType + ' none above threshold ' + minMetadataScore + '; kept ' + accepted.length + ' seed-tag fallback');
-    }
-
-    const chosen = this.topByPopularity(accepted, limit);
+    const accepted = this.acceptedWorks(byId, seedKey, tagScores, minMetadataScore, limit, contentType);
+    const chosen = this.topByPopularity(accepted, limit, relatedMode === 'always' ? undefined : seedKey);
     const selected = chosen.map((e) => e.candidate);
     logger.info('[MetadataTopicFilter] accepted=' + accepted.length);
     if (selected[0]) {
@@ -135,6 +167,7 @@ export class TopicPipeline {
         candidates: [...byId.values()].map((e) => e.candidate),
         selected,
         resolvedTagCount: space.tags.length,
+        searchedTags,
         rawCount,
         dedupedCount,
         acceptedCount: accepted.length,
@@ -187,6 +220,37 @@ export class TopicPipeline {
   }
 
   /**
+   * Applies the metadata gate to everything collected so far. When nothing at
+   * all clears the threshold but the seed tag is present, the seed-tag works are
+   * kept anyway: a sparse day must stay usable instead of reporting "no
+   * candidates" for a topic that visibly has works. Extracted from selection so
+   * the seed pass can be evaluated before deciding whether the related channel
+   * is needed at all (§topic-recall).
+   */
+  private acceptedWorks<T extends WorkLike>(
+    byId: Map<number, { work: T; candidate: TopicCandidate }>,
+    seedKey: string,
+    tagScores: Map<string, number>,
+    minMetadataScore: number,
+    limit: number,
+    contentType: TopicContentType
+  ): Array<{ work: T; candidate: TopicCandidate }> {
+    const accepted: Array<{ work: T; candidate: TopicCandidate }> = [];
+    for (const entry of byId.values()) {
+      entry.candidate.metadataScore = this.metadataScore(entry.candidate, seedKey, tagScores);
+      if (entry.candidate.metadataScore >= minMetadataScore) accepted.push(entry);
+    }
+    if (accepted.length === 0 && byId.size > 0) {
+      const fallback = [...byId.values()]
+        .filter((e) => e.candidate.tags.some((t) => this.key(t) === seedKey))
+        .sort((a, b) => b.candidate.popularity - a.candidate.popularity);
+      accepted.push(...fallback.slice(0, Math.max(limit, 1)));
+      logger.warn('[MetadataTopicFilter] type=' + contentType + ' none above threshold ' + minMetadataScore + '; kept ' + accepted.length + ' seed-tag fallback');
+    }
+    return accepted;
+  }
+
+  /**
    * Lightweight metadata relevance. Tags dominate (Pixiv's own taxonomy);
    * title/caption add smaller boosts. The seed tag is strong evidence.
    * No text model — case/symbol-insensitive substring matching only.
@@ -233,13 +297,34 @@ export class TopicPipeline {
    * as on-topic, and the choice between accepted works is decided by popularity
    * alone. A work with a higher metadata score does NOT outrank a more popular
    * accepted work.
+   *
+   * `seedKey` adds a single tier in front of that popularity order and is only
+   * passed by the seed-first recall modes (§topic-recall): when related tags
+   * were reached as a fallback, a work that actually carries the topic tag must
+   * outrank a related-only work, and popularity decides within each tier. The
+   * default mode passes no `seedKey`, so the documented popularity-only ranking
+   * is unchanged.
    */
   private popCompare(a: TopicCandidate, b: TopicCandidate): number {
     return b.popularity - a.popularity;
   }
 
-  private topByPopularity<T>(items: Array<{ work: T; candidate: TopicCandidate }>, limit: number) {
-    if (items.length <= limit) return items.sort((a, b) => this.popCompare(a.candidate, b.candidate));
+  private rankCompare(seedKey: string | undefined) {
+    if (!seedKey) return (a: TopicCandidate, b: TopicCandidate) => this.popCompare(a, b);
+    const tier = (c: TopicCandidate) => (c.tags.some((t) => this.key(t) === seedKey) ? 0 : 1);
+    return (a: TopicCandidate, b: TopicCandidate) => {
+      const diff = tier(a) - tier(b);
+      return diff !== 0 ? diff : this.popCompare(a, b);
+    };
+  }
+
+  private topByPopularity<T>(
+    items: Array<{ work: T; candidate: TopicCandidate }>,
+    limit: number,
+    seedKey?: string
+  ) {
+    if (items.length <= limit) return items.sort((a, b) => this.rankCompare(seedKey)(a.candidate, b.candidate));
+    if (seedKey) return items.sort((a, b) => this.rankCompare(seedKey)(a.candidate, b.candidate)).slice(0, limit);
     // O(n) top-`limit` selection (limit is tiny, e.g. 1); avoids a full sort.
     const top: Array<{ work: T; candidate: TopicCandidate }> = [];
     for (const item of items) {

@@ -1,5 +1,13 @@
 # Changelog
 
+## [3.4.1](https://github.com/redtidev1918/PixivFlow/compare/v3.4.0...v3.4.1) (2026-09-27)
+
+
+### Bug Fixes
+
+* **delivery:** ship a normalized reason code in refetch outcomes ([4584f46](https://github.com/redtidev1918/PixivFlow/commit/4584f469a4e30fdc0097f34aea113f133d504556))
+* **scheduler:** let a consumer cancel interrupt the in-flight run ([b59a434](https://github.com/redtidev1918/PixivFlow/commit/b59a434529b0c785d4fced1e48f2f11f873293e3))
+
 ## [3.4.0](https://github.com/redtidev1918/PixivFlow/compare/v3.3.0...v3.4.0) (2026-09-27)
 
 

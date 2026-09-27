@@ -181,6 +181,12 @@ export interface DeliveryNotificationRequest {
   refetchOutcome?: {
     requestId: string;
     disposition: 'no_alternative' | 'failed';
+    /**
+     * The cross-boundary, closed-vocabulary protocol error code (protocol/v1
+     * `$defs/Error.code`); raw upstream text never crosses the boundary.
+     */
+    reasonCode?: string;
+    /** Bounded, single-line, human-readable business message (never a raw body). */
     reason?: string;
     workId?: string;
     scanned?: number;

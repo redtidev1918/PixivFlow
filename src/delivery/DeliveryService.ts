@@ -57,6 +57,13 @@ export interface RefetchOutcomePayload {
   requestId: string;
   /** 'no_alternative' | 'failed' (replacement success rides the submission). */
   disposition: 'no_alternative' | 'failed';
+  /**
+   * The cross-boundary, closed-vocabulary protocol error code (protocol/v1
+   * `$defs/Error.code`). The consumer writes it into its `failure_code` CODE
+   * column, so raw upstream text must never appear here.
+   */
+  reasonCode?: string;
+  /** Bounded, single-line, human-readable business message (never a raw body). */
   reason?: string;
   workId?: string;
   /** Bounded candidate-scan bookkeeping for diagnostics (spec-compatible). */

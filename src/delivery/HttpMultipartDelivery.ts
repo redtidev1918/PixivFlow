@@ -149,6 +149,11 @@ export class HttpMultipartDelivery implements DeliveryProvider {
       ? {
           request_id: outcome.requestId,
           disposition: outcome.disposition,
+          // The closed-vocabulary code goes to TelePost's `failure_code` CODE
+          // column; `reason` is only the bounded human business message it
+          // sanitizes into `terminal_reason`. Raw upstream text (an nginx 502
+          // HTML page) must never appear on the wire.
+          reason_code: outcome.reasonCode,
           reason: outcome.reason,
           work_id: outcome.workId,
           scanned: outcome.scanned,

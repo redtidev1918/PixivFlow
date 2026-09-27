@@ -72,6 +72,25 @@ misleading `OperationCancelledError`/`internal_error`. See
 Admin still sees full stack / trace_id / pixiv_id / stage / retryable in logs and
 `system_errors`.
 
+## Liveness terminal reasons（不再有无限 RUNNING）
+
+一个 slot 不允许「永远 RUNNING」。常驻调度器的 liveness 扫掠（默认 60 s 一次）会把
+超过预算且没有推进的 slot 终结为 `failed`，并把原因码写进 durable ledger：
+
+| reason code | 触发条件 | 用户文案 |
+| --- | --- | --- |
+| `queued_too_long` | 仍是 `pending` 且超过 `schedulerRuntime.queuedTimeoutMs`（默认 30 min）仍未开始执行（如账户容量一直忙） | 排队超时，未能开始执行 |
+| `stalled_no_heartbeat` | `running` 且 `heartbeat_at`（回落 `started_at`/`created_at`）超过 `schedulerRuntime.stallTimeoutMs`（默认 15 min）没有推进，**且**执行租约已死 | 执行中断，长时间没有进展 |
+| `delivery_abandoned` | cell 已到投递阶段却没有任何可执行投递，也没有其它运行中的租约 | 投稿未被处理，已放弃 |
+
+规则：同一 tick **先恢复**被中断的 slot（crash-resume），**再**终结超预算的 slot，刚恢复
+的 slot 本轮不参与终结判定；只终结 `pending`/`selected` 的 cell，已被下游 ACK 的
+submitted cell 不改写；终结后用同一条 `deriveSlotStatus` 投影派生 slot 状态（因此部分
+投递过的 occurrence 可能报 `partial` 而不是 `failed`）。这三类都算系统失败
+（`business_status = failed`，alertable），与 `no_candidate`/`duplicate_only` 这类正常业务
+空结果严格分开。对外只暴露**封闭的协议错误码**（见
+`pixivflow-telepost-deploy/docs/protocol/v1/error-mapping.json`），内部原因码仅用于诊断。
+
 ## 告警规则（alertable）
 
 `alertable` 只在 `business_status === 'failed'` 为 true。监控只对 `failed`

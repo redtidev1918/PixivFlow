@@ -686,6 +686,9 @@ dead row 用 `pixivflow outbox retry <id>` 或 `retry --dead` 正式重放，幂
 | `trigger.port` / `trigger.host` | 8090 / `0.0.0.0` | 触发服务监听地址。Fly 注入 `PORT` 时优先用 `PORT`。 |
 | `trigger.token` | env | Bearer 令牌；缺省读 `SCHEDULER_TRIGGER_TOKEN` 环境变量。两者都没有则触发端点**拒绝一切请求（fail-closed）**。令牌不进日志/响应。 |
 | `trigger.graceMinutes` | 90 | 一次 occurrence 在其计划时刻之后多久内仍接受外部触发（容忍 watchdog/网络重试/唤醒延迟）。超出窗口判过期，不补历史。 |
+| `queuedTimeoutMs` | 1800000（30 min） | **排队上限**：一个 slot 仍是 `pending`（含人工重抓 waiting 排队）且创建时间超过该时长仍未开始执行 → 由 liveness 扫掠终结为 `failed`，原因码 `queued_too_long`（用户文案「排队超时，未能开始执行」）。避免账户容量忙时无限 pending。小于 60 s 的值会被夹到 60 s；非数字/非法值只告警（non-fatal）并回落默认。 |
+| `stallTimeoutMs` | 900000（15 min） | **停摆上限**：一个 `running` slot 的 `heartbeat_at`（回落 `started_at`，再回落 `created_at`）超过该时长没有推进、**且**执行租约已死 → 由扫掠终结为 `failed`，原因码 `stalled_no_heartbeat`（用户文案「执行中断，长时间没有进展」）。它是「进程死了没人知道」的兜底，不是超时重试。 |
+| （扫掠周期） | 60 s | 常驻调度器每 60 s 扫一次（下限 60 s，单批最多 100 行）。同一 tick **先恢复**被中断的 slot（crash-resume），**再**终结超过上限仍未推进的 slot；刚被恢复的 slot 不参与本次终结判定（它还没拿到租约）。投递侧另有 `delivery_abandoned`（「投稿未被处理，已放弃」）：cell 已 `delivery_pending`/`selected` 却没有可执行投递、且没有其它运行中的租约时收敛。 |
 
 **触发端点**（任何 HTTP cron 都可调，Cloudflare 只是官方参考适配器）：
 

@@ -251,6 +251,10 @@ GET  /health       你 → NapCat: POST /get_status（判 data.online !== false 
 - **幂等**：`retcode 0` 之后的重试**不要重发** —— 用 `idempotencyKey` 在你自己这侧短路返回
   `duplicate_existing`。
 
+这一节的**可运行实例**是 [`examples/onebot-adapter/`](../examples/onebot-adapter/README.md)：
+零依赖、带 `--selftest`，段构造与 ACK 映射逐条写死，可以直接拿来跑，也可以当作自己写适配器时的对照物。
+它同样不实现 QQ 协议、不做扫码 —— 扫码仍在 NapCat 自己的面板里。
+
 ### 5.4 PixivFlow 侧配置样例
 
 ```json
@@ -356,6 +360,15 @@ WebUI 的只读投影：`GET /api/gateways`、`GET /api/gateways/:name/pairing`�
 ```bash
 node examples/gateway/server.mjs --selftest   # 契约自检
 node examples/gateway/server.mjs              # 起服务，默认 127.0.0.1:8790
+```
+
+- **[`examples/onebot-adapter/`](../examples/onebot-adapter/README.md)** —— 零依赖的 OneBot v11
+  适配器实例（§5.3 的可运行版本）：把契约翻译成 `send_group_msg` / `upload_group_file`，
+  并把 OneBot 的 `retcode` 翻译回契约词汇。**它不实现 QQ 协议、不做扫码**，QQ 会话仍属于 NapCat。
+
+```bash
+node examples/onebot-adapter/server.mjs --selftest   # 片段/ACK/去重自检，不需要 QQ
+npx jest src/__tests__/delivery/onebot-adapter-e2e.test.ts   # 真投递运行时 → 适配器 → 假 OneBot
 ```
 
 ## 相关文档

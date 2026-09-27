@@ -1,5 +1,13 @@
 # Changelog
 
+## [3.0.3](https://github.com/redtidev1918/PixivFlow/compare/v3.0.2...v3.0.3) (2026-09-27)
+
+
+### Bug Fixes
+
+* **novel:** drop Pixiv's generated design cover instead of shipping it ([182694d](https://github.com/redtidev1918/PixivFlow/commit/182694dfb4b312900a9d7c0ba8945bf53c6b737f))
+* **topic:** let a topic target search its own tag before related tags ([3775a8d](https://github.com/redtidev1918/PixivFlow/commit/3775a8d96fdc4e9e4eb09b7382342038a811d975))
+
 ## [3.0.2](https://github.com/redtidev1918/PixivFlow/compare/v3.0.1...v3.0.2) (2026-09-26)
 
 

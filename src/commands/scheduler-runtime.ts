@@ -490,6 +490,9 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
      * overwrite the terminal `failed` record the abandon path wrote).
      */
     let slotAbandoned = false;
+    // This run's lease identity. It is passed to `finish` so a rollup can tell
+    // "my own live lease" from "another worker is on this slot right now".
+    const runOwner = `run-${process.pid}-${randomUUID().slice(0, 8)}`;
     if (!adhoc) {
       if (providedSlot) {
         slotCtx = providedSlot;
@@ -508,7 +511,6 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
       }
 
       const activeSlot = slotCtx!;
-      const runOwner = `run-${process.pid}-${randomUUID().slice(0, 8)}`;
       const prepared = coordinator.prepare(slotCtx, schedule, targets);
       if (prepared.alreadyCompleted && !onlyTarget) {
         logger.info('Slot already terminal; nothing to do', {
@@ -608,7 +610,7 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
 
     if (slotCtx && runTargets.length === 0) {
       logger.info('All slot cells already complete', { slot: slotCtx.slotId });
-      coordinator.finish(slotCtx, schedule, targets);
+      coordinator.finish(slotCtx, schedule, targets, { leaseOwner: runOwner });
       for (const target of targets) if (target.id) notificationPolicy.noteTerminalRefetchCell(slotCtx.slotId, target.id);
       // Release LAST: the slot must stay owned until its aggregate state has
       // been rolled up, otherwise a concurrent trigger could claim and re-run it
@@ -833,7 +835,7 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
         //  - the process is going away (`shutdown`). Deliberately leave the Slot
         //    non-terminal so recovery resumes the same occurrence after restart.
         if (slotCtx && shouldTerminaliseAbortedSlot(activeAbortOrigin, slotAbandoned)) {
-          coordinator.finish(slotCtx, schedule, targets);
+          coordinator.finish(slotCtx, schedule, targets, { leaseOwner: runOwner });
           for (const target of targets) if (target.id) notificationPolicy.noteTerminalRefetchCell(slotCtx.slotId, target.id);
         }
         // Hand the lease back either way: a terminal Slot cannot be re-dispatched,
@@ -851,7 +853,7 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
     const duration = Math.round((Date.now() - startTime) / 1000);
 
     if (slotCtx && !slotAbandoned) {
-      const summary = coordinator.finish(slotCtx, schedule, targets);
+      const summary = coordinator.finish(slotCtx, schedule, targets, { leaseOwner: runOwner });
       for (const target of targets) if (target.id) notificationPolicy.noteTerminalRefetchCell(slotCtx.slotId, target.id);
       // Terminal summaries are for SCHEDULED occurrences (P0-B). Remote manual
       // replacements already report through their own verdict channel

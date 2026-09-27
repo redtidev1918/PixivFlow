@@ -26,6 +26,12 @@ export const DEFAULT_CONFIG = {
     watchConfig: true,
     reloadDebounceMs: 500,
     queueLimit: 8,
+    // Liveness budgets (§liveness). Generous on purpose: production runs take
+    // 10-40 minutes and are sometimes queued hours behind a busy account, so a
+    // slot is only terminalised when its LEASE is dead and it stopped
+    // progressing — never merely because it is slow.
+    queuedTimeoutMs: 30 * 60 * 1000,
+    stallTimeoutMs: 15 * 60 * 1000,
     trigger: {
       port: 8090,
       host: '0.0.0.0',

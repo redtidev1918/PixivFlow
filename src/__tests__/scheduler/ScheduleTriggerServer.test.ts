@@ -73,6 +73,62 @@ describe('trigger endpoint auth + dispatch (live ephemeral express)', () => {
     }
   });
 
+  it('serves the additive job projection without changing the legacy fields or the 400/404 shapes', async () => {
+    const requestId = '6eb50329-20f2-4ea7-b95b-e4676b50d9f1';
+    const projection = {
+      // Legacy identity — semantics unchanged.
+      requestId,
+      slotId: 'plan-a@manual-' + requestId,
+      state: 'delivery_pending',
+      slotStatus: 'running',
+      // Additive liveness/correlation detail.
+      createdAt: 1_760_000_000_000,
+      startedAt: 1_760_000_010_000,
+      updatedAt: 1_760_000_020_000,
+      heartbeatAt: 1_760_000_030_000,
+      leaseExpiresAt: 1_760_000_210_000,
+      leaseActive: true,
+      claimed: true,
+      attemptCount: 2,
+      terminalReasonCode: null,
+      terminalReasonMessage: null,
+      manualRequestId: requestId,
+      idempotencyKey: requestId,
+      correlationId: 'chain-1',
+    };
+    const refetchStatus = jest.fn((targetId: string) =>
+      targetId === 'target-a' ? projection : null
+    );
+    const { base, close } = await boot('schedule-token', handlers({ refetchStatus }), 'refetch-token');
+    const url = `${base}/internal/targets/target-a/refetch/${requestId}`;
+    try {
+      const response = await fetch(url, { headers: { Authorization: 'Bearer refetch-token' } });
+      expect(response.status).toBe(200);
+      // Exact body: every projection field is passed through, none invented.
+      expect(await response.json()).toEqual(projection);
+
+      const missing = await fetch(`${base}/internal/targets/other/refetch/${requestId}`, {
+        headers: { Authorization: 'Bearer refetch-token' },
+      });
+      expect(missing.status).toBe(404);
+      expect(await missing.json()).toEqual({
+        status: 'error',
+        error: 'manual refetch not found',
+      });
+
+      const malformed = await fetch(`${base}/internal/targets/target-a/refetch/bad`, {
+        headers: { Authorization: 'Bearer refetch-token' },
+      });
+      expect(malformed.status).toBe(400);
+      expect(await malformed.json()).toEqual({
+        status: 'error',
+        error: 'requestId must be a UUID',
+      });
+    } finally {
+      close();
+    }
+  });
+
   it('accepts a single-target manual refetch only with its own token and a UUID', async () => {
     const refetch = jest.fn(async () => ({ slotId: 'manual-slot', disposition: 'accepted' }));
     const h = handlers({ refetch });

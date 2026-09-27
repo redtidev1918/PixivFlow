@@ -551,7 +551,21 @@ export type TerminalReasonCode =
   | 'network_error'
   | 'execution_timeout'
   | 'configuration_error'
-  | 'internal_error';
+  | 'internal_error'
+  /**
+   * Liveness verdicts of the stall sweep (§liveness). The Slot was admitted but
+   * made no progress within its budget: either nothing ever claimed it
+   * (`queued_too_long`) or its owner stopped heartbeating and its lease expired
+   * (`stalled_no_heartbeat`). These describe the LEDGER, not a Pixiv failure.
+   */
+  | 'queued_too_long'
+  | 'stalled_no_heartbeat'
+  /**
+   * The owning run ended while a delivery intent had no actionable outbox row
+   * left (dead-lettered, cancelled by an operator, or lost with the process),
+   * so no worker would ever converge that cell.
+   */
+  | 'delivery_abandoned';
 
 export interface TerminalReason {
   code: TerminalReasonCode;
@@ -589,6 +603,9 @@ const OPERATIONAL_REASON_POLICY: Record<TerminalReasonCode, Omit<OperationalReas
   execution_timeout: { stage: 'execution', retryable: true, operatorHint: '检查执行耗时和资源使用后重试。' },
   configuration_error: { stage: 'configuration', retryable: false, operatorHint: '修正配置并完成校验后再重试。' },
   internal_error: { stage: 'execution', retryable: false, operatorHint: '查看对应执行记录；若重复发生，请提交诊断信息。' },
+  queued_too_long: { stage: 'execution', retryable: true, operatorHint: '队列长时间未开始执行：检查调度器是否在运行/被 resource 队列阻塞后重试。' },
+  stalled_no_heartbeat: { stage: 'execution', retryable: true, operatorHint: '执行中途失去心跳（进程中断或卡死）：重启后可重试。' },
+  delivery_abandoned: { stage: 'delivery', retryable: true, operatorHint: '投递意图已无重试队列（被拒绝或取消）：检查接收端后重新重抓。' },
 };
 
 export function operationalReasonForCode(code: string, message?: string | null): OperationalReason | null {
@@ -619,6 +636,9 @@ export const TERMINAL_REASON_MESSAGES: Record<TerminalReasonCode, string> = {
   execution_timeout: '执行超时',
   configuration_error: '配置错误',
   internal_error: '内部错误',
+  queued_too_long: '排队超时，未能开始执行',
+  stalled_no_heartbeat: '执行中断，长时间没有进展',
+  delivery_abandoned: '投稿未被处理，已放弃',
 };
 
 /**

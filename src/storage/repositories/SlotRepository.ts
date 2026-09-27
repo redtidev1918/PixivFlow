@@ -540,6 +540,54 @@ export class SlotRepository extends BaseRepository {
   }
 
   /**
+   * Bounded liveness sweep candidates (§liveness): slots that are still
+   * `pending` (nothing ever claimed them) long after they were recorded. A live
+   * lease is never a candidate — a claimed slot is not stuck.
+   *
+   * `createdBefore` is a SQLite UTC datetime; the comparison stays in SQL so a
+   * large ledger never has to be loaded into memory to be filtered.
+   */
+  public agedPendingSlots(createdBefore: string, now: number, limit: number): SlotRecord[] {
+    const rows = this.db
+      .prepare(
+        `SELECT * FROM schedule_slots
+         WHERE status = 'pending'
+           AND (lease_until IS NULL OR lease_until <= @now)
+           AND created_at IS NOT NULL
+           AND created_at <= @createdBefore
+         ORDER BY created_at ASC
+         LIMIT @limit`
+      )
+      .all({ createdBefore, now, limit }) as any[];
+    return rows.map((r) => this.toSlot(r));
+  }
+
+  /**
+   * Bounded liveness sweep candidates (§liveness): slots left `running` whose
+   * owner stopped heartbeating. The lease must be expired or absent (a live
+   * lease means a live worker, however long the work takes), and progress must
+   * be older than the stall budget — falling back to `started_at`, then
+   * `created_at`, for rows from before heartbeats were recorded.
+   */
+  public stalledRunningSlots(progressBefore: string, now: number, limit: number): SlotRecord[] {
+    const rows = this.db
+      .prepare(
+        `SELECT * FROM schedule_slots
+         WHERE status = 'running'
+           AND (lease_until IS NULL OR lease_until <= @now)
+           AND COALESCE(
+                 CASE WHEN heartbeat_at IS NOT NULL THEN datetime(heartbeat_at / 1000, 'unixepoch') END,
+                 started_at,
+                 created_at
+               ) <= @progressBefore
+         ORDER BY COALESCE(started_at, created_at) ASC
+         LIMIT @limit`
+      )
+      .all({ progressBefore, now, limit }) as any[];
+    return rows.map((r) => this.toSlot(r));
+  }
+
+  /**
    * Non-terminal Slots (pending/running): work this ledger still owes, whether
    * or not a live worker currently holds their lease.
    *

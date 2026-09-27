@@ -9,6 +9,7 @@ import { getConfigPath, loadConfig, StandaloneConfig } from '../config';
 import { MultiScheduleManager } from '../scheduler/MultiScheduleManager';
 import { ScheduleTriggerServer, TriggerRunResult } from '../scheduler/ScheduleTriggerServer';
 import { SlotCoordinator } from '../scheduler/SlotCoordinator';
+import { buildJobProjection } from '../scheduler/JobProjection';
 import { selectScheduleTargets } from '../scheduler/schedules';
 import { primaryDeliveryName } from '../delivery/targetRoutes';
 import { createSchedulerRuntime } from './scheduler-runtime';
@@ -218,9 +219,10 @@ export class SchedulerCommand extends BaseCommand {
             refetchStatus: (targetId, requestId) => {
               const slot = runtime.database.slots.findManualSlot(requestId, targetId);
               const cell = slot && runtime.database.slots.getCell(slot.id, targetId);
-              return slot && cell
-                ? { requestId, slotId: slot.id, state: cell.status, slotStatus: slot.status }
-                : null;
+              // Legacy aliases (requestId/slotId/state/slotStatus) stay exactly as
+              // they were; everything else is additive liveness/cause detail so a
+              // caller can run a heartbeat watchdog instead of polling forever.
+              return slot && cell ? buildJobProjection(requestId, slot, cell) : null;
             },
             /**
              * Manual recovery of a FAILED target (§manual-recovery). Distinct

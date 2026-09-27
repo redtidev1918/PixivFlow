@@ -18,6 +18,7 @@ import { ResourceAdmission, pixivAccountResourceKey } from './ResourceAdmission'
 import { describeSchedule, resolveSchedules } from './schedules';
 import { ResolvedOccurrence, ScheduleRunOptions, TriggerSource, resolveOccurrence } from './OccurrenceResolver';
 import { SlotContext } from './SlotCoordinator';
+import { resolveStallTimeouts, sweepStalledSlots } from './StallSweep';
 
 export interface MultiScheduleManagerOptions {
   configPath: string;
@@ -128,10 +129,45 @@ export class MultiScheduleManager {
     this.updateWatcher(config);
     // Recovery first: it acts on occurrences the ledger already knows about.
     // Catch-up is inference ("cron suggests a fire was missed") and runs after.
-    this.recoverInterruptedSlots();
+    const rescued = this.recoverInterruptedSlots();
+    this.runStallSweep(rescued);
     this.startRecoveryLoop();
     this.catchUpMissedRuns(config);
     return result;
+  }
+
+  /**
+   * Liveness sweep (§liveness): terminalise slots that were admitted but never
+   * claimed, or that lost their worker, once they are older than the configured
+   * budget.
+   *
+   * Ordering is load-bearing. Recovery runs FIRST and reports the slots it
+   * re-dispatched; those are excluded here. A re-dispatched slot is owned by an
+   * asynchronous run that has not claimed its lease yet, so without the
+   * exclusion this tick would see "expired lease + stale heartbeat" and fail the
+   * very occurrence recovery just saved — and crash-resume (§manual-resume)
+   * would silently become "fail everything that was interrupted long enough".
+   * The sweep therefore answers the other half of the question: which slots is
+   * recovery UNABLE to rescue (no enabled plan, a stopped/failed Scheduler, or a
+   * queue that never drains)? Those are the ones that would otherwise stay
+   * non-terminal forever.
+   */
+  private runStallSweep(rescued: ReadonlySet<string> = new Set()): void {
+    const database = this.options.database;
+    if (!database) return;
+    try {
+      const result = sweepStalledSlots(database, {
+        ...resolveStallTimeouts(this.activeConfig?.schedulerRuntime),
+        skipSlotIds: rescued,
+      });
+      if (result.queuedTooLong > 0 || result.stalledNoHeartbeat > 0) {
+        logger.warn('Liveness sweep terminalised stalled slots', { ...result });
+      }
+    } catch (error) {
+      logger.warn('Liveness sweep failed; will retry on the next tick', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 
   private startRecoveryLoop(): void {
@@ -143,7 +179,7 @@ export class MultiScheduleManager {
     }
     this.recoveryTimer = setInterval(() => {
       try {
-        this.recoverInterruptedSlots();
+        this.runStallSweep(this.recoverInterruptedSlots());
       } catch (error) {
         logger.warn('Slot recovery sweep failed; will retry on the next tick', {
           error: error instanceof Error ? error.message : String(error),
@@ -169,9 +205,10 @@ export class MultiScheduleManager {
    * `claimSlotLease` elects the single winner, so duplicate clocks, restarts and
    * overlapping sweeps all converge on one worker.
    */
-  private recoverInterruptedSlots(): void {
+  private recoverInterruptedSlots(): Set<string> {
     const database = this.options.database;
-    if (!database) return;
+    const rescued = new Set<string>();
+    if (!database) return rescued;
 
     const config = this.activeConfig;
     const plans = new Map(
@@ -181,7 +218,7 @@ export class MultiScheduleManager {
     );
 
     const recovered = database.slots.recoverableSlots();
-    if (recovered.length === 0) return;
+    if (recovered.length === 0) return rescued;
 
     let reclaimed = 0;
     let skipped = 0;
@@ -196,6 +233,9 @@ export class MultiScheduleManager {
           slot: slot.id,
           schedule: slot.scheduleId,
           status: slot.status,
+          trigger_source: slot.triggerSource,
+          manual_request_id: slot.manualRequestId,
+          correlation_id: slot.correlationId,
         });
         continue;
       }
@@ -229,8 +269,29 @@ export class MultiScheduleManager {
         triggerSource: context.triggerSource,
         slot: context,
       });
-      if (admitted) reclaimed++;
-      else skipped++;
+      if (admitted) {
+        reclaimed++;
+        rescued.add(slot.id);
+      } else {
+        skipped++;
+        // NOT silent: a re-dispatch that keeps failing is exactly how a slot sat
+        // `pending` for days behind a stopped scheduler. Report the reason with
+        // the caller's own request id so a stuck manual job is traceable.
+        const scheduler = this.schedulers.get(slot.scheduleId);
+        const reason = !scheduler
+          ? 'scheduler_not_instantiated'
+          : scheduler.getStats().stopped
+            ? 'schedule_stopped'
+            : 'scheduler_busy';
+        logger.warn('Cannot recover slot: its schedule could not be admitted', {
+          slot: slot.id,
+          schedule: slot.scheduleId,
+          status: slot.status,
+          reason,
+          manual_request_id: slot.manualRequestId,
+          correlation_id: slot.correlationId,
+        });
+      }
     }
 
     logger.info('Recovered interrupted slots', {
@@ -238,6 +299,7 @@ export class MultiScheduleManager {
       reclaimed,
       skipped,
     });
+    return rescued;
   }
 
   /**

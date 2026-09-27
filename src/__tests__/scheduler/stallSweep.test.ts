@@ -49,6 +49,17 @@ function withDb<T>(fn: (db: Database) => T): T {
   }
 }
 
+/**
+ * The manual request id IS the slot id's `@manual-` suffix: one request id
+ * resolves to exactly one durable slot (enforced by the partial unique index on
+ * `manual_request_id`), so seeding several slots that share one id is not a
+ * ledger the producer can create.
+ */
+function manualRequestIdFor(slotId: string): string {
+  const suffix = slotId.split('@manual-')[1];
+  return suffix && suffix.trim() !== '' ? suffix : REQUEST_ID;
+}
+
 /** Admitted-but-queued manual slot: exactly what the refetch endpoint creates. */
 function seedPendingManualSlot(
   db: Database,
@@ -66,7 +77,7 @@ function seedPendingManualSlot(
     triggerSource: 'manual',
     slotDate: '2026-09-27',
     slotName: '审核群重抓',
-    manualRequestId: REQUEST_ID,
+    manualRequestId: manualRequestIdFor(slotId),
     correlationId: 'chain-1',
   });
   db.slots.materializeCells(slotId, [targetId], () => 'illustration');

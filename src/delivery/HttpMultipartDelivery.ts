@@ -6,6 +6,7 @@ import { DeliveryFieldValue, HttpMultipartDeliveryConfig } from '../config';
 import { logger } from '../logger';
 import { DeliveryNotificationRequest, DeliveryProvider, DeliveryRequest, DeliveryResult } from './types';
 import { parseDeliveryAck } from './DeliveryAck';
+import { canonicalRefetchRequestId } from './refetchProvenance';
 import { redactError, redactHeaders, redactUrl } from '../utils/redact';
 import type { MediaAsset } from '../domain/media/MediaAsset';
 
@@ -475,7 +476,10 @@ export function buildTemplateVariables(request: DeliveryRequest): Record<string,
     // Remote manual replacement ("重抓") request UUID; empty for scheduled runs.
     // Carried through the delivery payload context (extraContext) so the
     // receiving service can correlate the review with its refetch attempt.
-    refetchRequestId: (c.refetchRequestId as string) ?? '',
+    // Canonicalized at this last boundary before the wire: the receiver accepts
+    // only a canonical dashed lowercase UUID and rejects the whole submission
+    // otherwise (see delivery/refetchProvenance.ts).
+    refetchRequestId: canonicalRefetchRequestId(c.refetchRequestId),
   };
 }
 

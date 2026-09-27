@@ -121,10 +121,17 @@ export class TopicTagScorer {
       const genericPenalty = GENERIC_TAG_PENALTY.has(k) ? 0.4 : 1.0;
 
       const raw = recall * specificity * suggestionWeight * genericPenalty;
+      const score = Number(raw.toFixed(4));
       resolved.push({
         name: stat.name,
         translatedName: stat.translatedName,
-        score: Number(raw.toFixed(4)),
+        score,
+        // `weight` is the same semantic number; ranking and diagnostics read it
+        // while `score` stays for backward compatibility (§tag-provenance).
+        weight: score,
+        // Both channels may agree on a tag; the combined provenance records
+        // that, which is strictly more informative than either alone.
+        source: stat.suggested ? 'cooccurrence+autocomplete' : 'cooccurrence',
         occurrences: stat.topicDocs,
         coverage: Number(coverage.toFixed(4)),
         specificity: Number(specificity.toFixed(4)),
@@ -148,6 +155,10 @@ export class TopicTagScorer {
         name: name as string,
         translatedName: sug.translated_name?.trim() || undefined,
         score: AUTOCOMPLETE_ONLY_SCORE,
+        weight: AUTOCOMPLETE_ONLY_SCORE,
+        // Pixiv autocomplete is the only evidence for this tag: it never
+        // co-occurred in the bounded sample.
+        source: 'autocomplete',
         occurrences: 0,
         coverage: 0,
         specificity: 1.0, // Pixiv-endorsed related; treated as specific but unobserved

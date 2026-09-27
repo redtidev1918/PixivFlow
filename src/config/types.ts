@@ -10,6 +10,27 @@ import type { DeliveryCapabilityOverrides } from '../delivery/capabilities';
 
 export type DeliveryFieldValue = string | number | boolean | string[];
 
+/** Provenance names accepted by `TopicDiscoveryConfig.tagRelations`. */
+export const TAG_RELATION_SOURCES = ['seed', 'cooccurrence', 'autocomplete'] as const;
+export type TagRelationSource = (typeof TAG_RELATION_SOURCES)[number];
+
+/**
+ * Which resolved tags may become recall channels (§tag-provenance). Every list
+ * is optional and the defaults reproduce the pre-existing behaviour: walk the
+ * whole resolved space.
+ *
+ * `deny` always wins, then `allowSources`, then `allow`. The seed tag is never
+ * dropped by `allow`/`allowSources` — only `deny` can drop it.
+ */
+export interface TagRelationsConfig {
+  /** Provenance categories allowed to be walked (default: all three). */
+  allowSources?: TagRelationSource[];
+  /** If non-empty: ONLY these tag names are walked (the seed tag is kept). */
+  allow?: string[];
+  /** Always dropped, wins over `allow`/`allowSources` (default: none). */
+  deny?: string[];
+}
+
 /** Discovery tuning for mode='topic'. Every value has a safe default. */
 export interface TopicDiscoveryConfig {
   /** Max related tags used to build the search space (default 12). */
@@ -34,6 +55,26 @@ export interface TopicDiscoveryConfig {
    * - `'never'`: search the topic tag alone.
    */
   relatedTags?: 'always' | 'when_seed_insufficient' | 'never';
+  /**
+   * Make the seed tag a HARD ranking tier (default `'off'`).
+   *
+   * `'off'` keeps the documented popularity-only ranking, where relevance is
+   * only an acceptance gate. `'on'` guarantees the invariant "原始 Tag 权重最高，
+   * 相关 Tag 权重不得超过原始 Tag": a work carrying the seed tag always outranks
+   * a work that only matched expanded tags, however popular the latter is.
+   */
+  seedTier?: 'off' | 'on';
+  /** Which resolved tags may be walked as recall channels (default: all). */
+  tagRelations?: TagRelationsConfig;
+  /**
+   * Also treat a work's `translated_name` as a tag hit (default false).
+   *
+   * Today only the work's `name` is compared with the resolved tag keys. When
+   * enabled, a work whose translated tag name matches a resolved tag counts as
+   * carrying that tag (and a translated match of the seed counts as a seed hit).
+   * Default `false` keeps today's matching exactly.
+   */
+  matchTranslatedNames?: boolean;
 }
 
 /** Candidate collection tuning for mode='topic'. */

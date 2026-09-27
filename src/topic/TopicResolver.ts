@@ -116,6 +116,9 @@ export class TopicResolver {
       name: seed,
       translatedName: suggested.find((t) => this.scorer.key(t.name) === this.scorer.key(seed))?.translated_name,
       score: 1,
+      weight: 1,
+      // The tag the operator asked for: the strongest provenance, never a hint.
+      source: 'seed',
       occurrences: topicWorks.length,
       coverage: 1,
       specificity: 1,
@@ -197,7 +200,7 @@ export class TopicResolver {
       expiresAt: new Date(now + cacheDays * 24 * 60 * 60_000).toISOString(),
       sampleSize: 0,
       sampledWorks: 0,
-      tags: [{ name: seed, score: 1, occurrences: 0, coverage: 1, specificity: 1, suggested: false, seed: true }],
+      tags: [{ name: seed, score: 1, weight: 1, source: 'seed', occurrences: 0, coverage: 1, specificity: 1, suggested: false, seed: true }],
     };
   }
 

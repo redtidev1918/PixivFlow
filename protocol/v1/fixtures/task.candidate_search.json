@@ -1,0 +1,19 @@
+{
+  "protocol_version": "1",
+  "job_type": "candidate_search",
+  "idempotency_key": "c78dd065-60aa-4e7a-bba5-38275019217c",
+  "correlation_id": "review-chain:135",
+  "labels": { "origin": "moderation", "tenant": "bot1" },
+  "callback_url": "https://telesubmit-multi-bot.fly.dev/api/bot1/v1/jobs/events",
+  "deadline_ms": 5400000,
+  "params": {
+    "source": { "platform": "pixiv", "account": "default" },
+    "query": { "tags": ["西瓜肚"], "expand": true },
+    "constraints": {
+      "exclude": [{ "kind": "work", "id": "149713091" }],
+      "limit": 1,
+      "scan_limit": 5,
+      "work_types": ["illustration", "novel"]
+    }
+  }
+}

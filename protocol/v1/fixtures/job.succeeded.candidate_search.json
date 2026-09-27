@@ -1,0 +1,54 @@
+{
+  "protocol_version": "1",
+  "job_id": "job-13866d8b",
+  "job_type": "candidate_search",
+  "status": "succeeded",
+  "idempotency_key": "13866d8b-c354-4f29-80a5-befe0ad72e20",
+  "correlation_id": "review-chain:99",
+  "labels": { "origin": "moderation", "tenant": "bot2" },
+  "created_at": 1790481174570,
+  "started_at": 1790481179130,
+  "updated_at": 1790481318920,
+  "heartbeat_at": 1790481310000,
+  "deadline_at": 1790486874570,
+  "lease_active": false,
+  "lease_expires_at": null,
+  "attempt": 1,
+  "progress": { "stage": "delivering", "at": 1790481300000 },
+  "result": {
+    "candidates": [
+      {
+        "candidate_id": "cand-149713091",
+        "platform": "pixiv",
+        "work_id": "149713091",
+        "work_type": "illustration",
+        "url": "https://www.pixiv.net/artworks/149713091",
+        "tags": [
+          { "tag": "西瓜肚", "source": "seed", "weight": 1.0 },
+          { "tag": "孕妇", "source": "related", "weight": 0.42 }
+        ],
+        "assets": [
+          {
+            "asset_id": "asset-149713091-p0",
+            "type": "image",
+            "role": "primary",
+            "source": "pixiv",
+            "quality": "custom",
+            "width": 1200,
+            "height": 1600,
+            "mime": "image/jpeg",
+            "bytes": 842133,
+            "hash": "sha256:5f0c…",
+            "locator": { "kind": "url", "value": "https://i.pximg.net/img-original/…jpg" }
+          }
+        ]
+      }
+    ],
+    "scanned": 6,
+    "filtered": [
+      { "work_id": "149638093", "reason": "duplicate" },
+      { "work_id": "149590937", "reason": "duplicate" }
+    ]
+  },
+  "events_url": "https://pixivflow-scheduler.fly.dev/jobs/job-13866d8b/events"
+}

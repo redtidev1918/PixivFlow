@@ -1,0 +1,30 @@
+{
+  "protocol_version": "1",
+  "job_id": "job-6cc96212",
+  "job_type": "candidate_search",
+  "status": "failed",
+  "idempotency_key": "6cc96212-c354-4f29-80a5-befe0ad72e20",
+  "correlation_id": "review-chain:110",
+  "created_at": 1790481174570,
+  "started_at": 1790481179130,
+  "updated_at": 1790481318920,
+  "heartbeat_at": 1790481310000,
+  "deadline_at": 1790486874570,
+  "lease_active": false,
+  "attempt": 1,
+  "progress": { "stage": "filtering", "at": 1790481300000 },
+  "error": {
+    "code": "no_candidate",
+    "message": "no eligible candidate found after scanning 6 (all filtered as duplicate)",
+    "retryable": false,
+    "detail": {
+      "scanned": 6,
+      "filtered": [
+        { "work_id": "149638093", "reason": "duplicate" },
+        { "work_id": "149590937", "reason": "duplicate" },
+        { "work_id": "149526999", "reason": "duplicate" }
+      ]
+    }
+  },
+  "events_url": "https://pixivflow-scheduler.fly.dev/jobs/job-6cc96212/events"
+}

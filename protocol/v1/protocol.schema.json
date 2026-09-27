@@ -1,0 +1,296 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://redtidev1918.github.io/pixivflow-telepost-deploy/protocol/v1/protocol.schema.json",
+  "title": "PixivFlow <-> TelePost Workflow Protocol v1",
+  "description": "Entry points are the $defs members: validate a document with {'$ref': '#/$defs/<Name>'}. Unknown fields are intentionally allowed (additionalProperties defaults to true) because the protocol is additive-only: both sides MUST ignore unknown fields. Producers: Job, Event, Result_CandidateSearch, Asset, Capabilities. Consumers: Task, Event.",
+  "$comment": "protocol_version directory: v1. Changing this file requires scripts/sync-protocol.sh and contract tests in both repos.",
+  "$defs": {
+    "ProtocolVersion": {
+      "type": "string",
+      "const": "1"
+    },
+    "Labels": {
+      "type": "object",
+      "description": "Opaque caller-owned string map. The producer MUST NOT interpret its contents.",
+      "additionalProperties": { "type": "string" }
+    },
+    "Error": {
+      "type": "object",
+      "required": ["code"],
+      "properties": {
+        "code": {
+          "type": "string",
+          "enum": [
+            "no_candidate",
+            "source_error",
+            "auth_error",
+            "quota_exceeded",
+            "resource_busy",
+            "queued_too_long",
+            "stalled_no_progress",
+            "deadline_exceeded",
+            "cancelled_by_consumer",
+            "idempotency_conflict",
+            "unsupported_protocol_version",
+            "invalid_params",
+            "delivery_failed",
+            "delivery_rejected",
+            "delivery_abandoned",
+            "internal_error"
+          ],
+          "description": "Machine-readable. Consumers MUST branch on code, never on message text. The enum is closed on purpose: a producer maps its internal reason ledger onto these codes (docs/protocol/v1/error-mapping.json) instead of leaking internal codes across the boundary."
+        },
+        "message": { "type": "string", "description": "Human readable only; never used for control flow." },
+        "retryable": { "type": "boolean" },
+        "detail": { "type": "object" }
+      }
+    },
+    "Task": {
+      "type": "object",
+      "description": "Consumer -> producer request.",
+      "required": ["protocol_version", "job_type", "idempotency_key", "params"],
+      "properties": {
+        "protocol_version": { "$ref": "#/$defs/ProtocolVersion" },
+        "job_type": { "type": "string", "description": "e.g. candidate_search. Business terms are forbidden here." },
+        "idempotency_key": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Producer guarantees at most one Job per key, including across restarts and cluster nodes."
+        },
+        "correlation_id": { "type": "string", "description": "Opaque, echoed back verbatim, never interpreted." },
+        "labels": { "$ref": "#/$defs/Labels" },
+        "callback_url": { "type": "string", "description": "HTTPS endpoint receiving Event documents; 2xx means ack." },
+        "deadline_ms": { "type": "integer", "minimum": 1000, "description": "Hard ceiling for the whole job." },
+        "params": { "type": "object", "description": "job_type-specific, see the capability declaration." }
+      }
+    },
+    "Progress": {
+      "type": "object",
+      "required": ["stage"],
+      "properties": {
+        "stage": { "type": "string", "description": "Opaque producer stage label for display only; consumers MUST NOT branch on it." },
+        "message": { "type": "string" },
+        "at": { "type": "integer", "minimum": 0, "description": "epoch ms" }
+      }
+    },
+    "Job": {
+      "type": "object",
+      "description": "Producer-owned durable execution entity. Producers must expose timestamps, otherwise a consumer cannot distinguish 'just queued' from 'dead for three days'.",
+      "required": ["protocol_version", "job_id", "job_type", "status", "created_at", "updated_at"],
+      "properties": {
+        "protocol_version": { "$ref": "#/$defs/ProtocolVersion" },
+        "job_id": { "type": "string", "minLength": 1 },
+        "job_type": { "type": "string" },
+        "status": {
+          "type": "string",
+          "enum": ["queued", "running", "succeeded", "failed", "cancelled", "expired"]
+        },
+        "idempotency_key": { "type": "string" },
+        "correlation_id": { "type": "string" },
+        "labels": { "$ref": "#/$defs/Labels" },
+        "created_at": { "type": "integer", "minimum": 0 },
+        "started_at": { "type": ["integer", "null"], "minimum": 0 },
+        "updated_at": { "type": "integer", "minimum": 0 },
+        "heartbeat_at": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "description": "Refreshed by the producer while working (default every 30s). When absent, consumers MUST treat updated_at as the liveness clock."
+        },
+        "deadline_at": { "type": ["integer", "null"], "minimum": 0 },
+        "lease_active": { "type": "boolean", "description": "True when a live worker holds the job." },
+        "lease_expires_at": { "type": ["integer", "null"], "minimum": 0 },
+        "attempt": { "type": "integer", "minimum": 0 },
+        "progress": { "$ref": "#/$defs/Progress" },
+        "result": { "type": "object", "description": "Present on succeeded; shape follows the job_type Result schema." },
+        "error": { "$ref": "#/$defs/Error" },
+        "events_url": { "type": "string" }
+      }
+    },
+    "Event": {
+      "type": "object",
+      "description": "Producer -> consumer lifecycle event, delivered at least once.",
+      "required": ["protocol_version", "event_id", "job_id", "type", "at"],
+      "properties": {
+        "protocol_version": { "$ref": "#/$defs/ProtocolVersion" },
+        "event_id": { "type": "string", "minLength": 1, "description": "Consumers deduplicate on this." },
+        "job_id": { "type": "string", "minLength": 1 },
+        "type": {
+          "type": "string",
+          "enum": [
+            "job.accepted",
+            "job.started",
+            "job.progress",
+            "job.succeeded",
+            "job.failed",
+            "job.expired",
+            "job.cancelled"
+          ]
+        },
+        "at": { "type": "integer", "minimum": 0 },
+        "correlation_id": { "type": "string" },
+        "labels": { "$ref": "#/$defs/Labels" },
+        "payload": {
+          "type": "object",
+          "description": "Terminal events carry result or error.",
+          "properties": {
+            "job": { "$ref": "#/$defs/Job" },
+            "result": { "type": "object" },
+            "error": { "$ref": "#/$defs/Error" }
+          }
+        }
+      }
+    },
+    "Locator": {
+      "type": "object",
+      "required": ["kind", "value"],
+      "properties": {
+        "kind": { "type": "string", "enum": ["url", "path", "inline"] },
+        "value": { "type": "string" }
+      }
+    },
+    "Asset": {
+      "type": "object",
+      "description": "Producer describes, consumer decides whether to ship it (media policy belongs to the consumer).",
+      "required": ["asset_id", "type", "role", "source", "quality", "locator"],
+      "properties": {
+        "asset_id": { "type": "string", "minLength": 1 },
+        "type": { "type": "string", "enum": ["image", "novel", "metadata", "cover"] },
+        "role": { "type": "string", "enum": ["primary", "cover", "preview"] },
+        "source": { "type": "string", "enum": ["pixiv", "author", "generated", "unknown"] },
+        "quality": {
+          "type": "string",
+          "enum": ["default", "custom", "unknown"],
+          "description": "generated/template assets are 'default'; e.g. Pixiv's 640x900 design cover."
+        },
+        "width": { "type": "integer", "minimum": 0 },
+        "height": { "type": "integer", "minimum": 0 },
+        "mime": { "type": "string" },
+        "bytes": { "type": "integer", "minimum": 0 },
+        "hash": { "type": "string" },
+        "locator": { "$ref": "#/$defs/Locator" },
+        "metadata": { "type": "object" }
+      }
+    },
+    "MatchedTag": {
+      "type": "object",
+      "description": "Why a candidate matched: the producer must expose its recall basis so the consumer can decide whether to accept it.",
+      "required": ["tag"],
+      "properties": {
+        "tag": { "type": "string" },
+        "source": { "type": "string", "enum": ["seed", "related", "autocomplete", "tagged", "unknown"] },
+        "weight": { "type": "number" }
+      }
+    },
+    "Candidate": {
+      "type": "object",
+      "required": ["candidate_id", "platform", "work_id", "work_type"],
+      "properties": {
+        "candidate_id": { "type": "string", "minLength": 1 },
+        "platform": { "type": "string" },
+        "work_id": { "type": "string" },
+        "work_type": { "type": "string", "enum": ["illustration", "novel", "unknown"] },
+        "url": { "type": "string" },
+        "tags": { "type": "array", "items": { "$ref": "#/$defs/MatchedTag" } },
+        "assets": { "type": "array", "items": { "$ref": "#/$defs/Asset" } },
+        "metadata": { "type": "object" }
+      }
+    },
+    "CandidateSearchParams": {
+      "type": "object",
+      "description": "params for job_type=candidate_search. The producer only retrieves and ranks; it never decides admission, replacement or publishing.",
+      "required": ["query"],
+      "properties": {
+        "source": {
+          "type": "object",
+          "description": "Where to look. Accounts are producer-side resource keys, never business identities.",
+          "properties": {
+            "platform": { "type": "string", "enum": ["pixiv"] },
+            "account": { "type": "string" }
+          }
+        },
+        "query": {
+          "type": "object",
+          "required": ["tags"],
+          "properties": {
+            "tags": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+            "expand": {
+              "type": "boolean",
+              "description": "Allow recall expansion (related tags / autocomplete). The recall basis MUST still be reported in matched_tags."
+            }
+          }
+        },
+        "constraints": {
+          "type": "object",
+          "properties": {
+            "exclude": {
+              "type": "array",
+              "description": "Generic exclusions; the producer must not interpret why these are excluded.",
+              "items": {
+                "type": "object",
+                "required": ["kind", "id"],
+                "properties": {
+                  "kind": { "type": "string", "enum": ["work", "candidate", "tag"] },
+                  "id": { "type": "string" }
+                }
+              }
+            },
+            "limit": { "type": "integer", "minimum": 1 },
+            "scan_limit": { "type": "integer", "minimum": 1 },
+            "work_types": { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      }
+    },
+    "Result_CandidateSearch": {
+      "type": "object",
+      "description": "Result schema for job_type=candidate_search. The consumer alone decides which review a candidate replaces.",
+      "required": ["candidates", "scanned"],
+      "properties": {
+        "candidates": { "type": "array", "items": { "$ref": "#/$defs/Candidate" } },
+        "scanned": { "type": "integer", "minimum": 0 },
+        "filtered": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["work_id", "reason"],
+            "properties": {
+              "work_id": { "type": "string" },
+              "reason": { "type": "string", "enum": ["duplicate", "excluded", "invalid", "unavailable", "other"] }
+            }
+          }
+        }
+      }
+    },
+    "JobTypeDeclaration": {
+      "type": "object",
+      "required": ["name", "params_schema", "result_schema"],
+      "properties": {
+        "name": { "type": "string" },
+        "params_schema": { "type": "string", "description": "URI or $defs pointer into this document." },
+        "result_schema": { "type": "string" },
+        "features": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["events", "progress", "cancel", "idempotency", "exclude", "tag_expansion"] }
+        },
+        "queued_timeout_ms": { "type": "integer", "minimum": 0 },
+        "stall_timeout_ms": { "type": "integer", "minimum": 0 },
+        "heartbeat_interval_ms": { "type": "integer", "minimum": 0 },
+        "default_deadline_ms": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "Capabilities": {
+      "type": "object",
+      "description": "GET /capabilities: consumers discover instead of hardcoding job types, enums and budgets.",
+      "required": ["protocol_versions", "job_types"],
+      "properties": {
+        "protocol_versions": { "type": "array", "items": { "$ref": "#/$defs/ProtocolVersion" }, "minItems": 1 },
+        "job_types": { "type": "array", "items": { "$ref": "#/$defs/JobTypeDeclaration" } },
+        "sources": { "type": "array", "items": { "type": "object" } },
+        "asset_types": { "type": "array", "items": { "type": "string" } },
+        "asset_quality": { "type": "array", "items": { "type": "string" } },
+        "limits": { "type": "object" },
+        "server_time": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

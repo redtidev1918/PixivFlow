@@ -1,0 +1,13 @@
+{
+  "protocol_version": "1",
+  "event_id": "evt-1790481318920-13866d8b",
+  "job_id": "job-13866d8b",
+  "type": "job.succeeded",
+  "at": 1790481318920,
+  "correlation_id": "review-chain:99",
+  "labels": { "origin": "moderation", "tenant": "bot2" },
+  "payload": {
+    "job": { "protocol_version": "1", "job_id": "job-13866d8b", "job_type": "candidate_search", "status": "succeeded", "created_at": 1790481174570, "updated_at": 1790481318920, "heartbeat_at": 1790481310000, "lease_active": false, "attempt": 1 },
+    "result": { "candidates": [{ "candidate_id": "cand-149713091", "platform": "pixiv", "work_id": "149713091", "work_type": "illustration" }], "scanned": 6 }
+  }
+}

@@ -168,6 +168,8 @@ interface Harness {
   db: Database;
   config: StandaloneConfig;
   base: string;
+  /** Everything the cancel path asked the runtime to abort, in order. */
+  cancelHooks: jest.Mock;
   close: () => void;
 }
 
@@ -186,7 +188,13 @@ async function boot(overrides: StandaloneConfig = makeConfig()): Promise<Harness
     // make the durable slot/cell real, which is what the facade reads.
     admit: () => true,
   });
-  const jobs = new ManualJobService({ database: db, config: () => config, admission });
+  const cancelHooks = jest.fn();
+  const jobs = new ManualJobService({
+    database: db,
+    config: () => config,
+    admission,
+    onCancel: cancelHooks,
+  });
   const server = new ScheduleTriggerServer(
     REFETCH_TOKEN,
     {
@@ -211,6 +219,7 @@ async function boot(overrides: StandaloneConfig = makeConfig()): Promise<Harness
     db,
     config,
     base: `http://127.0.0.1:${port}`,
+    cancelHooks,
     close: () => {
       server.stop();
       db.close();
@@ -450,9 +459,18 @@ describe('protocol v1 job facade (live producer output)', () => {
       expect(h.db.outbox.get(pending.id)!.status).toBe('cancelled');
       expect(h.db.outbox.hasActionableDelivery('delivery-1')).toBe(false);
 
+      // Cancelling the ledger is not enough: the in-process run that owns this
+      // Slot must be told to stop, or it keeps consuming for the rest of its
+      // natural duration while holding `Scheduler.running` (which refuses every
+      // later admission for the same schedule with `scheduler_busy`).
+      expect(h.cancelHooks).toHaveBeenCalledTimes(1);
+      expect(h.cancelHooks).toHaveBeenCalledWith(jobId);
+
       const again = await post(h.base, `/jobs/${jobId}/cancel`, {});
       expect(again.status).toBe(200);
       expect(await again.json()).toEqual(job);
+      // A replay transitions nothing, so there is no live run left to abort.
+      expect(h.cancelHooks).toHaveBeenCalledTimes(1);
     } finally {
       h.close();
     }

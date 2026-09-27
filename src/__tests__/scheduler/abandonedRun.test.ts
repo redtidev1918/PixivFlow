@@ -17,6 +17,7 @@
 
 import { Database } from '../../storage/Database';
 import { Scheduler, ABORT_DRAIN_MS, JobAbandoned } from '../../scheduler/Scheduler';
+import { shouldTerminaliseAbortedSlot } from '../../commands/scheduler-runtime';
 import { SlotCoordinator } from '../../scheduler/SlotCoordinator';
 import { OperationCancelledError } from '../../utils/errors';
 import { TopicPipeline } from '../../topic/TopicPipeline';
@@ -275,5 +276,23 @@ describe('an abandoned run cannot coexist with its recovery', () => {
       db.slots.markSlotStatus(slot.slotId, 'running');
       expect(db.slots.recoverableSlots().map((s) => s.id)).toContain(slot.slotId);
     });
+  });
+});
+
+describe('an aborted run is only rolled up when the ledger is not already terminal', () => {
+  it('never re-finishes a consumer-cancelled slot', () => {
+    // A scheduler timeout is OUR verdict: the run is over and the Slot must be
+    // taken terminal so the recovery sweep stops re-dispatching it.
+    expect(shouldTerminaliseAbortedSlot('timeout', false)).toBe(true);
+    // A shutdown leaves the Slot recoverable on purpose; recovery resumes it.
+    expect(shouldTerminaliseAbortedSlot('shutdown', false)).toBe(false);
+    // A consumer cancel already wrote the terminal verdict (`cancelled_by_consumer`)
+    // in one transaction. Rolling the Slot up again would overwrite that verdict
+    // with a generic failure and flip the protocol status from `cancelled` to
+    // `failed` — while the aborted run unwinds through this same catch block.
+    expect(shouldTerminaliseAbortedSlot('consumer', false)).toBe(false);
+    // The abandon path owns its own terminal write.
+    expect(shouldTerminaliseAbortedSlot('timeout', true)).toBe(false);
+    expect(shouldTerminaliseAbortedSlot(null, false)).toBe(true);
   });
 });

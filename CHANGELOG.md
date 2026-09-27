@@ -1,5 +1,17 @@
 # Changelog
 
+## [3.4.0](https://github.com/redtidev1918/PixivFlow/compare/v3.3.0...v3.4.0) (2026-09-27)
+
+
+### Features
+
+* **protocol:** let candidate_search name its target ([aecd4cf](https://github.com/redtidev1918/PixivFlow/commit/aecd4cf6ad6f70ba87a2107c1124328740c5a00d))
+
+
+### Bug Fixes
+
+* **protocol:** stop using secret-shaped ids in the target-selector tests ([92a0f9f](https://github.com/redtidev1918/PixivFlow/commit/92a0f9f3df51358e881c82a588bce2fa23738c87))
+
 ## [3.3.0](https://github.com/redtidev1918/PixivFlow/compare/v3.2.0...v3.3.0) (2026-09-27)
 
 

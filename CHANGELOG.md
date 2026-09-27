@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.2.0](https://github.com/redtidev1918/PixivFlow/compare/v3.1.0...v3.2.0) (2026-09-27)
+
+
+### Features
+
+* **gateway:** ship a runnable OneBot v11 delivery adapter example ([0d60160](https://github.com/redtidev1918/PixivFlow/commit/0d601604fa38978ae424670cb07e6ab788d55013))
+
 ## [3.1.0](https://github.com/redtidev1918/PixivFlow/compare/v3.0.3...v3.1.0) (2026-09-27)
 
 

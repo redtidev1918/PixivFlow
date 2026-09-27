@@ -25,6 +25,8 @@ const ENTRY_POINTS: Record<string, string> = {
   event: 'Event',
   result: 'Result_CandidateSearch',
   capabilities: 'Capabilities',
+  jobpage: 'JobPage',
+  eventpage: 'EventPage',
   asset: 'Asset',
   candidate: 'Candidate',
 };

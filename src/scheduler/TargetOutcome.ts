@@ -17,6 +17,8 @@
  *    item after its bounded candidate scan, including the scan bookkeeping so
  *    "completed with nothing done" is impossible to report silently.
  */
+import type { ProtocolErrorCode } from './ProtocolErrors';
+
 export type WorkType = 'illustration' | 'novel';
 
 /**
@@ -565,7 +567,15 @@ export type TerminalReasonCode =
    * left (dead-lettered, cancelled by an operator, or lost with the process),
    * so no worker would ever converge that cell.
    */
-  | 'delivery_abandoned';
+  | 'delivery_abandoned'
+  /**
+   * A CONSUMER/operator stopped the work on purpose (§cancel). This is not a
+   * Pixiv failure and not a system failure: nothing went wrong, the work is
+   * simply no longer wanted, so it must never be alerted on or retried
+   * automatically. The cell is terminalised as `failed` (the existing FSM has no
+   * separate "cancelled" state and none is invented) with this code on it.
+   */
+  | 'cancelled_by_consumer';
 
 export interface TerminalReason {
   code: TerminalReasonCode;
@@ -606,6 +616,7 @@ const OPERATIONAL_REASON_POLICY: Record<TerminalReasonCode, Omit<OperationalReas
   queued_too_long: { stage: 'execution', retryable: true, operatorHint: '队列长时间未开始执行：检查调度器是否在运行/被 resource 队列阻塞后重试。' },
   stalled_no_heartbeat: { stage: 'execution', retryable: true, operatorHint: '执行中途失去心跳（进程中断或卡死）：重启后可重试。' },
   delivery_abandoned: { stage: 'delivery', retryable: true, operatorHint: '投递意图已无重试队列（被拒绝或取消）：检查接收端后重新重抓。' },
+  cancelled_by_consumer: { stage: 'execution', retryable: false, operatorHint: '用户已取消，无需重试。' },
 };
 
 export function operationalReasonForCode(code: string, message?: string | null): OperationalReason | null {
@@ -639,7 +650,52 @@ export const TERMINAL_REASON_MESSAGES: Record<TerminalReasonCode, string> = {
   queued_too_long: '排队超时，未能开始执行',
   stalled_no_heartbeat: '执行中断，长时间没有进展',
   delivery_abandoned: '投稿未被处理，已放弃',
+  cancelled_by_consumer: '任务已被取消',
 };
+
+/**
+ * The producer→protocol error mapping (`protocol/v1/error-mapping.json`,
+ * `producer_internal`), expressed as an exhaustive `Record` so a NEW internal
+ * code cannot compile without a protocol mapping: an unmapped internal code
+ * would otherwise leak this service's private vocabulary to a consumer.
+ *
+ * The translation happens ONCE, at the job facade. The legacy manual endpoints
+ * keep reporting internal codes (diagnosis), and the generic surface reports the
+ * protocol code plus `detail.internal_code`.
+ */
+export const PROTOCOL_ERROR_CODE_BY_TERMINAL_REASON: Record<TerminalReasonCode, ProtocolErrorCode> = {
+  no_candidate: 'no_candidate',
+  duplicate_exhausted: 'no_candidate',
+  filter_exhausted: 'no_candidate',
+  download_timeout: 'source_error',
+  download_failed: 'source_error',
+  metadata_failed: 'source_error',
+  rate_limited: 'quota_exceeded',
+  auth_failed: 'auth_error',
+  remote_http_error: 'source_error',
+  delivery_failed: 'delivery_failed',
+  telepost_rejected: 'delivery_rejected',
+  telegram_failed: 'delivery_failed',
+  network_error: 'source_error',
+  execution_timeout: 'deadline_exceeded',
+  configuration_error: 'internal_error',
+  internal_error: 'internal_error',
+  queued_too_long: 'queued_too_long',
+  stalled_no_heartbeat: 'stalled_no_progress',
+  delivery_abandoned: 'delivery_abandoned',
+  cancelled_by_consumer: 'cancelled_by_consumer',
+};
+
+/**
+ * Protocol error code for a persisted internal terminal reason, or null when the
+ * code is absent/unknown (never guess a protocol code for an unrecognised one).
+ */
+export function protocolErrorCodeForTerminalReason(
+  code: string | null | undefined
+): ProtocolErrorCode | null {
+  if (!code) return null;
+  return (PROTOCOL_ERROR_CODE_BY_TERMINAL_REASON as Record<string, ProtocolErrorCode>)[code] ?? null;
+}
 
 /**
  * Map a typed terminal TargetOutcome onto the normalized reason. Returns null

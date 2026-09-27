@@ -5,6 +5,8 @@ import { Server } from 'node:http';
 import { logger } from '../logger';
 import { SlotContext } from './SlotCoordinator';
 import { JobStatusProjection } from './JobProjection';
+import { ProtocolCapabilities, ProtocolJob } from './JobFacade';
+import { ProtocolRequestError, protocolErrorBody, protocolErrorResponse } from './ProtocolErrors';
 import { TriggerSource } from './OccurrenceResolver';
 import { BUILD } from '../version';
 
@@ -193,6 +195,33 @@ export interface TriggerHandlers {
     /** User-facing copy; never leaks internal error names. */
     message?: string;
   } | null;
+  /**
+   * Optional generic job facade (Workflow Protocol v1). Mounted on the SAME
+   * server and guarded by the SAME refetch token as the manual-work family, so
+   * there is exactly one HTTP system and one execution path: both this generic
+   * surface and the legacy `/internal/targets/:targetId/refetch` shim call the
+   * one shared admission function behind `submitJob`.
+   */
+  jobs?: JobHandlers;
+}
+
+/**
+ * The producer side of the generic Workflow Protocol v1 surface. Implementations
+ * own all business semantics; the server only authenticates, routes and shapes
+ * the HTTP response. Every failure is thrown as a `ProtocolRequestError` so the
+ * body is always a schema-valid `Error` with a closed-enum `code`.
+ */
+export interface JobHandlers {
+  /** `GET /capabilities` body (`$defs/Capabilities`), derived from live config. */
+  capabilities(): ProtocolCapabilities;
+  /** `POST /jobs`: parse a `$defs/Task`, admit it, project the `$defs/Job`. */
+  submitJob(body: unknown): { job: ProtocolJob; replayed: boolean };
+  /** `GET /jobs/{job_id}`: null means 404. */
+  jobStatus(jobId: string): ProtocolJob | null;
+  /** `GET /jobs?idempotency_key=`: 0 or 1 job. */
+  jobsByIdempotencyKey(idempotencyKey: string): ProtocolJob[];
+  /** `POST /jobs/{job_id}/cancel`: idempotent; always returns the current job. */
+  cancelJob(jobId: string): ProtocolJob;
 }
 
 export class ScheduleTriggerServer {
@@ -209,7 +238,8 @@ export class ScheduleTriggerServer {
     return (configured ?? process.env.SCHEDULER_TRIGGER_TOKEN ?? '').trim() || undefined;
   }
 
-  start(host: string, port: number): void {
+  /** `start` returns the listening server so tests/callers can read the port. */
+  start(host: string, port: number): Server {
     const app: Express = express();
     app.use(express.json());
     // Correlation + clock start for every route. Cheap enough to be unconditional.
@@ -224,6 +254,108 @@ export class ScheduleTriggerServer {
         version: BUILD.version,
         commit: BUILD.commit,
       });
+    });
+
+    // ---------------------------------------------------------------------
+    // Generic job facade — Workflow Protocol v1 (Task -> Job).
+    //
+    // Same server, same bearer token as the manual-work family (`refetchAuth`):
+    // this is not a second HTTP system and not a second execution path. Both
+    // this surface and the legacy `/internal/targets/:targetId/refetch` shim
+    // funnel into ONE shared admission function, so identity, idempotency and
+    // the terminal state can never diverge between entry points.
+    //
+    // No `refetch*` vocabulary appears on this surface, and nothing here reads
+    // `slot_name` or any consumer/business label: it is a projection adapter.
+    // ---------------------------------------------------------------------
+
+    app.get('/capabilities', this.refetchAuth, (req: Request, res: Response) => {
+      const jobs = this.handlers.jobs;
+      if (!jobs) {
+        res.status(503).json(this.jobUnavailableResponse());
+        return;
+      }
+      try {
+        res.json(jobs.capabilities());
+      } catch (error) {
+        this.jobFailure(req, res, error, 'capabilities failed');
+      }
+    });
+
+    app.post('/jobs', this.refetchAuth, (req: Request, res: Response) => {
+      const jobs = this.handlers.jobs;
+      if (!jobs) {
+        res.status(503).json(this.jobUnavailableResponse());
+        return;
+      }
+      try {
+        const { job, replayed } = jobs.submitJob(req.body);
+        this.triggerOutcome('schedule.job_admitted', replayed ? 200 : 202, req, res, {
+          job_id: job.job_id,
+          job_type: job.job_type,
+          status: job.status,
+          disposition: replayed ? 'replayed' : 'accepted',
+        });
+        // 202 on first admission, 200 when the idempotency key resolved to an
+        // already-existing Job. Both carry the identical `job` body.
+        res.status(replayed ? 200 : 202).json({ job });
+      } catch (error) {
+        this.jobFailure(req, res, error, 'job admission failed');
+      }
+    });
+
+    app.get('/jobs', this.refetchAuth, (req: Request, res: Response) => {
+      const jobs = this.handlers.jobs;
+      if (!jobs) {
+        res.status(503).json(this.jobUnavailableResponse());
+        return;
+      }
+      try {
+        const idempotencyKey = req.query.idempotency_key;
+        if (typeof idempotencyKey !== 'string' || idempotencyKey.trim() === '') {
+          throw new ProtocolRequestError('invalid_params', 400, {
+            message: 'idempotency_key is required',
+          });
+        }
+        res.json({ jobs: jobs.jobsByIdempotencyKey(idempotencyKey), server_time: Date.now() });
+      } catch (error) {
+        this.jobFailure(req, res, error, 'job lookup failed');
+      }
+    });
+
+    app.get('/jobs/:jobId', this.refetchAuth, (req: Request, res: Response) => {
+      const jobs = this.handlers.jobs;
+      if (!jobs) {
+        res.status(503).json(this.jobUnavailableResponse());
+        return;
+      }
+      try {
+        const job = jobs.jobStatus(req.params.jobId);
+        if (!job) {
+          throw new ProtocolRequestError('invalid_params', 404, { message: 'unknown job' });
+        }
+        res.json(job);
+      } catch (error) {
+        this.jobFailure(req, res, error, 'job lookup failed');
+      }
+    });
+
+    app.post('/jobs/:jobId/cancel', this.refetchAuth, (req: Request, res: Response) => {
+      const jobs = this.handlers.jobs;
+      if (!jobs) {
+        res.status(503).json(this.jobUnavailableResponse());
+        return;
+      }
+      try {
+        const job = jobs.cancelJob(req.params.jobId);
+        this.triggerOutcome('schedule.job_cancelled', 200, req, res, {
+          job_id: job.job_id,
+          status: job.status,
+        });
+        res.json(job);
+      } catch (error) {
+        this.jobFailure(req, res, error, 'job cancel failed');
+      }
     });
 
     // Read-only: list enabled schedules + their current occurrence status.
@@ -423,9 +555,11 @@ export class ScheduleTriggerServer {
       }
     });
 
-    this.server = app.listen(port, host, () => {
+    const server = app.listen(port, host, () => {
       logger.info('Schedule trigger server listening', { host, port, auth: this.token ? 'bearer' : 'DISABLED (no token)' });
     });
+    this.server = server;
+    return server;
   }
 
   /**
@@ -485,6 +619,35 @@ export class ScheduleTriggerServer {
       path: req.path,
       method: req.method,
       elapsed_ms: Date.now() - startedAt,
+    };
+  }
+
+  /**
+   * Every generic-surface failure is written as a protocol `Error`: a closed-enum
+   * `code`, a `retryable` boolean from the published defaults, and a `detail`
+   * object. Nothing here judges a failure by its message text.
+   */
+  private jobFailure(req: Request, res: Response, error: unknown, stage: string): void {
+    const { status, body } = protocolErrorResponse(error);
+    if (status >= 500) {
+      logger.error('Job API request failed', {
+        ...this.attemptMeta(req, res),
+        stage,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+    this.triggerOutcome('schedule.job_rejected', status, req, res, { code: body.code, stage });
+    // §3: protocol failures are reported as `{ error: <$defs/Error> }`.
+    res.status(status).json({ error: body });
+  }
+
+  /** Fail closed when the generic surface is not mounted in this runtime. */
+  private jobUnavailableResponse(): { error: ReturnType<typeof protocolErrorBody> } {
+    return {
+      error: protocolErrorBody('internal_error', {
+        message: 'job API is unavailable',
+        detail: { reason: 'job_api_disabled' },
+      }),
     };
   }
 

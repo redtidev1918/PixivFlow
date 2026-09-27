@@ -595,19 +595,17 @@ describe('protocol v1 job facade (job API disabled)', () => {
  * identity space. v1.1 makes the target nameable again — as a SELECTOR.
  */
 describe('protocol v1.1 target selector (params.target_id)', () => {
-  const SELECTOR_KEY = '0f6d5a3f-1b7e-4f2a-9c3d-7a1e5b9c2d40';
-
   it("accepts TelePost's exact production body in a deployment with four manual targets", async () => {
     const h = await boot(makeMultiTargetConfig());
     try {
       // `{params: {target_id}}` — no query, no constraints: the literal body
       // `telepost/application/pixivflow_jobs.py:_protocol_submit` builds.
-      const response = await post(h.base, '/jobs', telepostShapedBody('bot2-novel-marunomi', SELECTOR_KEY));
+      const response = await post(h.base, '/jobs', telepostShapedBody('bot2-novel-marunomi', KEY));
       expect(response.status).toBe(202);
       const body = (await response.json()) as { job: Record<string, unknown> };
       expect(validateEntry('Job', body.job)).toEqual([]);
 
-      const slot = h.db.slots.findManualSlotByKey(SELECTOR_KEY)!;
+      const slot = h.db.slots.findManualSlotByKey(KEY)!;
       expect(slot.targetIds).toEqual(['bot2-novel-marunomi']);
       expect(slot.scheduleId).toBe('bot2-daily');
     } finally {
@@ -618,8 +616,8 @@ describe('protocol v1.1 target selector (params.target_id)', () => {
   it('keeps the selector out of the stored retrieval view, so the target runs as configured', async () => {
     const h = await boot(makeMultiTargetConfig());
     try {
-      await post(h.base, '/jobs', telepostShapedBody('bot1-illust-botefuku', SELECTOR_KEY));
-      const slot = h.db.slots.findManualSlotByKey(SELECTOR_KEY)!;
+      await post(h.base, '/jobs', telepostShapedBody('bot1-illust-botefuku', KEY));
+      const slot = h.db.slots.findManualSlotByKey(KEY)!;
       expect(slot.paramsJson ?? '').not.toContain('target_id');
       // "No retrieval override" is exactly how a pre-protocol refetch behaved.
       expect(parseCandidateSearchParamsJson(slot.paramsJson)).toBeNull();
@@ -631,7 +629,7 @@ describe('protocol v1.1 target selector (params.target_id)', () => {
   it('still refuses an unhinted request when more than one target is eligible', async () => {
     const h = await boot(makeMultiTargetConfig());
     try {
-      const response = await post(h.base, '/jobs', { ...taskBody(), idempotency_key: SELECTOR_KEY });
+      const response = await post(h.base, '/jobs', { ...taskBody(), idempotency_key: KEY });
       expect(response.status).toBe(409);
       const body = (await response.json()) as { error: Record<string, unknown> };
       expect(validateEntry('Error', body.error)).toEqual([]);
@@ -651,12 +649,12 @@ describe('protocol v1.1 target selector (params.target_id)', () => {
   it('answers an unknown selector with unknown_target instead of inventing a target', async () => {
     const h = await boot(makeMultiTargetConfig());
     try {
-      const response = await post(h.base, '/jobs', telepostShapedBody('bot9-illust-nope', SELECTOR_KEY));
+      const response = await post(h.base, '/jobs', telepostShapedBody('bot9-illust-nope', KEY));
       expect(response.status).toBe(404);
       const body = (await response.json()) as { error: Record<string, unknown> };
       expect(validateEntry('Error', body.error)).toEqual([]);
       expect((body.error.detail as Record<string, unknown>).reason).toBe('unknown_target');
-      expect(h.db.slots.findManualSlotByKey(SELECTOR_KEY)).toBeNull();
+      expect(h.db.slots.findManualSlotByKey(KEY)).toBeNull();
     } finally {
       h.close();
     }
@@ -669,7 +667,7 @@ describe('protocol v1.1 target selector (params.target_id)', () => {
     delete (config.delivery as { targets: Record<string, unknown> }).targets['bot2-submit'];
     const h = await boot(config);
     try {
-      const response = await post(h.base, '/jobs', telepostShapedBody('bot2-novel-marunomi', SELECTOR_KEY));
+      const response = await post(h.base, '/jobs', telepostShapedBody('bot2-novel-marunomi', KEY));
       expect(response.status).toBe(500);
       const body = (await response.json()) as { error: Record<string, unknown> };
       expect((body.error.detail as Record<string, unknown>).reason).toBe('delivery_outcome_not_configured');
@@ -683,7 +681,7 @@ describe('protocol v1.1 target selector (params.target_id)', () => {
     try {
       for (const bad of [42, '', '   ']) {
         const response = await post(h.base, '/jobs', {
-          ...telepostShapedBody('bot1-illust-botefuku', SELECTOR_KEY),
+          ...telepostShapedBody('bot1-illust-botefuku', KEY),
           params: { target_id: bad },
         });
         expect(response.status).toBe(400);
@@ -699,7 +697,7 @@ describe('protocol v1.1 target selector (params.target_id)', () => {
     const h = await boot(makeMultiTargetConfig());
     try {
       const viaJobs = (await (
-        await post(h.base, '/jobs', telepostShapedBody('bot1-novel-botefuku', SELECTOR_KEY))
+        await post(h.base, '/jobs', telepostShapedBody('bot1-novel-botefuku', KEY))
       ).json()) as { job: Record<string, unknown> };
       const viaJobsId = String(viaJobs.job.job_id);
 
@@ -707,13 +705,13 @@ describe('protocol v1.1 target selector (params.target_id)', () => {
       // second one — this is what §3.1's mapping table promises and what a lost
       // target in the mapping broke.
       const legacy = await post(h.base, '/internal/targets/bot1-novel-botefuku/refetch', {
-        requestId: SELECTOR_KEY,
+        requestId: KEY,
         correlationId: 'refetch-42',
       });
       expect(legacy.status).toBe(202);
       const legacyBody = (await legacy.json()) as Record<string, unknown>;
       expect(String(legacyBody.slotId)).toBe(viaJobsId);
-      expect(h.db.slots.getRecentSlots(50).filter((row) => row.manualRequestId === SELECTOR_KEY)).toHaveLength(1);
+      expect(h.db.slots.getRecentSlots(50).filter((row) => row.manualRequestId === KEY)).toHaveLength(1);
     } finally {
       h.close();
     }

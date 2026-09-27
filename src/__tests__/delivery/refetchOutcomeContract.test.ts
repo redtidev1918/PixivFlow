@@ -14,6 +14,7 @@ import { Database } from '../../storage/Database';
 import { NotificationPolicy } from '../../notification/NotificationPolicy';
 import { SlotContext } from '../../scheduler/SlotCoordinator';
 import { SlotCoordinator } from '../../scheduler/SlotCoordinator';
+import { cancelConsumerJob } from '../../scheduler/JobCancellation';
 import { DeliveryDispatcher } from '../../delivery/DeliveryDispatcher';
 import { OutboxWorker } from '../../delivery/OutboxWorker';
 
@@ -343,5 +344,49 @@ it('never ships raw upstream text in a refetch outcome (protocol code only)', ()
     expect(payload.reasonCode).toMatch(/^[a-z][a-z0-9_]{0,63}$/);
     expect(payload.reason).not.toMatch(/[\r\n<>]/);
     expect(payload.reason.length).toBeLessThanOrEqual(200);
+  });
+});
+
+/**
+ * Field-acceptance finding D (2026-09): an operator-cancelled job must never
+ * be reported as a refetch failure. After `cancelConsumerJob` writes the
+ * terminal `cancelled_by_consumer` verdict, the interrupted run still lands in
+ * the normal per-target outcome path — but a late `failed` outcome must not
+ * re-verdict the cancelled cell, and NO `disposition:"failed"` outcome may be
+ * emitted for it.
+ */
+it('does not emit a failed refetch outcome for a consumer-cancelled job', () => {
+  withDb((db) => {
+    const coordinator = new SlotCoordinator(db);
+    coordinator.prepare(manualSlot, schedule, [target]);
+    // Consumer cancel writes the terminal verdict in one transaction.
+    const cancelled = cancelConsumerJob(db, manualSlot.slotId);
+    expect(cancelled.cancelled).toBe(true);
+    expect(db.slots.getCell(manualSlot.slotId, target.id)?.terminalReasonCode).toBe('cancelled_by_consumer');
+
+    // The interrupted run's per-target outcome lands next; it must leave the
+    // cancel verdict untouched (the slot stays `cancelled`, never `failed`).
+    coordinator.applyOutcome(manualSlot.slotId, target.id, {
+      kind: 'failed', retryable: false, error: 'Request aborted',
+    });
+    const cell = db.slots.getCell(manualSlot.slotId, target.id)!;
+    expect(cell.status).toBe('failed');
+    expect(cell.terminalReasonCode).toBe('cancelled_by_consumer');
+
+    const policy = new NotificationPolicy(
+      db,
+      {
+        ...config({
+          'bot1-submit': submitTarget({ refetchOutcomeUrl: 'https://telepost.example/refetch/outcomes' }),
+        }),
+        targets: [target],
+      }
+    );
+    policy.noteRefetchOutcome(manualSlot, schedule, target, manualSlot.manualRequestId!, {
+      kind: 'failed', retryable: false, error: 'Request aborted',
+    });
+    policy.noteTerminalRefetchCell(manualSlot.slotId, target.id);
+    // No `disposition:"failed"` report for a cancelled job — not even one.
+    expect(db.outbox.list()).toHaveLength(0);
   });
 });

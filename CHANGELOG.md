@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.4.3](https://github.com/redtidev1918/PixivFlow/compare/v3.4.2...v3.4.3) (2026-09-27)
+
+
+### Bug Fixes
+
+* **delivery:** canonicalize the manual refetch request id before delivery ([#182](https://github.com/redtidev1918/PixivFlow/issues/182)) ([fee6df8](https://github.com/redtidev1918/PixivFlow/commit/fee6df89328ffa79b449a66c3f29e6f4418d49d7))
+
 ## [3.4.2](https://github.com/redtidev1918/PixivFlow/compare/v3.4.1...v3.4.2) (2026-09-27)
 
 

@@ -287,11 +287,32 @@ describe('NovelDownloader cover semantics (§novel-cover)', () => {
     create_date: '2026-09-01T00:00:00+00:00',
   } as PixivNovel;
 
-  function build(textResponse: Record<string, unknown>) {
+  /** Minimal JPEG (APP0 + SOF0) carrying the frame dimensions. */
+  function jpeg(width: number, height: number): Uint8Array {
+    return new Uint8Array([
+      0xff, 0xd8,
+      0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01,
+      0x00, 0x01, 0x00, 0x00,
+      0xff, 0xc0, 0x00, 0x11, 0x08,
+      (height >> 8) & 0xff, height & 0xff,
+      (width >> 8) & 0xff, width & 0xff,
+      0x03, 0x01, 0x11, 0x00, 0x02, 0x11, 0x01, 0x03, 0x11, 0x01,
+      0xff, 0xd9,
+    ]);
+  }
+
+  function build(
+    textResponse: Record<string, unknown>,
+    cover: ArrayBuffer | Uint8Array | Error = new Uint8Array(4)
+  ) {
+    const downloadImage =
+      cover instanceof Error
+        ? jest.fn().mockRejectedValue(cover)
+        : jest.fn().mockResolvedValue(cover);
     const client = {
       getNovelDetailWithTags: jest.fn().mockResolvedValue({ novel, tags: [] }),
       getNovelText: jest.fn().mockResolvedValue(textResponse),
-      downloadImage: jest.fn(),
+      downloadImage,
     } as unknown as jest.Mocked<IPixivClient>;
     const database = { insertDownload: jest.fn() } as unknown as jest.Mocked<IDatabase>;
     const fileService = {
@@ -352,5 +373,57 @@ describe('NovelDownloader cover semantics (§novel-cover)', () => {
     );
     expect(fileService.saveMetadata.mock.calls[0][1].cover_url).toBeNull();
     expect(artifact!.mediaAssets ?? []).toHaveLength(0);
+  });
+
+  it('drops Pixiv design covers (its 640x900 canvas) without touching inline art', async () => {
+    const { downloader, fileService } = build(
+      {
+        novel_text: 'body [uploadedimage:11]',
+        coverUrl:
+          'https://i.pximg.net/novel-cover-master/img/2026/09/26/15/36/33/sci16561761_design_master1200.jpg',
+        images: { '11': { urls: { original: 'https://i.pximg.net/img/original/u/11.jpg' } } },
+      },
+      jpeg(640, 900)
+    );
+    const artifact = await downloader.download(
+      novel, 'bg', { type: 'novel', detectLanguage: false } as TargetConfig
+    );
+
+    // Pixiv renders its designs on the same CDN path as real covers, so the
+    // only discriminator is the canvas: that cover must never reach TelePost.
+    expect(fileService.saveMetadata.mock.calls[0][1].cover_url).toBeNull();
+    expect(artifact!.mediaAssets!.some((a) => a.id === 'pixiv:789:novelcover')).toBe(false);
+    expect(artifact!.mediaAssets!.some((a) => a.id === 'pixiv:789:uploadedimage:11')).toBe(true);
+  });
+
+  it('keeps an author cover on any other canvas', async () => {
+    const { downloader, fileService } = build(
+      {
+        novel_text: 'body',
+        coverUrl: 'https://i.pximg.net/novel-cover-master/img/author_cover_master1200.jpg',
+      },
+      jpeg(800, 1200)
+    );
+    const artifact = await downloader.download(
+      novel, 'bg', { type: 'novel', detectLanguage: false } as TargetConfig
+    );
+    expect(fileService.saveMetadata.mock.calls[0][1].cover_url).toBe(
+      'https://i.pximg.net/novel-cover-master/img/author_cover_master1200.jpg'
+    );
+    expect(artifact!.mediaAssets![0]).toMatchObject({ id: 'pixiv:789:novelcover' });
+  });
+
+  it('fails open and keeps the cover when the probe cannot be fetched', async () => {
+    const coverUrl = 'https://i.pximg.net/novel-cover-master/img/unreachable_master1200.jpg';
+    const { downloader, fileService } = build(
+      { novel_text: 'body', coverUrl },
+      new Error('429 Too Many Requests')
+    );
+    const artifact = await downloader.download(
+      novel, 'bg', { type: 'novel', detectLanguage: false } as TargetConfig
+    );
+    // A failed probe must never cost a real cover.
+    expect(fileService.saveMetadata.mock.calls[0][1].cover_url).toBe(coverUrl);
+    expect(artifact!.mediaAssets!.some((a) => a.id === 'pixiv:789:novelcover')).toBe(true);
   });
 });

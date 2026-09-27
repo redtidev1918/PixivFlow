@@ -14,7 +14,7 @@ import { DEFAULT_MATERIALIZATION_POLICY, shouldMaterialize, type Materialization
 import { artifactId, type Artifact } from '../domain/media/Artifact';
 import { PixivMediaMaterializer, type MediaMaterializer } from './materialization/MediaMaterializer';
 import { extractNovelAssets, NovelAsset, renderNovelMarkdown, renderNovelMarkdownReference } from './novelMarkers';
-import { normalizeNovelCoverUrl, novelCoverAsset } from './novelCover';
+import { normalizeNovelCoverUrl, novelCoverAsset, isPixivDesignCoverImage, PIXIV_DESIGN_COVER_WIDTH, PIXIV_DESIGN_COVER_HEIGHT } from './novelCover';
 import { createZipArchive } from '../utils/zip';
 import type { Database } from '../storage/Database';
 
@@ -229,12 +229,11 @@ export class NovelDownloader {
     }
 
     // Novel cover (§novel-cover): normalized to null for Pixiv's default
-    // placeholder, carried as a dedicated `novelcover` MediaAsset so TelePost
-    // can build `cover root + TXT reply` without positional guessing. The
-    // cover is never materialized locally — Telegram fetches it (via proxy).
-    const coverUrl = normalizeNovelCoverUrl(
-      typeof textResponse === 'string' ? undefined : textResponse.coverUrl
-    );
+    // placeholder AND for Pixiv's generated design covers, carried as a
+    // dedicated `novelcover` MediaAsset so TelePost can build
+    // `cover root + TXT reply` without positional guessing. The cover is never
+    // materialized locally — Telegram fetches it (via proxy).
+    const coverUrl = await this.resolveCoverUrl(detail.id, typeof textResponse === 'string' ? undefined : textResponse.coverUrl);
     const coverAsset = coverUrl ? novelCoverAsset(String(detail.id), coverUrl) : undefined;
 
     const downloadByAssetKey = new Map<string, (typeof assets)[number]>(
@@ -417,6 +416,43 @@ export class NovelDownloader {
       viewCount: detail.total_view ?? detail.view_count,
       language: detectedLang ? `${detectedLang.name} (${detectedLang.code})` : undefined,
     };
+  }
+
+  /**
+   * Resolves the cover URL a novel should ship with (§novel-cover).
+   *
+   * Pixiv's "author set no cover" case is invisible in the API: the design it
+   * renders (title typeset on a template) is served from the same CDN path with
+   * a unique hash as a real cover, so the URL cannot decide. The candidate cover
+   * is therefore fetched once and its header inspected; Pixiv's design canvas is
+   * exactly 640x900. Anything that cannot be classified keeps the cover — a
+   * failed probe must never cost a real cover.
+   */
+  private async resolveCoverUrl(
+    novelId: number | string,
+    coverUrl?: string | null
+  ): Promise<string | null> {
+    const normalized = normalizeNovelCoverUrl(coverUrl);
+    if (!normalized) return null;
+
+    try {
+      const cover = await this.client.downloadImage(normalized);
+      if (isPixivDesignCoverImage(cover)) {
+        logger.info(
+          `Novel ${novelId} cover is a Pixiv design cover (${PIXIV_DESIGN_COVER_WIDTH}x${PIXIV_DESIGN_COVER_HEIGHT}); delivering without a cover`,
+          { novelId, coverUrl: normalized, designCover: true }
+        );
+        return null;
+      }
+      return normalized;
+    } catch (error) {
+      logger.warn(`Novel ${novelId} cover probe failed; keeping the cover`, {
+        novelId,
+        coverUrl: normalized,
+        reason: error instanceof Error ? error.message : String(error),
+      });
+      return normalized;
+    }
   }
 }
 

@@ -122,6 +122,8 @@ executeCommand():command.validate?(args) → command.execute(context, args)
 
 小说目标由 `NovelTargetHandler` 处理,同样经过 plan → pipeline → downloader 链路。
 
+小说封面的处理遵循 §novel-cover 契约(`src/download/NovelDownloader.ts` + `src/download/novelCover.ts` + `src/utils/imageDimensions.ts`):Pixiv 现在会为**没有自定义封面**的小说现场渲染一张设计封面(标题排版 + 每篇小说独立的日期与哈希,CDN 路径与作者封面完全一致,`novel-cover-master-default` 占位图已基本不再出现),因此仅凭 URL 无法区分两者。`normalizeNovelCoverUrl()` 只做 URL 归一化(空值/非 http/占位图 → `null`,去掉 `/c/<size>/` 缩放段);真正的判别在下载阶段——`resolveCoverUrl()` 取回封面字节后用 `isPixivDesignCoverImage()` 判断是否为 Pixiv 的 640x900 设计画布(只读图片头,不引入图像解码器):**是则丢弃封面**(`cover_url: null`,不产出 `:novelcover` 资产,TelePost 侧只发文档或自有兜底卡片);探测失败(网络/鉴权/限流)一律**保留**封面——失败不能复刻成丢图。
+
 ### 计划与去重
 
 `DownloadPlanner.planDownloads()`(`src/download/plan/DownloadPlanner.ts`)依次执行:

@@ -442,6 +442,12 @@ export class SlotCoordinator {
   applyOutcome(slotId: string, targetId: string, outcome: TargetOutcome): void {
     const cell = this.database.slots.getCell(slotId, targetId);
     if (!cell) return;
+    // A consumer/operator cancel is FINAL (see JobCancellation.ts). The abort of
+    // the interrupted run still lands here through the normal per-target outcome
+    // path; a late `failed` must never re-verdict a cancelled cell, or the
+    // protocol status flips from `cancelled` back to `failed` ~10s after the
+    // operator's cancel (finding D). Cancel verdicts are never re-written.
+    if (cell.terminalReasonCode === CANCELLED_BY_CONSUMER) return;
     switch (outcome.kind) {
       case 'submitted':
         this.database.slots.lockCellWork(slotId, targetId, outcome.workId, outcome.workType);

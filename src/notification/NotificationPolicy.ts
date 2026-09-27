@@ -8,6 +8,7 @@ import {
   TargetOutcome,
   terminalReasonFor,
 } from '../scheduler/TargetOutcome';
+import { CANCELLED_BY_CONSUMER } from '../scheduler/ProtocolErrors';
 import { SlotContext, SlotCoordinator } from '../scheduler/SlotCoordinator';
 import { logger } from '../logger';
 
@@ -278,6 +279,20 @@ export class NotificationPolicy {
   ): void {
     const name = this.targetName(target);
     if (!name) return;
+    // A consumer/operator cancel is NOT a refetch failure (finding D). The
+    // cancelled cell keeps its terminal `cancelled_by_consumer` verdict, and no
+    // `disposition:"failed"` outcome may ever be emitted for it — the operator
+    // deliberately stopped the work, and the cancellation is already surfaced
+    // through the job status / events channel, never as a failed refetch report.
+    const cancelledCell = target.id ? this.database.slots.getCell(slot.slotId, target.id) : null;
+    if (cancelledCell?.terminalReasonCode === CANCELLED_BY_CONSUMER) {
+      logger.info('Refetch outcome suppressed: job was cancelled by the consumer', {
+        slot: slot.slotId,
+        target: target.id,
+        requestId,
+      });
+      return;
+    }
     const deliveryTarget = this.config.delivery?.targets?.[name];
     if (!deliveryTarget || deliveryTarget.type !== 'httpMultipart') return;
     if (!deliveryTarget.refetchOutcomeUrl?.trim()) {

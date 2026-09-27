@@ -1,5 +1,13 @@
 # Changelog
 
+## [3.4.2](https://github.com/redtidev1918/PixivFlow/compare/v3.4.1...v3.4.2) (2026-09-27)
+
+
+### Bug Fixes
+
+* never overwrite a consumer-cancelled verdict or report it as refetch failure ([80e2b02](https://github.com/redtidev1918/PixivFlow/commit/80e2b0241ceaa1cd2392b7da15fc3161527dd629))
+* **novel:** make a failed cover probe a policy decision, default skip ([#181](https://github.com/redtidev1918/PixivFlow/issues/181)) ([efb6762](https://github.com/redtidev1918/PixivFlow/commit/efb67624c855921bf72cb278a4ddfdbf6667285b))
+
 ## [3.4.1](https://github.com/redtidev1918/PixivFlow/compare/v3.4.0...v3.4.1) (2026-09-27)
 
 

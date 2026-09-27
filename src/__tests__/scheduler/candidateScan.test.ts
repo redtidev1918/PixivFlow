@@ -423,7 +423,7 @@ describe('scheduler candidate scan: duplicate -> next candidate, never a complet
       expect(detail.outcome?.business_status).toBe('duplicate_only');
       expect(detail.outcome?.business_status).not.toBe('failed');
       expect(detail.outcome?.alertable).toBe(false);
-      expect(detail.outcome?.outcome_version).toBe(1);
+      expect(detail.outcome?.outcome_version).toBe(2);
     } finally {
       h.close();
     }

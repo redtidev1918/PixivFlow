@@ -2,7 +2,12 @@ import { Database } from '../storage/Database';
 import { DeliveryService, RefetchOutcomePayload } from '../delivery/DeliveryService';
 import { primaryDeliveryName } from '../delivery/targetRoutes';
 import { ScheduleConfig, StandaloneConfig, TargetConfig } from '../config';
-import { operationalReasonForCode, TargetOutcome } from '../scheduler/TargetOutcome';
+import {
+  operationalReasonForCode,
+  protocolErrorCodeForTerminalReason,
+  TargetOutcome,
+  terminalReasonFor,
+} from '../scheduler/TargetOutcome';
 import { SlotContext, SlotCoordinator } from '../scheduler/SlotCoordinator';
 import { logger } from '../logger';
 
@@ -285,12 +290,24 @@ export class NotificationPolicy {
       return;
     }
 
+    // Translate the internal outcome ONCE, through the existing classifier:
+    // the wire carries the closed-vocabulary protocol code plus the short
+    // Chinese business message. The raw technical text (`outcome.error` /
+    // `outcome.reason`) never crosses the boundary — a live acceptance run
+    // shipped a 220-char multi-line nginx 502 HTML page into TelePost's
+    // `failure_code` CODE column that way.
+    const normalized = terminalReasonFor(outcome);
+    const reasonCode =
+      protocolErrorCodeForTerminalReason(normalized?.code) ?? undefined;
+    const reason = (normalized?.message ?? '').trim() || undefined;
+
     let payload: RefetchOutcomePayload;
     if (outcome.kind === 'no_candidate' || outcome.kind === 'duplicate') {
       payload = {
         requestId,
         disposition: 'no_alternative',
-        reason: outcome.reason,
+        reasonCode,
+        reason,
         workId: outcome.kind === 'duplicate' ? outcome.workId : undefined,
         ...scanCounts(outcome.scan),
       };
@@ -298,7 +315,8 @@ export class NotificationPolicy {
       payload = {
         requestId,
         disposition: 'failed',
-        reason: outcome.error,
+        reasonCode,
+        reason,
         ...scanCounts(outcome.scan),
       };
     } else {

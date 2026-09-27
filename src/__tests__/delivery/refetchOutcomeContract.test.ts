@@ -98,7 +98,10 @@ describe('refetch outcome reporting', () => {
       expect(payload.refetchOutcome).toMatchObject({
         requestId: manualSlot.manualRequestId,
         disposition: 'no_alternative',
-        reason: 'no eligible candidate',
+        // The wire carries the closed-vocabulary protocol code plus the short
+        // business message — never the internal technical text.
+        reasonCode: 'no_candidate',
+        reason: '没有符合筛选条件的新作品',
         scanned: 5,
         skipped: { total: 3, duplicate: 2, invalid: 1, unavailable: 0 },
       });
@@ -124,7 +127,8 @@ describe('refetch outcome reporting', () => {
       expect(payload.refetchOutcome).toMatchObject({
         requestId: manualSlot.manualRequestId,
         disposition: 'failed',
-        reason: 'pixiv auth failure',
+        reasonCode: 'internal_error',
+        reason: '内部错误',
       });
     });
   });
@@ -295,7 +299,49 @@ it('reports a retryable target failure after the slot exhausts its run', () => {
     expect(outcomeJson(db.outbox.list()[0]).refetchOutcome).toMatchObject({
       requestId: manualSlot.manualRequestId,
       disposition: 'failed',
-      reason: 'Pixiv 429 after bounded retries',
+      reasonCode: 'quota_exceeded',
+      reason: 'Pixiv 请求频率受限',
     });
+  });
+});
+
+/**
+ * Field-acceptance regression (2026-09): the producer shipped the raw upstream
+ * technical text — a 220-char multi-line nginx 502 HTML page — into TelePost's
+ * `failure_code` CODE column. The wire must carry only the closed-vocabulary
+ * protocol code plus a short business message.
+ */
+it('never ships raw upstream text in a refetch outcome (protocol code only)', () => {
+  withDb((db) => {
+    const policy = new NotificationPolicy(
+      db,
+      config({
+        'bot1-submit': submitTarget({ refetchOutcomeUrl: 'https://telepost.example/refetch/outcomes' }),
+      })
+    );
+
+    const raw =
+      'job-level outage (network_outage): Pixiv API error: 502 Bad Gateway - ' +
+      '<html>\r\n<head><title>502 Bad Gateway</title></head>\r\n' +
+      '<body>\r\n<center><h1>502 Bad Gateway</h1></center>\r\n' +
+      '<hr><center>nginx</center>\r\n</body>\r\n</html>\r\n';
+
+    policy.noteRefetchOutcome(manualSlot, schedule, target, manualSlot.manualRequestId!, {
+      kind: 'failed',
+      retryable: false,
+      error: raw,
+    });
+
+    const serialized = JSON.stringify(outcomeJson(db.outbox.list()[0]));
+    // The raw body, its markup and its newlines never cross the boundary.
+    expect(serialized).not.toContain('<html>');
+    expect(serialized).not.toContain('nginx');
+    expect(serialized).not.toContain('\\r\\n');
+    expect(serialized).not.toContain(raw);
+
+    const payload = outcomeJson(db.outbox.list()[0]).refetchOutcome;
+    expect(payload.reasonCode).toMatch(/^[a-z][a-z0-9_]{0,63}$/);
+    expect(payload.reason).not.toMatch(/[\r\n<>]/);
+    expect(payload.reason.length).toBeLessThanOrEqual(200);
   });
 });

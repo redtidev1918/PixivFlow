@@ -205,6 +205,45 @@ export function validateConfig(config: Partial<StandaloneConfig>, location: stri
         if (td.relatedTags !== undefined && !['always', 'when_seed_insufficient', 'never'].includes(td.relatedTags)) {
           errors.push(`targets[${index}].topicDiscovery.relatedTags: Must be "always", "when_seed_insufficient" or "never" (got ${String(td.relatedTags)})`);
         }
+        // §tag-provenance: all optional; the defaults reproduce the pre-change
+        // behaviour (whole space walked, popularity-only ranking, name-only match).
+        if (td.seedTier !== undefined && !['off', 'on'].includes(td.seedTier)) {
+          errors.push(`targets[${index}].topicDiscovery.seedTier: Must be "off" or "on" (got ${String(td.seedTier)})`);
+        }
+        if (td.matchTranslatedNames !== undefined && typeof td.matchTranslatedNames !== 'boolean') {
+          errors.push(`targets[${index}].topicDiscovery.matchTranslatedNames: Must be a boolean (got ${typeof td.matchTranslatedNames})`);
+        }
+        const relations = td.tagRelations;
+        if (relations !== undefined) {
+          if (typeof relations !== 'object' || relations === null || Array.isArray(relations)) {
+            errors.push(`targets[${index}].topicDiscovery.tagRelations: Must be an object (got ${Array.isArray(relations) ? 'array' : typeof relations})`);
+          } else {
+            const knownSources = ['seed', 'cooccurrence', 'autocomplete'];
+            const listErrors = (field: 'allowSources' | 'allow' | 'deny') => (
+              field === 'allowSources'
+                ? `targets[${index}].topicDiscovery.tagRelations.allowSources: Must be an array of tag sources: ${knownSources.map((s) => `"${s}"`).join(', ')} (got ${JSON.stringify(relations.allowSources)})`
+                : `targets[${index}].topicDiscovery.tagRelations.${field}: Must be an array of tag names (got ${JSON.stringify(relations[field])})`
+            );
+            const checkList = (field: 'allowSources' | 'allow' | 'deny'): string[] | undefined => {
+              const value = relations[field];
+              if (value === undefined) return undefined;
+              if (!Array.isArray(value) || value.some((entry) => typeof entry !== 'string' || entry.trim() === '')) {
+                errors.push(listErrors(field));
+                return undefined;
+              }
+              return value as string[];
+            };
+            const allowSources = checkList('allowSources');
+            if (allowSources) {
+              const unknown = allowSources.filter((source) => !knownSources.includes(source));
+              if (unknown.length > 0) {
+                errors.push(`targets[${index}].topicDiscovery.tagRelations.allowSources: Unknown tag source${unknown.length > 1 ? 's' : ''} ${unknown.map((source) => `"${source}"`).join(', ')}; known sources are ${knownSources.map((s) => `"${s}"`).join(', ')}`);
+              }
+            }
+            checkList('allow');
+            checkList('deny');
+          }
+        }
       }
       const cc = target.candidateCollection;
       if (cc) {

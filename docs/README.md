@@ -41,6 +41,7 @@
 | --- | --- |
 | [USAGE](USAGE.md) | 六种下载模式、URL 直链格式、去重与断点续传、定时任务行为、全命令速查 |
 | [CONFIG](CONFIG.md) | 配置文件逐项说明:targets 全字段、存储目录组织、调度器参数、代理与环境变量 |
+| [TAG_RANKING](TAG_RANKING.md) | 主题模式的 Tag 评分公式、来源(provenance)分类、排名规则与召回排查手册 |
 | [SCRIPTS](SCRIPTS.md) | `scripts/` 目录下辅助脚本的用途与用法 |
 
 ### 部署运行

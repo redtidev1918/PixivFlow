@@ -6,12 +6,35 @@
 
 export type TopicContentType = 'illustration' | 'novel';
 
+/**
+ * Where a resolved tag came from. Provenance is what lets a caller treat a weak
+ * expansion differently from the topic it was asked for (§tag-provenance):
+ *
+ * - `'seed'`: the tag the operator asked for. Always the strongest key.
+ * - `'cooccurrence'`: sampled together with the seed, but Pixiv autocomplete
+ *   does not relate it to the seed. Co-occurrence evidence only.
+ * - `'autocomplete'`: Pixiv autocomplete relates it to the seed, but it never
+ *   appeared in the sample. No co-occurrence evidence.
+ * - `'cooccurrence+autocomplete'`: both channels agree — the strongest related
+ *   provenance available.
+ */
+export type TagSource = 'seed' | 'cooccurrence' | 'autocomplete' | 'cooccurrence+autocomplete';
+
 /** A single related tag with a 0..1 relatedness score and provenance. */
 export interface ResolvedTag {
   name: string;
   translatedName?: string;
   /** Combined relatedness score (co-occurrence * specificity * suggestion). */
   score: number;
+  /**
+   * Semantic weight used for ranking, filtering and diagnostics. Always the
+   * same number as `score`; kept as a separate, documented field so ranking can
+   * be explained (and, later, adjusted) without redefining `score`.
+   * Optional: spaces persisted before provenance existed have neither field.
+   */
+  weight?: number;
+  /** Provenance of the tag. Optional for the same reason as `weight`. */
+  source?: TagSource;
   /** How many sampled works (of the seed search) carried this tag. */
   occurrences: number;
   /** Coverage of the sampled seed works (occurrences / sample size). */
@@ -62,6 +85,27 @@ export interface TopicDiscoveryOptions {
    * `'never'` searches the seed tag alone.
    */
   relatedTags?: RelatedTagMode;
+  /**
+   * Which resolved tags may become recall channels (§tag-provenance). Deny wins
+   * over allow; the seed tag is never dropped by `allow`/`allowSources`.
+   */
+  tagRelations?: TopicRelationsOptions;
+  /** Make the seed tag a hard ranking tier (default `'off'`). */
+  seedTier?: 'off' | 'on';
+  /** Count a work's translated tag names as tag hits (default false). */
+  matchTranslatedNames?: boolean;
+}
+
+/**
+ * Runtime shape of `TopicDiscoveryConfig.tagRelations`, declared here so the
+ * topic module does not depend on the config layer (the topic pipeline is also
+ * driven by hand-written targets in tests and by callers that never load a
+ * config file).
+ */
+export interface TopicRelationsOptions {
+  allowSources?: TagSource[];
+  allow?: string[];
+  deny?: string[];
 }
 
 export interface TopicCollectOptions {
@@ -83,6 +127,12 @@ export interface TopicCandidate {
   popularity: number;
   /** Metadata topic-relevance score computed by the filter stage. */
   metadataScore: number;
+  /**
+   * Translated tag names carried by the work, kept beside `tags` so
+   * `matchTranslatedNames` can compare them WITHOUT claiming the work itself
+   * carries a tag it does not (§tag-provenance). Default-off.
+   */
+  translatedTags?: string[];
   /** Pixiv AI classification copied from illustration search metadata. */
   aiType?: number;
 }

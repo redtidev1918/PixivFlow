@@ -6,6 +6,7 @@
 - 使用手册
   - [功能与命令](/USAGE.md)
   - [配置参考](/CONFIG.md)
+  - [Tag 空间与排名规则](/TAG_RANKING.md)
   - [脚本工具](/SCRIPTS.md)
 - 部署运行
   - [Docker 部署](/DOCKER.md)

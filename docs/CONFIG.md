@@ -108,8 +108,10 @@ pixivflow setup
 | `topicDiscovery` | object | 可选高级覆盖，见下，均有默认值 |
 | `candidateCollection` | object | 可选高级覆盖，见下 |
 
-`topicDiscovery`：`maxTags`(默认 12)、`sampleWorks`(默认 100)、`cacheDays`(默认 7)、`minScore`(默认 0.22)、`refresh`(默认 false)、`includeR18`(默认 false，设为 `true` 时采样与采集均包含 R-18 作品——Pixiv 插画搜索默认会被 `filter=for_ios` 过滤掉 R-18；小说搜索本来就包含)、`relatedTags`(默认 `always`，见下)。
+`topicDiscovery`：`maxTags`(默认 12)、`sampleWorks`(默认 100)、`cacheDays`(默认 7)、`minScore`(默认 0.22)、`refresh`(默认 false)、`includeR18`(默认 false，设为 `true` 时采样与采集均包含 R-18 作品——Pixiv 插画搜索默认会被 `filter=for_ios` 过滤掉 R-18；小说搜索本来就包含)、`relatedTags`(默认 `always`，见下)、`seedTier`(默认 `off`)、`tagRelations`(默认不限制任何来源)、`matchTranslatedNames`(默认 `false`)。
 `candidateCollection`：`maxPerTag`(默认 40)、`maxCandidates`(默认 250)、`minMetadataScore`(默认 0.35)。
+
+后三个 `topicDiscovery` 键（`seedTier` / `tagRelations` / `matchTranslatedNames`）全部可选，**默认值完全等价于它们出现之前的行为**；每个 resolved Tag 还带 `source`（来源）与 `weight`（排序读的语义权重，与 `score` 同值）。规则与诊断方法见 [Tag 空间与排名规则](/TAG_RANKING.md)。
 
 工作流：Topic →（Pixiv 标签联想 + 近期作品 Tag 共现，PMI 式特异性打分自动压低 R-18/オリジナル 等通用 Tag）→ 相关 Tag 空间 → 分别搜索当天作品 → PID 去重 → 仅用 Tag/标题/描述做轻量相关性过滤（**只作接受门槛**，过 `minMetadataScore` 即视为属于主题）→ 通过的候选之间**完全按本地热度 `calculatePopularityScore()` 排名** → 从有界热度候选池剔除下载历史 → 依次递补至 Top N。插画与小说使用各自独立的 Tag 空间，结果缓存到数据卷 `topic-cache/`（默认 7 天），刷新失败自动降级到旧缓存或仅用主题词本身，不中断调度。同一发布日期重复执行时，已经投稿的第一名不会让任务空跑；`limit=1` 默认保留 20 个插画候选，常规递补池上限 100（用户显式配置更大的 `limit` 时仍会尊重该数量），再由下载计划批量去重。**全程不使用任何 LLM/VLM/Embedding/本地模型。**
 
@@ -130,7 +132,43 @@ pixivflow setup
   "topicDiscovery": { "relatedTags": "when_seed_insufficient" } }
 ```
 
-诊断：`pixivflow topic test "<主题>" --date YESTERDAY` 的日志会打印 `[TopicRecall] mode=... seedAccepted=... relatedTags=...` 与 `searchedTags=`（本次实际检索过的 Tag 数），可直接确认相关 Tag 有没有被搜。
+诊断：`pixivflow topic test "<主题>" --date YESTERDAY` 的日志会打印 `[TopicRecall] mode=... seedAccepted=... relatedTags=...` 与 `searchedTags=`（本次实际检索过的 Tag 列表），可直接确认相关 Tag 有没有被搜。
+
+#### `topicDiscovery.seedTier`：主题 Tag 是否是硬层级
+
+| 取值 | 语义 |
+| --- | --- |
+| `off`（默认） | 保持历史行为：过 `minMetadataScore` 门槛后**纯按热度**排名（`relatedTags: "always"` 时主题 Tag 不加层级） |
+| `on` | 主题 Tag 成为**硬层级**：带主题 Tag 的作品永远排在只带相关 Tag 的作品之前，无论后者多热；同层内仍按热度 |
+
+诊断：`pixivflow topic test` 选中项会带 `seedTier=on` 标记；`pixivflow topic resolve` 表格里 `seed=yes` 的行即主题 Tag。
+
+#### `topicDiscovery.tagRelations`：允许/禁止哪些 Tag 进入检索
+
+作用在**发起检索之前**，决定当天实际搜哪些 Tag（不是只影响显示）。
+
+| 键 | 类型 | 默认 | 说明 |
+| --- | --- | --- | --- |
+| `allowSources` | `("seed"\|"cooccurrence"\|"autocomplete")[]` | 全部 | 只走这些来源的 Tag。未知来源名会被配置校验拒绝 |
+| `allow` | string[] | `[]` | 非空时**只走列出的 Tag**，主题 Tag 永远保留 |
+| `deny` | string[] | `[]` | 无条件丢弃，**优先级高于 `allow` 与 `allowSources`** |
+
+```json
+{ "id": "bote-illust", "type": "illustration", "mode": "topic", "topic": "西瓜肚", "limit": 1,
+  "topicDiscovery": { "tagRelations": { "allowSources": ["seed", "cooccurrence"], "deny": ["丸吞"] } } }
+```
+
+主题 Tag 不会被 `allow` / `allowSources` 丢弃；只有 `deny` 能丢弃它，且丢弃后空间为空时退化为**仅用主题词**检索（与推导失败时的降级一致），不会返回空结果。
+
+#### `topicDiscovery.matchTranslatedNames`：译文算不算命中
+
+默认 `false`：只把作品的 Tag `name` 与 resolved Tag 比较（历史行为）。设为 `true` 后，作品的 `translated_name` 也可以命中对应的 resolved Tag，适用于“主题词与作品 Tag 语言不同”的场景。
+
+```json
+{ "topicDiscovery": { "matchTranslatedNames": true } }
+```
+
+译文只是**同一个 resolved Tag 的另一种写法**：作品不会被报告成携带了它没有的 Tag，且同一个 resolved Tag 在一个作品上只计一次（写了 Tag 名又写译文不会加分两次）。
 
 每日北京时间 10:00 下载昨天“ボテ腹”主题最热非 AI 插画 1 部、中文小说 1 部：
 

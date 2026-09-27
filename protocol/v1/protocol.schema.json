@@ -250,8 +250,11 @@
     "CandidateSearchParams": {
       "type": "object",
       "description": "params for job_type=candidate_search. The producer only retrieves and ranks; it never decides admission, replacement or publishing.",
-      "required": ["query"],
       "properties": {
+        "target_id": {
+          "type": "string",
+          "description": "SCOPE selector: which of the producer's ALREADY CONFIGURED targets this job runs for. It selects an existing target and can never override that target's delivery wiring or plan identity; a selector naming an unknown target is refused. Omitted means the deployment must have exactly one manual-eligible target (more than one is 409 ambiguous_target). Optional and additive since v1.1 — the legacy refetch route carried the same value in its request path."
+        },
         "source": {
           "type": "object",
           "description": "Where to look. Accounts are producer-side resource keys, never business identities.",
@@ -262,6 +265,7 @@
         },
         "query": {
           "type": "object",
+          "description": "Retrieval override. Optional: omitting it runs the resolved target's own configured search, which is what every pre-protocol refetch did.",
           "required": ["tags"],
           "properties": {
             "tags": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
@@ -322,7 +326,7 @@
         "result_schema": { "type": "string" },
         "features": {
           "type": "array",
-          "items": { "type": "string", "enum": ["events", "progress", "cancel", "idempotency", "exclude", "tag_expansion"] }
+          "items": { "type": "string", "enum": ["events", "progress", "cancel", "idempotency", "exclude", "tag_expansion", "target_selector"] }
         },
         "queued_timeout_ms": { "type": "integer", "minimum": 0 },
         "stall_timeout_ms": { "type": "integer", "minimum": 0 },

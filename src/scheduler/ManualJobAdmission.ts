@@ -45,8 +45,11 @@ const DELIVERY_CORRELATION_PLACEHOLDER = '{{refetchRequestId}}';
 /**
  * A consumer-initiated candidate search, normalized from whichever adapter
  * received it. `targetId` exists only for the legacy path (the old endpoint
- * carries the target in its URL); the generic job surface resolves the target
- * from configuration instead, optionally narrowed by `account`.
+ * carries the target in its URL); the generic job surface instead names the
+ * target explicitly with `targetSelector` (`params.target_id`) or, when it names
+ * none, resolves the unique manual-eligible target from configuration. Both are
+ * SELECTORS over the configured targets — neither can override delivery wiring or
+ * plan identity.
  */
 export interface CandidateSearchJobRequest {
   /** Consumer idempotency key; becomes the durable `manual_request_id`. */
@@ -55,6 +58,8 @@ export interface CandidateSearchJobRequest {
   correlationId?: string;
   /** Legacy adapter only: target id taken from the request path. */
   targetId?: string;
+  /** Generic adapter only: `params.target_id`, an explicit target selector. */
+  targetSelector?: string;
   /** Generic adapter only: `params.source.account` resource identity. */
   account?: string;
   /**
@@ -116,7 +121,7 @@ export class ManualJobAdmission {
     const legacy = request.targetId !== undefined;
     const config = this.deps.config();
     this.assertAccount(config, request.account);
-    const admission = this.resolveTarget(config, request.targetId);
+    const admission = this.resolveTarget(config, request.targetId, request.targetSelector);
     const { plan, target } = admission;
     this.assertParamsApplyToTarget(target, request.params);
 
@@ -167,39 +172,49 @@ export class ManualJobAdmission {
   /**
    * Legacy: the target comes from the URL and must resolve to exactly one
    * enabled plan (the historic `unknown target` / `ambiguous target` rules).
-   * Generic: the target is discovered from configuration — every enabled plan's
-   * selected target that actually wires manual candidate-search delivery.
+   * Generic with `params.target_id`: the same rules, applied to the selector the
+   * caller named — a selector picks an existing target, it never rewrites one.
+   * Generic without any selector: the target is discovered from configuration —
+   * every enabled plan's selected target that actually wires manual
+   * candidate-search delivery, which must be exactly one.
    */
-  private resolveTarget(config: StandaloneConfig, targetId: string | undefined): AdmissionTarget {
-    if (targetId !== undefined) {
+  private resolveTarget(
+    config: StandaloneConfig,
+    targetId: string | undefined,
+    targetSelector?: string
+  ): AdmissionTarget {
+    const explicit = targetId ?? targetSelector;
+    if (explicit !== undefined) {
       const plans = (config.schedules ?? []).filter(
         (plan) =>
           plan.enabled !== false &&
-          selectScheduleTargets(config.targets, plan).some((target) => target.id === targetId)
+          selectScheduleTargets(config.targets, plan).some((target) => target.id === explicit)
       );
       if (plans.length === 0) {
         throw new ProtocolRequestError('invalid_params', 404, {
           message: 'unknown target',
-          detail: { reason: 'unknown_target', target_id: targetId },
+          detail: { reason: 'unknown_target', target_id: explicit },
         });
       }
       if (plans.length !== 1) {
         throw new ProtocolRequestError('invalid_params', 409, {
           message: 'ambiguous target',
-          detail: { reason: 'ambiguous_target', target_id: targetId },
+          detail: { reason: 'ambiguous_target', target_id: explicit },
         });
       }
       const plan = plans[0];
       const target = selectScheduleTargets(config.targets, plan).find(
-        (item) => item.id === targetId && Boolean(item.id)
+        (item) => item.id === explicit && Boolean(item.id)
       );
       if (!target || !target.id) {
         throw new ProtocolRequestError('invalid_params', 404, {
           message: 'unknown target',
-          detail: { reason: 'unknown_target', target_id: targetId },
+          detail: { reason: 'unknown_target', target_id: explicit },
         });
       }
-      this.assertManualWiring(config, target, target.id, true);
+      // `legacy` only selects the historic diagnostic vocabulary: the URL-borne
+      // target is the old path, `params.target_id` is the generic one.
+      this.assertManualWiring(config, target, target.id, targetId !== undefined);
       return { plan, target, targetId: target.id };
     }
 

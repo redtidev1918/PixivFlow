@@ -70,6 +70,7 @@ export class ManualJobService implements JobHandlers {
       idempotencyKey: task.idempotencyKey,
       ...(task.correlationId !== undefined ? { correlationId: task.correlationId } : {}),
       ...(task.account !== undefined ? { account: task.account } : {}),
+      ...(task.targetSelector !== undefined ? { targetSelector: task.targetSelector } : {}),
       params: task.params,
     });
     // The admission event (and the declared callback_url) are recorded against

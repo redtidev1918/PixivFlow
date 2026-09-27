@@ -1,0 +1,10 @@
+{
+  "protocol_version": "1",
+  "job_type": "candidate_search",
+  "idempotency_key": "0f6d5a3f-1b7e-4f2a-9c3d-7a1e5b9c2d40",
+  "correlation_id": "review-chain:135",
+  "labels": { "origin": "moderation", "tenant": "bot1" },
+  "params": {
+    "target_id": "example-illust"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "protocol_version": "1",
+  "job_id": "job-c78dd065",
+  "job_type": "candidate_search",
+  "status": "running",
+  "idempotency_key": "c78dd065-60aa-4e7a-bba5-38275019217c",
+  "correlation_id": "review-chain:135",
+  "labels": { "origin": "moderation", "tenant": "bot1" },
+  "created_at": 1790481174570,
+  "started_at": 1790481179130,
+  "updated_at": 1790481260000,
+  "heartbeat_at": 1790481260000,
+  "deadline_at": 1790486874570,
+  "lease_active": true,
+  "lease_expires_at": 1790481440000,
+  "attempt": 1,
+  "progress": { "stage": "searching", "message": "已扫描 3 个候选", "at": 1790481260000 },
+  "events_url": "https://pixivflow-scheduler.fly.dev/jobs/job-c78dd065/events"
+}

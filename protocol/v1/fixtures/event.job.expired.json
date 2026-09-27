@@ -1,0 +1,13 @@
+{
+  "protocol_version": "1",
+  "event_id": "evt-1790483374570-c78dd065",
+  "job_id": "job-c78dd065",
+  "type": "job.expired",
+  "at": 1790483374570,
+  "correlation_id": "review-chain:135",
+  "labels": { "origin": "moderation", "tenant": "bot1" },
+  "payload": {
+    "job": { "protocol_version": "1", "job_id": "job-c78dd065", "job_type": "candidate_search", "status": "expired", "created_at": 1790481174570, "updated_at": 1790483374570, "heartbeat_at": 1790481374570, "lease_active": false, "attempt": 1 },
+    "error": { "code": "stalled_no_progress", "message": "no heartbeat and no state change for 15 minutes", "retryable": true }
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "protocol_versions": ["1"],
+  "job_types": [
+    {
+      "name": "candidate_search",
+      "params_schema": "#/$defs/CandidateSearchParams",
+      "result_schema": "#/$defs/Result_CandidateSearch",
+      "features": ["events", "progress", "cancel", "idempotency", "exclude", "tag_expansion"],
+      "queued_timeout_ms": 1800000,
+      "stall_timeout_ms": 900000,
+      "heartbeat_interval_ms": 30000,
+      "default_deadline_ms": 5400000
+    }
+  ],
+  "sources": [
+    { "platform": "pixiv", "account": "default", "label": "Pixiv 主账号" }
+  ],
+  "asset_types": ["image", "novel", "metadata", "cover"],
+  "asset_quality": ["default", "custom", "unknown"],
+  "limits": {
+    "max_concurrent_jobs": 4,
+    "max_scan_limit": 60,
+    "max_candidates_per_job": 20,
+    "max_callback_bytes": 1048576
+  },
+  "server_time": 1790481290000
+}

@@ -739,6 +739,12 @@ Authorization: Bearer <PIXIVFLOW_REFETCH_TOKEN>
 `{{slotId}}`/`{{slotName}}`/`{{slotDate}}`。
 它们都是通用执行上下文，可投递到任意 HTTP 端点，不绑定特定下游。
 
+`refetch_request_id` 在渲染前会被规范化为带连字符的小写 UUID：无连字符的 32 位十六进制、
+大写、花括号包裹以及 `urn:uuid:` 前缀等写法都按同一个 UUID 还原（下游只接受唯一规范拼写，
+否则会以 400 拒绝整次投递）。`manual-` Slot 的身份仍用调用方送来的原拼写，只有投递负载走
+规范化；若该值根本不是 UUID（例如 `api:<reviewId>:<hex>` 形式的回调键），则投递该字段为空串
+并记一条 warn —— **绝不因为一段不可用的 provenance 让一次合法投稿失败**。
+
 热重载流程为“读入新快照 → 默认值/路径处理 → 完整校验 → 整表替换”。失败时旧计划
 继续运行。正在执行的任务不会被中断；`YESTERDAY` / `TODAY` 在每次真正执行前
 重新计算。可热更新 `schedules`、`targets`、`delivery`、`download`；修改

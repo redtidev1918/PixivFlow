@@ -4,8 +4,9 @@
  * This is an ADAPTER, not a second execution system. Everything it does is a
  * translation on top of the one durable ledger:
  *   - admission      -> `ManualJobAdmission` (shared with the legacy refetch path)
- *   - read model     -> `buildJobProjection` + `buildProtocolJob`
+ *   - read model     -> `JobView` (`buildJobProjection` + `buildProtocolJob`)
  *   - cancellation   -> `cancelConsumerJob` (one transaction)
+ *   - events/ack     -> `JobEventStream` (projection of `delivery_events`)
  *
  * Identity is the consumer's idempotency key, which IS the durable
  * `manual_request_id`; `job_id` IS the slot id. A replay from either entry
@@ -15,22 +16,19 @@
 
 import type { StandaloneConfig } from '../config';
 import type { Database } from '../storage/Database';
-import type { SlotItemRecord, SlotRecord } from '../storage/repositories/SlotRepository';
-import { buildJobProjection } from './JobProjection';
 import { cancelConsumerJob } from './JobCancellation';
+import { JobEventQuery, JobEventStream } from './JobEventStream';
 import {
   buildCapabilities,
-  buildProtocolJob,
-  JOB_TYPE_CANDIDATE_SEARCH,
   parseTaskBody,
+  ProtocolAckResult,
   ProtocolCapabilities,
+  ProtocolEventPage,
   ProtocolJob,
-  resolveDeadlineMs,
 } from './JobFacade';
+import { JobViewDeps, protocolJobBySlotId, protocolJobForSlot, requireProtocolJobForSlotId } from './JobView';
 import { ManualJobAdmission } from './ManualJobAdmission';
-import { ProtocolRequestError } from './ProtocolErrors';
 import type { JobHandlers } from './ScheduleTriggerServer';
-import { CandidateSupplyReport } from './TargetOutcome';
 
 export interface ManualJobServiceDeps {
   database: Database;
@@ -43,10 +41,22 @@ export interface ManualJobServiceDeps {
 }
 
 export class ManualJobService implements JobHandlers {
-  constructor(private readonly deps: ManualJobServiceDeps) {}
+  private readonly events: JobEventStream;
+
+  constructor(private readonly deps: ManualJobServiceDeps) {
+    this.events = new JobEventStream(this.viewDeps());
+  }
 
   private now(): number {
     return this.deps.now ? this.deps.now() : Date.now();
+  }
+
+  private viewDeps(): JobViewDeps {
+    return {
+      database: this.deps.database,
+      config: this.deps.config,
+      now: () => this.now(),
+    };
   }
 
   capabilities(): ProtocolCapabilities {
@@ -62,17 +72,31 @@ export class ManualJobService implements JobHandlers {
       ...(task.account !== undefined ? { account: task.account } : {}),
       params: task.params,
     });
+    // The admission event (and the declared callback_url) are recorded against
+    // the durable slot inside the one shared admission path, so a crash right
+    // after admission is repaired by the same reconcile that serves the stream.
+    // A replay never rewrites the endpoint the job already declared.
+    this.events.reconcile(result.slotId, task.callbackUrl ?? null);
     return { job: this.viewBySlotId(result.slotId), replayed: result.reused };
   }
 
   jobStatus(jobId: string): ProtocolJob | null {
-    const slot = this.deps.database.slots.getSlot(jobId);
-    return slot ? this.view(slot) : null;
+    return protocolJobBySlotId(this.viewDeps(), jobId);
   }
 
   jobsByIdempotencyKey(idempotencyKey: string): ProtocolJob[] {
     const slot = this.deps.database.slots.findManualSlotByKey(idempotencyKey);
-    return slot ? [this.view(slot)] : [];
+    return slot ? [protocolJobForSlot(this.viewDeps(), slot)] : [];
+  }
+
+  /** `GET /jobs/:jobId/events` — the durable stream, reconciled from the ledger. */
+  jobEvents(jobId: string, query: JobEventQuery): ProtocolEventPage {
+    return this.events.page(jobId, query);
+  }
+
+  /** `POST /jobs/:jobId/events/ack` — O(1) durable cursor write, never a job mutation. */
+  ackJobEvents(jobId: string, body: unknown): ProtocolAckResult {
+    return this.events.ack(jobId, body);
   }
 
   /**
@@ -82,77 +106,13 @@ export class ManualJobService implements JobHandlers {
    */
   cancelJob(jobId: string): ProtocolJob {
     cancelConsumerJob(this.deps.database, jobId, this.now());
+    // The cancellation is now durable, so its terminal event must be too — a
+    // consumer that polls after cancelling must never see an unterminated stream.
+    this.events.reconcile(jobId);
     return this.viewBySlotId(jobId);
   }
 
   private viewBySlotId(slotId: string): ProtocolJob {
-    const slot = this.deps.database.slots.getSlot(slotId);
-    if (!slot) {
-      throw new ProtocolRequestError('internal_error', 500, {
-        message: 'admitted job is missing from the ledger',
-        detail: { reason: 'job_not_persisted', job_id: slotId },
-      });
-    }
-    return this.view(slot);
-  }
-
-  /**
-   * Read the durable projection of one job. The cell is the truth: a manual
-   * slot has exactly one target, so its single cell carries the outcome.
-   */
-  private view(slot: SlotRecord): ProtocolJob {
-    const targetId = slot.targetIds[0];
-    const cell = targetId ? this.deps.database.slots.getCell(slot.id, targetId) : null;
-    if (!targetId || !cell) {
-      throw new ProtocolRequestError('internal_error', 500, {
-        message: 'job has no materialized work item',
-        detail: { reason: 'job_cell_missing', job_id: slot.id },
-      });
-    }
-    const requestId = slot.manualRequestId ?? slot.id;
-    const projection = buildJobProjection(requestId, slot, cell, this.now());
-    const delivered = this.deliveredWork(slot, targetId, cell);
-    const supply = cell.candidateReport as unknown as CandidateSupplyReport | null;
-    const config = this.deps.config();
-    return buildProtocolJob({
-      jobType: JOB_TYPE_CANDIDATE_SEARCH,
-      projection,
-      deadlineAt: this.deadlineAt(slot, config),
-      delivered,
-      supply,
-      now: this.now(),
-    });
-  }
-
-  /**
-   * What this job actually delivered, read from the durable delivery intents.
-   * Only a confirmed delivery counts; an intent that never left is not an
-   * outcome.
-   */
-  private deliveredWork(
-    slot: SlotRecord,
-    targetId: string,
-    cell: SlotItemRecord
-  ): { workId: string | null; workType: string | null } | null {
-    const delivered = this.deps.database.deliveries
-      .listForSlotCell(slot.id, targetId)
-      .filter((row) => row.status === 'delivered');
-    const last = delivered[delivered.length - 1];
-    if (last) return { workId: last.pixivId, workType: last.workType };
-    if (cell.status === 'submitted' && cell.workId) {
-      return { workId: cell.workId, workType: cell.workType };
-    }
-    return null;
-  }
-
-  /**
-   * The ceiling this deployment enforces for the job: the plan's execution
-   * timeout, measured from the occurrence. A consumer-supplied `deadline_ms`
-   * that is shorter is NOT honoured yet (no durable column enforces it), so the
-   * facade must not report it here.
-   */
-  private deadlineAt(slot: SlotRecord, config: StandaloneConfig): number | null {
-    if (slot.occurrenceAt === null) return null;
-    return slot.occurrenceAt + resolveDeadlineMs(config, slot.scheduleId);
+    return requireProtocolJobForSlotId(this.viewDeps(), slotId);
   }
 }

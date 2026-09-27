@@ -1,5 +1,6 @@
 import { DeliveryConfig } from '../config';
 import { ConfigError } from '../utils/errors';
+import { EventCallbackDelivery, EventCallbackPayload } from './EventCallbackDelivery';
 import { HttpMultipartDelivery, ReadinessProbeResult } from './HttpMultipartDelivery';
 import { TelegramReviewDelivery } from './TelegramReviewDelivery';
 import { WebhookDelivery } from './WebhookDelivery';
@@ -7,10 +8,14 @@ import { DeliveryNotificationRequest, DeliveryRequest, DeliveryResult } from './
 
 /** Resolves named delivery targets without coupling the outbox to a provider. */
 export class DeliveryDispatcher {
+  private readonly eventCallbacks: EventCallbackDelivery;
+
   constructor(
     private readonly config: DeliveryConfig | undefined,
     private readonly proxyUrl?: string
-  ) {}
+  ) {
+    this.eventCallbacks = new EventCallbackDelivery(proxyUrl);
+  }
 
   hasTarget(name: string): boolean {
     return Boolean(this.config?.targets?.[name]);
@@ -67,5 +72,20 @@ export class DeliveryDispatcher {
       throw new ConfigError(`Delivery target does not configure ${urlKey}: ${name}`);
     }
     return new HttpMultipartDelivery(target, this.proxyUrl).notifyOnce(request);
+  }
+
+  /**
+   * Deliver one `$defs/Event` to a Task's declared `callback_url`.
+   *
+   * This does NOT go through a named delivery target: the endpoint is chosen by
+   * the consumer per Task, not by our config. It is still a delivery in every
+   * other sense — the caller is the outbox worker, so retry, backoff,
+   * dead-lettering and the idempotency index all apply unchanged.
+   */
+  async deliverEventCallback(
+    url: string,
+    request: { payload: EventCallbackPayload; idempotencyKey: string }
+  ): Promise<number> {
+    return this.eventCallbacks.deliver({ url, payload: request.payload, idempotencyKey: request.idempotencyKey });
   }
 }

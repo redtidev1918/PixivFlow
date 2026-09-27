@@ -34,7 +34,45 @@ export interface RecordEventInput {
   detail?: Record<string, unknown> | null;
 }
 
-export type OutboxKind = 'delivery' | 'notification';
+/**
+ * A position in one job's durable event log: the `(ts, id)` of a
+ * `delivery_events` row. Total order, resolvable back to the row, and stable
+ * across restarts — which is what makes the ack cursor meaningful.
+ */
+export interface EventCursorPosition {
+  at: number;
+  rowId: number;
+}
+
+export interface JobEventCursor extends EventCursorPosition {
+  jobId: string;
+  updatedAt: number;
+}
+
+export interface SlotEventInput {
+  slotId: string;
+  event: string;
+  /** Honest instant of the transition. Clamped to the slot's newest event. */
+  at?: number;
+  /** Only set on the `job.requested` row: the declared callback_url. */
+  deliveryTarget?: string | null;
+  detail?: Record<string, unknown> | null;
+}
+
+export interface SlotEventWrite {
+  /** False when an identical lifecycle event was already durable. */
+  inserted: boolean;
+  event: DeliveryEvent;
+}
+
+/**
+ * Outbox row kinds. `event_callback` is a Workflow Protocol v1 §events
+ * obligation: deliver one `$defs/Event` to the Task's `callback_url`. It rides
+ * the SAME outbox, dedupe index and retry machinery as outcome delivery — it is
+ * not a second delivery system, and `hasActionableDelivery` (kind='delivery')
+ * and the delivery ledger are deliberately unaffected by it.
+ */
+export type OutboxKind = 'delivery' | 'notification' | 'event_callback';
 export type OutboxStatus = 'pending' | 'processing' | 'retry_wait' | 'done' | 'dead' | 'cancelled';
 
 export interface OutboxRow {
@@ -418,6 +456,179 @@ export class OutboxRepository extends BaseRepository {
         actor: input.actor ?? null,
         detail: input.detail ? JSON.stringify(input.detail) : null,
       });
+  }
+
+  // --- job event stream (Workflow Protocol v1 §events) ---
+  //
+  // The protocol event stream is a PROJECTION of this same durable log: no
+  // second event table, no second queue. `slot_id` is the job id, `event` is the
+  // internal kind, `ts` is the protocol `at`. Writers below guarantee the
+  // once-only and monotonic properties the protocol requires.
+
+  /**
+   * Append one job-lifecycle event at most once.
+   *
+   * Idempotent by construction: a single `INSERT ... SELECT ... WHERE NOT
+   * EXISTS` statement, so two callers cannot race a duplicate into the log, and
+   * no UNIQUE index is needed (an index over historical duplicate rows would
+   * brick the migration instead of reporting them).
+   */
+  recordSlotEventOnce(input: SlotEventInput, now: number = Date.now()): SlotEventWrite {
+    // `at` is never allowed to move backwards: the page is ordered by `at` and
+    // `next_after` is a row position, so ascending timestamps and ascending ids
+    // must agree.
+    const ts = Math.max(input.at ?? now, this.newestSlotEventTs(input.slotId) ?? 0);
+    const info = this.db
+      .prepare(
+        `INSERT INTO delivery_events
+           (ts, slot_id, delivery_target, event, counts_as_attempt, actor, detail)
+         SELECT @ts, @slotId, @deliveryTarget, @event, 0, NULL, @detail
+         WHERE NOT EXISTS (
+           SELECT 1 FROM delivery_events WHERE slot_id = @slotId AND event = @event
+         )`
+      )
+      .run({
+        ts,
+        slotId: input.slotId,
+        deliveryTarget: input.deliveryTarget ?? null,
+        event: input.event,
+        detail: input.detail ? JSON.stringify(input.detail) : null,
+      });
+    const event = this.slotEvent(input.slotId, input.event);
+    if (!event) throw new Error(`job event ${input.event} for ${input.slotId} was not persisted`);
+    return { inserted: info.changes > 0, event };
+  }
+
+  /** Newest recorded `ts` for a slot; null when the slot has no events yet. */
+  newestSlotEventTs(slotId: string): number | null {
+    const row = this.db
+      .prepare('SELECT MAX(ts) AS ts FROM delivery_events WHERE slot_id = ?')
+      .get(slotId) as { ts: number | null } | undefined;
+    return row?.ts ?? null;
+  }
+
+  /** Newest row of one internal kind for a slot. */
+  slotEvent(slotId: string, event: string): DeliveryEvent | null {
+    const row = this.db
+      .prepare('SELECT * FROM delivery_events WHERE slot_id = ? AND event = ? ORDER BY ts DESC, id DESC LIMIT 1')
+      .get(slotId, event) as any;
+    return row ? this.toEvent(row) : null;
+  }
+
+  /** One row by its durable `(slot_id, id)` identity — the ack resolver. */
+  slotEventById(slotId: string, id: number): DeliveryEvent | null {
+    const row = this.db
+      .prepare('SELECT * FROM delivery_events WHERE slot_id = ? AND id = ?')
+      .get(slotId, id) as any;
+    return row ? this.toEvent(row) : null;
+  }
+
+  /** A job's events of the given internal kinds, oldest first (ascending `at`). */
+  listSlotEvents(
+    slotId: string,
+    kinds: readonly string[],
+    after: EventCursorPosition | null = null,
+    limit = 200
+  ): DeliveryEvent[] {
+    if (kinds.length === 0) return [];
+    const { where, params } = this.jobEventFilter(slotId, kinds, after);
+    const rows = this.db
+      .prepare(`SELECT * FROM delivery_events WHERE ${where} ORDER BY ts ASC, id ASC LIMIT ?`)
+      .all(...params, Math.max(1, Math.min(limit, 500))) as any[];
+    return rows.map((r) => this.toEvent(r));
+  }
+
+  /** How many of a job's events sit strictly after a cursor position. */
+  countSlotEvents(
+    slotId: string,
+    kinds: readonly string[],
+    after: EventCursorPosition | null = null
+  ): number {
+    if (kinds.length === 0) return 0;
+    const { where, params } = this.jobEventFilter(slotId, kinds, after);
+    const row = this.db
+      .prepare(`SELECT COUNT(*) AS n FROM delivery_events WHERE ${where}`)
+      .get(...params) as { n: number };
+    return row.n;
+  }
+
+  /**
+   * Slots that declared a callback_url but whose terminal event is not durable
+   * yet. This is the sweep behind "a callback is never silently dropped": it is
+   * driven from durable rows only, so a crash between "job terminal" and
+   * "callback enqueued" is repaired, and it converges (each pass either writes
+   * the terminal event or the job is not terminal yet).
+   */
+  slotsAwaitingTerminalEvent(terminalKinds: readonly string[], limit = 50): string[] {
+    if (terminalKinds.length === 0) return [];
+    const placeholders = terminalKinds.map(() => '?').join(', ');
+    const rows = this.db
+      .prepare(
+        `SELECT e.slot_id AS slot_id
+           FROM delivery_events e
+          WHERE e.event = 'job.requested'
+            AND e.delivery_target IS NOT NULL
+            AND e.slot_id IS NOT NULL
+            AND NOT EXISTS (
+                  SELECT 1 FROM delivery_events t
+                   WHERE t.slot_id = e.slot_id AND t.event IN (${placeholders})
+                )
+          GROUP BY e.slot_id
+          ORDER BY MAX(e.ts) DESC
+          LIMIT ?`
+      )
+      .all(...terminalKinds, Math.max(1, Math.min(limit, 500))) as any[];
+    return rows.map((r) => r.slot_id as string);
+  }
+
+  /** The consumer's durable ack cursor for a job, or null when never acked. */
+  jobEventCursor(jobId: string): JobEventCursor | null {
+    const row = this.db.prepare('SELECT * FROM job_event_cursors WHERE job_id = ?').get(jobId) as any;
+    return row ? this.toCursor(row) : null;
+  }
+
+  /**
+   * Advance a job's ack cursor. Monotonic and idempotent: a position that is not
+   * strictly ahead of the stored one is a no-op and the stored position is
+   * returned unchanged. This only records what the consumer attests it has
+   * durably stored — it never touches the slot ledger.
+   */
+  advanceJobEventCursor(
+    jobId: string,
+    position: EventCursorPosition,
+    now: number = Date.now()
+  ): JobEventCursor {
+    this.db
+      .prepare(
+        `INSERT INTO job_event_cursors (job_id, acked_at, acked_row_id, updated_at)
+         VALUES (@jobId, @at, @rowId, @now)
+         ON CONFLICT(job_id) DO UPDATE SET
+           acked_at = @at,
+           acked_row_id = @rowId,
+           updated_at = @now
+         WHERE @at > acked_at OR (@at = acked_at AND @rowId > acked_row_id)`
+      )
+      .run({ jobId, at: position.at, rowId: position.rowId, now });
+    return this.jobEventCursor(jobId)!;
+  }
+
+  private jobEventFilter(
+    slotId: string,
+    kinds: readonly string[],
+    after: EventCursorPosition | null
+  ): { where: string; params: unknown[] } {
+    const placeholders = kinds.map(() => '?').join(', ');
+    const clauses = ['slot_id = ?', `event IN (${placeholders})`];
+    const params: unknown[] = [slotId, ...kinds];
+    if (after) {
+      clauses.push('(ts > ? OR (ts = ? AND id > ?))');
+      params.push(after.at, after.at, after.rowId);
+    }
+    return { where: clauses.join(' AND '), params };
+  }
+
+  private toCursor(row: any): JobEventCursor {
+    return { jobId: row.job_id, at: row.acked_at, rowId: row.acked_row_id, updatedAt: row.updated_at };
   }
 
   listEvents(filter: { executionId?: string; outboxId?: string; limit?: number } = {}): DeliveryEvent[] {

@@ -13,9 +13,10 @@
  */
 
 import { StandaloneConfig } from '../config';
+import { logger } from '../logger';
 import { CandidateSearchParams, CANDIDATE_SEARCH_SCAN_LIMIT_MAX } from './CandidateSearchParams';
 import { JobStatusProjection } from './JobProjection';
-import { ProtocolRequestError, protocolErrorBody } from './ProtocolErrors';
+import { ProtocolErrorBody, ProtocolRequestError, protocolErrorBody } from './ProtocolErrors';
 import { DEFAULT_SCHEDULE_TIMEOUT_MS } from './Scheduler';
 import { SLOT_HEARTBEAT_MS } from './SlotCoordinator';
 import { resolveStallTimeouts } from './StallSweep';
@@ -78,12 +79,8 @@ export interface ProtocolJob {
   attempt?: number;
   progress: ProtocolJobProgress;
   result?: Record<string, unknown>;
-  error?: {
-    code: string;
-    message?: string;
-    retryable?: boolean;
-    detail?: Record<string, unknown>;
-  };
+  /** Always built by `protocolErrorBody`, so the code stays in the closed enum. */
+  error?: ProtocolErrorBody;
   events_url?: string;
 }
 
@@ -211,6 +208,7 @@ export function buildProtocolJob(input: ProtocolJobInput): ProtocolJob {
   };
   if (projection.idempotencyKey) job.idempotency_key = projection.idempotencyKey;
   if (projection.correlationId) job.correlation_id = projection.correlationId;
+  job.events_url = `/jobs/${job.job_id}/events`;
 
   if (status === 'succeeded') {
     job.result = buildCandidateSearchResult(input.delivered ?? null, input.supply ?? null);
@@ -288,7 +286,11 @@ export interface ParsedTask {
    * one it would not honour.
    */
   deadlineMs?: number;
-  /** Validated and accepted; callback delivery arrives with the events phase. */
+  /**
+   * Validated and accepted. Carried durably by the `delivery_events` row for
+   * this Task's `job.requested` event and delivered by the outbox
+   * (`event_callback` rows) — `src/scheduler/JobEventStream.ts`.
+   */
   callbackUrl?: string;
 }
 
@@ -517,9 +519,11 @@ export function buildCapabilities(
         result_schema: '#/$defs/Result_CandidateSearch',
         // Honest feature list. `exclude` and `tag_expansion` are real: the
         // occurrence-scoped retrieval view applies `constraints.exclude` and
-        // `query.expand`. `events` is NOT declared: this phase has no events
-        // endpoint and no callback delivery yet.
-        features: ['progress', 'cancel', 'idempotency', 'exclude', 'tag_expansion'],
+        // `query.expand`. `events` is real too: `GET /jobs/:id/events` serves the
+        // durable stream and `POST /jobs/:id/events/ack` persists the cursor
+        // (`src/scheduler/JobEventStream.ts`), and a Task's `callback_url`
+        // receives `$defs/Event` bodies through the existing outbox.
+        features: ['events', 'progress', 'cancel', 'idempotency', 'exclude', 'tag_expansion'],
         queued_timeout_ms: budgets.queuedTimeoutMs,
         stall_timeout_ms: budgets.stallTimeoutMs,
         heartbeat_interval_ms: SLOT_HEARTBEAT_MS,
@@ -528,4 +532,324 @@ export function buildCapabilities(
     ],
     server_time: now,
   };
+}
+
+// ---------------------------------------------------------------------------
+// The event stream (§events)
+//
+// Same durable log, protocol vocabulary. `delivery_events` already records every
+// lifecycle step; this section is the ONE place that decides which internal
+// kinds a consumer may see and what they are called. Nothing here invents state:
+// an event exists only because a durable row exists.
+// ---------------------------------------------------------------------------
+
+export const PROTOCOL_EVENT_TYPES = [
+  'job.accepted',
+  'job.started',
+  'job.progress',
+  'job.succeeded',
+  'job.failed',
+  'job.expired',
+  'job.cancelled',
+] as const;
+
+export type ProtocolEventType = (typeof PROTOCOL_EVENT_TYPES)[number];
+
+/**
+ * The internal job-lifecycle kinds PixivFlow persists for a job. They are
+ * deliberately NOT spelled like the protocol enum: the translation is a
+ * decision made here, never a string passthrough.
+ */
+export const JOB_EVENT_KINDS = [
+  'job.requested',
+  'job.execution_started',
+  'job.progressed',
+  'job.outcome_succeeded',
+  'job.outcome_failed',
+  'job.outcome_expired',
+  'job.outcome_cancelled',
+] as const;
+
+export type JobEventKind = (typeof JOB_EVENT_KINDS)[number];
+
+export const TERMINAL_JOB_EVENT_KINDS: readonly JobEventKind[] = [
+  'job.outcome_succeeded',
+  'job.outcome_failed',
+  'job.outcome_expired',
+  'job.outcome_cancelled',
+];
+
+/** Protocol type for one durable terminal job status. */
+const TERMINAL_EVENT_FOR_STATUS: Record<'succeeded' | 'failed' | 'expired' | 'cancelled', JobEventKind> = {
+  succeeded: 'job.outcome_succeeded',
+  failed: 'job.outcome_failed',
+  expired: 'job.outcome_expired',
+  cancelled: 'job.outcome_cancelled',
+};
+
+/** The internal kind that materialises the terminal event of a finished job. */
+export function terminalJobEventKind(
+  status: ProtocolJobStatus
+): JobEventKind | null {
+  if (status === 'succeeded' || status === 'failed' || status === 'expired' || status === 'cancelled') {
+    return TERMINAL_EVENT_FOR_STATUS[status];
+  }
+  return null;
+}
+
+/**
+ * The ONE mapping from durable internal kinds to protocol event types.
+ *
+ * `null` means internal-only: the row stays in `delivery_events` for operators
+ * and `runs show`, and never reaches a consumer. Any kind absent from this map
+ * is DROPPED with a warning — an internal kind can never become an unknown
+ * protocol type by accident. The intersection type below makes the mapping
+ * exhaustive over `JobEventKind` at compile time, so adding a new lifecycle kind
+ * without mapping it fails `tsc` instead of shipping.
+ */
+export const PROTOCOL_EVENT_FOR_INTERNAL_KIND: Record<string, ProtocolEventType | null> &
+  Record<JobEventKind, ProtocolEventType> = {
+  'job.requested': 'job.accepted',
+  'job.execution_started': 'job.started',
+  'job.progressed': 'job.progress',
+  'job.outcome_succeeded': 'job.succeeded',
+  'job.outcome_failed': 'job.failed',
+  'job.outcome_expired': 'job.expired',
+  'job.outcome_cancelled': 'job.cancelled',
+
+  // Internal-only: outbox/ledger telemetry that happens to carry a slot_id.
+  'execution.summary': null,
+  'delivery.duplicate': null,
+  'media.fallback': null,
+  'outbox.claimed': null,
+  'outbox.deferred': null,
+  'outbox.delivered': null,
+  'outbox.retry_scheduled': null,
+  'outbox.dead': null,
+  'outbox.cancelled': null,
+  'outbox.replay_requested': null,
+};
+
+/**
+ * The internal kinds a consumer is allowed to see. Callers use this as the SQL
+ * filter so `unacked` can never be pinned by rows that are not projectable.
+ */
+export function projectedInternalKinds(): string[] {
+  return Object.keys(PROTOCOL_EVENT_FOR_INTERNAL_KIND).filter(
+    (kind) => PROTOCOL_EVENT_FOR_INTERNAL_KIND[kind] !== null
+  );
+}
+
+/** True when an internal kind is visible to consumers (has a protocol type). */
+export function isProjectedInternalKind(internalKind: string): boolean {
+  return (
+    Object.prototype.hasOwnProperty.call(PROTOCOL_EVENT_FOR_INTERNAL_KIND, internalKind) &&
+    PROTOCOL_EVENT_FOR_INTERNAL_KIND[internalKind] !== null
+  );
+}
+
+/** Map one internal kind to its protocol type; null when internal-only. */
+export function protocolEventTypeFor(internalKind: string): ProtocolEventType | null {
+  if (!Object.prototype.hasOwnProperty.call(PROTOCOL_EVENT_FOR_INTERNAL_KIND, internalKind)) {
+    logger.warn('Unmapped internal event kind dropped from the protocol event stream', {
+      event: internalKind,
+    });
+    return null;
+  }
+  return PROTOCOL_EVENT_FOR_INTERNAL_KIND[internalKind];
+}
+
+export interface ProtocolEventPayload {
+  job?: ProtocolJob | null;
+  result?: Record<string, unknown> | null;
+  error?: ProtocolErrorBody | null;
+  /**
+   * Non-normative producer detail. Consumers MUST ignore unknown keys; this is
+   * where internal vocabulary (`internal_kind`) is disclosed without polluting
+   * the protocol fields above.
+   */
+  detail?: Record<string, unknown> | null;
+}
+
+export interface ProtocolEvent {
+  protocol_version: string;
+  /** Consumers deduplicate on this. Also the ack cursor. */
+  event_id: string;
+  job_id: string;
+  type: ProtocolEventType;
+  at: number;
+  correlation_id?: string;
+  payload?: ProtocolEventPayload;
+}
+
+export interface ProtocolEventPage {
+  job_id: string;
+  events: ProtocolEvent[];
+  /** Present only when more events remain after this page. */
+  next_after?: string;
+  unacked?: number;
+  server_time?: number;
+}
+
+export interface ProtocolAckResult {
+  job_id: string;
+  acked: number;
+  unacked: number;
+  server_time?: number;
+}
+
+/**
+ * A durable event row as the stream sees it. Deliberately a plain shape so the
+ * facade stays independent of the storage layer's row type.
+ */
+export interface ProtocolEventSource {
+  /** `delivery_events.id` — half of the ack cursor identity. */
+  rowId: number;
+  /** `delivery_events.ts` — the honest instant of the transition. */
+  at: number;
+  internalKind: string;
+}
+
+/** `evt-<at>-<row id>`: opaque, unique, and resolvable back to the row. */
+export function protocolEventId(at: number, rowId: number): string {
+  return `evt-${at}-${rowId}`;
+}
+
+/**
+ * A position in a job's durable event log. Structurally identical to the storage
+ * layer's cursor position; declared here so the facade does not depend on the
+ * storage layer's types.
+ */
+export interface ProtocolEventPosition {
+  at: number;
+  rowId: number;
+}
+
+/** Resolve an opaque event_id to a durable position; null when unrecognised. */
+export function parseProtocolEventId(value: string): ProtocolEventPosition | null {
+  const match = /^evt-(\d+)-(\d+)$/.exec(value);
+  if (!match) return null;
+  return { at: Number(match[1]), rowId: Number(match[2]) };
+}
+
+/** Build one protocol event, or null when the internal kind is internal-only. */
+export function buildProtocolEvent(input: {
+  jobId: string;
+  source: ProtocolEventSource;
+  job?: ProtocolJob | null;
+  correlationId?: string | null;
+}): ProtocolEvent | null {
+  const type = protocolEventTypeFor(input.source.internalKind);
+  if (!type) return null;
+
+  const payload: ProtocolEventPayload = {
+    detail: { internal_kind: input.source.internalKind },
+  };
+  // Terminal events carry the outcome, exactly like the vendored fixtures:
+  // `event.job.succeeded` carries `payload.job` + `payload.result`, and
+  // `event.job.expired` carries `payload.job` + `payload.error`.
+  const job = input.job ?? null;
+  if (type === 'job.succeeded' || type === 'job.failed' || type === 'job.expired' || type === 'job.cancelled') {
+    payload.job = job;
+    if (type === 'job.succeeded') payload.result = (job?.result as Record<string, unknown> | undefined) ?? null;
+    else payload.error = job?.error ?? null;
+  }
+
+  const event: ProtocolEvent = {
+    protocol_version: '1',
+    event_id: protocolEventId(input.source.at, input.source.rowId),
+    job_id: input.jobId,
+    type,
+    at: input.source.at,
+    payload,
+  };
+  if (input.correlationId) event.correlation_id = input.correlationId;
+  return event;
+}
+
+/**
+ * `$defs/EventPage` from durable rows. `events` is ordered by `at` (then by the
+ * durable row order, which is the same order because writers never move `at`
+ * backwards).
+ */
+export function buildEventPage(input: {
+  jobId: string;
+  sources: readonly ProtocolEventSource[];
+  job?: ProtocolJob | null;
+  correlationId?: string | null;
+  hasMore: boolean;
+  unacked: number;
+  serverTime: number;
+}): ProtocolEventPage {
+  const events: ProtocolEvent[] = [];
+  for (const source of input.sources) {
+    const event = buildProtocolEvent({
+      jobId: input.jobId,
+      source,
+      job: input.job ?? null,
+      correlationId: input.correlationId ?? null,
+    });
+    if (event) events.push(event);
+  }
+
+  const page: ProtocolEventPage = {
+    job_id: input.jobId,
+    events,
+    unacked: Math.max(0, input.unacked),
+    server_time: input.serverTime,
+  };
+  const last = events[events.length - 1];
+  if (input.hasMore && last) page.next_after = last.event_id;
+  return page;
+}
+
+/** `$defs/AckResult` from the durable cursor. */
+export function buildAckResult(input: {
+  jobId: string;
+  acked: number;
+  unacked: number;
+  serverTime: number;
+}): ProtocolAckResult {
+  return {
+    job_id: input.jobId,
+    acked: Math.max(0, input.acked),
+    unacked: Math.max(0, input.unacked),
+    server_time: input.serverTime,
+  };
+}
+
+/** `$defs/AckRequest`. */
+export function parseAckBody(body: unknown): { ackThrough: string } {
+  if (!isPlainObject(body)) throw invalid('request body must be a JSON object');
+  const ackThrough = body.ack_through;
+  if (typeof ackThrough !== 'string' || ackThrough.length === 0) {
+    throw invalid('ack_through is required', { field: 'ack_through' });
+  }
+  return { ackThrough };
+}
+
+/** Query parameters of `GET /jobs/:jobId/events`. */
+export function parseEventQuery(query: {
+  after?: unknown;
+  unacked?: unknown;
+}): { after: string | null; unackedOnly: boolean } {
+  const raw = query.after;
+  let after: string | null = null;
+  if (raw !== undefined && raw !== null) {
+    if (typeof raw !== 'string' || raw.length === 0) {
+      throw invalid('after must be a non-empty event_id', { field: 'after' });
+    }
+    after = raw;
+  }
+
+  const rawUnacked = query.unacked;
+  let unackedOnly = false;
+  if (rawUnacked !== undefined && rawUnacked !== null && rawUnacked !== '') {
+    const value = String(rawUnacked);
+    if (value === '1' || value === 'true') unackedOnly = true;
+    else if (value !== '0' && value !== 'false') {
+      throw invalid('unacked must be 1 or 0', { field: 'unacked' });
+    }
+  }
+  return { after, unackedOnly };
 }

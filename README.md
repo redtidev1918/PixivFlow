@@ -257,6 +257,31 @@ pixivflow outbox cancel <id>  # 只取消尚未执行的 row
 租约、pending 投递、dead 行，`--repair` 收敛）与 `pixivflow reconcile`
 （把下游已确认的历史重复登记进投递账本，默认 dry-run）。
 
+### 面向编排方的 Job API（Workflow Protocol v1）
+
+PixivFlow 只做「内容采集与处理引擎」：发现、筛选、下载、元数据与媒体处理、候选生成。
+**审核 / 替换 / 队列 / 发布等业务语义不在这里实现**，由编排方（如 TelePost）负责。
+两者之间通过一套稳定的 **Workflow Protocol v1** 用通用 Job 面交互，编排方不互调
+内部接口、也不往请求里塞业务字段。scheduler 对外暴露：
+
+| 端点 | 作用 |
+| --- | --- |
+| `GET /capabilities` | 能力发现：如实声明 `protocol_version` 与 `features`（`idempotency` / `cancel` / `events` / ...），能力声明必须诚实，没声明就是没有 |
+| `POST /jobs` | 提交一个采集任务（如 `candidate_search`）：`idempotency_key` 幂等，携带消费者声明的 `callback_url` 时事件会推送到该地址 |
+| `GET /jobs` · `GET /jobs/{job_id}` | 按幂等键或按 id 查作业状态（含 `status`、`created_at`、`heartbeat_at`、`deadline_at`、`result`/`error`） |
+| `GET /jobs/{job_id}/events` · `POST /jobs/{job_id}/events/ack` | 事件流与对账：`?after=` 续拉、`unacked` 计数、单调游标 ack；回调只是加速通道，漏送也能从这里补齐 |
+
+**作业生命周期可信、可查，不再永久静默。** 每个作业都是持久化的、带完整状态机
+（`queued → running → succeeded|failed|expired|cancelled`）、30 秒心跳、活性预算、
+启动恢复与终态事件；终态必有 `result` 或 `error`。编排方可以随时查询作业、订阅事件、
+对账补拉——再也回不到「点了重抓之后什么反应都没有」的那种状态。写入方与读取方都受
+[外包层](docs/architecture/delivery-runtime.md) 与仓库内 `protocol/v1/`（schema、夹具
+与验收清单）约束；规范与跨仓部署见
+[pixivflow-telepost-deploy](https://github.com/redtidev1918/pixivflow-telepost-deploy)
+的 [Workflow Protocol 文档](https://github.com/redtidev1918/pixivflow-telepost-deploy/blob/main/docs/architecture/workflow-protocol.md)。
+旧的 `/internal/targets/:targetId/refetch` 仍作为字节兼容 shim 可用，与 Job 面共享同一
+身份空间，但新集成请走 Job 面 / `POST /jobs`。
+
 ## 常用命令
 
 | 命令 | 说明 |
@@ -316,7 +341,7 @@ PixivFlow 可以完全独立使用。下面是同一作者生态里与它相关�
 
 | 项目 | 是什么 | 什么时候需要 |
 | --- | --- | --- |
-| [TelePost](https://github.com/redtidev1918/TelePost) | Telegram 频道投稿、审核与自动化发布平台 | 想把下载结果投进 Telegram 频道、先人工审核再发布时，把它配成 delivery 下游即可。这只是可选组合，PixivFlow 不依赖它 |
+| [TelePost](https://github.com/redtidev1918/TelePost) | Telegram 频道投稿、审核与自动化发布平台 | 作为投递下游接收下载结果，或作为**编排方**通过 [Workflow Protocol v1](#面向编排方的-job-apiworkflow-protocol-v1) 驱动 PixivFlow 提交候选查找作业（审核重抓即走此路）。这只是可选组合，PixivFlow 不依赖它 |
 | [pixivflow-telepost-deploy](https://github.com/redtidev1918/pixivflow-telepost-deploy) | PixivFlow + TelePost 的部署与运维套件（Docker / VPS / 云平台） | 想一次性把上面两个项目部署并运维起来时。只跑 PixivFlow 不需要它 |
 | [pixivflow-webui](https://github.com/redtidev1918/pixivflow-webui) | PixivFlow 的 WebUI 前端 | 想用图形界面管理下载与计划 |
 | [pixivflow-desktop](https://github.com/redtidev1918/pixivflow-desktop) | PixivFlow 的官方桌面客户端（macOS / Windows / Linux），内置本仓库运行时与 WebUI | 想要双击即用的原生应用、不想自己装 Node 或起服务时。业务逻辑仍在本仓库，桌面端只负责启动、守护与打包 |

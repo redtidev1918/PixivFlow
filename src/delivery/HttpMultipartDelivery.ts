@@ -423,8 +423,23 @@ export function buildTemplateVariables(request: DeliveryRequest): Record<string,
     return `XRestrict${xRestrict}`;
   })();
 
+  // A series novel's `seriesTitle` names its parent series while `title` is the
+  // chapter title. Compose the card headline `《系列名》 章节名` when the work
+  // belongs to a series; fall back to the bare title otherwise (illustrations
+  // and non-series novels never carry a seriesTitle).
+  const displayTitle =
+    c.type === 'novel' && c.seriesTitle
+      ? `《${c.seriesTitle}》 ${c.title}`
+      : c.title;
+
   return {
     title: c.title,
+    // Composed card headline: `《系列名》 章节名` for series novels, else the
+    // bare work title. Templates should render {{displayTitle}}.
+    displayTitle,
+    // Parent series name for a series novel chapter; empty otherwise. Tempo
+    // templates can render `《{{seriesTitle}}》 {{title}}` themselves.
+    seriesTitle: c.seriesTitle ?? '',
     pixivId: c.pixivId,
     type: c.type,
     targetId: c.targetId ?? '',

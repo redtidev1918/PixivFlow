@@ -17,6 +17,12 @@ export interface DownloadedArtifact {
   type: DeliveryItemType;
   title: string;
   /**
+   * Parent series name for a series-novel chapter, when the API response
+   * carried one. This is distinct from `title`, which holds the chapter title
+   * only. Empty when the work is not part of a Pixiv series.
+   */
+  seriesTitle?: string;
+  /**
    * Pixiv author (artist) display name, when the API response carried one.
    *
    * Attribution is part of the artifact, not a downloader-private detail: a
@@ -80,6 +86,13 @@ export function deliveryFilePaths(artifact: DownloadedArtifact): string[] {
 
 export interface DeliveryContext {
   title: string;
+  /**
+   * Series (series novel) name, when the work belongs to a Pixiv series.
+   * A series novel's `title` holds the chapter title only; this carries the
+   * parent series name so templates can render e.g. `《系列名》 章节名`.
+   * Empty when the work is not part of a series.
+   */
+  seriesTitle?: string;
   pixivId: string;
   type: DeliveryItemType;
   /**

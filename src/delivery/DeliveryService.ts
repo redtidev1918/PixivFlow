@@ -278,6 +278,7 @@ export class DeliveryService {
         pixivId: artifact.pixivId,
         type: artifact.type,
         title: artifact.title,
+        ...(artifact.seriesTitle !== undefined ? { seriesTitle: artifact.seriesTitle } : {}),
         ...(artifact.spoiler !== undefined ? { spoiler: artifact.spoiler } : {}),
       },
       files,
@@ -445,6 +446,7 @@ export class DeliveryService {
     return {
       deliveryTarget,
       title: artifact.title,
+      ...(artifact.seriesTitle !== undefined ? { seriesTitle: artifact.seriesTitle } : {}),
       pixivId: artifact.pixivId,
       type: artifact.type,
       targetId: target.id,

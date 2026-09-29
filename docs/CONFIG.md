@@ -456,11 +456,14 @@ pixivflow delivery retry <deliveryId> --yes           # 只重开这一条（仍
 }
 ```
 
-字段值支持 `{{title}}`、`{{pixivId}}`、`{{type}}`、`{{tag}}`、`{{topic}}`、
+字段值支持 `{{title}}`、`{{displayTitle}}`、`{{seriesTitle}}`、`{{pixivId}}`、`{{type}}`、`{{tag}}`、`{{topic}}`、
 `{{workTags}}`、`{{author}}`、`{{link}}`、`{{topicTag}}`、`{{spoiler}}`、`{{xRestrict}}`、
 `{{xRestrictLabel}}`、`{{xRestrictTag}}`、`{{rankingDate}}`、`{{publishedDate}}`、
 `{{language}}`、`{{bookmarkCount}}`、`{{viewCount}}`
-模板。`{{author}}` 是 Pixiv 作者名（`illustration` 与 `novel` 都有），Pixiv 响应里
+模板。`{{title}}` 是作品标题：对系列小说是**章节名**（如 `Day 1`），父系列名单独通过
+`{{seriesTitle}}` 给出（非系列作品为空串）；`{{displayTitle}}` 是合成标题——系列小说渲染成
+`《系列名》 章节名`（如 `《我的胎归者女友》 Day 1`），非系列作品与 `{{title}}` 相同，
+模板标题槽位应优先用 `{{displayTitle}}`。`{{author}}` 是 Pixiv 作者名（`illustration` 与 `novel` 都有），Pixiv 响应里
 没有作者时为空串——**不会**填 `Unknown`，所以模板写 `作者：{{author}}` 在缺失时会
 明显地露出空值，而不是编造一个署名。`{{bookmarkCount}}`/`{{viewCount}}` 是作品收藏数/浏览数（Pixiv
 `total_bookmarks`/`total_view`），大数字紧凑渲染（`1.2k`、`34.6w`），接口

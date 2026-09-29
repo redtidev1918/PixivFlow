@@ -1,16 +1,16 @@
 <!-- docsite-release-repo: redtidev1918/PixivFlow -->
-<!-- docsite-release-tag: v3.4.3 -->
+<!-- docsite-release-tag: v3.5.0 -->
 # 📥 下载 PixivFlow
 
 **语言 / Language:** 中文 · [English](/en/download.md)
 
-<!-- docsite: generated from redtidev1918/PixivFlow release v3.4.3; do not edit by hand -->
+<!-- docsite: generated from redtidev1918/PixivFlow release v3.5.0; do not edit by hand -->
 
 本页由 GitHub Actions 在每次发版时**自动更新**，始终指向最新 Release。
 
-## 最新版本：`v3.4.3`（2026-09-27）
+## 最新版本：`v3.5.0`（2026-09-29）
 
-👉 [查看 Release 说明与校验和](https://github.com/redtidev1918/PixivFlow/releases/tag/v3.4.3)
+👉 [查看 Release 说明与校验和](https://github.com/redtidev1918/PixivFlow/releases/tag/v3.5.0)
 
 PixivFlow 以 npm 包为主，同时提供发布包与官方 Docker 镜像。完整资产与历史版本见 [Releases](https://github.com/redtidev1918/PixivFlow/releases)。
 
@@ -51,6 +51,6 @@ grep '\.tgz' SHA256SUMS | sha256sum -c -
 
 | 平台 | 文件 | 大小 | 下载 |
 |---|---|---|---|
-| 通用 | `RELEASE-METADATA.json` | 2 KB | [⬇️ 下载](https://github.com/redtidev1918/PixivFlow/releases/download/v3.4.3/RELEASE-METADATA.json) |
-| 通用 | `SHA256SUMS` | 0 KB | [⬇️ 下载](https://github.com/redtidev1918/PixivFlow/releases/download/v3.4.3/SHA256SUMS) |
-| 通用 | `pixivflow-3.4.3.tgz` | 2.5 MB | [⬇️ 下载](https://github.com/redtidev1918/PixivFlow/releases/download/v3.4.3/pixivflow-3.4.3.tgz) |
+| 通用 | `RELEASE-METADATA.json` | 2 KB | [⬇️ 下载](https://github.com/redtidev1918/PixivFlow/releases/download/v3.5.0/RELEASE-METADATA.json) |
+| 通用 | `SHA256SUMS` | 0 KB | [⬇️ 下载](https://github.com/redtidev1918/PixivFlow/releases/download/v3.5.0/SHA256SUMS) |
+| 通用 | `pixivflow-3.5.0.tgz` | 2.5 MB | [⬇️ 下载](https://github.com/redtidev1918/PixivFlow/releases/download/v3.5.0/pixivflow-3.5.0.tgz) |

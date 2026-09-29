@@ -1,5 +1,13 @@
 # Changelog
 
+## [3.5.0](https://github.com/redtidev1918/PixivFlow/compare/v3.4.3...v3.5.0) (2026-09-29)
+
+
+### Features
+
+* **delivery:** expose series name for series novels ([c87ad3d](https://github.com/redtidev1918/PixivFlow/commit/c87ad3d385bd8223713143dfd806095f4e08f2cf))
+* **delivery:** expose series name for series novels ({{seriesTitle}} / {{displayTitle}}) ([088c194](https://github.com/redtidev1918/PixivFlow/commit/088c194004430138e44b88216b961f4cb4bdc74e))
+
 ## [3.4.3](https://github.com/redtidev1918/PixivFlow/compare/v3.4.2...v3.4.3) (2026-09-27)
 
 

@@ -30,10 +30,10 @@ describe('NovelDownloader', () => {
     x_restrict: 1,
   } as PixivNovel;
 
-  function createDownloader(text: string) {
+  function createDownloader(text: string, detailOverride?: Partial<PixivNovel>) {
     const client = {
       getNovelDetailWithTags: jest.fn().mockResolvedValue({
-        novel,
+        novel: { ...novel, ...detailOverride },
         tags: [{ name: 'ボテ腹' }, { name: 'R-18' }],
       }),
       getNovelText: jest.fn().mockResolvedValue({ novel_text: text }),
@@ -75,6 +75,8 @@ describe('NovelDownloader', () => {
       tags: ['ボテ腹', 'R-18'],
       // Attribution travels with the artifact, not only the downloads table.
       author: 'Author',
+      // Not part of a series in this fixture -> no seriesTitle.
+      seriesTitle: undefined,
     });
     expect(artifact!.mediaAssets).toEqual([]);
     expect(artifact!.artifacts).toEqual([
@@ -95,6 +97,26 @@ describe('NovelDownloader', () => {
     expect(artifact).toBeUndefined();
     expect(fileService.saveText).not.toHaveBeenCalled();
     expect(database.insertDownload).not.toHaveBeenCalled();
+  });
+
+  it('carries the parent series title onto the artifact', async () => {
+    const { downloader } = createDownloader('Actual novel body', {
+      title: 'Day 1',
+      series: { id: 99, title: '我的胎归者女友' },
+    } as Partial<PixivNovel>);
+
+    const artifact = await downloader.download(
+      novel,
+      'ボテ腹',
+      { type: 'novel', detectLanguage: false } as TargetConfig
+    );
+
+    expect(artifact).toMatchObject({
+      pixivId: '123',
+      type: 'novel',
+      title: 'Day 1',
+      seriesTitle: '我的胎归者女友',
+    });
   });
 
   it('strict language filtering skips text that is too short to classify', async () => {

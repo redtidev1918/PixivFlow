@@ -412,6 +412,7 @@ export class NovelDownloader {
       pixivId: workId,
       type: 'novel',
       title: detail.title,
+      seriesTitle: detail.series?.title || undefined,
       // Attribution travels with the artifact: a publishing provider (e.g. the
       // TelePost submission target) renders it into its own fields, so the
       // downloader must not be the only place that knows the author.

@@ -1,7 +1,7 @@
 import { promises as fs } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { HttpMultipartDelivery, renderDeliveryTemplate } from '../../delivery/HttpMultipartDelivery';
+import { HttpMultipartDelivery, buildTemplateVariables, renderDeliveryTemplate } from '../../delivery/HttpMultipartDelivery';
 import { logger } from '../../logger';
 
 describe('HttpMultipartDelivery', () => {
@@ -359,6 +359,45 @@ describe('HttpMultipartDelivery', () => {
         bookmarkCount: '49',
       })
     ).toBe('📅  · ⭐ 49');
+
+    // Series novels carry the parent series name separately from the chapter
+    // title. Non-series works leave {{seriesTitle}} literal-empty.
+    expect(
+      renderDeliveryTemplate('《{{seriesTitle}}》 {{title}}', {
+        seriesTitle: '我的胎归者女友',
+        title: 'Day 1',
+      })
+    ).toBe('《我的胎归者女友》 Day 1');
+    expect(
+      renderDeliveryTemplate('《{{seriesTitle}}》 {{title}}', {
+        seriesTitle: '',
+        title: 'Solo novel',
+      })
+    ).toBe('《》 Solo novel');
+
+    // buildTemplateVariables composes {{displayTitle}}: `《系列名》 章节名` for a
+    // series novel, bare title otherwise (illustrations never have a series).
+    expect(
+      buildTemplateVariables({
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        context: {
+          title: 'Day 1',
+          seriesTitle: '我的胎归者女友',
+          pixivId: '789',
+          type: 'novel',
+        },
+      } as any).displayTitle
+    ).toBe('《我的胎归者女友》 Day 1');
+    expect(
+      buildTemplateVariables({
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        context: {
+          title: '月圆，肚肚圆',
+          pixivId: '111',
+          type: 'illustration',
+        },
+      } as any).displayTitle
+    ).toBe('月圆，肚肚圆');
 
     const provider = new HttpMultipartDelivery({
       type: 'httpMultipart',

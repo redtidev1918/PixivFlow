@@ -34,7 +34,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           # Deliberately the exact declared floor (engines.node >=22.13.0, the version where
           # `node:sqlite` stops being behind --experimental-sqlite). The gate therefore proves

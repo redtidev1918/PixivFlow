@@ -731,6 +731,14 @@ export function validateConfig(config: Partial<StandaloneConfig>, location: stri
       );
     }
     if (
+      config.download.assetNamespace !== undefined &&
+      !/^[a-z0-9][a-z0-9-]{0,31}$/.test(String(config.download.assetNamespace))
+    ) {
+      errors.push(
+        `download.assetNamespace: Must be lowercase letters/digits/dashes, 1-32 chars (got ${String(config.download.assetNamespace)})`
+      );
+    }
+    if (
       config.download.novelCover?.probeFailed !== undefined &&
       config.download.novelCover.probeFailed !== 'skip' &&
       config.download.novelCover.probeFailed !== 'keep'

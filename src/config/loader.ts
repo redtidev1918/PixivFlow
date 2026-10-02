@@ -16,6 +16,7 @@ import { applyDefaults } from './path-resolution';
 import { applyEnvironmentOverrides, adjustProxyForEnvironment } from './environment';
 import { processConfigPlaceholders } from './placeholders';
 import { validateConfig } from './validation';
+import { configureMediaAssetNamespace } from '../domain/media/MediaAsset';
 
 /**
  * Get the resolved configuration file path
@@ -146,6 +147,10 @@ export function loadConfig(
   // Apply defaults - use config file directory as base path to ensure paths are resolved correctly
   // This prevents the app from accidentally using paths from the development machine
   const config = applyDefaults(parsed, configDir);
+
+  // Media-asset id namespace (download.assetNamespace, default 'pixiv').
+  // Applied once per config load so every mediaAssetId() call site picks it up.
+  configureMediaAssetNamespace(config.download?.assetNamespace);
 
   // Set log level
   if (config.logLevel) {

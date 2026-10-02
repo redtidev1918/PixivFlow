@@ -441,6 +441,10 @@ export function buildTemplateVariables(request: DeliveryRequest): Record<string,
     // templates can render `《{{seriesTitle}}》 {{title}}` themselves.
     seriesTitle: c.seriesTitle ?? '',
     pixivId: c.pixivId,
+    // Source-neutral alias of pixivId for delivery templates: TelePost's
+    // canonical submission field is work_id (pixiv_id deprecated), so
+    // templates should render {{workId}} going forward. Same value.
+    workId: c.pixivId,
     type: c.type,
     targetId: c.targetId ?? '',
     tag: c.tag ?? '',

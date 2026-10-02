@@ -3,8 +3,8 @@
 > **English:** Complete usage reference. Six download modes (URL direct
 > download, config-driven search, ranking mode, random, single ID, whole
 > user), the ten supported Pixiv URL formats, dedup and resume behavior,
-> scheduler semantics, a WebUI overview, and a cheat sheet of all 20 CLI
-> commands grouped by category.
+> scheduler semantics, a WebUI overview, and a category-grouped cheat sheet
+> of the CLI commands.
 
 PixivFlow 的一切下载行为都由「命令 + 配置」驱动。本章讲清楚每种能力的用法与边界,配置字段细节见 [CONFIG](CONFIG.md)。
 
@@ -134,7 +134,7 @@ pixivflow web     # 监听 3000 端口,浏览器打开 http://localhost:3000
 
 ## 全部命令速查
 
-共 20 个命令,分类与 `pixivflow help` 输出一致:
+按 `pixivflow help` 的分类分组(命令随版本演进,完整列表以 `pixivflow help` 输出为准):
 
 ### 认证
 
@@ -185,6 +185,27 @@ pixivflow web     # 监听 3000 端口,浏览器打开 http://localhost:3000
 | `help [command]` | 总帮助或单命令帮助 |
 | `version` | 显示版本号 |
 | `web` | 启动 WebUI 服务器 |
+
+### 调度与投递面
+
+| 命令 | 说明 |
+| --- | --- |
+| `run-once` | 立即把全部启用的 schedule 执行一次后退出 |
+| `execute-slot` | 单次执行一个 canonical occurrence(批处理/CI 执行面) |
+| `runs` | 列出调度运行记录并查看单次执行摘要 |
+| `outbox` | 列出 / 查看 / 重试 / 取消 durable 投递意图 |
+| `gateway` | 列出已配置消息网关及其投递状态与可达性 |
+| `delivery` | 查看各网关投递状态并重新武装失败路由 |
+| `tags` | 发现关联 Pixiv 标签,并显式应用选中标签 |
+| `topic` | 把语义主题解析为关联标签(resolve),或干跑一天的选择(test) |
+
+### 诊断与对账
+
+| 命令 | 说明 |
+| --- | --- |
+| `doctor` | 诊断并(`--repair`)收敛 slot、投递与 outbox |
+| `diagnose` | 最小化 Pixiv 数据面出站探针(用法:`diagnose egress`) |
+| `reconcile` | 对账一笔下游已确认的历史重复(默认 dry-run,`--repair` 才执行) |
 
 ---
 

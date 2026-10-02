@@ -1,6 +1,6 @@
 # PixivFlow API 文档
 
-> **English:** This document lists every REST endpoint exposed by the PixivFlow WebUI server and the Socket.IO events used for live log streaming. Endpoints are grouped by route prefix (`/api/auth`, `/api/config`, `/api/download`, `/api/stats`, `/api/logs`, `/api/files`, plus `GET /api/health`, `GET /api/status`, `GET /api/version`) with request/response examples. It also explains how to start the server, the error-code convention, and why the API has no authentication layer. All shapes are taken from the handler source code in `src/webui/routes/handlers/`.
+> **English:** This document lists every REST endpoint exposed by the PixivFlow WebUI server and the Socket.IO events used for live log streaming. Endpoints are grouped by route prefix (`/api/auth`, `/api/config`, `/api/download`, `/api/stats`, `/api/logs`, `/api/files`, `/api/gateways`, `/api/deliveries`, `/api/scheduler`, `/admin/*`, plus `GET /api/health`, `GET /api/status`, `GET /api/version`) with request/response examples. It also explains how to start the server, the error-code convention, and why the API has no authentication layer. All shapes are taken from the handler source code in `src/webui/routes/handlers/`.
 
 本文档面向直接调用 WebUI HTTP 接口的开发者(前端开发、脚本集成、容器健康检查)。示例均从 `src/webui/websocket/` 与 `src/webui/routes/` 的源码整理;不确定的字段按保守描述,以源码为准。
 
@@ -41,7 +41,7 @@ Pixiv 登录流程涉及的端点:`GET /api/auth/status` 检查令牌是否有�
 
 ## REST 端点
 
-以下 54 个端点对应 `src/webui/server/server-routes.ts` 挂载的全部路由。约定:多数响应带 `errorCode` 字段(枚举见 `src/webui/utils/error-codes.ts`);个别处理器在校验失败时仍返回 HTTP 200 并用 `data.success: false` 表达结果,文中已标注。
+以下端点按路由前缀分组,对应 `src/webui/server/server-routes.ts` 挂载的全部路由组(端点数量随版本演进,以源码为准)。约定:多数响应带 `errorCode` 字段(枚举见 `src/webui/utils/error-codes.ts`);个别处理器在校验失败时仍返回 HTTP 200 并用 `data.success: false` 表达结果,文中已标注。
 
 ### GET /api/health(别名 `/health`)
 
@@ -51,7 +51,7 @@ Pixiv 登录流程涉及的端点:`GET /api/auth/status` 检查令牌是否有�
 
 生态 Runtime Contract 的探针端点(新增,追加式、非敏感,供 CLI/WebUI/Desktop/Docker 统一探测进程运行状态与版本)。同样注册 `/api/…` 与 `/…` 双路径别名,与健康检查一致;载荷不含下载列表、令牌或配置。版本取自身份权威来源 `package.json`(不是可能滞后的生成文件 `src/version.ts`)。
 
-`GET /api/status`:
+`GET /api/status`（示例响应，版本号以最新 release 为准）:
 
 ```json
 {
@@ -60,14 +60,14 @@ Pixiv 登录流程涉及的端点:`GET /api/auth/status` 检查令牌是否有�
   "pid": 12345,
   "startedAt": "2026-09-26T00:00:00.000Z",
   "uptimeSec": 42,
-  "version": "2.46.0"
+  "version": "3.6.0"
 }
 ```
 
 `GET /api/version`:
 
 ```json
-{ "schemaVersion": 1, "name": "pixivflow", "version": "2.46.0" }
+{ "schemaVersion": 1, "name": "pixivflow", "version": "3.6.0" }
 ```
 
 开启 Basic Auth 时,这两个端点与健康检查同属默认豁免路径;若运维自定义了 `exemptPaths`,新端点默认要求认证(更安全,可按需另行豁免)。
@@ -412,6 +412,32 @@ PixivFlow 只 GET 它并把答案原样交给前端渲染。
 错误码:`DELIVERY_LIST_FAILED`(500)、`DELIVERY_NOT_FOUND`(404)、
 `DELIVERY_STATUS_INVALID`(400,未知的 `status` 过滤值)。响应不含 token、凭据、文件路径或
 stack;`lastError` 是 provider 自己写入的短消息(投递平面从不把凭据写进去)。
+
+## Scheduler 组:`/api/scheduler`
+
+WebUI 控制中心(Scheduler 控制面板)的调度投影与受控恢复入口。读取类端点是 durable slot /
+执行历史的只读投影;恢复类端点转发到调度进程的内部入口,带 Origin 与参数白名单校验
+(`SCHEDULER_RECOVERY_ORIGIN_REJECTED` 403,`targetId` 需匹配安全字符集,`requestId` 必须是 UUID)。
+
+| 方法 | 路径 | 说明 | 主要参数/请求体 |
+| --- | --- | --- | --- |
+| GET | `/` | 最近 slot 列表(只读投影) | 无 |
+| GET | `/executions` | 执行历史列表 | 查询参数分页 |
+| GET | `/slots/:slotId/logs` | 单个 slot 的日志 | 路径参数 `slotId` |
+| POST | `/targets/:targetId/recover` | 触发目标级恢复(转发 `/internal/targets/:targetId/recover`) | body:`requestId`(UUID,必填)、`retryMode?`(`normal`/`relaxed`)、`correlationId?`(≤200 字符) |
+| GET | `/targets/:targetId/recover/:requestId` | 轮询恢复 slot 的终态(与审核链同一契约) | 路径参数 `targetId`、`requestId` |
+
+## 运维诊断组:`/admin/logs`、`/admin/system-errors`
+
+挂在 `/admin/*`(非 `/api/*`)的管理可观测端点;启用 WebUI Basic Auth 时同样受其保护,
+主要供 WebUI 前端的运维页使用。
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET | `/admin/logs` | 管理日志查询 |
+| GET | `/admin/logs/download` | 日志打包下载 |
+| GET | `/admin/system-errors` | 系统级错误列表 |
+| POST | `/admin/system-errors/:id/resolve` | 标记一条系统错误为已解决 |
 
 ## Socket.IO 实时事件
 

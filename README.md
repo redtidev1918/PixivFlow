@@ -176,6 +176,11 @@ Email、Telegram、Discord、ntfy 等渠道；PixivFlow 不实现这些通知协
 - 同一目标也可指向 [telepress](https://github.com/redtidev1918/TelePress) 的 `/publish/gallery`，
   把插画自动发布成 Telegra.ph 相册，见 [CONFIG.md](docs/CONFIG.md) 的
   「Telegraph（telegra.ph）相册上传」。
+- 小说目标可配置 `delivery.richNovelPreview` 指向 TelePress 的
+  `/publish/rich-novel`，把 `novel.md` + 插图发布成 Telegra.ph 在线阅读链接，
+  并作为 `novel_preview_url` 传给接收端。生产部署建议使用 TelePress 0.16.4+，
+  长文分页会把单页目标提升到约 20,000 字符并尽量保留段落边界，减少阅读中断；
+  详见 [CONFIG.md](docs/CONFIG.md) 的「富媒体小说（Novel）→ TelePress」。
 
 ## 自动化与可靠性
 

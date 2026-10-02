@@ -177,6 +177,12 @@ ntfy and more; PixivFlow does not implement those notification protocols itself.
 - The same target can point at [telepress](https://github.com/redtidev1918/TelePress)'s
   `/publish/gallery` to publish illustrations as a Telegra.ph gallery, see the
   "Telegraph (telegra.ph) gallery upload" section of [CONFIG.md](docs/CONFIG.md).
+- Novel targets can set `delivery.richNovelPreview` to TelePress's
+  `/publish/rich-novel`, turning `novel.md` + images into a Telegra.ph online
+  reading link that is passed downstream as `novel_preview_url`. Production
+  deployments should prefer TelePress 0.16.4+, which targets ~20,000 source
+  characters per long-form page while preserving paragraph boundaries, reducing
+  reader interruptions. See the rich-novel section in [CONFIG.md](docs/CONFIG.md).
 
 ## Automation and reliability
 

@@ -51,7 +51,7 @@ Pixiv 登录流程涉及的端点:`GET /api/auth/status` 检查令牌是否有�
 
 生态 Runtime Contract 的探针端点(新增,追加式、非敏感,供 CLI/WebUI/Desktop/Docker 统一探测进程运行状态与版本)。同样注册 `/api/…` 与 `/…` 双路径别名,与健康检查一致;载荷不含下载列表、令牌或配置。版本取自身份权威来源 `package.json`(不是可能滞后的生成文件 `src/version.ts`)。
 
-`GET /api/status`:
+`GET /api/status`（示例响应，版本号以最新 release 为准）:
 
 ```json
 {
@@ -60,14 +60,14 @@ Pixiv 登录流程涉及的端点:`GET /api/auth/status` 检查令牌是否有�
   "pid": 12345,
   "startedAt": "2026-09-26T00:00:00.000Z",
   "uptimeSec": 42,
-  "version": "2.46.0"
+  "version": "3.6.0"
 }
 ```
 
 `GET /api/version`:
 
 ```json
-{ "schemaVersion": 1, "name": "pixivflow", "version": "2.46.0" }
+{ "schemaVersion": 1, "name": "pixivflow", "version": "3.6.0" }
 ```
 
 开启 Basic Auth 时,这两个端点与健康检查同属默认豁免路径;若运维自定义了 `exemptPaths`,新端点默认要求认证(更安全,可按需另行豁免)。

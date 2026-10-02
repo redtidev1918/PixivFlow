@@ -58,7 +58,7 @@
 | 文档 | 内容 |
 | --- | --- |
 | [ARCHITECTURE](ARCHITECTURE.md) | 模块地图、命令注册机制、下载管线、存储层设计 |
-| [PIXIV_CLIENT_KIT](PIXIV_CLIENT_KIT.md) | 独立可复用的 Pixiv App API 客户端 kit:依赖规则、单一 429 闸门设计、何时拆分到独立仓库(英文版见 [docs/en/PIXIV_CLIENT_KIT.md](docs/en/PIXIV_CLIENT_KIT.md)) |
+| [PIXIV_CLIENT_KIT](PIXIV_CLIENT_KIT.md) | 独立可复用的 Pixiv App API 客户端 kit:依赖规则、单一 429 闸门设计、何时拆分到独立仓库(英文版见 [en/PIXIV_CLIENT_KIT.md](en/PIXIV_CLIENT_KIT.md)) |
 | [API](API.md) | WebUI 后端 REST 接口与 Socket.IO 实时事件 |
 | [OBSERVABILITY](OBSERVABILITY.md) | 日志、指标与告警的可观测入口 |
 | [SLOT_OUTCOME](SLOT_OUTCOME.md) | schedule slot 的结果分类与终态定义 |

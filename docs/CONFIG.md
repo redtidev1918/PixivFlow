@@ -67,6 +67,8 @@ pixivflow setup
 | `limit` | number | 单次执行最多下载多少个 |
 | `minBookmarks` | number | 最低收藏数门槛 |
 | `startDate` / `endDate` | string | 发布日期范围 `YYYY-MM-DD`,支持占位符见[下文](#日期占位符) |
+| `maxPageCount` | number | 单作品最大页数（正整数）；多页作品超限时本次执行判为不可用 |
+| `aiMetadataCheck` | boolean | 可选的文件元数据 AI 检测：在 `illust_ai_type` 缺失或 Pixiv 尚未分类时，用文件元数据补充识别 AI 生成作品（`excludeAI` 之外的第二层） |
 
 ### 搜索模式字段(`mode: "search"`,默认)
 
@@ -116,6 +118,10 @@ pixivflow setup
 工作流：Topic →（Pixiv 标签联想 + 近期作品 Tag 共现，PMI 式特异性打分自动压低 R-18/オリジナル 等通用 Tag）→ 相关 Tag 空间 → 分别搜索当天作品 → PID 去重 → 仅用 Tag/标题/描述做轻量相关性过滤（**只作接受门槛**，过 `minMetadataScore` 即视为属于主题）→ 通过的候选之间**完全按本地热度 `calculatePopularityScore()` 排名** → 从有界热度候选池剔除下载历史 → 依次递补至 Top N。插画与小说使用各自独立的 Tag 空间，结果缓存到数据卷 `topic-cache/`（默认 7 天），刷新失败自动降级到旧缓存或仅用主题词本身，不中断调度。同一发布日期重复执行时，已经投稿的第一名不会让任务空跑；`limit=1` 默认保留 20 个插画候选，常规递补池上限 100（用户显式配置更大的 `limit` 时仍会尊重该数量），再由下载计划批量去重。**全程不使用任何 LLM/VLM/Embedding/本地模型。**
 
 能力边界：如果某作品没有任何与主题相关的 Tag/标题/描述（视觉上相关但元数据无关），在不使用视觉模型的前提下无法识别，这是设计取舍而非 Bug。
+
+target 级 `topicProfile`（`primary` / `related` / `strategy.freshnessWeight` / `strategy.popularityWeight` /
+`inventory.maxAgeDays` / `inventory.reserveSize` 等）是候选供给的高级覆盖，面向供给调优而非常规配置；
+语义与治理规则见 [候选供给 RFC](architecture/candidate-supply-rfc.md)。
 
 #### `topicDiscovery.relatedTags`：相关 Tag 是否可以作为独立检索通道
 
@@ -348,7 +354,10 @@ PixivFlow 分类时读 HTTP 状态码与记录状态，不额外分支 `business
 HTTP 状态码就能正确落成确定性失败。
 
 `fields` 里的模板变量与 `ack` 信封映射都可以覆盖，但 `ack` 的默认值就是 TelePost 的
-`{ok, data:{review_id, reused, reuse_reason, matched_idempotency_key}}`，日常不需要写。
+`{ok, data:{review_id, reused, reuse_reason, matched_idempotency_key}}`，日常不需要写；覆盖时可用子键为
+`dataPath` / `idField` / `statusField` / `reusedField` / `reasonField` / `keyField`。
+`scheduleOutcomeUrl` 是可选的**计划终态摘要**端点：每次 schedule occurrence 终态（success/partial/failed）由 durable
+outbox 投递到该地址（复用 `headers` 鉴权），TelePost 侧 relay 成用户可见消息；与 `refetchOutcomeUrl`（人工重抓终态）互相独立。
 这条边界的完整证据（每一条应答形状与它对应的下游结论）在
 `src/__tests__/delivery/telepost-compat.test.ts`；TelePost 侧的权威定义是它自己的
 `docs/API.md` §「投稿业务 ACK」。
@@ -691,6 +700,9 @@ dead row 用 `pixivflow outbox retry <id>` 或 `retry --dead` 正式重放，幂
 | `trigger.graceMinutes` | 90 | 一次 occurrence 在其计划时刻之后多久内仍接受外部触发（容忍 watchdog/网络重试/唤醒延迟）。超出窗口判过期，不补历史。 |
 | `queuedTimeoutMs` | 1800000（30 min） | **排队上限**：一个 slot 仍是 `pending`（含人工重抓 waiting 排队）且创建时间超过该时长仍未开始执行 → 由 liveness 扫掠终结为 `failed`，原因码 `queued_too_long`（用户文案「排队超时，未能开始执行」）。避免账户容量忙时无限 pending。小于 60 s 的值会被夹到 60 s；非数字/非法值只告警（non-fatal）并回落默认。 |
 | `stallTimeoutMs` | 900000（15 min） | **停摆上限**：一个 `running` slot 的 `heartbeat_at`（回落 `started_at`，再回落 `created_at`）超过该时长没有推进、**且**执行租约已死 → 由扫掠终结为 `failed`，原因码 `stalled_no_heartbeat`（用户文案「执行中断，长时间没有进展」）。它是「进程死了没人知道」的兜底，不是超时重试。 |
+| `exitWhenIdle` | false | **external 模式专属**：durable 账本排空（无未终态 Slot、无在途/未投递 outbox 行）后进程自行退出，配合 autosleep 平台跑完即停。不看 HTTP 活跃度——触发端点在 occurrence durable 后即返回，HTTP 空闲不代表下载结束 |
+| `idleGraceMs` | 600000（10 min） | 退出前的空闲合并窗口（不是超时）：间隔十分钟的两个计划通常由同一次唤醒服务，落在线上的投递重试也不必再付一次冷启动 |
+| `maxLifetimeMs` | 10800000（3 h） | 单次唤醒的寿命上限，防止异常情况下机器永不退出 |
 | （扫掠周期） | 60 s | 常驻调度器每 60 s 扫一次（下限 60 s，单批最多 100 行）。同一 tick **先恢复**被中断的 slot（crash-resume），**再**终结超过上限仍未推进的 slot；刚被恢复的 slot 不参与本次终结判定（它还没拿到租约）。投递侧另有 `delivery_abandoned`（「投稿未被处理，已放弃」）：cell 已 `delivery_pending`/`selected` 却没有可执行投递、且没有其它运行中的租约时收敛。 |
 
 **触发端点**（任何 HTTP cron 都可调，Cloudflare 只是官方参考适配器）：
@@ -773,6 +785,7 @@ kill -HUP <pixivflow-pid>
 | `timeoutMs` | 30000 | API 请求超时(ms) |
 | `retries` | 3 | 失败重试次数 |
 | `retryDelay` | 1000 | 重试间隔(ms) |
+| `requestPacingMs` | 未设 | 请求节奏下限（相邻 Pixiv API 请求的最小间隔 ms）；显式设置才生效，写 `0` 可关闭 pacing |
 
 代理:`network.proxy` 完整字段为 `enabled / host / port / protocol(http·https·socks4·socks5) / username / password`。
 
@@ -792,6 +805,8 @@ kill -HUP <pixivflow-pid>
 | `maxRetries` | 3 | 单文件最大重试次数 |
 | `retryDelay` | 2000 | 文件级重试间隔(ms) |
 | `timeout` | 60000 | 单文件下载超时(ms) |
+| `assetNamespace` | `pixiv` | 媒体资产 id 命名空间（如 `pixiv:<id>:novelcover` 的前缀）；小写字母/数字/连字符、最长 32；多实例共存时用不同命名空间避免资产 id 互相归属 |
+| `maxFallbackStages` | `3` | 候选恢复级数预算（0–10）：必需 target 无候选时逐级扩大扫描范围重试，级数耗尽后才允许本次执行记为部分成功（partial）终态（§schedule-recovery） |
 | `materializationPolicy` | `eager` | novel 预览媒体物化策略：`eager` 提前下载本地图片（旧行为）；`on-demand` 预览路径只保留 MediaReference（`assetId`/`sourceUrl`），ZIP/归档仍按需物化 |
 | `novelCover.unknown` | `skip` | 小说封面**内容类型无法识别**时的策略：`skip` 安全模式，不把无法判别的封面当作 Telegram 媒体投递（只是不发送，不会丢文档）；`keep` 优先可用性。Pixiv 生成的设计封面（恰好 640x900）无论如何都不会投递 |
 | `novelCover.probeFailed` | `skip` | **取图失败**（网络/鉴权/限流，从未看到字节）时的策略：`skip` 安全模式——绝大多数小说封面本身就是 Pixiv 生成的设计封面，保留未判别的封面等于重新投递分类器本要拦下的设计；`keep` 优先可用性（一次取图失败不丢作者封面）。两种取值都会记录 `coverType=probe_failed` 告警 |

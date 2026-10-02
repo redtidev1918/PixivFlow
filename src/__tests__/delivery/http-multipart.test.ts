@@ -399,6 +399,16 @@ describe('HttpMultipartDelivery', () => {
       } as any).displayTitle
     ).toBe('月圆，肚肚圆');
 
+    // Source-neutral work id alias: {{workId}} renders the same value as
+    // {{pixivId}} — TelePost's canonical submission field is work_id.
+    const idVars = buildTemplateVariables({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      context: { title: 't', pixivId: '424242', type: 'illustration' },
+    } as any);
+    expect(idVars.pixivId).toBe('424242');
+    expect(idVars.workId).toBe('424242');
+    expect(renderDeliveryTemplate('id={{workId}}', idVars)).toBe('id=424242');
+
     const provider = new HttpMultipartDelivery({
       type: 'httpMultipart',
       url: 'https://example.test/submissions',

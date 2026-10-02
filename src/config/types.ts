@@ -1001,6 +1001,13 @@ export interface StandaloneConfig {
       unknown?: 'skip' | 'keep';
       probeFailed?: 'skip' | 'keep';
     };
+    /**
+     * Media-asset id namespace prefix (`<namespace>:<workId>:<kind>[:<sourceId>]`).
+     * Default: 'pixiv' (production unchanged; `pixiv:` ids stay valid forever).
+     * A second content source may adopt its own namespace — consumers treat the
+     * prefix as opaque. Lowercase letters/digits/dashes, max 32 chars.
+     */
+    assetNamespace?: string;
   };
 }
 

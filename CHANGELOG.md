@@ -1,5 +1,13 @@
 # Changelog
 
+## [3.6.0](https://github.com/redtidev1918/PixivFlow/compare/v3.5.0...v3.6.0) (2026-10-02)
+
+
+### Features
+
+* **config:** configurable media-asset id namespace (default pixiv) ([#190](https://github.com/redtidev1918/PixivFlow/issues/190)) ([496070d](https://github.com/redtidev1918/PixivFlow/commit/496070dc96167cebd2de7306bf72fb8a049c8635))
+* **delivery:** {{workId}} template alias for the source-neutral work id ([#191](https://github.com/redtidev1918/PixivFlow/issues/191)) ([1c019f2](https://github.com/redtidev1918/PixivFlow/commit/1c019f2b969fd22570c993a9622effaedd770901))
+
 ## [3.5.0](https://github.com/redtidev1918/PixivFlow/compare/v3.4.3...v3.5.0) (2026-09-29)
 
 

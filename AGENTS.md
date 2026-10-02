@@ -62,6 +62,9 @@ PixivFlow 负责 Pixiv 认证、候选发现/排序/去重、下载、审核链�
 - **投稿必带幂等键**：`httpMultipart` 的 `config.fields` 没声明 `idempotency_key` 时自动补
   `{{idempotencyKey}}`（`autoIdempotencyKey: false` 关闭）。本地账本只保证 PixivFlow 不重复产生
   意图；接收端能收敛 ACK 丢失后的重投，靠的就是请求里这个字段。
+- **作品标识已来源中立化**：交付模板用 `{{workId}}`（与 `{{pixivId}}` 同值，后者为 deprecated
+  别名）；对接 TelePost 的模板字段写 `work_id`。资产 ID 前缀由 `download.assetNamespace`
+  控制（默认 `pixiv`，生产不改）；前缀对消费侧不透明，第二来源用自己的命名空间。
 - 能力声明的字段名以 `src/delivery/capabilities.ts` 的 `TargetCapabilities` 为唯一来源
   （相册是平铺的 `album` + `albumMin`/`albumMax`，不是 `supportsAlbum`）；写错的键会被忽略并
   warning。`success` 不参与投递判定——判定只看业务 ACK。

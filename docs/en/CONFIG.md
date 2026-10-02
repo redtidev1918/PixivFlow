@@ -61,6 +61,8 @@ An array; each item describes one class of content to collect, with AND semantic
 | `limit` | number | Maximum items to download per run |
 | `minBookmarks` | number | Minimum bookmark threshold |
 | `startDate` / `endDate` | string | Publish-date range `YYYY-MM-DD`; placeholder support [below](#date-placeholders) |
+| `maxPageCount` | number | Maximum pages per work (positive integer); multi-page works beyond the limit are judged unusable for this run |
+| `aiMetadataCheck` | boolean | Optional file-metadata AI detection: supplements `illust_ai_type` when it is missing or not yet classified by Pixiv (a second layer beyond `excludeAI`) |
 
 ### Search mode fields (`mode: "search"`, default)
 
@@ -110,6 +112,10 @@ The last three `topicDiscovery` keys (`seedTier` / `tagRelations` / `matchTransl
 Workflow: Topic → (Pixiv tag suggestions + recent-work tag co-occurrence, with PMI-style specificity scoring automatically suppressing generic tags like R-18/オリジナル) → related tag space → search the day's works per tag → PID dedup → lightweight relevance filtering using only tag/title/description (**acceptance gate only** — passing `minMetadataScore` means belonging to the topic) → passing candidates ranked **purely by local popularity `calculatePopularityScore()`** → download history removed from the bounded popularity candidate pool → backfill up to Top N. Illustrations and novels use their own independent tag spaces; results are cached in the data volume `topic-cache/` (default 7 days); refresh failures automatically degrade to the old cache or the topic word alone, without interrupting the schedule. On repeated runs of the same publish date, an already-submitted #1 does not make the task run empty; `limit=1` keeps 20 illustration candidates by default, with a regular backfill pool cap of 100 (an explicitly configured larger `limit` is still respected), then batch-deduped by the download plan. **No LLM/VLM/Embedding/local model is used anywhere in this flow.**
 
 Capability boundary: if a work has no topic-related tag/title/description (visually related but metadata-unrelated), it cannot be recognized without a vision model — this is a design trade-off, not a bug.
+
+The target-level `topicProfile` (`primary` / `related` / `strategy.freshnessWeight` / `strategy.popularityWeight` /
+`inventory.maxAgeDays` / `inventory.reserveSize`, etc.) is an advanced candidate-supply override, aimed at supply tuning rather than routine configuration;
+its semantics and governance rules live in the [candidate-supply RFC](../architecture/candidate-supply-rfc.md) (Chinese).
 
 #### `topicDiscovery.relatedTags`: may related tags act as independent search channels
 
@@ -342,7 +348,11 @@ When a **terminally failed** review item is reused by key, TelePost returns `400
 correctly as a deterministic failure via the HTTP status code alone.
 
 Both the template variables in `fields` and the `ack` envelope mapping can be overridden, but the default `ack` is exactly TelePost's
-`{ok, data:{review_id, reused, reuse_reason, matched_idempotency_key}}` — no need to write it in daily use.
+`{ok, data:{review_id, reused, reuse_reason, matched_idempotency_key}}` — no need to write it in daily use; the overridable sub-keys are
+`dataPath` / `idField` / `statusField` / `reusedField` / `reasonField` / `keyField`.
+`scheduleOutcomeUrl` is an optional **schedule terminal summary** endpoint: each schedule occurrence's terminal state (success/partial/failed) is delivered
+to it by the durable outbox (reusing `headers` for auth), and TelePost relays it as a user-visible message; it is independent of
+`refetchOutcomeUrl` (manual-refetch terminal verdicts).
 The complete evidence for this boundary (every response shape and its corresponding downstream outcome) lives in
 `src/__tests__/delivery/telepost-compat.test.ts`; the authoritative definition on the TelePost side is its own
 `docs/API.md` §"Submission business ACK".
@@ -685,6 +695,9 @@ On 512 MiB environments, stagger the crons and set `download.concurrency: 1`.
 | `trigger.graceMinutes` | 90 | How long after its scheduled moment an occurrence still accepts external triggers (tolerating watchdog/network retries/wake latency). Beyond the window it is judged expired — no history backfill. |
 | `queuedTimeoutMs` | 1800000 (30 min) | **Queue cap**: a slot still `pending` (including manual-refetch waiting queue) whose creation time exceeds this duration without starting execution → terminated as `failed` by the liveness sweep, reason code `queued_too_long` (user copy: "queue timeout, execution never started"). Avoids infinite pending while account capacity is busy. Values below 60 s are clamped to 60 s; non-numeric/invalid values only warn (non-fatal) and fall back to the default. |
 | `stallTimeoutMs` | 900000 (15 min) | **Stall cap**: a `running` slot whose `heartbeat_at` (falling back to `started_at`, then `created_at`) has made no progress for this long **and** whose execution lease is dead → terminated as `failed` by the sweep, reason code `stalled_no_heartbeat` (user copy: "execution interrupted, no progress for a long time"). It is the fallback for "the process died and nobody knows", not a timeout retry. |
+| `exitWhenIdle` | false | **external mode only**: the process exits on its own once the durable ledger is drained (no non-terminal Slot, no in-flight/undelivered outbox rows) — run-to-completion for autosleep platforms. It does not look at HTTP activity: the trigger endpoint returns as soon as the occurrence is durable, so HTTP idleness says nothing about whether a download has finished |
+| `idleGraceMs` | 600000 (10 min) | Idle merge window before exiting (not a timeout): two schedules ten minutes apart are normally served by a single wake-up, and a delivery retry landing just after the run drains avoids a second cold start |
+| `maxLifetimeMs` | 10800000 (3 h) | Lifetime cap of a single wake-up, preventing a machine from never exiting in abnormal situations |
 | (sweep period) | 60 s | The resident scheduler sweeps every 60 s (floor 60 s, at most 100 rows per batch). In the same tick it **first resumes** interrupted slots (crash-resume), **then** terminates slots that exceed the caps without progress; just-resumed slots do not participate in this tick's termination (they haven't acquired a lease yet). The delivery side separately has `delivery_abandoned` ("submission unhandled, abandoned"): converges when a cell is `delivery_pending`/`selected` but has no executable delivery and no other running lease. |
 
 **Trigger endpoint** (callable by any HTTP cron; Cloudflare is only the official reference adapter):
@@ -767,6 +780,7 @@ Common cron expressions:
 | `timeoutMs` | 30000 | API request timeout (ms) |
 | `retries` | 3 | Failure retry count |
 | `retryDelay` | 1000 | Retry interval (ms) |
+| `requestPacingMs` | unset | Request pacing floor (minimum interval between adjacent Pixiv API requests, ms); effective only when explicitly set — `0` disables pacing |
 
 Proxy: `network.proxy`'s full fields are `enabled / host / port / protocol (http·https·socks4·socks5) / username / password`.
 
@@ -786,6 +800,8 @@ the program automatically parses and enables that proxy, supporting http and soc
 | `maxRetries` | 3 | Maximum retries per file |
 | `retryDelay` | 2000 | File-level retry interval (ms) |
 | `timeout` | 60000 | Per-file download timeout (ms) |
+| `assetNamespace` | `pixiv` | Media-asset id namespace (the prefix in e.g. `pixiv:<id>:novelcover`); lowercase letters/digits/dashes, max 32 chars; use distinct namespaces when multiple instances coexist so asset ids are not attributed across them |
+| `maxFallbackStages` | `3` | Candidate recovery stage budget (0–10): when a required target has no candidates, the scan scope is widened stage by stage; only after the budget is exhausted may the run roll up as a degraded (partial) terminal result (§schedule-recovery) |
 | `materializationPolicy` | `eager` | Novel preview media materialization policy: `eager` downloads local images up front (legacy behavior); `on-demand` keeps only MediaReference (`assetId`/`sourceUrl`) on the preview path — ZIP/archives are still materialized as needed |
 | `novelCover.unknown` | `skip` | Policy when the novel cover's **content type cannot be recognized**: `skip` is the safe mode — an unrecognizable cover is not delivered as Telegram media (just not sent; no document is lost); `keep` favors availability. Pixiv-generated designed covers (exactly 640x900) are never delivered either way |
 | `novelCover.probeFailed` | `skip` | Policy when **image fetching fails** (network/auth/rate-limit — bytes never seen): `skip` is the safe mode — the vast majority of novel covers are Pixiv-generated designed covers, and keeping an unjudged cover amounts to redelivering a design the classifier was meant to block; `keep` favors availability (one failed fetch does not cost the author's cover). Both values log a `coverType=probe_failed` warning |

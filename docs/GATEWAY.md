@@ -13,7 +13,7 @@
 ## 1. 最小可用配置
 
 放在 `config/<你的配置>.json` 的 `delivery` 段里（完整可加载样例见
-[`config/examples/standalone.config.multi-delivery.json`](../../config/examples/standalone.config.multi-delivery.json)）：
+[`config/examples/standalone.config.multi-delivery.json`](../config/examples/standalone.config.multi-delivery.json)）：
 
 ```json
 {
@@ -220,7 +220,7 @@ body。因此「让 PixivFlow 直接发到 NapCat」这条路目前是**不通�
   PixivFlow 完全无关，也不需要 PixivFlow 配置任何东西。
 - **`pairingUrl`**：这是 PixivFlow **只读展示**用的地址。WebUI 的投递面板（`/deliveries`）点
   「配对」时，PixivFlow `GET` 这个 URL 并把答案原样渲染（不生成二维码、不跑登录协议、
-  不存 session、不落库，见 [API 文档](../API.md#配对透传-get-apigatewaysnamepairing)）。它可以是：
+  不存 session、不落库，见 [API 文档](API.md#配对透传-get-apigatewaysnamepairing)）。它可以是：
   - 你那个薄转换进程自己暴露的一个状态端点（推荐 —— 它能同时回答「NapCat 在线吗、账号登录了吗」）；
   - 任何返回登录/配对状态的网关端点。
 
@@ -305,8 +305,8 @@ GET  /health       你 → NapCat: POST /get_status（判 data.online !== false 
 - **凭据**：只用 `${ENV}`；PixivFlow 的响应与日志都会脱敏，但**网关侧的错误体可能被 relay** —— 别在错误信息里回显你自己的凭据。
 - **重定向**：默认**不跟随**重定向（避免凭据被转发到第三方）；确有需要时用 `pairingAllowRedirects`/网关侧显式配置。
 - **配对/扫码**：由网关承担（QQ 场景见 §5.2）。若它暴露一个配对端点，可用 `pairingUrl` 让 WebUI 只读渲染
-  （`GET /api/gateways/:name/pairing`，透传，不落库）——见 [API 文档](../API.md#配对透传-get-apigatewaysnamepairing)。
-- **不要把 WebUI 暴露到公网**：见 [部署文档](../DOCKER.md) 的鉴权说明。
+  （`GET /api/gateways/:name/pairing`，透传，不落库）——见 [API 文档](API.md#配对透传-get-apigatewaysnamepairing)。
+- **不要把 WebUI 暴露到公网**：见 [部署文档](DOCKER.md) 的鉴权说明。
 
 ### 容器 / Fly.io 里的网关地址
 
@@ -319,7 +319,7 @@ PixivFlow 常跑在容器里，而网关往往在宿主机或另一个服务上�
 | 网关只监听 `127.0.0.1` | **容器不可达** —— 让它监听 `0.0.0.0` 或对应网桥地址 |
 | Fly.io | 同机进程用 `http://127.0.0.1:<port>`；网关是**另一个 Fly app** 时用 `http://<app>.internal:<port>`（同组织的 6PN 内网）。本仓库不带 `fly.toml`，部署拓扑以 `pixivflow-telepost-deploy` 的 deployment manifest 为准 |
 
-另见 [DOCKER.md](../DOCKER.md) 的代理与网络约定（同文件里 `HTTP_PROXY`/`ALL_PROXY` 的规则同样适用于投递请求）。
+另见 [DOCKER.md](DOCKER.md) 的代理与网络约定（同文件里 `HTTP_PROXY`/`ALL_PROXY` 的规则同样适用于投递请求）。
 
 ### `reference` 传输的文件可见性（最容易踩的坑）
 
@@ -374,7 +374,7 @@ npx jest src/__tests__/delivery/onebot-adapter-e2e.test.ts   # 真投递运行�
 ## 相关文档
 
 - [投递运行时架构](architecture/delivery-runtime.md) —— 平面分层、账本与幂等、扇出、capability
-- [配置说明](../CONFIG.md) —— `delivery.*` 全部字段与校验规则
-- [API 文档](../API.md) —— `/api/gateways*`、`/api/deliveries*` 的请求/响应与错误码
+- [配置说明](CONFIG.md) —— `delivery.*` 全部字段与校验规则
+- [API 文档](API.md) —— `/api/gateways*`、`/api/deliveries*` 的请求/响应与错误码
 - [OneBot v11 规范](https://github.com/botuniverse/onebot-11) —— 网关侧要实现的那一侧协议
 - [NapCat 文档](https://napneko.github.io/) —— 最活跃的 QQ 协议实现；扫码登录在它自己的面板里完成

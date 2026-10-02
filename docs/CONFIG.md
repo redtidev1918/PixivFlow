@@ -587,6 +587,10 @@ Telegraph 页面生成，最终把 Telegra.ph 阅读链接写进提交字段（�
   记录并可诊断；网络错误/超时/5xx 标记 `retryable=true`，后续由 outbox 重试。
 - 成功后把 Telegraph `url` 注入字段（默认 `novel_preview_url`），随正常投稿/通知
   一起提交给 TelePost 等接收端；失败绝不删除已下载的正文 artifact。
+- TelePress 0.16.4 起把 Markdown / 纯文本的单页目标从旧的约 10,000 字符提升到
+  约 20,000 字符源文本，并能尽量保留段落边界；这会让长篇小说在线阅读的翻页
+  次数明显减少。生产部署建议固定 TelePress 0.16.4 或更新版本，避免旧服务继续
+  高频分页。
 
 交付前会把任务写入 SQLite `outbox` 表。作品投递失败不会删除下载文件；无候选通知也先
 写入该 outbox，不需要依赖当前进程的内存状态。独立 worker 在进程启动后持续消费；

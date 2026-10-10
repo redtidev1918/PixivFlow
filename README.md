@@ -1,6 +1,6 @@
 # PixivFlow
 
-**语言 / Language:** 中文 · [English](README.en.md)
+语言 / Language：中文 · [English](README.en.md)
 
 **把喜欢的 Pixiv 插画、漫画、小说和动图保存到本地，也可以按条件批量收集、定时下载。**
 
@@ -9,14 +9,12 @@
 [![License](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](LICENSE)
 [![Documentation](https://img.shields.io/badge/Docs-redtidev1918.github.io-6366f1?style=flat-square)](https://redtidev1918.github.io/PixivFlow/)
 
-你可以用它：
+- 下载链接：支持作品、小说系列和作者主页。
+- 批量收集：按标签、榜单、发布日期和收藏数筛选插画或小说。
+- 定时下载：设置执行时间，自动跳过已有下载记录的作品。
+- 查看结果：在浏览器中查看下载记录和定时任务状态。
 
-- **下载一个链接**：粘贴作品、小说系列或作者主页链接。
-- **批量收集**：按标签、榜单、发布日期和收藏数筛选插画或小说。
-- **自动下载**：设置时间，让程序定期收集，自动跳过已有下载记录的作品。
-- **查看结果**：在浏览器中查看下载记录和定时任务状态。
-
-只保存到本地就可以使用这些功能。需要分享时，还可以配置 HTTP 投递，把结果交给其他服务处理。
+下载结果默认保存在本地。需要分享时，可配置 HTTP 投递，将作品发给其他服务。
 
 [开始使用](#开始使用) · [批量下载](#批量下载) · [定时下载](#定时下载) · [常见问题](#常见问题) · [完整教程](https://redtidev1918.github.io/PixivFlow/)
 
@@ -35,7 +33,7 @@
 
 ### 1. 安装
 
-先准备 **Node.js 22.13 或更高版本、npm 9 或更高版本**，以及可以访问 Pixiv 的网络和 Pixiv 账号。
+需要 Node.js 22.13+、npm 9+、Pixiv 账号，以及可以访问 Pixiv 的网络。
 
 ```bash
 node -v
@@ -93,7 +91,7 @@ pixivflow web
 
 在浏览器中打开终端显示的地址，默认是 [http://localhost:3000](http://localhost:3000)。npm 发布包已包含网页界面。
 
-可以查看下载记录、配置和调度中心中的任务结果。调度中心会显示各下载目标的状态与原因，方便了解为什么某次没有新作品。
+界面可以查看下载记录、配置和任务结果。调度中心会显示各下载目标的状态与原因，例如候选为空或作品已下载。
 
 使用期间保持命令运行；按 `Ctrl+C` 停止网页服务。如果端口被占用，可以指定其他端口：
 
@@ -116,7 +114,7 @@ pixivflow config backup
 pixivflow config edit
 ```
 
-例如，将当前配置中的 `targets` 改为下面的内容。**这是配置片段，只替换 `targets`，保留已有的登录和其他设置。**
+将当前配置的 `targets` 替换为下面的数组，保留已有登录和其他字段。这个片段每次最多下载 10 个插画作品和 5 篇小说：
 
 ```json
 {
@@ -165,7 +163,7 @@ pixivflow config validate
 pixivflow scheduler
 ```
 
-**定时下载需要程序持续运行，电脑或服务器也需要保持开机。** 按 `Ctrl+C` 停止调度。服务器长期运行见 [Docker 部署指南](docs/DOCKER.md)；多个计划、时区和运行频率见 [配置说明](docs/CONFIG.md)。
+程序和电脑需要持续运行；按 `Ctrl+C` 停止调度。服务器长期运行见 [Docker 部署指南](docs/DOCKER.md)，多个计划和运行频率见 [配置说明](docs/CONFIG.md)。
 
 ## 常用命令
 

@@ -1,26 +1,35 @@
 # 配置参考
 
-> **English:** Every configuration option explained: config file discovery
-> and precedence, the `pixiv` credential block, all 20+ `targets` fields
-> (search / ranking / single-ID modes), storage directory organization
-> (12 modes), scheduler parameters, network and proxy settings, download
-> performance tuning, environment variable overrides, and date placeholders.
+语言：中文 · [English](en/CONFIG.md)
 
-一份配置文件决定 PixivFlow 收什么、存哪、什么时候跑。本文按配置块逐项说明;只想要能跑的最小配置,先看[快速开始](QUICKSTART.md)。
+在配置中设置下载内容、保存位置和执行时间。第一次使用先看 [快速开始](QUICKSTART.md)；需要修改某个字段时，按下面的章节查找。
 
 ## 配置文件在哪
 
-默认路径:`config/standalone.config.json`(仓库根目录下的 `config/`)。
+先查看当前使用的文件：
+
+```bash
+pixivflow dirs
+```
+
+配置目录随安装方式变化，全局安装不一定使用仓库中的 `config/`。
 
 实际查找顺序:
 
 1. 命令行参数 `--config <path>`;
 2. 环境变量 `PIXIV_DOWNLOADER_CONFIG`;
-3. 自动检测:在配置目录中找到第一个可用配置文件;
+3. 配置管理器记录的当前文件；记录不可用时，自动选择配置目录中的可用文件；
 4. 回退到默认路径。
 
-多份配置可用 `pixivflow config` 管理(切换、备份、恢复)。
-不想手写就跑交互式向导:
+已有配置先备份，再编辑和验证：
+
+```bash
+pixivflow config backup
+pixivflow config edit
+pixivflow config validate
+```
+
+临时指定另一份配置可以使用 `pixivflow download --config <文件路径>`。首次配置也可以运行向导：
 
 ```bash
 pixivflow setup
@@ -28,7 +37,7 @@ pixivflow setup
 
 ## 最小可用配置
 
-登录命令会自动填好 `pixiv` 段,你只需要关心 `targets`:
+登录命令会写入 `pixiv` 凭据。下面是下载设置的片段，合并到已有配置中，保留 `pixiv` 和其他字段：
 
 ```json
 {

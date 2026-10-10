@@ -1,6 +1,6 @@
 # PixivFlow
 
-**Language / 语言:** [中文](README.md) · English
+Language / 语言: [中文](README.md) · English
 
 **Save Pixiv illustrations, manga, novels and animations locally, collect works with filters, or download on a schedule.**
 
@@ -9,14 +9,12 @@
 [![License](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](LICENSE)
 [![Documentation](https://img.shields.io/badge/Docs-redtidev1918.github.io-6366f1?style=flat-square)](https://redtidev1918.github.io/PixivFlow/)
 
-Use PixivFlow to:
+- Download links to works, novel series and artist profiles.
+- Collect illustrations or novels by tags, rankings, publication dates and bookmark counts.
+- Set a download schedule and skip works already in your download history.
+- View download records and scheduled task status in your browser.
 
-- **Download a link**: paste a work, novel series or artist profile URL.
-- **Collect in batches**: filter illustrations or novels by tags, rankings, publication dates and bookmark counts.
-- **Download automatically**: set a schedule and skip works already in your download history.
-- **Check results**: view download records and scheduled task status in your browser.
-
-These features work with local storage. You can also configure HTTP delivery to send results to another service.
+Downloads are saved locally by default. Configure HTTP delivery to send works to another service.
 
 [Get started](#get-started) · [Batch downloads](#batch-downloads) · [Scheduled downloads](#scheduled-downloads) · [Common questions](#common-questions) · [Full documentation](https://redtidev1918.github.io/PixivFlow/)
 
@@ -35,7 +33,7 @@ Open PowerShell on Windows or a terminal on macOS / Linux, and run each command 
 
 ### 1. Install
 
-You need **Node.js 22.13 or newer, npm 9 or newer**, a Pixiv account and a network connection that can reach Pixiv.
+You need Node.js 22.13+, npm 9+, a Pixiv account and a network connection that can reach Pixiv.
 
 ```bash
 node -v
@@ -114,7 +112,7 @@ pixivflow config backup
 pixivflow config edit
 ```
 
-For example, replace `targets` in your active configuration with the following. **This is a configuration fragment: replace only `targets` and keep your credentials and other settings.**
+Replace `targets` in your active configuration with the array below, keeping your credentials and other fields. This fragment downloads up to 10 illustrations and 5 novels per run:
 
 ```json
 {
@@ -163,7 +161,7 @@ pixivflow config validate
 pixivflow scheduler
 ```
 
-**The program must keep running and your computer or server must stay on for scheduled downloads.** Press `Ctrl+C` to stop the scheduler. See the [Docker guide](docs/DOCKER.md) for server operation, and the [configuration reference](docs/en/CONFIG.md) for multiple schedules, time zones and frequency settings.
+Keep the program running and the computer on. Press `Ctrl+C` to stop the scheduler. See the [Docker guide](docs/DOCKER.md) for server operation, and the [configuration reference](docs/en/CONFIG.md) for multiple schedules and frequency settings.
 
 ## Common commands
 

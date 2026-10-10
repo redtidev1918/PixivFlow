@@ -14,7 +14,7 @@ Language / 语言: [中文](README.md) · English
 - Set a download schedule and skip works already in your download history.
 - View download records and scheduled task status in your browser.
 
-Downloads are saved locally by default. Configure HTTP delivery to send works to another service.
+Downloaded files stay on your computer by default. Follow the steps below to save your first work, then set up batch or scheduled downloads when you need them.
 
 [Get started](#get-started) · [Batch downloads](#batch-downloads) · [Scheduled downloads](#scheduled-downloads) · [Common questions](#common-questions) · [Full documentation](https://redtidev1918.github.io/PixivFlow/)
 
@@ -22,18 +22,22 @@ Downloads are saved locally by default. Configure HTTP delivery to send works to
 
 | How you want to use PixivFlow | Where to start |
 | --- | --- |
-| Download from your terminal, or open a browser interface | Install the npm version below, then run `pixivflow web` for the interface |
-| Use a desktop client | See [pixivflow-desktop](https://github.com/redtidev1918/pixivflow-desktop) |
+| Use a desktop client | See the [desktop client setup and usage instructions](https://github.com/redtidev1918/pixivflow-desktop) |
+| Enter commands in a terminal | Follow the four steps below to download a work; the installation also includes a browser interface |
 | Keep it running on a server | See the [Docker guide](docs/DOCKER.md) |
 | Run it on Android | See the [Termux guide](docs/TERMUX_INSTALL.md) |
 
 ## Get started
 
-Open PowerShell on Windows or a terminal on macOS / Linux, and run each command in order.
+These steps use the command-line version. Open PowerShell on Windows or a terminal on macOS / Linux. Copy each command into it and press Enter.
+
+To download a single work, you only need these four steps.
 
 ### 1. Install
 
-You need Node.js 22.13+, npm 9+, a Pixiv account and a network connection that can reach Pixiv.
+Have a Pixiv account ready and check that your computer can reach Pixiv. Install [Node.js](https://nodejs.org/) 22.13 or newer; it comes with npm, which must be version 9 or newer.
+
+After installing Node.js, reopen your terminal. Check the versions with the first two commands, then install PixivFlow:
 
 ```bash
 node -v
@@ -46,17 +50,17 @@ If `pixivflow --help` displays the command help, installation succeeded.
 
 ### 2. Sign in to Pixiv
 
-On a computer with Chrome / Chromium installed, run:
+Install Chrome or Chromium on your computer. Run this command, then follow the prompts to sign in to your Pixiv account:
 
 ```bash
 pixivflow login
 ```
 
-Follow the prompts to sign in. Credentials are saved locally and reused for downloads. See the [login guide](docs/en/LOGIN.md) for server login and importing an existing login token. Configuration files contain credentials; remove sensitive information before sharing them for help.
+After sign-in, credentials are saved locally and reused for downloads. See the [login guide](docs/en/LOGIN.md) for server login and importing an existing login token. Configuration files contain credentials; remove sensitive information before sharing them for help.
 
 ### 3. Download your first work
 
-Replace the example URL with a real work link:
+Open the work you want to save on Pixiv and copy its URL from the browser address bar. Replace the example URL below, keeping the double quotes:
 
 ```bash
 pixivflow download --url "https://www.pixiv.net/artworks/123456789"
@@ -72,12 +76,15 @@ pixivflow download --url "https://www.pixiv.net/novel/show.php?id=12345678"
 
 ### 4. Find your files
 
+When the download command finishes, run:
+
 ```bash
 pixivflow dirs
-pixivflow status
 ```
 
-`dirs` shows the actual locations of your configuration, illustrations, novels and download history database. `status` shows download statistics and recent records. Paths depend on your installation and settings; use the output of `dirs` to find them.
+Find the illustration or novel directory in the output and open that path in your file manager to see the downloaded files. Storage locations depend on your installation; use the paths shown by this command.
+
+To save another work, run the download command again with its URL. Run `pixivflow status` to see download counts and recent records.
 
 ## Use it in your browser
 
@@ -99,11 +106,16 @@ pixivflow web --port 8080
 
 ## Batch downloads
 
-A “download target” is a set of collection rules, such as “download up to 10 landscape illustrations per run.” For initial setup, the wizard guides you through credentials, storage locations, tags and scheduling:
+To collect several works at once, choose tags, bookmark counts or publication dates. For example, you can collect up to 10 illustrations tagged “風景” per run. For initial setup, run the wizard and follow its prompts:
 
 ```bash
 pixivflow setup
 ```
+
+After setup, run `pixivflow download` to start collecting. Previously downloaded works are skipped, so you may receive fewer new works than the limit you set.
+
+<details>
+<summary>Set collection rules manually: illustration and novel examples</summary>
 
 If you already have a configuration, back it up and edit it:
 
@@ -138,11 +150,24 @@ pixivflow download
 | `minBookmarks` | Minimum bookmark count, for filtering popular works |
 | `startDate` / `endDate` | Publication date range, in `YYYY-MM-DD` format |
 
-Repeated runs skip works already recorded as downloaded. New downloads may therefore be fewer than `limit`. See the [configuration reference](docs/en/CONFIG.md) for rankings, topic discovery and more filters.
+</details>
+
+See the [batch download walkthrough](docs/en/QUICKSTART.md#download-by-tag) for more examples and the [configuration reference](docs/en/CONFIG.md) for all filters.
 
 ## Scheduled downloads
 
-First check that `pixivflow download` works with your collection rules. Set `scheduler` in your active configuration; this example runs daily at 03:00 in the Asia/Shanghai time zone:
+To collect works automatically each day, configure a schedule in the `pixivflow setup` wizard. Check that batch downloads work first, then start:
+
+```bash
+pixivflow scheduler
+```
+
+Keep your computer and this command running; press `Ctrl+C` to stop. Downloads cannot run while the computer is shut down or asleep.
+
+<details>
+<summary>Set a time manually: every day at 03:00 in Asia/Shanghai</summary>
+
+Set `scheduler` in your active configuration:
 
 ```json
 {
@@ -161,9 +186,12 @@ pixivflow config validate
 pixivflow scheduler
 ```
 
-Keep the program running and the computer on. Press `Ctrl+C` to stop the scheduler. See the [Docker guide](docs/DOCKER.md) for server operation, and the [configuration reference](docs/en/CONFIG.md) for multiple schedules and frequency settings.
+</details>
 
-## Common commands
+See the [scheduled download walkthrough](docs/en/QUICKSTART.md#set-a-download-schedule) for the full steps. For continuous server operation, see the [Docker guide](docs/DOCKER.md).
+
+<details>
+<summary>Command reference</summary>
 
 | What you want to do | Command |
 | --- | --- |
@@ -178,6 +206,8 @@ Keep the program running and the computer on. Press `Ctrl+C` to stop the schedul
 | Check environment and connectivity | `pixivflow health` |
 | Open the browser interface | `pixivflow web` |
 | Start scheduled downloads | `pixivflow scheduler` |
+
+</details>
 
 ## Common questions
 
@@ -206,12 +236,12 @@ For further help, open an [issue](https://github.com/redtidev1918/PixivFlow/issu
 | Configure operational notifications | [Apprise notifications](docs/APPRISE.md) |
 | Upgrade from an older version | [Migration guide](docs/MIGRATION.md) · [Changelog](CHANGELOG.md) |
 
+<details>
+<summary>Service integration and developer documentation</summary>
+
 Local storage uses `persistent` mode by default. With `cache` delivery configured, files can be removed after the receiving service confirms success. Read the [configuration reference](docs/en/CONFIG.md) first to choose the storage behavior you want.
 
 For Telegram submission, review and publishing, you can connect [TelePost](https://github.com/redtidev1918/TelePost). See the [deployment kit](https://github.com/redtidev1918/pixivflow-telepost-deploy) to run both projects together.
-
-<details>
-<summary>Developer and service integration documentation</summary>
 
 - [Project architecture](docs/ARCHITECTURE.md)
 - [Delivery, retries and gateway contracts](docs/architecture/delivery-runtime.md)

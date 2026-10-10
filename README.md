@@ -14,7 +14,7 @@
 - 定时下载：设置执行时间，自动跳过已有下载记录的作品。
 - 查看结果：在浏览器中查看下载记录和定时任务状态。
 
-下载结果默认保存在本地。需要分享时，可配置 HTTP 投递，将作品发给其他服务。
+下载的文件默认保存在你的电脑上。先跟着下面的步骤下载一个作品，再按需要开启批量收集或定时下载。
 
 [开始使用](#开始使用) · [批量下载](#批量下载) · [定时下载](#定时下载) · [常见问题](#常见问题) · [完整教程](https://redtidev1918.github.io/PixivFlow/)
 
@@ -22,18 +22,22 @@
 
 | 你想怎么用 | 入口 |
 | --- | --- |
-| 在电脑上用命令下载，或打开浏览器界面 | 按下面的步骤安装 npm 版，再运行 `pixivflow web` 打开界面 |
-| 使用桌面客户端 | 查看 [pixivflow-desktop](https://github.com/redtidev1918/pixivflow-desktop) |
+| 希望使用桌面客户端 | 查看 [桌面客户端的安装与使用说明](https://github.com/redtidev1918/pixivflow-desktop) |
+| 愿意在终端输入命令 | 跟着下面的四步，先下载一个作品；安装后也能打开浏览器界面 |
 | 在服务器上长期运行 | 查看 [Docker 部署指南](docs/DOCKER.md) |
 | 在 Android 手机上运行 | 查看 [Termux 安装指南](docs/TERMUX_INSTALL.md) |
 
 ## 开始使用
 
-下面以命令行版为例。Windows 可以打开 PowerShell，macOS / Linux 可以打开终端，逐条执行命令。
+下面是命令行版的上手步骤。Windows 打开 PowerShell，macOS / Linux 打开终端。代码框中的命令逐行复制进去，按回车执行。
+
+只下载一个作品时，完成这四步就够了。
 
 ### 1. 安装
 
-需要 Node.js 22.13+、npm 9+、Pixiv 账号，以及可以访问 Pixiv 的网络。
+先准备一个 Pixiv 账号，并确认电脑能访问 Pixiv。还需要安装 [Node.js](https://nodejs.org/) 22.13 或更新版本；npm 会随 Node.js 一起安装，需要 9 或更新版本。
+
+安装 Node.js 后重新打开终端。先用前两条命令检查版本，再安装 PixivFlow：
 
 ```bash
 node -v
@@ -46,19 +50,19 @@ pixivflow --help
 
 ### 2. 登录 Pixiv
 
-本机有 Chrome / Chromium 浏览器时，运行：
+电脑上需要安装 Chrome 或 Chromium 浏览器。运行下面的命令，再按提示登录你的 Pixiv 账号：
 
 ```bash
 pixivflow login
 ```
 
-按提示完成登录。凭据会保存在本地，之后下载时会自动使用。
+登录成功后，凭据会保存在本地，之后下载时会自动使用。
 
 服务器登录、已有登录令牌的导入方式见 [登录指南](docs/LOGIN.md)。配置文件包含登录凭据，求助时请删除敏感信息后再分享。
 
 ### 3. 下载第一个作品
 
-把下面的示例地址替换成你想下载的真实作品链接：
+在 Pixiv 打开想保存的作品，复制浏览器地址栏中的链接，替换下面引号里的示例地址。保留两侧的英文双引号：
 
 ```bash
 pixivflow download --url "https://www.pixiv.net/artworks/123456789"
@@ -74,12 +78,15 @@ pixivflow download --url "https://www.pixiv.net/novel/show.php?id=12345678"
 
 ### 4. 找到下载的文件
 
+下载命令结束后，运行：
+
 ```bash
 pixivflow dirs
-pixivflow status
 ```
 
-`dirs` 显示当前配置文件、插画、小说和下载记录数据库的实际位置；`status` 查看下载统计和最近记录。路径会受安装方式和配置影响，以 `dirs` 的输出为准。
+在输出中找到插画或小说的保存目录，用文件管理器打开对应路径，就能查看下载的文件。不同安装方式的保存位置可能不同，以这条命令显示的路径为准。
+
+以后下载其他作品，替换链接再运行下载命令即可。想查看下载数量和最近记录，运行 `pixivflow status`。
 
 ## 在浏览器中使用
 
@@ -101,11 +108,16 @@ pixivflow web --port 8080
 
 ## 批量下载
 
-一个「下载目标」就是一组收集条件，例如「每次下载最多 10 个風景插画作品」。首次配置可以使用交互式向导，一步步设置登录信息、保存位置、标签和定时任务：
+想一次收集多个作品，可以按标签、收藏数或发布日期设置条件，例如每次下载最多 10 个「風景」插画作品。首次设置时，运行向导并按提示选择：
 
 ```bash
 pixivflow setup
 ```
+
+完成配置后，运行 `pixivflow download` 开始收集。已下载过的作品会被跳过，所以新增数量可能少于设置的上限。
+
+<details>
+<summary>手动设置收集条件：插画和小说示例</summary>
 
 已有配置时，可以先备份，再编辑：
 
@@ -140,11 +152,24 @@ pixivflow download
 | `minBookmarks` | 最低收藏数，用于筛选热门作品 |
 | `startDate` / `endDate` | 发布日期范围，格式为 `YYYY-MM-DD` |
 
-重复执行时，程序会根据下载记录跳过已下载作品。因此实际新增数量可能小于 `limit`。榜单、主题发现和更多筛选条件见 [配置说明](docs/CONFIG.md)。
+</details>
+
+更多例子见 [批量下载教程](docs/QUICKSTART.md#按标签批量下载)，完整筛选条件见 [配置说明](docs/CONFIG.md)。
 
 ## 定时下载
 
-先确认 `pixivflow download` 能按你的条件下载，再设置自动运行时间。在当前配置中设置 `scheduler`，例如每天北京时间凌晨 3 点运行：
+想每天自动收集作品，可以在 `pixivflow setup` 向导中设置定时任务。先确认批量下载能正常运行，再启动：
+
+```bash
+pixivflow scheduler
+```
+
+电脑和这个命令都需要保持运行；按 `Ctrl+C` 停止。电脑关机或休眠期间，程序无法执行下载。
+
+<details>
+<summary>手动设置时间：每天北京时间凌晨 3 点</summary>
+
+在当前配置中设置 `scheduler`：
 
 ```json
 {
@@ -163,9 +188,12 @@ pixivflow config validate
 pixivflow scheduler
 ```
 
-程序和电脑需要持续运行；按 `Ctrl+C` 停止调度。服务器长期运行见 [Docker 部署指南](docs/DOCKER.md)，多个计划和运行频率见 [配置说明](docs/CONFIG.md)。
+</details>
 
-## 常用命令
+完整步骤见 [定时下载教程](docs/QUICKSTART.md#设置定时下载)。需要在服务器上长期运行时，查看 [Docker 部署指南](docs/DOCKER.md)。
+
+<details>
+<summary>常用命令速查</summary>
 
 | 你要做什么 | 命令 |
 | --- | --- |
@@ -180,6 +208,8 @@ pixivflow scheduler
 | 检查环境与连通性 | `pixivflow health` |
 | 打开浏览器界面 | `pixivflow web` |
 | 启动定时下载 | `pixivflow scheduler` |
+
+</details>
 
 ## 常见问题
 
@@ -208,12 +238,12 @@ pixivflow scheduler
 | 配置运维通知 | [Apprise 通知](docs/APPRISE.md) |
 | 从旧版升级 | [迁移指南](docs/MIGRATION.md) · [更新日志](CHANGELOG.md) |
 
+<details>
+<summary>服务集成与开发文档</summary>
+
 本地保存默认使用 `persistent` 模式。配置 `cache` 投递时，文件在接收服务确认成功后可自动清理；请先阅读 [配置参考](docs/CONFIG.md)，确认保存策略符合你的需求。
 
 需要 Telegram 投稿、审核与发布时，可以接入 [TelePost](https://github.com/redtidev1918/TelePost)；组合部署见 [部署套件](https://github.com/redtidev1918/pixivflow-telepost-deploy)。
-
-<details>
-<summary>开发者与服务集成文档</summary>
 
 - [项目架构](docs/ARCHITECTURE.md)
 - [投递、重试与网关契约](docs/architecture/delivery-runtime.md)

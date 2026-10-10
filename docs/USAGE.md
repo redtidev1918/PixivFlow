@@ -1,27 +1,24 @@
 # 功能与命令
 
-> **English:** Complete usage reference. Six download modes (URL direct
-> download, config-driven search, ranking mode, random, single ID, whole
-> user), the ten supported Pixiv URL formats, dedup and resume behavior,
-> scheduler semantics, a WebUI overview, and a category-grouped cheat sheet
-> of the CLI commands.
+语言：中文 · [English](en/USAGE.md)
 
-PixivFlow 的一切下载行为都由「命令 + 配置」驱动。本章讲清楚每种能力的用法与边界,配置字段细节见 [CONFIG](CONFIG.md)。
+按链接下载用 `pixivflow download --url`，按条件批量收集用 `pixivflow download`。下面列出下载方式和命令；字段说明见 [配置参考](CONFIG.md)。
 
-## 六种下载模式
+## 选择下载方式
 
 | 模式 | 用法 | 一句话说明 |
 | --- | --- | --- |
-| URL 直链 | `download --url <链接>` | 粘贴即下,自动识别品类型 |
+| URL 直链 | `download --url <链接>` | 自动识别作品类型 |
 | 标签搜索 | targets 配置 `mode: "search"`(默认) | 按标签 + 筛选条件批量收集 |
 | 排行榜 | targets 配置 `mode: "ranking"` | 从日/周/月榜抓取再按条件过滤 |
-| 随机下载 | `random` 命令或 target `random: true` | 从结果中随机挑选,保持惊喜感 |
+| 主题发现 | targets 配置 `mode: "topic"` 和 `topic` | 根据主题推导相关标签，再筛选作品 |
+| 随机下载 | `random` 命令或 target `random: true` | 从结果中随机挑选 |
 | 单作品 | URL / `illustId` / `novelId` | 精确下载一幅插画或一本小说 |
 | 用户全量 | 用户主页 URL / `userId` | 收取某位用户全部插画或小说 |
 
 ## URL 直链下载
 
-`--url` 会覆盖配置文件中的 targets,只下载这一个目标:
+`--url` 在本次执行中使用链接指定的目标，不修改配置中的 `targets`。把示例地址换成真实链接：
 
 ```bash
 pixivflow download --url "https://www.pixiv.net/artworks/123456789"
@@ -98,21 +95,24 @@ week_original / week_rookie 及对应 R18 榜单,完整取值见
 
 ## 去重与断点
 
-每幅作品的下载记录写入 SQLite(默认 `./data/pixiv-downloader.db`):
+下载记录保存在 SQLite 数据库中，实际位置可用 `pixivflow dirs` 查看：
 
 - 已有记录的作品直接跳过,重复执行安全;
 - 文件存在但缺记录时自动对账补录,删库不毁文件;
-- 中断后再次执行从断点继续,不会整批重来。
+- 中断后再次执行会跳过已完成的作品，继续处理未完成部分。
 
 整理已有文件用 `normalize`:按当前目录组织规则把文件归位。
 
 ## 定时任务
 
+先设置 `scheduler.enabled: true`，并检查 cron 和时区，再运行：
+
 ```bash
+pixivflow config validate
 pixivflow scheduler
 ```
 
-行为要点:
+进程需要持续运行，电脑也需要保持开机。常用设置：
 
 - cron 默认 `0 3 * * *`,时区 `Asia/Shanghai`;
 - `maxExecutions` 限制总执行次数,`minInterval` 避免触发过密;
@@ -195,9 +195,9 @@ pixivflow web     # 监听 3000 端口,浏览器打开 http://localhost:3000
 | `runs` | 列出调度运行记录并查看单次执行摘要 |
 | `outbox` | 列出 / 查看 / 重试 / 取消 durable 投递意图 |
 | `gateway` | 列出已配置消息网关及其投递状态与可达性 |
-| `delivery` | 查看各网关投递状态并重新武装失败路由 |
+| `delivery` | 查看各网关投递状态，预览或重试未完成的投递 |
 | `tags` | 发现关联 Pixiv 标签,并显式应用选中标签 |
-| `topic` | 把语义主题解析为关联标签(resolve),或干跑一天的选择(test) |
+| `topic` | 查看主题的关联标签（resolve），或预览指定日期的候选而不下载（test） |
 
 ### 诊断与对账
 

@@ -1,129 +1,81 @@
 # Login guide
 
-**Language / 语言:** [中文](/LOGIN.md) · English
+Language: [中文](../LOGIN.md) · English
 
-PixivFlow obtains credentials through Pixiv's OAuth interface. You sign in once, the
-refresh token is written to your local config file, and every later command uses it
-automatically — no repeated sign-in.
+After login, PixivFlow saves a refresh token to the active configuration and uses it for later downloads. Sign in again when the token stops working.
 
-## The three login paths
+## Choose a login method
 
-| Path | Command | When to use |
-| --- | --- | --- |
-| Interactive login | `pixivflow login` | Desktop environment with a browser (the default recommendation) |
-| Headless login | `pixivflow login-headless -u <username> -p <password>` | Servers, containers and other GUI-less environments |
-| Token injection | `pixivflow refresh <refresh_token>` | You already hold a refresh token (e.g. you signed in on another machine) |
+| Your environment | Command |
+| --- | --- |
+| Computer with Chrome / Chromium | `pixivflow login` |
+| Valid token from another device | `pixivflow refresh -`, read from standard input |
+| Server requiring username/password login | `pixivflow login-headless -u <username> --password-stdin` |
 
-### Interactive login
+## Sign in on your computer
 
 ```bash
-pixivflow login                 # open the browser and authorise
-pixivflow login -u <username> -p <password>   # or pass the account inline
+pixivflow login
 ```
 
-The underlying implementation prefers
-[pixiv-token-getter](https://www.npmjs.com/package/pixiv-token-getter) (a Node.js
-implementation with zero extra dependencies); it falls back to Puppeteer automation
-when that fails, and to [Python gppt](https://github.com/eggplants/get-pixivpy-token)
-only as a last resort. In the normal case you **do not need Python installed**.
+The program opens your local browser. Follow the login page, then wait for the terminal to report success and the configuration save result.
 
-### Headless login
+PixivFlow uses an existing Chrome / Chromium installation. It does not download a browser. If none is found, install one or set `PUPPETEER_EXECUTABLE_PATH` to its executable path. The official Docker image includes a browser.
 
-```bash
-pixivflow login-headless -u user@example.com -p <password>
-```
+## Import an existing token
 
-Both `-u` and `-p` are required. Add `-j` to make the output JSON, which is easier to
-parse from scripts.
-
-### Token injection
+Put your own valid refresh token in a private local file named `token.txt`. On macOS / Linux:
 
 ```bash
-pixivflow refresh <refresh_token>
-
-# A safer form that keeps the token out of shell history / the process list:
 cat token.txt | pixivflow refresh -
 ```
 
-This writes an existing refresh token into the config and refreshes the access token.
-Typical uses:
+On Windows PowerShell:
 
-- migrating a token from a desktop machine to a server;
-- preparing credentials on the host before a Docker deployment (see [DOCKER](/DOCKER.md)（中文）).
-
-The command has the aliases `login-token` and `set-token`, with identical behaviour.
-
-### Headless username/password login (fallback)
-
-```bash
-pixivflow login-headless -u user@example.com -p <password>
-
-# Keeping the password out of shell history:
-echo "<password>" | pixivflow login-headless -u user@example.com --password-stdin
+```powershell
+Get-Content -Raw token.txt | pixivflow refresh -
 ```
 
-Browser login drives the Chrome/Chromium already present on the host (common install
-locations and `PATH` are probed, or set `PUPPETEER_EXECUTABLE_PATH` explicitly).
-PixivFlow no longer downloads Chromium itself, so install a browser on the server first —
-the Docker image already ships one. The password passes through the server process, so
-avoid this when you can — prefer moving a token instead.
+`-` reads the token from standard input, keeping it out of the command arguments. The file still contains credentials; store it privately or delete it after importing.
+
+`pixivflow refresh <refresh_token>` also works, but entering a real token in the command saves it in shell history. `login-token` and `set-token` are aliases.
+
+## Sign in on a server with a password
+
+`login-headless` opens no visible window but still needs a browser runtime. Prepare a private file named `password.txt` containing only the password. On macOS / Linux:
+
+```bash
+pixivflow login-headless -u user@example.com --password-stdin < password.txt
+```
+
+On Windows PowerShell:
+
+```powershell
+Get-Content -Raw password.txt | pixivflow login-headless -u user@example.com --password-stdin
+```
+
+Replace the example email with your account. The username is required. Supply the password through `--password-stdin` or `-p <password>`. Using `-p` or `echo "real password"` leaves the password in shell history.
+
+Add `-j` for JSON output in scripts. Login and refresh output can contain access and refresh tokens; check it before sharing screenshots or logs.
 
 ## Where credentials are stored
 
-After a successful sign-in the credential is written into the `pixiv` section of the
-config file currently in use (usually `config/standalone.config.json`):
-
-```json
-{
-  "pixiv": {
-    "clientId": "...",
-    "clientSecret": "...",
-    "deviceToken": "pixiv",
-    "refreshToken": "<your token>",
-    "userAgent": "..."
-  }
-}
+```bash
+pixivflow dirs
 ```
 
-Two things to note:
+Check the configuration file path in the output. Credentials are stored in `pixiv.refreshToken`; each configuration keeps its own credentials. Depending on the installation, the file may live outside the current directory.
 
-1. **This file is equivalent to a password.** Never commit it to git and never share a
-   screenshot of it. `config/` is already excluded by `.gitignore`.
-2. Multiple config files (managed by `pixivflow config`) each keep their own credential.
+Configuration files, token files and login output contain sensitive information. When filing an issue, include only relevant settings and remove passwords, tokens and API keys.
 
 ## Expired tokens
 
-When the refresh token stops working, any command that needs authentication fails with
-a prompt to sign in again:
+If authentication fails, run `pixivflow login` again. If another device has a valid token, import it using the steps above. For server password login, rerun `login-headless`.
 
-```
-❌ Authentication Error
-   Your refresh token may have expired or is invalid.
-   Please login again to get a new refresh token:
-     • Interactive login:  pixivflow login
-     • Headless login:     pixivflow login-headless
-```
+Check that successful login also saved the configuration. If saving failed, use `pixivflow dirs` to locate the file and check directory write permissions. For connection problems, see [network and proxy settings](CONFIG.md#network-network--proxy).
 
-Take either path:
+## Related guides
 
-- run `login` / `login-headless` again;
-- if a valid token exists on another device, inject it directly with `refresh <token>`.
-
-## Security checklist
-
-- The config file contains credentials. Remove the `refreshToken` section before
-  filing an issue or asking for help.
-- Deploy to servers with `refresh` rather than a username and password, so no password
-  is ever written to disk.
-- The username and password only exist at the moment of login; they are not persisted.
-
----
-
-## Related
-
-- [QUICKSTART](QUICKSTART.md) — the full flow from installation
-- [DOCKER](/DOCKER.md)（中文）— credential setup in containers
-- [CONFIG](/CONFIG.md)（中文）— config file structure and the `pixiv` fields
-
-> Pages marked **（中文）** are currently Chinese-only. Their English versions are
-> being added incrementally.
+- [Quick start](QUICKSTART.md): installation and your first download
+- [Configuration reference](CONFIG.md): credential fields and configuration paths
+- [Docker](../DOCKER.md) (Chinese): credentials in containers

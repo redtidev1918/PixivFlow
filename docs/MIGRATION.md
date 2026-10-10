@@ -1,12 +1,6 @@
 # v1 → v2 CLI 迁移指南
 
-> **English:** Migration notes for users upgrading from the v1 shell-script
-> workflow to the v2 `pixivflow` CLI. It covers what changed (command entry
-> point, config file location, output behavior), a side-by-side command
-> mapping table, how to run the config path migration command, and answers
-> to common upgrade questions.
-
-本文档面向从 v1(shell 脚本工流)升级到 v2 的用户。读完即可在 v2 下完成登录、下载与配置管理,不需要了解内部实现。
+如果你仍通过 `scripts/pixiv.sh` 运行旧版，请按本文迁移到 `pixivflow` 命令。已经使用 CLI 的用户查看 [更新日志](https://github.com/redtidev1918/PixivFlow/blob/master/CHANGELOG.md) 了解版本变化。
 
 ---
 
@@ -31,7 +25,7 @@ v1 统一使用仓库内 `config/standalone.config.json`。v2 按运行场景解
 | 3 | 全局安装 | 存在 `~/pixivflow/` 则用 `~/pixivflow/config/`,否则 `~/.pixivflow/config/` |
 | 4 | 开发目录/兜底 | 同样回退到 home 目录下的上述位置 |
 
-找不到任何配置时,v2 会自动生成一份默认配置再继续,而不是报错退出。多数"从 v1 升级后找不到配置"的问题,是目录切换触发了优先级变化——用 `pixivflow config show` 末尾输出的 Configuration file 一行确认当前实际使用的文件。
+找不到任何配置时，程序会生成默认配置。迁移后先运行 `pixivflow dirs`，确认实际使用的文件，再检查它是否包含原来的登录信息和下载目标。
 
 ### 输出行为
 

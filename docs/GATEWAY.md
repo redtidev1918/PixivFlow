@@ -1,19 +1,51 @@
-# 外部网关投递（PixivFlow → 你的网关 → 平台）
+# 外部网关投递
 
-这份文档给出**两条具体路径**，把 PixivFlow 的作品投递到一个自己写的网关：
+PixivFlow 可以将作品发给网关，由网关调用 QQ、飞书或其他平台的接口。你需要运行一个接受 PixivFlow 消息格式的网关；平台自己的 webhook 通常需要适配，不能只替换 URL。
 
-1. **通用网关（`type: "webhook"`）** —— 任何语言、任何部署形态都能接。PixivFlow POST 一份统一消息 JSON，网关负责把它变成某个平台的调用。
-2. **QQ / OneBot v11（网关侧模式）** —— PixivFlow **不实现** OneBot 协议；由你的网关（或社区实现如 NapCat / Lagrange / LLOneBot）对 QQ 说话，PixivFlow 只对它说话。
-
-> 为什么不在 PixivFlow 里内置这些平台？见
-> [投递运行时架构 §5](architecture/delivery-runtime.md)：PixivFlow 只做 **Messaging Gateway
-> Client**（内容获取 + 投递账本 + durable outbox），平台协议、扫码登录、会话与凭据留在网关侧。
-> 这样平台故障、协议变更、封号风险都不会进入下载与审核链。
+本文包含通用网关配置、请求与响应格式，以及 QQ / OneBot 适配示例。平台登录、会话和凭据保存在网关侧，见 [投递运行时架构](architecture/delivery-runtime.md)。
 
 ## 1. 最小可用配置
 
-放在 `config/<你的配置>.json` 的 `delivery` 段里（完整可加载样例见
-[`config/examples/standalone.config.multi-delivery.json`](../config/examples/standalone.config.multi-delivery.json)）：
+用 `pixivflow dirs` 找到当前配置，把下面的片段合并进去，保留登录、网络和存储设置。将 URL 换成你的网关地址：
+
+```json
+{
+  "delivery": {
+    "deleteAfterDelivery": false,
+    "targets": {
+      "my-gateway": {
+        "type": "webhook",
+        "url": "http://127.0.0.1:8790/pixivflow/deliver",
+        "mediaTransport": "reference"
+      }
+    }
+  },
+  "targets": [
+    {
+      "type": "illustration",
+      "tag": "風景",
+      "limit": 1,
+      "storageMode": "cache",
+      "delivery": { "target": "my-gateway" }
+    }
+  ]
+}
+```
+
+这个例子保留投递后的文件。`reference` 要求网关能读取 PixivFlow 的文件；跨机器投递可选 `base64`，限制见下文。鉴权和多个投递目标见 [完整配置示例](../config/examples/standalone.config.multi-delivery.json)。
+
+```bash
+pixivflow config validate
+pixivflow gateway test my-gateway
+pixivflow download
+pixivflow delivery status
+```
+
+`gateway test` 只检查端点是否应答，实际投递结果以 `delivery status` 为准。
+
+## 2. 网关收到的请求
+
+下面是请求 payload，供网关开发者解析，不是 PixivFlow 配置：
 
 ```json
 {
@@ -137,9 +169,6 @@ PixivFlow 只看状态码和 body 里的状态词，**HTTP 200 不等于业务�
 
 **远端 id 的字段名**：只有 `id` 和 `message_id` 会被记为 `remoteId`（用于审计与对账），其它名字一律忽略。
 
-```json
-```
-
 失败时把**原因**放在 `reason` / `error` / `message` 任一字段里（会被记进 `last_error`，见
 `pixivflow delivery status`）。
 
@@ -193,7 +222,7 @@ PixivFlow --HTTP POST(统一消息 JSON)--> 你的网关 --OneBot v11 HTTP--> Na
 
 **不要让 PixivFlow 直接对 QQ 说话**：token、风控、限速、掉线重连、协议版本漂移都属于网关。
 
-### 5.1 一个必须说清的事实：投递与扫码是两个不同的接口
+### 5.1 投递接口与扫码接口
 
 用 NapCat 时，QQ 的**登录态**由 NapCat 持有（它在自己的 WebUI 里出二维码，你扫码，
 会话留在 NapCat 进程内）。而 PixivFlow 只会对**一个** URL 说话：配置里的
@@ -321,7 +350,7 @@ PixivFlow 常跑在容器里，而网关往往在宿主机或另一个服务上�
 
 另见 [DOCKER.md](DOCKER.md) 的代理与网络约定（同文件里 `HTTP_PROXY`/`ALL_PROXY` 的规则同样适用于投递请求）。
 
-### `reference` 传输的文件可见性（最容易踩的坑）
+### `reference` 传输的文件可见性
 
 `mediaTransport: "reference"` 发的是**绝对路径**，只有在网关与 PixivFlow **看到同一份文件系统**时才有意义：
 
@@ -377,4 +406,4 @@ npx jest src/__tests__/delivery/onebot-adapter-e2e.test.ts   # 真投递运行�
 - [配置说明](CONFIG.md) —— `delivery.*` 全部字段与校验规则
 - [API 文档](API.md) —— `/api/gateways*`、`/api/deliveries*` 的请求/响应与错误码
 - [OneBot v11 规范](https://github.com/botuniverse/onebot-11) —— 网关侧要实现的那一侧协议
-- [NapCat 文档](https://napneko.github.io/) —— 最活跃的 QQ 协议实现；扫码登录在它自己的面板里完成
+- [NapCat 文档](https://napneko.github.io/)：QQ 接口和扫码登录说明

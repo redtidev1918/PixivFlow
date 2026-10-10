@@ -1,44 +1,64 @@
-# PixivFlow Documentation
+# PixivFlow documentation
 
-**Language / 语言:** [中文](/) · English
+Language: [中文](../README.md) · English
 
-> PixivFlow is a Pixiv batch downloader with CLI and WebUI.
+Start with [Quick start](QUICKSTART.md) to download one work. If downloads already work, use the task index below.
 
-> **Mirror policy**: user-facing docs (install, configuration, commands/usage, API, download) are
-> bilingual; internals, architecture notes and RFCs are Chinese-only by policy. The remaining
-> Chinese guides are indexed below with English summaries.
+## Find a guide
 
-## Get started
+| What you want to do | Guide |
+| --- | --- |
+| Install and download your first work | [Quick start](QUICKSTART.md) · [Download page](download.md) |
+| Sign in, import a token or resolve authentication failures | [Login](LOGIN.md) |
+| Collect by tag, ranking, topic or artist | [Features and commands](USAGE.md) |
+| Change limits, dates, bookmarks, directories or proxies | [Configuration](CONFIG.md) · [Examples](https://github.com/redtidev1918/PixivFlow/tree/master/config/examples) |
+| Run scheduled downloads on a server or NAS | [Docker](../DOCKER.md) (Chinese) |
+| Run on Android | [Termux](../TERMUX_INSTALL.md) (Chinese) |
+| Send works to QQ, Feishu or your own service | [Gateway delivery](../GATEWAY.md) (Chinese) |
+| Receive operational notifications | [Apprise](../APPRISE.md) (Chinese) |
+| Migrate from v1 scripts to the CLI | [Migration](../MIGRATION.md) (Chinese) |
 
-| Document | Description |
-| :-- | :-- |
-| [📥 Download](download.md) | Prebuilt packages, npm and Docker |
-| [README (English)](https://github.com/redtidev1918/PixivFlow/blob/master/README.en.md) | Project overview, install and common commands |
-| [Quick Start](QUICKSTART.md) | Install, sign in, first download |
-| [Login](LOGIN.md) | Sign-in methods and credential storage |
-| [Configuration](CONFIG.md) | Every configuration field |
-| [Usage](USAGE.md) | Download modes, URL forms and the scheduler |
+## File locations and the browser interface
+
+```bash
+pixivflow dirs
+pixivflow web
+```
+
+`dirs` shows the active configuration and download paths. `web` starts the browser interface at the address shown in the terminal, normally `http://localhost:3000`. The scheduling center shows the status and reason for each download target.
+
+See the [desktop client documentation](https://redtidev1918.github.io/pixivflow-desktop/) for desktop installation and troubleshooting.
+
+## Advanced use
+
+The following guides are in Chinese:
+
+| Guide | Contents |
+| --- | --- |
+| [Tag space and ranking](../TAG_RANKING.md) | Tag sources, scoring and candidate diagnostics |
+| [Gateway contract](../GATEWAY_CONTRACT.md) | Message format, signing, responses and pairing |
+| [Reference gateway](https://github.com/redtidev1918/PixivFlow/tree/master/examples/gateway) | A runnable gateway example |
+| [Helper scripts](../SCRIPTS.md) | Script purposes and arguments |
+
+<details>
+<summary>Development, architecture and service integration</summary>
+
+| Guide | Contents |
+| --- | --- |
 | [WebUI API](API.md) | REST endpoints and Socket.IO events |
-| [Pixiv Client Kit](PIXIV_CLIENT_KIT.md) | Reusable Pixiv App API client kit |
+| [Pixiv Client Kit](PIXIV_CLIENT_KIT.md) | Reusable Pixiv App API client |
+| [Architecture](../ARCHITECTURE.md) (Chinese) | Modules, download pipeline and storage |
+| [Observability](../OBSERVABILITY.md) (Chinese) | Logs, metrics and alerts |
+| [Schedule outcomes](../SLOT_OUTCOME.md) (Chinese) | Result types and terminal states |
+| [Architecture index](../architecture/README.md) (Chinese) | Design documents and governance |
+| [Releasing](../RELEASING.md) (Chinese) | Versions and npm publication |
 
-## Chinese guides (English index)
+The frontend source is in [pixivflow-webui](https://github.com/redtidev1918/pixivflow-webui). Contributor guidance is in [CONTRIBUTING](https://github.com/redtidev1918/PixivFlow/blob/master/CONTRIBUTING.md).
 
-| Document | Description |
-| :-- | :-- |
-| [Docker (中文)](/DOCKER.md) | Container deployment |
-| [Migration (中文)](/MIGRATION.md) | Upgrading from v1 to v2 |
-| [Tag space & ranking (中文)](/TAG_RANKING.md) | Tag derivation and ranking rules |
-| [Gateway delivery (中文)](/GATEWAY.md) | External messaging gateway delivery |
-| [Gateway contract v1 (中文)](/GATEWAY_CONTRACT.md) | Wire contract for gateways |
-| [Apprise gateway (中文)](/APPRISE.md) | Notification forwarding via Apprise |
-| [Architecture (中文)](/ARCHITECTURE.md) | Module map and download pipeline |
-| [Observability (中文)](/OBSERVABILITY.md) | Logs, metrics and alerting |
-| [Releasing (中文)](/RELEASING.md) | Release process |
+</details>
 
-## Links
+## Feedback and project links
 
-- Documentation site: [docs site](https://redtidev1918.github.io/PixivFlow/)
-- Releases: <https://github.com/redtidev1918/PixivFlow/releases>
-- Changelog: <https://github.com/redtidev1918/PixivFlow/blob/master/CHANGELOG.md>
-- WebUI frontend: <https://github.com/redtidev1918/pixivflow-webui>
-- Desktop client: <https://github.com/redtidev1918/pixivflow-desktop>
+Open an [issue](https://github.com/redtidev1918/PixivFlow/issues) with reproduction steps and sanitized error output. Report vulnerabilities as described in the [security policy](https://github.com/redtidev1918/PixivFlow/blob/master/SECURITY.en.md).
+
+[Repository](https://github.com/redtidev1918/PixivFlow) · [Releases](https://github.com/redtidev1918/PixivFlow/releases) · [Changelog](https://github.com/redtidev1918/PixivFlow/blob/master/CHANGELOG.md) · [npm package](https://www.npmjs.com/package/pixivflow)

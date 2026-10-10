@@ -1,119 +1,81 @@
 # 登录指南
 
-> **English:** How PixivFlow authenticates. Three login paths: interactive
-> `login` (browser-based, via the pixiv-token-getter library with Puppeteer
-> fallback), `login-headless -u -p` for servers without a GUI, and
-> `refresh <token>` when you already hold a refresh token. Credentials are
-> stored in your local config file — never share it.
+语言：中文 · [English](en/LOGIN.md)
 
-PixivFlow 通过 Pixiv 的 OAuth 接口获取凭据。登录一次,refresh token
-写入本地配置文件,之后所有命令自动使用,无需重复登录。
+PixivFlow 登录后会把 refresh token（刷新令牌）写入当前配置。之后下载时会自动使用；令牌失效后需要重新登录。
 
-## 三种登录方式
+## 选择登录方式
 
-| 方式 | 命令 | 适用场景 |
-| --- | --- | --- |
-| 交互式登录 | `pixivflow login` | 有浏览器的桌面环境(默认推荐) |
-| 无头登录 | `pixivflow login-headless -u <用户名> -p <密码>` | 服务器、容器等无图形界面环境 |
-| Token 注入 | `pixivflow refresh <refresh_token>` | 已有 refresh token(如在别的机器上登过) |
+| 你的环境 | 命令 |
+| --- | --- |
+| 电脑上有 Chrome / Chromium | `pixivflow login` |
+| 已在其他设备登录，持有有效令牌 | `pixivflow refresh -`，从标准输入导入 |
+| 服务器需要用账号密码登录 | `pixivflow login-headless -u <用户名> --password-stdin` |
 
-### 交互式登录
+## 在电脑上登录
 
 ```bash
-pixivflow login                 # 打开浏览器完成授权
-pixivflow login -u 用户名 -p 密码 # 也可以直接带账号参数
+pixivflow login
 ```
 
-底层优先使用 [pixiv-token-getter](https://www.npmjs.com/package/pixiv-token-getter)
-(Node.js 实现,零额外依赖);失败时回退到 Puppeteer 自动化;[Python gppt](https://github.com/eggplants/get-pixivpy-token)
-仅作为最后备选,正常情况下**不需要安装 Python**。
+程序会打开本机浏览器。按页面提示登录，等待终端显示成功和配置保存结果。
 
-### 无头登录
+PixivFlow 使用已有的 Chrome / Chromium，不会自动下载浏览器。无法找到浏览器时，先安装或通过 `PUPPETEER_EXECUTABLE_PATH` 指定可执行文件位置。官方 Docker 镜像已包含浏览器。
 
-```bash
-pixivflow login-headless -u user@example.com -p 密码
-```
+## 导入已有令牌
 
-`-u` 和 `-p` 均为必填。加上 `-j` 可以让输出变成 JSON,
-方便脚本解析。
-
-### Token 注入
+将你自己的有效 refresh token 放入本机私有文件 `token.txt`，然后导入。macOS / Linux：
 
 ```bash
-pixivflow refresh <refresh_token>
-
-# 不让 token 进 shell history / 进程列表的安全写法:
 cat token.txt | pixivflow refresh -
 ```
 
-把一个已有的 refresh token 写入配置并刷新访问令牌,适合:
+Windows PowerShell：
 
-- 把桌面机器的 token 迁移到服务器;
-- Docker 部署时在宿主机准备好凭据(见 [DOCKER · 凭据](DOCKER.md))。
-
-该命令有别名 `login-token` 和 `set-token`,行为一致。
-
-### 无头账密登录(兜底)
-
-```bash
-pixivflow login-headless -u user@example.com -p 密码
-
-# 密码不进 shell history 的写法:
-echo "密码" | pixivflow login-headless -u user@example.com --password-stdin
+```powershell
+Get-Content -Raw token.txt | pixivflow refresh -
 ```
 
-浏览器登录驱动的是宿主机上已有的 Chrome/Chromium(自动探测常见安装位置与 `PATH`,也可用 `PUPPETEER_EXECUTABLE_PATH` 显式指定)。PixivFlow 自身不再下载 Chromium,服务器上没有浏览器时请先安装(Docker 镜像已内置)。密码会经过服务器进程,能避免就避免——优先用 Token 搬运。
+`-` 表示从标准输入读取，令牌不会作为命令参数出现。文件本身仍包含凭据，请妥善保存或在导入后删除。
+
+也支持 `pixivflow refresh <refresh_token>`；直接把真实令牌写在命令里会让它进入终端历史。`login-token` 和 `set-token` 是该命令的别名。
+
+## 在服务器上用账号密码登录
+
+`login-headless` 不打开可见窗口，但仍需要浏览器运行环境。准备只包含密码的私有文件 `password.txt`。macOS / Linux：
+
+```bash
+pixivflow login-headless -u user@example.com --password-stdin < password.txt
+```
+
+Windows PowerShell：
+
+```powershell
+Get-Content -Raw password.txt | pixivflow login-headless -u user@example.com --password-stdin
+```
+
+把示例邮箱换成你的账号。用户名必填；密码可从 `--password-stdin` 读取，也可通过 `-p <密码>` 传入。直接使用 `-p` 或 `echo "真实密码"` 会在命令历史中留下密码。
+
+`-j` 可输出 JSON，供脚本读取。登录和刷新命令的输出可能包含访问令牌与刷新令牌，分享截图或日志前请检查。
 
 ## 凭据存在哪里
 
-登录成功后,凭据写进当前使用的配置文件(通常是
-`config/standalone.config.json`)的 `pixiv` 段:
-
-```json
-{
-  "pixiv": {
-    "clientId": "...",
-    "clientSecret": "...",
-    "deviceToken": "pixiv",
-    "refreshToken": "<你的 token>",
-    "userAgent": "..."
-  }
-}
+```bash
+pixivflow dirs
 ```
 
-注意两点:
+查看输出中的配置文件位置。凭据保存在该文件的 `pixiv.refreshToken` 字段；多份配置各自保存凭据。安装方式不同，配置未必位于当前目录下的 `config/`。
 
-1. **这个文件等同密码**,不要提交到 git、不要截图分享。
-   `config/` 默认已被 .gitignore 排除。
-2. 多份配置文件(`pixivflow config` 管理)各自保存各自的凭据。
+配置文件、令牌文件和登录输出都包含敏感信息。提交 Issue 时只保留与问题有关的字段，删除账号密码、令牌和 API key。
 
 ## Token 过期处理
 
-refresh token 失效时,任何需要认证的命令会报错并提示重新登录:
+看到认证失败提示时，重新运行 `pixivflow login`。如果另一台设备上有有效令牌，可按上面的步骤导入。服务器使用账密登录时，重新执行 `login-headless`。
 
-```
-❌ Authentication Error
-   Your refresh token may have expired or is invalid.
-   Please login again to get a new refresh token:
-     • Interactive login:  pixivflow login
-     • Headless login:     pixivflow login-headless
-```
-
-处理方式二选一:
-
-- 重新执行 `login` / `login-headless`;
-- 若在其他设备上有有效 token,`refresh <token>` 直接注入。
-
-## 安全清单
-
-- 配置文件含认证信息,提 Issue 或求助前务必删除 refreshToken 段。
-- 用 `refresh` 而非账号密码方式部署到服务器,可以避免密码落盘。
-- 账号密码只出现在登录那一刻,不会持久化。
-
----
+登录显示成功后，检查是否同时保存了配置；若出现保存失败，先用 `pixivflow dirs` 找到文件并检查目录写入权限。网络问题见 [网络与代理](CONFIG.md#network-网络与代理)。
 
 ## 相关文档
 
-- [QUICKSTART](QUICKSTART.md) — 从安装开始的完整流程
-- [DOCKER](DOCKER.md) — 容器场景下的凭据配置
-- [CONFIG](CONFIG.md) — 配置文件结构与 pixiv 字段说明
+- [快速开始](QUICKSTART.md)：安装与第一次下载
+- [配置参考](CONFIG.md)：`pixiv` 字段和配置路径
+- [Docker 部署](DOCKER.md)：容器中的凭据设置

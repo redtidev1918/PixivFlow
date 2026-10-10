@@ -1,20 +1,35 @@
 # Configuration Reference
 
-A single config file decides what PixivFlow collects, where it stores, and when it runs. This document goes through each config block; if you only want a minimal working config, start with [Quick start](QUICKSTART.md).
+Language: [中文](../CONFIG.md) · English
+
+Use the configuration to set what to download, where to save it and when to run. Start with [Quick start](QUICKSTART.md) for your first download; use this reference to look up individual fields.
 
 ## Where the config file lives
 
-Default path: `config/standalone.config.json` (under `config/` at the repository root).
+Find the active file first:
+
+```bash
+pixivflow dirs
+```
+
+The configuration directory depends on the installation. A global installation may use a directory outside the repository.
 
 Actual lookup order:
 
 1. Command-line argument `--config <path>`;
 2. Environment variable `PIXIV_DOWNLOADER_CONFIG`;
-3. Auto-detection: the first usable config file found in the config directory;
+3. The current file recorded by the configuration manager, or an available file in the configuration directory if that record is unavailable;
 4. Fall back to the default path.
 
-Multiple configs can be managed with `pixivflow config` (switch, backup, restore).
-If you don't want to write it by hand, run the interactive wizard:
+Back up an existing configuration before editing, then validate it:
+
+```bash
+pixivflow config backup
+pixivflow config edit
+pixivflow config validate
+```
+
+Use `pixivflow download --config <file path>` to select another configuration for a run. For initial setup, you can also use the wizard:
 
 ```bash
 pixivflow setup
@@ -22,7 +37,7 @@ pixivflow setup
 
 ## Minimal working config
 
-The login command fills in the `pixiv` section automatically; you only need to care about `targets`:
+The login command writes the `pixiv` credentials. Merge this download-settings fragment into your existing configuration, keeping `pixiv` and other fields:
 
 ```json
 {

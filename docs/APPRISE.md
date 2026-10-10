@@ -1,6 +1,6 @@
 # 通过 Apprise API 发送运维通知
 
-PixivFlow 只产生运维事件并把小 JSON 可靠 POST 到 `notificationUrl`；Email、Telegram、Discord、ntfy、Gotify、Bark、Slack 等具体协议交给独立运行的 [Apprise API](https://github.com/caronc/apprise-api)。PixivFlow 不实现 SMTP，也不内嵌 Apprise。
+通过 [Apprise API](https://github.com/caronc/apprise-api)，可以将 PixivFlow 的运行通知转发到 Email、Telegram、Discord 等渠道。先单独启动 Apprise，再把投递目标的 `notificationUrl` 指向它。
 
 ## 适用边界
 
@@ -26,7 +26,7 @@ Apprise API 要求字段名为 `body`。无需修改 PixivFlow：在 URL query �
 
 含义：`text → body`，所有 PixivFlow 运维通知标记为 Apprise `warning`，并移除 PixivFlow 自己消费的 `idempotency_key`。
 
-## 最快接入（无公网端口）
+## 配置通知（仅本机访问）
 
 ### 1. 启动 Apprise sidecar
 

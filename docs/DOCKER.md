@@ -1,25 +1,12 @@
 # Docker 部署指南
 
-> **English:** This guide covers deploying PixivFlow with Docker Compose: prerequisites,
-> the five-minute deployment route (.env setup, credential injection, `docker compose up`),
-> enabling the WebUI service, the two-service topology with shared volumes, the full
-> environment variable reference, data persistence and backup, upgrade and rollback
-> procedures, and a troubleshooting table for common container failures. All commands use
-> Compose V2 syntax. Read top to bottom for first-time setup, or jump to a section for
-> maintenance tasks.
+在服务器或 NAS 上运行 PixivFlow，可以用 Docker Compose 管理进程、配置和数据目录。本文命令使用 Compose V2（`docker compose`）。电脑上的 npm 安装见 [快速开始](QUICKSTART.md)。
 
-> **联合部署套件**：如果还需要 TelePost（Telegram 频道投稿机器人），推荐使用
-> [pixivflow-telepost-deploy](https://github.com/redtidev1918/pixivflow-telepost-deploy)
-> —— 一套 Compose 同时启动 PixivFlow + TelePost，支持 Polling/Webhook 双模式，
-> 可选 Mihomo 代理（国内服务器），以及 Fly.io 低成本托管。
-
-本文档面向通过 Docker 在服务器或 NAS 上长期运行 PixivFlow 的用户，覆盖部署、登录、升级与排障全流程。
-所有命令基于 Compose V2（`docker compose`）。非容器环境的原生安装见[快速开始](./QUICKSTART.md)。
+第一次部署按 [部署步骤](#部署步骤) 操作，已有服务需要维护时看 [升级与回滚](#升级与回滚) 或 [故障排查](#故障排查)。与 TelePost 组合部署见 [部署套件](https://github.com/redtidev1918/pixivflow-telepost-deploy)。
 
 ## 适用场景
 
-服务器持续挂机收集时，Docker 提供裸跑 Node.js 难以得到的保障：进程崩溃或宿主机重启后由 `restart: unless-stopped` 自动拉起、内置健康检查、以及隔离的运行时（Node 24 LTS、Chromium、gppt 打包在镜像内，宿主机无需安装依赖）。
-只想临时手动下载几个作品，不必上 Docker。
+Compose 配置用 `restart: unless-stopped` 在进程退出或宿主机重启后拉起服务，并提供健康检查。镜像包含 Node.js、Chromium 和登录依赖，宿主机无需单独安装这些组件。
 
 ## 服务组成
 
@@ -103,7 +90,7 @@ mkdir -p data downloads
 docker compose version   # 应输出 v2.x
 ```
 
-## 五分钟部署路线
+## 部署步骤
 
 ### 第 1 步：初始化环境变量
 
@@ -126,7 +113,7 @@ HTTP_PROXY=http://host.docker.internal:6152
 HTTPS_PROXY=http://host.docker.internal:6152
 ```
 
-凭据有三种注入方式，见[登录与凭据](#登录与凭据)，先让服务跑起来也无妨。
+启动下载前先设置有效凭据，三种方式见 [登录与凭据](#登录与凭据)。
 
 ### 第 2 步：准备配置文件
 
@@ -134,7 +121,9 @@ HTTPS_PROXY=http://host.docker.internal:6152
 cp config/examples/standalone.config.simple.json config/standalone.config.json
 ```
 
-编辑其中 `targets` 数组定义要下载的内容。`pixiv.refreshToken` 可以保留占位符 `YOUR_REFRESH_TOKEN`，配合 `.env` 里的 `PIXIV_REFRESH_TOKEN` 使用——应用加载时会用环境变量覆盖配置文件的同名字段。
+编辑 `targets` 数组设置下载内容。示例中的调度默认关闭；要定时下载，请同时设置 `scheduler.enabled: true`、cron 和时区，见 [定时任务配置](CONFIG.md#scheduler-定时任务)。
+
+`pixiv.refreshToken` 可以保留占位符 `YOUR_REFRESH_TOKEN`，配合 `.env` 中的 `PIXIV_REFRESH_TOKEN` 使用。加载配置时，环境变量会覆盖对应字段。
 
 ### 第 3 步：启动定时下载服务
 
@@ -142,7 +131,7 @@ cp config/examples/standalone.config.simple.json config/standalone.config.json
 docker compose up -d pixivflow
 ```
 
-首次执行会自动构建镜像（数分钟），之后复用已有镜像秒级启动。
+首次执行会构建镜像，后续启动会复用已有镜像。耗时取决于网络和机器性能。
 
 ### 第 4 步：验证
 

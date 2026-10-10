@@ -1,6 +1,6 @@
 - Documentation
   - [Overview](/en/)
-  - [📥 Download](/en/download.md)
+  - [Download](/en/download.md)
   - [Quick Start](/en/QUICKSTART.md)
   - [Login Guide](/en/LOGIN.md)
   - [Configuration](/en/CONFIG.md)

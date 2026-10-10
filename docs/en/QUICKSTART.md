@@ -1,136 +1,112 @@
 # Quick start
 
-**Language / 语言:** [中文](/QUICKSTART.md) · English
+Language: [中文](../QUICKSTART.md) · English
 
-Three commands take you through the whole flow: install → sign in → download.
+Download one work to check your login and connection, then set up batch collection or scheduling. Run these commands in PowerShell on Windows, or a terminal on macOS / Linux.
 
-## 1. Requirements
+## Install and sign in
 
-- Node.js 22.13 or newer (use a still-supported LTS in production)
-- npm 9+
-- A network that can reach Pixiv normally
-
-Check your Node version:
+You need Node.js 22.13+, npm 9+, a Pixiv account and a network that can reach Pixiv.
 
 ```bash
-node -v   # v22.13 or newer
-```
-
-## 2. Install
-
-```bash
+node -v
+npm -v
 npm install -g pixivflow
-pixivflow --help    # printing help means the install worked
+pixivflow --help
 ```
 
-Prefer not to install globally? Run from source:
+Once the help text appears, sign in:
 
 ```bash
-git clone https://github.com/redtidev1918/PixivFlow.git
-cd PixivFlow
-npm install
-npm run build
-npm run download    # equivalent to pixivflow download
-```
-
-## 3. Sign in to your Pixiv account
-
-You only sign in once; the credential is stored in your local config file:
-
-```bash
-# Desktop environment with a browser: authorise in the browser
 pixivflow login
-
-# Server without a GUI: username and password
-pixivflow login-headless -u <username> -p <password>
-
-# Already have a refresh token: inject it directly
-pixivflow refresh <refresh_token>
 ```
 
-For the details and the differences between the three paths, see the
-[login guide](LOGIN.md).
+The program opens Chrome / Chromium on your computer. After login, it saves credentials to the active configuration for later downloads. Servers and phones can import an existing login token; see the [login guide](LOGIN.md).
 
-## 4. Your first download
+## Download your first work
 
-The simplest way — paste any Pixiv link; illustrations, novels, series and user
-profiles are all recognised:
+Replace the example URL with a real work link:
 
 ```bash
-pixivflow download --url https://www.pixiv.net/artworks/123456789
+pixivflow download --url "https://www.pixiv.net/artworks/123456789"
 ```
 
-Files land in `./downloads` (configurable) and the database in `./data/`; the two
-together give you automatic de-duplication.
+You can download a novel too:
 
-Collecting by tag needs a little configuration. Edit
-`config/standalone.config.json` and change `targets` to what you want, for example
-20 `風景` illustrations a day:
+```bash
+pixivflow download --url "https://www.pixiv.net/novel/show.php?id=12345678"
+```
+
+After downloading, check file locations and records:
+
+```bash
+pixivflow dirs
+pixivflow status
+```
+
+`dirs` shows the actual paths for your configuration, downloads and database. Global installations and source checkouts can use different paths; check this output before editing configuration or looking for files.
+
+To view records in a browser, run `pixivflow web` and open the address shown in the terminal. The default is `http://localhost:3000`. Keep the command running while using the interface.
+
+## Download by tag
+
+For initial setup of tags, storage and scheduling, run `pixivflow setup`. If you already have a configuration, back it up and edit it:
+
+```bash
+pixivflow config backup
+pixivflow config edit
+```
+
+Replace `targets` with the array below and keep other fields, including `pixiv`. This example downloads up to 20 landscape illustrations per run:
 
 ```json
 {
   "targets": [
-    {
-      "type": "illustration",
-      "tag": "風景",
-      "limit": 20
-    }
+    { "type": "illustration", "tag": "風景", "limit": 20 }
   ]
 }
 ```
 
-Then run:
+Save, validate and download:
 
 ```bash
+pixivflow config validate
 pixivflow download
 ```
 
-Every field is documented in the [configuration reference](/CONFIG.md)（中文）; if
-you would rather not write it by hand, use the interactive wizard:
+Works already in your download history are skipped, so new downloads may be fewer than `limit`. See the [configuration reference](CONFIG.md) for more filters.
 
-```bash
-pixivflow setup
+## Set a download schedule
+
+Add or update `scheduler` in your existing configuration. This example runs daily at 03:00 in the Asia/Shanghai time zone:
+
+```json
+{
+  "scheduler": {
+    "enabled": true,
+    "cron": "0 3 * * *",
+    "timezone": "Asia/Shanghai"
+  }
+}
 ```
 
-## 5. Collect on a schedule
-
-Once `targets` is configured, start the scheduler and it runs unattended:
+Save and start:
 
 ```bash
+pixivflow config validate
 pixivflow scheduler
 ```
 
-By default it runs once a day at 03:00 (`cron: "0 3 * * *"`, timezone
-`Asia/Shanghai`); see the [configuration reference · scheduler](/CONFIG.md#scheduler-定时任务)（中文）
-to change the frequency. On a server, [Docker Compose](/DOCKER.md)（中文）is the
-recommended host — automatic restarts and a built-in health check.
+Keep the program running and the computer on. Press `Ctrl+C` to stop. For server operation, see the [Docker guide](../DOCKER.md) (Chinese).
 
-## 6. Verify the environment
+## Troubleshooting
 
-```bash
-pixivflow health    # config completeness, directory writability, Pixiv connectivity
-pixivflow status    # download statistics and recent records
-pixivflow dirs      # where each kind of file actually goes
-```
-
-If every item `health` reports passes, you are ready.
-
-## Common first-day problems
-
-| Symptom | What to do |
+| Symptom | What to check |
 | --- | --- |
-| `Authentication Error` | The refresh token expired. Run `login` or `refresh` again; see [LOGIN](LOGIN.md#expired-tokens) |
-| 0 works downloaded | The filters are too strict (bookmarks / dates / limit). Get it working with a minimal config first, then tighten. Search terms must match the site's casing and language |
-| Cannot reach Pixiv | Common on corporate and campus networks — use a proxy, see [CONFIG · network](/CONFIG.md#network-网络与代理)（中文） |
+| Command not found | Reopen the terminal; check the global npm installation and that its executable directory is in `PATH` |
+| Login fails or credentials expire | Run `pixivflow login` again, or import a valid token as described in the [login guide](LOGIN.md) |
+| No works downloaded | Check tags, dates and bookmark filters; matching works may already be downloaded |
+| Cannot reach Pixiv | Run `pixivflow health`; see the [network settings](CONFIG.md#network-network--proxy) if you need a proxy |
+| Scheduled task did not run | Check `scheduler.enabled`, the time zone and schedule, and whether the process is still running |
 
----
-
-## Related
-
-- [LOGIN](LOGIN.md) — sign-in details and token maintenance
-- [CONFIG](/CONFIG.md)（中文）— every configuration field
-- [USAGE](/USAGE.md)（中文）— the six download modes and all commands
-- [DOCKER](/DOCKER.md)（中文）— the preferred server deployment
-
-> Pages marked **（中文）** are currently Chinese-only. Their English versions are
-> being added incrementally.
+When asking for help, include your version, operating system, command and error output. Remove passwords, tokens and other credentials first.

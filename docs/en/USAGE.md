@@ -1,21 +1,24 @@
 # Features & Commands
 
-Every download behavior in PixivFlow is driven by "command + config". This chapter explains the usage and boundaries of each capability; for config field details see [CONFIG](../CONFIG.md) (Chinese).
+Language: [中文](../USAGE.md) · English
 
-## Six download modes
+Use `pixivflow download --url` for a link, or `pixivflow download` to collect works with configured filters. The modes and commands are listed below; see the [configuration reference](CONFIG.md) for fields.
+
+## Choose a download method
 
 | Mode | Usage | One-liner |
 | --- | --- | --- |
 | URL direct | `download --url <link>` | Paste and download; work type auto-detected |
 | Tag search | targets config `mode: "search"` (default) | Batch collection by tag + filters |
 | Ranking | targets config `mode: "ranking"` | Pull from daily/weekly/monthly rankings, then filter |
-| Random | `random` command or target `random: true` | Randomly pick from results, keeping the surprise |
+| Topic discovery | targets config `mode: "topic"` and `topic` | Derive related tags from a topic, then filter works |
+| Random | `random` command or target `random: true` | Randomly pick from results |
 | Single work | URL / `illustId` / `novelId` | Precisely download one illustration or one novel |
 | Whole user | User profile URL / `userId` | Collect all illustrations or novels of a user |
 
 ## URL direct download
 
-`--url` overrides the targets in the config file and downloads only this one target:
+`--url` uses the linked target for this run and leaves the configured `targets` unchanged. Replace this example with a real link:
 
 ```bash
 pixivflow download --url "https://www.pixiv.net/artworks/123456789"
@@ -89,25 +92,28 @@ works of that tag published on `rankingDate` are fetched and sorted locally by p
 
 `rankingMode` supports day / week / month / day_male / day_female / day_ai /
 week_original / week_rookie and the corresponding R18 rankings; full values in
-[CONFIG · targets](../CONFIG.md#targets-下载目标) (Chinese).
+[CONFIG · targets](CONFIG.md#targets-download-targets).
 
 ## Dedup & resume
 
-Every work's download record is written to SQLite (default `./data/pixiv-downloader.db`):
+Download records are stored in SQLite. Use `pixivflow dirs` to find the actual database location:
 
 - Works with an existing record are skipped — repeated runs are safe;
 - When the file exists but the record is missing, reconciliation back-fills it — deleting the database does not destroy files;
-- After an interruption, rerunning continues from the breakpoint instead of restarting the whole batch.
+- After an interruption, rerunning skips completed works and continues with unfinished ones.
 
 Use `normalize` to tidy existing files: it puts files back in place per the current directory organization rules.
 
 ## Scheduled tasks
 
+Set `scheduler.enabled: true` and check the cron expression and time zone before running:
+
 ```bash
+pixivflow config validate
 pixivflow scheduler
 ```
 
-Behavior highlights:
+Keep the process running and the computer on. Common settings:
 
 - Cron defaults to `0 3 * * *`, timezone `Asia/Shanghai`;
 - `maxExecutions` caps total executions; `minInterval` prevents overly dense triggering;
@@ -123,7 +129,7 @@ For long-running servers, hand it to [Docker Compose](../DOCKER.md) (Chinese).
 pixivflow web     # listens on port 3000; open http://localhost:3000 in a browser
 ```
 
-Provides dashboard stats, download task management, URL download, file browsing and preview, history, realtime logs, and config editing. For REST and WebSocket details see [API](API.md); the frontend source lives in the separate repository [pixivflow-webui](https://github.com/redtidev1918/pixivflow-webui). In Docker, simply enable the `pixivflow-webui` service in compose.
+The interface includes download statistics, URL downloads, task management, file previews, history, logs and configuration editing. For REST and WebSocket details, see [API](API.md). The frontend source is in [pixivflow-webui](https://github.com/redtidev1918/pixivflow-webui). In Docker, enable the `pixivflow-webui` service in Compose.
 
 For the interactive component map and the realtime pipeline description, see the frontend repository's [development guide](https://github.com/redtidev1918/pixivflow-webui/blob/master/docs/DEVELOPMENT_GUIDE.md) and [component guide](https://github.com/redtidev1918/pixivflow-webui/blob/master/docs/COMPONENT_GUIDE.md).
 
@@ -190,7 +196,7 @@ Grouped by the categories of `pixivflow help` (commands evolve with releases —
 | `runs` | List scheduler runs and show one execution summary |
 | `outbox` | List / inspect / retry / cancel durable delivery intents |
 | `gateway` | List configured messaging gateways, their delivery state and reachability |
-| `delivery` | Inspect per-gateway delivery state and re-arm failed routes |
+| `delivery` | Inspect delivery status, preview retries or retry unfinished deliveries |
 | `tags` | Discover related Pixiv tags, then explicitly apply selected tags |
 | `topic` | Resolve a semantic topic into related tags (resolve) or dry-run a day selection (test) |
 
@@ -206,7 +212,7 @@ Grouped by the categories of `pixivflow help` (commands evolve with releases —
 
 ## Related documents
 
-- [CONFIG](../CONFIG.md) (Chinese) — detailed semantics of every target field
+- [CONFIG](CONFIG.md) — detailed semantics of every target field
 - [API](API.md) — WebUI backend interface reference
 - [DOCKER](../DOCKER.md) (Chinese) — run the scheduler and WebUI long-term on a server
 - [SCRIPTS](../SCRIPTS.md) (Chinese) — helper scripts in scripts/

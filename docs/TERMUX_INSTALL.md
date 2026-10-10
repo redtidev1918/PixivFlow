@@ -1,14 +1,6 @@
 # Android（Termux）安装指南
 
-> **English:** This guide explains how to run PixivFlow on Android with Termux:
-> obtaining the correct Termux distribution, installing the CLI globally (pure
-> JavaScript, no compiler toolchain), injecting your Pixiv refresh token without a
-> desktop browser, editing configuration for phone storage limits, keeping the
-> scheduler alive in the background with tmux or nohup, and a troubleshooting table
-> for install, permission, and process-killing issues.
-
-本文档面向想在 Android 手机上长期挂机收集的用户：没有桌面浏览器、有更严格的文件权限与后台存活限制。
-Termux 场景只覆盖 CLI 用法；WebUI 与 Docker 部署不在本文范围（后者见 [DOCKER.md](./DOCKER.md)，仅限服务器）。
+在 Android 上用 Termux 安装命令行版、导入登录令牌，再下载作品或启动定时任务。手机的存储权限和后台限制可能打断下载，本文包含对应的配置与排查方法。
 
 ## 适用场景
 
@@ -24,7 +16,7 @@ Termux 场景只覆盖 CLI 用法；WebUI 与 Docker 部署不在本文范围（
 - F-Droid：<https://f-droid.org/packages/com.termux/>（推荐）
 - GitHub Releases：<https://github.com/termux/termux-app/releases>
 
-不要使用 Google Play 版本。该版本已停止维护，且与上述渠道的环境不能混用。
+本文按 F-Droid / GitHub 版本说明。Google Play 使用独立分支，差异见 [Termux 安装说明](https://github.com/termux/termux-app#installation)。Termux 和插件应来自同一渠道；切换渠道前先备份数据。
 
 ### 安装运行时
 
@@ -59,8 +51,7 @@ npm install -g pixivflow
 pixivflow --help      # 打印帮助即安装成功
 ```
 
-安装过程只下载并解包 JavaScript，不触发任何编译，也不会自动下载浏览器；正常应在数十秒内结束。
-失败原因基本只剩网络：换镜像源后重试。
+安装过程不编译原生模块，也不下载浏览器。失败时先阅读 npm 错误，检查 Node.js 版本、网络、写入权限和剩余空间；确认是网络问题后再更换镜像源。
 
 ```bash
 npm config set registry https://registry.npmmirror.com
@@ -119,7 +110,7 @@ security 提醒：refresh token 等同账号密码，不要发到群聊，不要
 pixivflow setup
 ```
 
-也可以手工写最小配置。先用 `pixivflow dirs` 确认实际路径，再编辑对应位置的 `standalone.config.json`：
+已有配置时，先用 `pixivflow dirs` 确认文件位置，再修改 `targets`。下面是片段，保留已有登录和存储字段：
 
 ```json
 {

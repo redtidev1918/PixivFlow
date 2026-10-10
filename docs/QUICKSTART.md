@@ -1,132 +1,112 @@
 # 快速开始
 
-> **English:** Get PixivFlow running in about ten minutes: install the CLI
-> from npm, sign in to your Pixiv account once, download your first artwork
-> by pasting any Pixiv URL, then verify the setup with `pixivflow health`.
-> For servers without a browser, use `pixivflow login-headless`; for Docker,
-> see DOCKER.md after finishing step 1.
+语言：中文 · [English](en/QUICKSTART.md)
 
-三条命令跑通全流程:安装 → 登录 → 下载。
+先下载一个作品，确认登录和网络可用，再设置批量收集或定时任务。以下命令在 Windows PowerShell、macOS 或 Linux 终端中执行。
 
-## 1. 环境要求
+## 安装与登录
 
-- Node.js 22.13 及以上版本（生产环境使用仍受支持的 LTS）
-- npm 9+
-- 一个可以正常访问 Pixiv 的网络环境
-
-确认 Node 版本:
+需要 Node.js 22.13+、npm 9+、Pixiv 账号，以及能访问 Pixiv 的网络。
 
 ```bash
-node -v   # v22.13 或更高
-```
-
-## 2. 安装
-
-```bash
+node -v
+npm -v
 npm install -g pixivflow
-pixivflow --help    # 输出帮助信息即安装成功
+pixivflow --help
 ```
 
-不想全局安装也可以从源码运行:
+帮助信息能正常显示后，运行登录命令：
 
 ```bash
-git clone https://github.com/redtidev1918/PixivFlow.git
-cd PixivFlow
-npm install
-npm run build
-npm run download    # 等价于 pixivflow download
-```
-
-## 3. 登录 Pixiv 账号
-
-登录一次即可,凭据会保存在本地配置文件中:
-
-```bash
-# 有浏览器的桌面环境:打开浏览器完成授权
 pixivflow login
-
-# 无图形界面的服务器:账号密码方式
-pixivflow login-headless -u 用户名 -p 密码
-
-# 已有 refresh token:直接注入配置
-pixivflow refresh <refresh_token>
 ```
 
-三种方式的细节与差异见[登录指南](LOGIN.md)。
+程序会打开本机的 Chrome / Chromium。登录成功后，凭据写入当前配置，后续下载会自动使用。服务器和手机可导入已有的登录令牌，见 [登录指南](LOGIN.md)。
 
-## 4. 第一次下载
+## 下载第一个作品
 
-最简单的方式——粘贴任意 Pixiv 链接,支持插画、小说、系列和用户主页:
+将示例地址替换成真实作品链接：
 
 ```bash
-pixivflow download --url https://www.pixiv.net/artworks/123456789
+pixivflow download --url "https://www.pixiv.net/artworks/123456789"
 ```
 
-文件保存在 `./downloads`(可用配置修改),数据库记录在 `./data/`,
-两者配合实现自动去重。
+小说也可以直接下载：
 
-按标签批量收集则需要写一点配置。编辑 `config/standalone.config.json`,
-把 `targets` 改成你想要的内容,例如每天收 20 张「風景」插画:
+```bash
+pixivflow download --url "https://www.pixiv.net/novel/show.php?id=12345678"
+```
+
+下载后，查看文件位置和记录：
+
+```bash
+pixivflow dirs
+pixivflow status
+```
+
+`dirs` 显示当前配置、下载目录和数据库的实际路径。全局安装和源码运行的路径可能不同，编辑配置或寻找文件时以这里的输出为准。
+
+想在浏览器中查看记录，可以运行 `pixivflow web`，打开终端显示的地址。默认地址为 `http://localhost:3000`；使用期间保持命令运行。
+
+## 按标签批量下载
+
+首次设置标签、保存位置和计划，可以运行 `pixivflow setup`。已有配置时，先备份再编辑：
+
+```bash
+pixivflow config backup
+pixivflow config edit
+```
+
+将配置中的 `targets` 替换为下面的数组，保留 `pixiv` 等其他字段。这个例子每次最多下载 20 个「風景」插画作品：
 
 ```json
 {
   "targets": [
-    {
-      "type": "illustration",
-      "tag": "風景",
-      "limit": 20
-    }
+    { "type": "illustration", "tag": "風景", "limit": 20 }
   ]
 }
 ```
 
-然后执行:
+保存后验证并执行：
 
 ```bash
+pixivflow config validate
 pixivflow download
 ```
 
-全部字段含义见[配置参考](CONFIG.md);不想手写可以用交互式向导:
+已有下载记录的作品会被跳过，所以新增数量可能少于 `limit`。更多筛选条件见 [配置参考](CONFIG.md)。
 
-```bash
-pixivflow setup
+## 设置定时下载
+
+在已有配置中添加或修改 `scheduler`。这个例子每天北京时间凌晨 3 点执行：
+
+```json
+{
+  "scheduler": {
+    "enabled": true,
+    "cron": "0 3 * * *",
+    "timezone": "Asia/Shanghai"
+  }
+}
 ```
 
-## 5. 挂机自动收集
-
-配置好 targets 后,启动定时任务即可长期自动运行:
+保存后启动：
 
 ```bash
+pixivflow config validate
 pixivflow scheduler
 ```
 
-默认每天凌晨 3 点执行一次(`cron: "0 3 * * *"`,时区 Asia/Shanghai),
-修改频率见[配置参考 · scheduler](CONFIG.md)。服务器上推荐用
-[Docker Compose](DOCKER.md) 托管,自动重启、自带健康检查。
+程序和电脑需要持续运行；按 `Ctrl+C` 停止。服务器长期运行见 [Docker 部署](DOCKER.md)。
 
-## 6. 验证环境
+## 遇到问题
 
-```bash
-pixivflow health    # 配置完整性、目录可写性、Pixiv 连通性
-pixivflow status    # 下载统计与最近记录
-pixivflow dirs      # 各类文件的实际保存位置
-```
-
-`health` 报告的所有项都为通过状态,就绪。
-
-## 常见的第一天问题
-
-| 现象 | 处理 |
+| 现象 | 检查方法 |
 | --- | --- |
-| `Authentication Error` | refresh token 失效,重新 `login` 或 `refresh`,详见 [LOGIN](LOGIN.md#token-过期处理) |
-| 下载了 0 个作品 | 条件太严(收藏数/日期/limit),先用最小配置跑通再收紧;搜索词大小写与语言要与站内一致 |
-| 连不上 Pixiv | 公司网/校园网常见,走代理,见 [CONFIG · network](CONFIG.md#network-网络与代理) |
+| 命令找不到 | 重新打开终端，检查 npm 全局安装是否成功、可执行文件目录是否在 `PATH` 中 |
+| 登录失败或认证过期 | 重新运行 `pixivflow login`，或按 [登录指南](LOGIN.md) 导入有效令牌 |
+| 下载 0 个作品 | 检查标签、日期和收藏数条件，也可能是符合条件的作品已下载 |
+| 无法连接 Pixiv | 运行 `pixivflow health`，需要代理时参考 [网络配置](CONFIG.md#network-网络与代理) |
+| 定时任务没执行 | 检查 `scheduler.enabled`、时区、运行时间，以及进程是否仍在运行 |
 
----
-
-## 相关文档
-
-- [LOGIN](LOGIN.md) — 登录细节与 token 维护
-- [CONFIG](CONFIG.md) — 全部配置字段
-- [USAGE](USAGE.md) — 六种下载模式与全部命令
-- [DOCKER](DOCKER.md) — 服务器部署首选方案
+求助时附上版本、系统、执行命令和错误信息；先删除账号密码、令牌和其他凭据。

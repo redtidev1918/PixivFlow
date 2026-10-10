@@ -1,115 +1,69 @@
-# PixivFlow 文档中心
+# PixivFlow 文档
 
-> **English:** This is the documentation hub for PixivFlow, a Pixiv batch
-> downloader with CLI and WebUI. New here? Follow [Quick Start](QUICKSTART.md)
-> → [Login](LOGIN.md). Server deployment goes through
-> [Docker](DOCKER.md); developers will find architecture notes and the full
-> WebUI HTTP API under "For Developers".
->
-> English docs live under [`/en/`](en/); the English README is
-> [README.en.md](https://github.com/redtidev1918/PixivFlow/blob/master/README.en.md).
+语言：中文 · [English](en/README.md)
 
-这里汇聚 PixivFlow 的全部文档。按你的目标选择一条路线:
+第一次使用，从 [快速开始](QUICKSTART.md) 下载一个作品。已经能下载了，可以按下面的任务查找说明。
 
-## 🧭 按任务找文档
+## 按任务找文档
 
-| 你想做什么 | 路线 |
+| 你要做什么 | 文档 |
 | --- | --- |
-| 第一次使用,跑通第一个下载 | [快速开始](QUICKSTART.md) → [账号登录](LOGIN.md) |
-| 了解每种下载方式和全部命令 | [功能与命令](USAGE.md) |
-| 精细控制下载内容(标签、收藏数、日期、排行) | [配置参考](CONFIG.md) + [示例合集](https://github.com/redtidev1918/PixivFlow/tree/master/config/examples) |
-| 部署到服务器长期挂机 | [Docker 部署](DOCKER.md) |
-| 把作品投递到 QQ / 飞书 / 自建服务 | [外部网关投递](GATEWAY.md) |
-| 写一个自己的网关 / 对接已有网关 | [网关契约 v1](GATEWAY_CONTRACT.md) + [参考实现](../examples/gateway/README.md) |
+| 安装并下载第一个作品 | [快速开始](QUICKSTART.md) · [下载页面](download.md) |
+| 登录账号、导入令牌或处理认证失败 | [登录指南](LOGIN.md) |
+| 按标签、榜单、主题或作者收集作品 | [功能与命令](USAGE.md) |
+| 修改数量、日期、收藏数、目录或代理 | [配置参考](CONFIG.md) · [配置示例](https://github.com/redtidev1918/PixivFlow/tree/master/config/examples) |
+| 在服务器或 NAS 上定时下载 | [Docker 部署](DOCKER.md) |
 | 在 Android 手机上运行 | [Termux 安装](TERMUX_INSTALL.md) |
-| 从 v1 升级到 v2 | [迁移指南](MIGRATION.md) |
-| 二次开发、改代码、查接口 | [架构说明](ARCHITECTURE.md) → [Pixiv Client Kit](PIXIV_CLIENT_KIT.md) → [WebUI API](API.md) |
+| 将作品发到 QQ、飞书或自建服务 | [外部网关投递](GATEWAY.md) |
+| 接收运行通知 | [Apprise 通知](APPRISE.md) |
+| 从 v1 的脚本用法迁移到 CLI | [迁移指南](MIGRATION.md) |
 
-## 📚 全部文档
+## 文件位置与浏览器界面
 
-### 开始使用
+```bash
+pixivflow dirs
+pixivflow web
+```
 
-| 文档 | 内容 |
-| --- | --- |
-| [📥 下载](download.md) | 各平台安装包、npm 与 Docker 获取方式 |
-| [QUICKSTART](QUICKSTART.md) | 安装、登录、第一次下载、验证环境,十分钟走完全流程 |
-| [LOGIN](LOGIN.md) | 三种登录方式、凭据存储位置、token 过期处理 |
+`dirs` 显示实际配置和下载路径。`web` 启动浏览器界面，地址会显示在终端，默认是 `http://localhost:3000`。调度中心可以查看逐个下载目标的状态和原因。
 
-### 使用手册
+桌面客户端的安装与排障见 [pixivflow-desktop 文档](https://redtidev1918.github.io/pixivflow-desktop/)。
 
-| 文档 | 内容 |
-| --- | --- |
-| [USAGE](USAGE.md) | 六种下载模式、URL 直链格式、去重与断点续传、定时任务行为、全命令速查 |
-| [CONFIG](CONFIG.md) | 配置文件逐项说明:targets 全字段、存储目录组织、调度器参数、代理与环境变量 |
-| [TAG_RANKING](TAG_RANKING.md) | 主题模式的 Tag 评分公式、来源(provenance)分类、排名规则与召回排查手册 |
-| [SCRIPTS](SCRIPTS.md) | `scripts/` 目录下辅助脚本的用途与用法 |
-
-### 部署运行
+## 进阶使用
 
 | 文档 | 内容 |
 | --- | --- |
-| [DOCKER](DOCKER.md) | docker compose 双服务部署、环境变量参考、数据持久化、故障排查 |
-| [GATEWAY](GATEWAY.md) | 作品投递到自建网关:统一消息 JSON、HMAC 验签、ACK 契约、capability、QQ/OneBot 网关侧模式与「扫码在网关、投递在 PixivFlow」的边界 |
-| [GATEWAY_CONTRACT](GATEWAY_CONTRACT.md) | **网关契约规范 v1**:三个端点、消息 schema、响应词汇表、配对 schema、签名、错误码 —— 由代码与测试逐行钉住 |
-| [TERMUX_INSTALL](TERMUX_INSTALL.md) | Android/Termux 环境从零安装 |
+| [Tag 空间与排名](TAG_RANKING.md) | 主题标签来源、评分和候选排查 |
+| [网关契约](GATEWAY_CONTRACT.md) | 消息格式、签名、响应和配对接口 |
+| [参考网关](https://github.com/redtidev1918/PixivFlow/tree/master/examples/gateway) | 可运行的网关示例 |
+| [辅助脚本](SCRIPTS.md) | 仓库中脚本的用途与参数 |
+| [更新日志](https://github.com/redtidev1918/PixivFlow/blob/master/CHANGELOG.md) | 各版本变化 |
 
-### 开发者
-
-| 文档 | 内容 |
-| --- | --- |
-| [ARCHITECTURE](ARCHITECTURE.md) | 模块地图、命令注册机制、下载管线、存储层设计 |
-| [PIXIV_CLIENT_KIT](PIXIV_CLIENT_KIT.md) | 独立可复用的 Pixiv App API 客户端 kit:依赖规则、单一 429 闸门设计、何时拆分到独立仓库(英文版见 [en/PIXIV_CLIENT_KIT.md](en/PIXIV_CLIENT_KIT.md)) |
-| [API](API.md) | WebUI 后端 REST 接口与 Socket.IO 实时事件 |
-| [OBSERVABILITY](OBSERVABILITY.md) | 日志、指标与告警的可观测入口 |
-| [SLOT_OUTCOME](SLOT_OUTCOME.md) | schedule slot 的结果分类与终态定义 |
-| [CONTRIBUTING](https://github.com/redtidev1918/PixivFlow/blob/master/CONTRIBUTING.md) | 参与贡献的流程与规范 |
-| [RELEASING](RELEASING.md) | 版本管理与 npm 发版流程 |
-| [MIGRATION](MIGRATION.md) | 从 v1 升级到 v2 |
-
-### 架构设计
+<details>
+<summary>开发、架构与服务集成</summary>
 
 | 文档 | 内容 |
 | --- | --- |
-| [architecture/README](architecture/README.md) | 长期架构决策与治理索引 |
-| [principles](architecture/principles.md) | 架构原则 |
-| [delivery-runtime](architecture/delivery-runtime.md) | 投递运行时：Artifact → Delivery Engine → Target Adapter |
-| [operational-result-contract](architecture/operational-result-contract.md) | 运行结果契约 |
-| [candidate-supply-rfc](architecture/candidate-supply-rfc.md) | 候选供给 RFC（Phase 5：主题画像 + 候选库存） |
-| [candidate-supply-observability-rfc](architecture/candidate-supply-observability-rfc.md) | 候选供给可观测性 RFC |
-| [webui-control-center-rfc](architecture/webui-control-center-rfc.md) | WebUI 控制中心 RFC |
-| [CHANGELOG](https://github.com/redtidev1918/PixivFlow/blob/master/CHANGELOG.md) | 版本更新记录 |
+| [架构说明](ARCHITECTURE.md) | 模块、下载流程和存储设计 |
+| [Pixiv Client Kit](PIXIV_CLIENT_KIT.md) | 可复用的 Pixiv App API 客户端 |
+| [WebUI API](API.md) | REST 接口和 Socket.IO 事件 |
+| [可观测性](OBSERVABILITY.md) | 日志、指标与告警 |
+| [调度结果](SLOT_OUTCOME.md) | 调度结果分类和终态定义 |
+| [贡献指南](https://github.com/redtidev1918/PixivFlow/blob/master/CONTRIBUTING.md) | 提交代码与检查流程 |
+| [发版流程](RELEASING.md) | 版本管理与 npm 发布 |
+| [架构索引](architecture/README.md) · [架构原则](architecture/principles.md) | 长期设计与文档治理 |
+| [投递运行时](architecture/delivery-runtime.md) | 投递、重试、幂等与网关 |
+| [运行结果契约](architecture/operational-result-contract.md) | 执行结果的跨模块约定 |
+| [候选供给 RFC](architecture/candidate-supply-rfc.md) | 主题画像与候选库存设计 |
+| [候选可观测性 RFC](architecture/candidate-supply-observability-rfc.md) | 候选供给排查设计 |
+| [WebUI 控制中心 RFC](architecture/webui-control-center-rfc.md) | 控制中心设计 |
 
-## 🖥️ WebUI 前端
+WebUI 前端源码在 [pixivflow-webui](https://github.com/redtidev1918/pixivflow-webui)。环境搭建见 [开发指南](https://github.com/redtidev1918/pixivflow-webui/blob/master/docs/DEVELOPMENT_GUIDE.md)，界面组件见 [组件目录](https://github.com/redtidev1918/pixivflow-webui/blob/master/docs/COMPONENT_GUIDE.md)，静态包与 Docker 构建见 [构建选项](https://github.com/redtidev1918/pixivflow-webui/blob/master/docs/BUILD_OPTIONS.md)。
 
-| 文档 | 内容 |
-| --- | --- |
-| [pixivflow-webui 仓库](https://github.com/redtidev1918/pixivflow-webui) | React 18 + Ant Design 5 前端源码与文档入口 |
-| [开发指南](https://github.com/redtidev1918/pixivflow-webui/blob/master/docs/DEVELOPMENT_GUIDE.md) | 环境搭建、脚本、状态与 i18n 约定 |
-| [组件目录](https://github.com/redtidev1918/pixivflow-webui/blob/master/docs/COMPONENT_GUIDE.md) | 全量组件职责与组合套路 |
-| [构建选项](https://github.com/redtidev1918/pixivflow-webui/blob/master/docs/BUILD_OPTIONS.md) | 静态托管 / Docker 一体化两条路线 |
+</details>
 
-## 🖥️ 桌面客户端
+## 反馈与项目入口
 
-| 文档 | 内容 |
-| --- | --- |
-| [pixivflow-desktop 仓库](https://github.com/redtidev1918/pixivflow-desktop) | 官方桌面客户端（Tauri 2），把本仓库的运行时与 WebUI 一起打包 |
-| [桌面端文档站](https://redtidev1918.github.io/pixivflow-desktop/) | 安装、排障、架构与发布说明 |
+问题与建议提交到 [Issues](https://github.com/redtidev1918/PixivFlow/issues)，附上复现步骤和脱敏后的错误信息。安全问题按 [安全说明](https://github.com/redtidev1918/PixivFlow/blob/master/SECURITY.md) 反馈。
 
-## 致谢
-
-灵感来源、核心依赖与规范声明见 [ACKNOWLEDGMENTS.md](ACKNOWLEDGMENTS.md)。
-
-## 🔗 其他入口
-
-- 项目主页:<https://github.com/redtidev1918/PixivFlow>
-- 教程站点(HTML)：[教程站点](https://redtidev1918.github.io/PixivFlow/)
-- npm 包:<https://www.npmjs.com/package/pixivflow>
-- 问题反馈:[Issues](https://github.com/redtidev1918/PixivFlow/issues)(安全漏洞请看 [SECURITY.md](https://github.com/redtidev1918/PixivFlow/blob/master/SECURITY.md))
-
----
-
-## 相关文档
-
-- [QUICKSTART](QUICKSTART.md)：还没跑起来，先看这里
-- [USAGE](USAGE.md)：已经能跑，看完整能力
-- [CONFIG](CONFIG.md)：想精确控制下载内容，读这份
+[项目主页](https://github.com/redtidev1918/PixivFlow) · [npm 包](https://www.npmjs.com/package/pixivflow) · [致谢](ACKNOWLEDGMENTS.md)

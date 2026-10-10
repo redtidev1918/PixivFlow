@@ -14,6 +14,15 @@ function withDb<T>(fn: (db: Database) => Promise<T>): Promise<T> {
 }
 
 describe('CandidateInventoryRepository', () => {
+  beforeEach(() => {
+    // Keep implicit expiry checks on the same date as the fixture and claims.
+    jest.useFakeTimers({ now: new Date('2026-09-18T00:00:00Z') });
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
   it('claims oldest pending and marks submitted/filtered/pending', async () => {
     await withDb(async (db) => {
       const repo = db.candidateInventory;

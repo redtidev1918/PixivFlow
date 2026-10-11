@@ -91,8 +91,8 @@ async function forwardRecovery(
  * a second state system. Only counts and booleans — never tokens or paths.
  */
 export function scheduleSummary(config: StandaloneConfig): { enabled: boolean; configuredCount: number } {
-  const schedules = Array.isArray(config.schedules) ? config.schedules : [];
-  if (schedules.length > 0) {
+  if (Array.isArray(config.schedules)) {
+    const schedules = config.schedules;
     return {
       enabled: schedules.some((schedule) => schedule.enabled !== false),
       configuredCount: schedules.length,

@@ -55,7 +55,7 @@ describe('scheduler empty-state contract', () => {
     expect(summary).toEqual({ enabled: true, configuredCount: 2 });
   });
 
-  it('treats a purely disabled schedule list as not configured', () => {
+  it('keeps configured but disabled plans distinct from missing plans', () => {
     const summary = scheduleSummary(
       config({
         schedules: [{ id: 'night', enabled: false, cron: '0 23 * * *' }],
@@ -63,6 +63,12 @@ describe('scheduler empty-state contract', () => {
     );
 
     expect(summary).toEqual({ enabled: false, configuredCount: 1 });
+  });
+
+  it('lets an explicit empty schedules array override the legacy cron', () => {
+    expect(scheduleSummary(config({ schedules: [], scheduler: { enabled: true } }))).toEqual({
+      enabled: false, configuredCount: 0,
+    });
   });
 
   it('returns the summary with an empty, healthy slot list', async () => {

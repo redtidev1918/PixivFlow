@@ -3,6 +3,7 @@ import { readFileSync, existsSync } from 'fs';
 import path from 'path';
 import { Database } from '../../../storage/Database';
 import { loadConfig, getConfigPath } from '../../../config';
+import { StandaloneConfig } from '../../../config/types';
 import { logger } from '../../../logger';
 import { ErrorCode } from '../../utils/error-codes';
 import { buildConfigAwareErrorBody } from '../../utils/config-error';
@@ -85,6 +86,25 @@ async function forwardRecovery(
 }
 
 /**
+ * Read-only projection of the configured schedules. It lets the WebUI tell
+ * "no schedule configured yet" apart from "nothing ran yet" without inventing
+ * a second state system. Only counts and booleans — never tokens or paths.
+ */
+export function scheduleSummary(config: StandaloneConfig): { enabled: boolean; configuredCount: number } {
+  const schedules = Array.isArray(config.schedules) ? config.schedules : [];
+  if (schedules.length > 0) {
+    return {
+      enabled: schedules.some((schedule) => schedule.enabled !== false),
+      configuredCount: schedules.length,
+    };
+  }
+
+  // Legacy single-schedule form: `scheduler.enabled` gates `scheduler.cron`.
+  const legacyEnabled = config.scheduler?.enabled === true;
+  return { enabled: legacyEnabled, configuredCount: legacyEnabled ? 1 : 0 };
+}
+
+/**
  * GET /api/scheduler — read-only recent slot occurrences (WebUI Control Center
  * Phase 1: Scheduler panel). Deliberately no writes and no secrets: this is a
  * projection of the existing Slot Ledger, not a second state system.
@@ -94,7 +114,7 @@ export async function listRecentSlots(req: Request, res: Response): Promise<void
   try {
     const limit = Math.min(Math.max(Number(req.query.limit ?? 14) || 14, 1), 50);
     const configPath = getConfigPath();
-    const config = loadConfig(configPath);
+    const config = loadConfig(configPath, true);
     if (!config.storage?.databasePath) {
       res.status(400).json({ errorCode: ErrorCode.SCHEDULER_LIST_FAILED, message: 'database not configured' });
       return;
@@ -122,7 +142,7 @@ export async function listRecentSlots(req: Request, res: Response): Promise<void
     database.close();
     database = null;
 
-    res.json({ data: { slots } });
+    res.json({ data: { slots, scheduler: scheduleSummary(config) } });
   } catch (error) {
     if (database) {
       try {
@@ -208,7 +228,7 @@ export async function listExecutions(req: Request, res: Response): Promise<void>
   let database: Database | null = null;
   try {
     const configPath = getConfigPath();
-    const config = loadConfig(configPath);
+    const config = loadConfig(configPath, true);
     if (!config.storage?.databasePath) {
       res.status(400).json({ errorCode: ErrorCode.SCHEDULER_LIST_FAILED, message: 'database not configured' });
       return;
@@ -284,7 +304,7 @@ export async function getSlotLogs(req: Request, res: Response): Promise<void> {
   let database: Database | null = null;
   try {
     const configPath = getConfigPath();
-    const config = loadConfig(configPath);
+    const config = loadConfig(configPath, true);
     if (!config.storage?.databasePath) {
       res.status(400).json({ errorCode: ErrorCode.SCHEDULER_LIST_FAILED, message: 'database not configured' });
       return;

@@ -56,6 +56,19 @@ function unifiedErrors(target: DeliveryTargetConfig): string[] {
     .map((error) => `${error.field ?? ''} ${error.message ?? ''}`);
 }
 
+describe('archive delivery policy validation', () => {
+  it.each([undefined, 'attach', 'local-only'] as const)('accepts %s in both validators', archiveDelivery => {
+    const target: DeliveryTargetConfig = {type:'httpMultipart',url:'https://receiver.test/submissions',archiveDelivery};
+    expect(loaderErrors(target)).toEqual([]);
+    expect(unifiedErrors(target)).toEqual([]);
+  });
+  it.each(['local', '', true, null, 1])('rejects malformed %s in both validators', archiveDelivery => {
+    const target = {type:'httpMultipart',url:'https://receiver.test/submissions',archiveDelivery} as unknown as DeliveryTargetConfig;
+    expect(loaderErrors(target).join()).toContain('archiveDelivery');
+    expect(unifiedErrors(target).join()).toContain('archiveDelivery');
+  });
+});
+
 describe('telegram delivery target validation', () => {
   it('accepts a complete target in both validators', () => {
     expect(loaderErrors(validTelegramTarget)).toEqual([]);

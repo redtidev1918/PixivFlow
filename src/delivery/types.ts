@@ -63,12 +63,12 @@ export interface DownloadedArtifact {
  * original media. Metadata, markdown-only sidecars and preview/delivery
  * variants are never sent as independent Telegram attachments.
  */
-export function deliveryFilePaths(artifact: DownloadedArtifact): string[] {
+export function deliveryFilePaths(artifact: DownloadedArtifact, includeArchives = true): string[] {
   const chosen: string[] = [];
   for (const item of artifact.artifacts ?? []) {
     const deliverable =
       item.variant === 'text' ||
-      item.variant === 'zip' ||
+      (includeArchives && item.variant === 'zip') ||
       (artifact.type === 'illustration' && item.variant === 'original');
     if (!deliverable) continue;
     const path = item.path.trim();
@@ -81,7 +81,7 @@ export function deliveryFilePaths(artifact: DownloadedArtifact): string[] {
   const mediaPaths = (artifact.mediaAssets ?? [])
     .map((asset) => asset.artifactId?.trim())
     .filter((path): path is string => Boolean(path));
-  return [...new Set(mediaPaths)];
+  return [...new Set(mediaPaths)].filter(path => includeArchives || !/\.zip$/i.test(path));
 }
 
 export interface DeliveryContext {

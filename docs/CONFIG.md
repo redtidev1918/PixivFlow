@@ -333,6 +333,12 @@ album 2–10 条）。投递引擎按能力而不是平台名决定投递形态�
 
 ### TelePost 投稿链（`type: "httpMultipart"`）
 
+TelePost 默认同时禁止 `.zip` 和 `application/zip`。对接目标在 `type` / `url` 同层配置
+`"archiveDelivery": "local-only"`：eager 模式仍生成本地 ZIP，但在冻结 outbox 意图前
+从该目标的附件、预览与内容投影排除 ZIP，发送小说 TXT 与既有媒体引用。此设置不改变
+接收端黑名单或下载策略；未配置时默认为 `attach`，其他接收端继续接收 ZIP。
+ZIP 遵循原有缓存清理策略；多目标共享文件须等所有投递确认后才清理，失败目标保留恢复所需文件。
+
 `httpMultipart` 是**多部分表单**投递：把已下载的文件与渲染好的表单字段一次性 POST 给
 接收端。当前生产接收端就是 TelePost 的 `POST /api/botN/v1/submissions`。请求侧要做对
 这几件事：
@@ -822,7 +828,7 @@ kill -HUP <pixivflow-pid>
 | `timeout` | 60000 | 单文件下载超时(ms) |
 | `assetNamespace` | `pixiv` | 媒体资产 id 命名空间（如 `pixiv:<id>:novelcover` 的前缀）；小写字母/数字/连字符、最长 32；多实例共存时用不同命名空间避免资产 id 互相归属 |
 | `maxFallbackStages` | `3` | 候选恢复级数预算（0–10）：必需 target 无候选时逐级扩大扫描范围重试，级数耗尽后才允许本次执行记为部分成功（partial）终态（§schedule-recovery） |
-| `materializationPolicy` | `eager` | novel 预览媒体物化策略：`eager` 提前下载本地图片（旧行为）；`on-demand` 预览路径只保留 MediaReference（`assetId`/`sourceUrl`），ZIP/归档仍按需物化 |
+| `materializationPolicy` | `eager` | novel 预览媒体物化策略：`eager` 提前下载本地图片（旧行为）；`on-demand` 预览路径只保留 MediaReference（`assetId`/`sourceUrl`），常规小说投递不生成图片 ZIP；`eager` 的 ZIP 附件由目标的 `archiveDelivery` 决定 |
 | `novelCover.unknown` | `skip` | 小说封面**内容类型无法识别**时的策略：`skip` 安全模式，不把无法判别的封面当作 Telegram 媒体投递（只是不发送，不会丢文档）；`keep` 优先可用性。Pixiv 生成的设计封面（恰好 640x900）无论如何都不会投递 |
 | `novelCover.probeFailed` | `skip` | **取图失败**（网络/鉴权/限流，从未看到字节）时的策略：`skip` 安全模式——绝大多数小说封面本身就是 Pixiv 生成的设计封面，保留未判别的封面等于重新投递分类器本要拦下的设计；`keep` 优先可用性（一次取图失败不丢作者封面）。两种取值都会记录 `coverType=probe_failed` 告警 |
 

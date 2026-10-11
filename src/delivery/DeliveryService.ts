@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 
 import { Database } from '../storage/Database';
-import { TargetConfig } from '../config';
+import { DeliveryConfig, TargetConfig } from '../config';
 import { DownloadedArtifact, deliveryFilePaths } from './types';
 import { targetDeliveryNames } from './targetRoutes';
 import { buildContent } from './content';
@@ -92,7 +92,7 @@ export interface ScheduleOutcomePayload {
 }
 
 export class DeliveryService {
-  constructor(private readonly database: Database) {}
+  constructor(private readonly database: Database, private readonly deliveryConfig?: DeliveryConfig) {}
 
   /** Delivery target name for a target config, or null when it is not a delivery run. */
   static targetName(target: TargetConfig): string | null {
@@ -213,13 +213,6 @@ export class DeliveryService {
     if (files.length === 0) {
       throw new Error(`no deliverable artifacts produced for ${artifact.type} ${artifact.pixivId}`);
     }
-    const missing = files.find((file) => !existsSync(file));
-    if (missing) {
-      // Crash between download and intent, or cache eviction. Recoverable: the
-      // cell stays selected and a resume re-downloads the SAME locked work.
-      throw new Error(`artifact file missing before enqueue: ${missing}`);
-    }
-
     const routes = deliveryTargets.map((deliveryTarget) =>
       this.enqueueOne(artifact, target, deliveryTarget, context, files)
     );
@@ -254,6 +247,22 @@ export class DeliveryService {
       return { deliveryTarget, deliveryId: '', idempotencyKey: '', duplicate: true, created: false };
     }
 
+    // Projection belongs to this route, before its durable intent is frozen.
+    // An archive is a local companion, never a substitute for novel text.
+    const routeConfig = this.deliveryConfig?.targets?.[deliveryTarget];
+    let previewFiles = artifact.previewFiles ?? [];
+    if (routeConfig?.type === 'httpMultipart' && routeConfig.archiveDelivery === 'local-only') {
+      const selected = deliveryFilePaths(artifact, false);
+      if (selected.length === 0) throw new Error('no deliverable artifacts remain after archive selection');
+      if (previewFiles.length > 0) {
+        if (previewFiles.length !== files.length) throw new Error('preview files must align with delivery files');
+        previewFiles = selected.map(file => previewFiles[files.indexOf(file)]);
+      }
+      files = selected;
+    }
+    const missing = files.find(file => !existsSync(file));
+    if (missing) throw new Error(`artifact file missing before enqueue: ${missing}`);
+
     const idempotencyKey =
       context.idempotencyKey ??
       DeliveryService.idempotencyKey(deliveryTarget, artifact, context.slotId, target.id);
@@ -282,13 +291,13 @@ export class DeliveryService {
         ...(artifact.spoiler !== undefined ? { spoiler: artifact.spoiler } : {}),
       },
       files,
-      previewFiles: artifact.previewFiles,
+      previewFiles,
       mediaAssets: artifact.mediaAssets,
       artifactFacts: artifact.artifacts,
     });
     const payload = {
       files,
-      previewFiles: artifact.previewFiles ?? [],
+      previewFiles,
       mediaAssets: artifact.mediaAssets,
       cleanupFiles: artifact.cleanupFiles ?? [],
       fields: context.fields ?? null,

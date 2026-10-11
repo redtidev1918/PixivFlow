@@ -5,7 +5,7 @@
 
 ### Bug Fixes
 
-* qualify novel language before durable work binding ([#198](https://github.com/redtidev1918/PixivFlow/issues/198)) ([9fe956b](https://github.com/redtidev1918/PixivFlow/commit/9fe956b8f55e8468b7a46c32b76fb6d3dcba99bf))
+* 中文小说计划先检查正文语言，再锁定合格作品；语言检查期间重启，不再卡在日语候选上。通过检查后仍先锁定再保存文件，恢复时保持作品身份。已有锁定作品不符合语言规则时，通知报告筛选原因。([#198](https://github.com/redtidev1918/PixivFlow/pull/198))
 
 ## [3.6.0](https://github.com/redtidev1918/PixivFlow/compare/v3.5.0...v3.6.0) (2026-10-02)
 

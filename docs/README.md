@@ -11,6 +11,7 @@
 | 安装并下载第一个作品 | [快速开始](QUICKSTART.md) · [下载页面](download.md) |
 | 登录账号、导入令牌或处理认证失败 | [登录指南](LOGIN.md) |
 | 按标签、榜单、主题或作者收集作品 | [功能与命令](USAGE.md) |
+| 在浏览器里管理下载与配置 | [WebUI 使用指南](WEBUI.md) |
 | 修改数量、日期、收藏数、目录或代理 | [配置参考](CONFIG.md) · [配置示例](https://github.com/redtidev1918/PixivFlow/tree/master/config/examples) |
 | 在服务器或 NAS 上定时下载 | [Docker 部署](DOCKER.md) |
 | 在 Android 手机上运行 | [Termux 安装](TERMUX_INSTALL.md) |
@@ -25,7 +26,7 @@ pixivflow dirs
 pixivflow web
 ```
 
-`dirs` 显示实际配置和下载路径。`web` 启动浏览器界面，地址会显示在终端，默认是 `http://localhost:3000`。调度中心可以查看逐个下载目标的状态和原因。
+`dirs` 显示实际配置和下载路径。`web` 启动浏览器界面，地址会显示在终端，默认是 `http://localhost:3000`。界面功能、访问凭据与安全设置见 [WebUI 使用指南](WEBUI.md)。
 
 桌面客户端的安装与排障见 [pixivflow-desktop 文档](https://redtidev1918.github.io/pixivflow-desktop/)。
 

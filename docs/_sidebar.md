@@ -5,6 +5,7 @@
   - [账号登录](/LOGIN.md)
 - 使用手册
   - [功能与命令](/USAGE.md)
+  - [浏览器界面 WebUI](/WEBUI.md)
   - [配置参考](/CONFIG.md)
   - [Tag 空间与排名规则](/TAG_RANKING.md)
   - [脚本工具](/SCRIPTS.md)

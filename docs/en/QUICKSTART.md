@@ -97,7 +97,7 @@ pixivflow config validate
 pixivflow scheduler
 ```
 
-Keep the program running and the computer on. Press `Ctrl+C` to stop. For server operation, see the [Docker guide](../DOCKER.md) (Chinese).
+Keep the program running and the computer on. Press `Ctrl+C` to stop. For server operation, see the [Docker guide](DOCKER.md).
 
 ## Troubleshooting
 

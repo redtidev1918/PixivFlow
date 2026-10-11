@@ -76,6 +76,7 @@ export class WebUICommand extends BaseCommand {
       context.logger.info('[WebUI] Starting server...');
       context.logger.info('[WebUI] PORT:', { port });
       context.logger.info('[WebUI] HOST:', { host });
+      context.logger.info('[WebUI] CONFIG_PATH:', { configPath: context.configPath });
       context.logger.info('[WebUI] STATIC_PATH:', { staticPath: staticPath || '(not found)' });
 
       if (staticPath) {
@@ -106,6 +107,7 @@ export class WebUICommand extends BaseCommand {
         host,
         enableCors: true,
         staticPath,
+        configPath: args.options.config as string | undefined,
       });
 
       context.logger.info(`[WebUI] Server started successfully on http://${host}:${actualPort}`);
@@ -443,11 +445,18 @@ Options:
   --port <number>     Port to listen on (default: 3000)
   --host <string>     Host to bind to (default: localhost)
   --static-path <path> Path to frontend static files
+  --config <path>     Configuration file the WebUI must serve
+                      (default: PIXIV_DOWNLOADER_CONFIG, then the detected config)
+
+Configuration priority:
+  --config  >  PIXIV_DOWNLOADER_CONFIG  >  default configuration path
+  The WebUI, its API, download tasks and the scheduler all use this one file.
 
 Environment Variables:
   PORT                Port to listen on
   HOST                Host to bind to
   STATIC_PATH         Path to frontend static files
+  PIXIV_DOWNLOADER_CONFIG  Configuration file to serve
 
 Auto-Build Feature:
   If run from the project source directory and frontend is not built,
@@ -458,6 +467,7 @@ Examples:
   pixivflow web --port 8080                          # Use custom port
   pixivflow web --host 0.0.0.0                       # Bind to all interfaces
   pixivflow web --static-path ./webui-frontend/dist  # Use custom static path
+  pixivflow web --config ./config/fly-two-bots.example.json  # Serve a specific config
 
 Backward-compatible aliases: pixivflow webui, pixivflow w`;
   }

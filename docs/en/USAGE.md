@@ -121,7 +121,7 @@ Keep the process running and the computer on. Common settings:
 - Running bare `pixivflow` with no subcommand: if `scheduler.enabled` is true in config,
   it is equivalent to starting the scheduler; otherwise it runs one download.
 
-For long-running servers, hand it to [Docker Compose](../DOCKER.md) (Chinese).
+For long-running servers, hand it to [Docker Compose](DOCKER.md).
 
 ## WebUI
 
@@ -214,5 +214,5 @@ Grouped by the categories of `pixivflow help` (commands evolve with releases —
 
 - [CONFIG](CONFIG.md) — detailed semantics of every target field
 - [API](API.md) — WebUI backend interface reference
-- [DOCKER](../DOCKER.md) (Chinese) — run the scheduler and WebUI long-term on a server
+- [DOCKER](DOCKER.md) — run the scheduler and WebUI long-term on a server
 - [SCRIPTS](../SCRIPTS.md) (Chinese) — helper scripts in scripts/

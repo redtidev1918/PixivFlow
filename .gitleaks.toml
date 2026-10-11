@@ -125,6 +125,8 @@ description = "Vendored minified WebUI bundle: KeyboardEvent.shiftKey false posi
 regexTarget = "secret"
 regexes = [
   '''^N=b\.shiftKey$''',
+  # WebUI 2.0.2: the same rc-input-number handler uses `j` after rebuilding.
+  '''^N=j\.shiftKey$''',
 ]
 
 # ---------------------------------------------------------------------------
@@ -137,4 +139,5 @@ regexes = [
 description = "Vendored minified WebUI bundle: minified KeyboardEvent handler code shape (key + shiftKey)"
 regexes = [
   '''b\.key,N=b\.shiftKey;''',
+  '''j\.key,N=j\.shiftKey;''',
 ]

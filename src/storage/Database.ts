@@ -70,9 +70,11 @@ export class Database implements IDatabase {
   private gatewayConnectionRepo!: GatewayConnectionRepository;
 
   constructor(private readonly databasePath: string) {
+    let openedDriver: SqliteDriver | undefined;
     try {
       mkdirSync(dirname(this.databasePath), { recursive: true });
       this.db = new NodeSqliteDriver(this.databasePath);
+      openedDriver = this.db;
       // Enable WAL mode for better concurrency
       this.db.pragma('journal_mode = WAL');
       // Optimize for read-heavy workloads
@@ -100,6 +102,9 @@ export class Database implements IDatabase {
       this.candidateInventoryRepo = new CandidateInventoryRepository(this.db);
       this.gatewayConnectionRepo = new GatewayConnectionRepository(this.db);
     } catch (error) {
+      // A failed constructor cannot be closed by the request handler. Release
+      // any opened connection here, preserving the original diagnostic.
+      try { openedDriver?.close(); } catch { /* preserve initialization error */ }
       throw new DatabaseError(
         `Failed to initialize database at ${this.databasePath}`,
         error instanceof Error ? error : undefined

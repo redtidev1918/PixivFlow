@@ -493,8 +493,8 @@ Business errors are carried by the `errorCode` string (full enum in `src/webui/u
 
 - [pixivflow-webui frontend repository](https://github.com/redtidev1918/pixivflow-webui) — the official frontend consumer, reference implementation for REST/realtime events; see its [COMPONENT_GUIDE](https://github.com/redtidev1918/pixivflow-webui/blob/master/docs/COMPONENT_GUIDE.md) for the component/data-contract mapping
 
-- [Architecture document](../ARCHITECTURE.md) (Chinese) — how the server-side modules work together
+- [Architecture document](ARCHITECTURE.md) — how the server-side modules work together
 - [Usage guide](USAGE.md) — day-to-day CLI and WebUI operations
-- [Docker deployment](../DOCKER.md) (Chinese) — container ports and environment variables
+- [Docker deployment](DOCKER.md) — container ports and environment variables
 - [Quick start](QUICKSTART.md) — from installation to first download
 - [Project README](https://github.com/redtidev1918/PixivFlow) — feature overview

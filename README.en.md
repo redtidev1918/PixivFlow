@@ -136,7 +136,7 @@ To run several times a day, or to give different targets different times, use th
 
 </details>
 
-The scheduler only runs while this command is running. Downloads do not happen while the machine is off or asleep; by default the process catches up on one missed run after a restart. See the [configuration reference](docs/en/CONFIG.md) for the exact behaviour, and the [Docker guide](docs/DOCKER.md) (Chinese) to keep it running on a server.
+The scheduler only runs while this command is running. Downloads do not happen while the machine is off or asleep; by default the process catches up on one missed run after a restart. See the [configuration reference](docs/en/CONFIG.md) for the exact behaviour, and the [Docker guide](docs/en/DOCKER.md) to keep it running on a server.
 
 ## Configuration and file locations
 
@@ -261,11 +261,11 @@ Still stuck? Open an [issue](https://github.com/redtidev1918/PixivFlow/issues) w
 | Login and credential maintenance | [Login guide](docs/en/LOGIN.md) |
 | Every download mode and option | [Usage](docs/en/USAGE.md) · [Configuration](docs/en/CONFIG.md) |
 | Browser interface | [WebUI guide](docs/en/WEBUI.md) |
-| Server and container deployment | [Docker guide](docs/DOCKER.md) (Chinese) · [Termux](docs/TERMUX_INSTALL.md) (Chinese) |
-| Delivery to another service | [Gateway delivery](docs/GATEWAY.md) (Chinese) |
-| Operational notifications | [Apprise](docs/APPRISE.md) (Chinese) |
-| Upgrading from an older version | [Migration](docs/MIGRATION.md) (Chinese) · [Changelog](CHANGELOG.md) |
-| Architecture and troubleshooting | [Architecture](docs/ARCHITECTURE.md) (Chinese) · [Schedule outcomes](docs/SLOT_OUTCOME.md) (Chinese) |
+| Server and container deployment | [Docker guide](docs/en/DOCKER.md) · [Termux](docs/en/TERMUX_INSTALL.md) |
+| Delivery to another service | [Gateway delivery](docs/en/GATEWAY.md) |
+| Operational notifications | [Apprise](docs/en/APPRISE.md) |
+| Upgrading from an older version | [Migration](docs/en/MIGRATION.md) · [Changelog](CHANGELOG.md) |
+| Architecture and troubleshooting | [Architecture](docs/en/ARCHITECTURE.md) · [Schedule outcomes](docs/SLOT_OUTCOME.md) (Chinese) |
 | npm release process | [Releasing](docs/RELEASING.md) (Chinese) |
 
 ## Related projects

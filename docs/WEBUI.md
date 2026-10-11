@@ -15,11 +15,11 @@ pixivflow web
 | 需要 | 命令 |
 | --- | --- |
 | 换一个端口 | `pixivflow web --port 8080` |
-| 指定配置文件 | `PIXIV_DOWNLOADER_CONFIG=/path/to/config.json pixivflow web` |
+| 指定配置文件 | `pixivflow web --config "/path/to/my config.json"` |
 | 绑定其他网卡地址 | `pixivflow web --host 0.0.0.0`（先按下面的说明配置访问凭据） |
 | 使用自定义静态包 | `pixivflow web --static-path ./webui-frontend/dist` |
 
-`PIXIV_DOWNLOADER_CONFIG` 只对 WebUI 服务生效；命令行的 `--config` 用于其他命令。
+配置路径优先级为 `--config` > `PIXIV_DOWNLOADER_CONFIG` > 默认配置。相对路径按启动命令的工作目录解析；路径包含空格时加引号。指定文件不存在或 JSON 无效时会报错，不会静默切换配置。WebUI、API、下载任务及调度模块共用已选定的文件；环境变量也可用于其他 CLI 命令。
 
 ## 界面功能
 
@@ -33,6 +33,8 @@ pixivflow web
 | 配置管理 | 查看和编辑配置，密钥字段由服务端脱敏 |
 | 日志查看 | 查看运行日志 |
 | 文件浏览 | 浏览已下载的文件 |
+
+调度中心区分尚未配置计划、计划未启用及已配置但暂无执行记录；这些是正常空状态，不需要先登录 Pixiv。配置、API 或数据库真实异常仍显示错误。
 
 ## 界面截图
 

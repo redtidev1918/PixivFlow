@@ -138,6 +138,13 @@ submitted cell 不改写；终结后用同一条 `deriveSlotStatus` 投影派生
 
 ## Manual recovery outcome (「放宽条件重试」)
 
+小说的全文语言检查在候选锁定之前完成；空正文、语言不匹配或无法满足严格语言规则的
+候选不产生持久锁定和文件，可以继续检查下一篇。通过检查后，先锁定作品再写文件，
+重启仍恢复同一作品。旧版本留下的锁定作品若不符合语言规则，保留原身份并报告
+`filter_exhausted`，不会把它伪装成“内部错误”，也不会自动换稿。
+
+需要补回失败的小说时，使用下述单目标恢复入口；不要重跑整个计划或修改执行数据库。
+
 A manual recovery (`POST /internal/targets/:targetId/recover`) opens a dedicated
 `<schedule>@recover-<requestId>` slot and reports through the normal
 `schedule-outcome` channel. The recovery business verdict is NOT the raw cell

@@ -1,0 +1,2 @@
+import{a_ as i,X as u}from"./index-DVXG5BJ9.js";function f(r,t,e,o){if(!r)return o||t("common.error");const a=`errorCodes.${r}`,n=t(a,{...e,defaultValue:""});return!n||n===a?o||t("common.error",{defaultValue:""})||r:n}function d(r){if(!r)return{};const t=r instanceof i?r:u(r),{code:e,message:o,params:a,details:n,statusCode:s}=t;return{errorCode:e,message:o,params:a,details:n,statusCode:s}}export{d as e,f as t};
+//# sourceMappingURL=errorCodeTranslator-DS4rlytL.js.map

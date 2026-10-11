@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { loadConfig, getConfigPath as getConfigPathUtil } from './config';
+import { setActiveConfigPath } from './config/active-config';
 import { StandaloneConfig } from './config/types';
 import { logger } from './logger';
 import { CommandRegistry } from './commands/CommandRegistry';
@@ -161,7 +162,13 @@ async function bootstrap() {
   const commandArgs: CommandArgs = { options, positional };
 
   // --- Pre-execution hooks ---
-  const configPath = getConfigPathUtil(options.config as string | undefined);
+  // Resolve the effective configuration file once and publish it for the whole
+  // process, so commands, WebUI handlers and the scheduler runtime all read the
+  // same file instead of each re-resolving a path of its own.
+  const explicitConfigOption = options.config as string | undefined;
+  const configExplicitSource = Boolean(explicitConfigOption) || Boolean(process.env.PIXIV_DOWNLOADER_CONFIG);
+  const configPath = getConfigPathUtil(explicitConfigOption);
+  setActiveConfigPath(configPath, configExplicitSource);
   const command = registry.find(commandName || '');
   if (command && command.name === 'refresh') {
     await RefreshCommand.preExecute(commandArgs, configPath);
@@ -172,9 +179,9 @@ async function bootstrap() {
   try {
     const isLoginCommand = ['login', 'l', 'login-interactive', 'li', 'login-headless'].includes(commandName || '');
     const tokenOptionalCommands = new Set(['config', 'dirs', 'logs', 'setup', 'status', 'health', 'maintain', 'normalize', 'migrate-config', 'backup', 'monitor', 'outbox', 'runs', 'webui', 'w', 'diagnose', 'gateway', 'gateways', 'delivery']);
-    const isTokenOptional = commandName ? tokenOptionalCommands.has(commandName) : true;
+    const isTokenOptional = command ? tokenOptionalCommands.has(command.name) || command.name === 'web' : !commandName;
     
-    config = loadConfig(configPath, isLoginCommand || isTokenOptional || !commandName);
+    config = loadConfig(configPath, isLoginCommand || isTokenOptional || !commandName, true, configExplicitSource);
   } catch (error) {
     return handleFatalError(error);
   }

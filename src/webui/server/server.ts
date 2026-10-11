@@ -33,6 +33,7 @@ import { Server as SocketServer } from 'socket.io';
 import path from 'path';
 import { logger } from '../../logger';
 import { Database } from '../../storage/Database';
+import { setActiveConfigPath } from '../../config/active-config';
 import { loadConfig, getConfigPath } from '../../config';
 
 // WebSocket handlers
@@ -273,10 +274,16 @@ export class WebUIServer {
 export async function startWebUI(
   options?: WebUIServerOptions
 ): Promise<number> {
+  const configPath = getConfigPath(options?.configPath);
+  // Validate the file before accepting requests, even on embedded startup.
+  const config = loadConfig(configPath, true);
+  setActiveConfigPath(configPath, true);
   // Initialize database to ensure tables exist
   try {
-    const configPath = getConfigPath();
-    const config = loadConfig(configPath);
+    // Honour the explicitly requested configuration file (--config /
+    // PIXIV_DOWNLOADER_CONFIG), then the process-wide active path. Never
+    // re-detect a different file here: the WebUI must serve the same config
+    // as the CLI that started it.
 
     // Set up log file path (use data directory from database path for Electron app)
     let logPath: string;

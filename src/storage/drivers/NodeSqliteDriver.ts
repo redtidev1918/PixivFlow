@@ -34,8 +34,13 @@ export class NodeSqliteDriver implements SqliteDriver {
 
   constructor(path: string) {
     this.db = new DatabaseSync(path);
-    this.pragma('foreign_keys = OFF');
-    this.pragma(`busy_timeout = ${BUSY_TIMEOUT_MS}`);
+    try {
+      this.pragma('foreign_keys = OFF');
+      this.pragma(`busy_timeout = ${BUSY_TIMEOUT_MS}`);
+    } catch (error) {
+      this.db.close();
+      throw error;
+    }
   }
 
   public prepare(sql: string): SqliteStatement {

@@ -20,6 +20,8 @@ pixivflow login
 
 The program opens your local browser. Follow the login page, then wait for the terminal to report success and the configuration save result.
 
+Adapters are tried in order: pixiv-token-getter, Puppeteer (Node.js/PKCE), then Python gppt as a fallback. Python is not required for the preferred browser adapters. Android and headless servers may lack a usable browser; importing a token from another device is then the practical route.
+
 PixivFlow uses an existing Chrome / Chromium installation. It does not download a browser. If none is found, install one or set `PUPPETEER_EXECUTABLE_PATH` to its executable path. The official Docker image includes a browser.
 
 ## Import an existing token
@@ -78,4 +80,4 @@ Check that successful login also saved the configuration. If saving failed, use 
 
 - [Quick start](QUICKSTART.md): installation and your first download
 - [Configuration reference](CONFIG.md): credential fields and configuration paths
-- [Docker](../DOCKER.md) (Chinese): credentials in containers
+- [Docker](DOCKER.md): credentials in containers

@@ -34,7 +34,7 @@ function outputLoginResult(loginInfo: LoginInfo, json: boolean = false): void {
  */
 export class LoginCommand extends BaseCommand {
   readonly name = 'login';
-  readonly description = 'Login interactively (using Python gppt)';
+  readonly description = 'Login interactively in a browser window (headless with -u/-p)';
   readonly aliases = ['l', 'login-interactive', 'li'];
   readonly requiresToken = false;
   readonly metadata = {
@@ -109,12 +109,28 @@ export class LoginCommand extends BaseCommand {
 
   getUsage(): string {
     return `login [options]
-  
+
+Log in to Pixiv and store the refresh token in your configuration file.
+
+Login methods (tried in this order):
+  1. pixiv-token-getter  - recommended; opens a local Chrome/Chromium window
+  2. Puppeteer           - Node.js native, no Python required
+  3. Python gppt         - fallback only; requires Python 3.9+ (installed on demand)
+
+  Interactive mode (no credentials): a browser window opens, you log in there,
+  and the token is retrieved automatically. Chrome/Chromium must be installed.
+  Headless mode (-u and -p): no browser window, credentials are used directly.
+
 Options:
   -u, --username <id>    Pixiv ID (email, username, or account name)
   -p, --password <pwd>   Your Pixiv password
   -j, --json             Output response as JSON
-  --config <path>        Path to config file
+  --config <path>        Configuration file to update (default: PIXIV_DOWNLOADER_CONFIG,
+                         then the detected config)
+
+Security:
+  The access token and refresh token are printed in plain text. Never share your
+  terminal output, logs or screenshots containing them.
 
 Examples:
   pixivflow login                    # Interactive login (opens browser)

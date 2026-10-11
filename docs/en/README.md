@@ -13,11 +13,11 @@ Start with [Quick start](QUICKSTART.md) to download one work. If downloads alrea
 | Collect by tag, ranking, topic or artist | [Features and commands](USAGE.md) |
 | Manage downloads and configuration in a browser | [WebUI guide](WEBUI.md) |
 | Change limits, dates, bookmarks, directories or proxies | [Configuration](CONFIG.md) · [Examples](https://github.com/redtidev1918/PixivFlow/tree/master/config/examples) |
-| Run scheduled downloads on a server or NAS | [Docker](../DOCKER.md) (Chinese) |
-| Run on Android | [Termux](../TERMUX_INSTALL.md) (Chinese) |
-| Send works to QQ, Feishu or your own service | [Gateway delivery](../GATEWAY.md) (Chinese) |
-| Receive operational notifications | [Apprise](../APPRISE.md) (Chinese) |
-| Migrate from v1 scripts to the CLI | [Migration](../MIGRATION.md) (Chinese) |
+| Run scheduled downloads on a server or NAS | [Docker](DOCKER.md) |
+| Run on Android | [Termux](TERMUX_INSTALL.md) |
+| Send works to QQ, Feishu or your own service | [Gateway delivery](GATEWAY.md) |
+| Receive operational notifications | [Apprise](APPRISE.md) |
+| Migrate from v1 scripts to the CLI | [Migration](MIGRATION.md) |
 
 ## File locations and the browser interface
 
@@ -48,7 +48,7 @@ The following guides are in Chinese:
 | --- | --- |
 | [WebUI API](API.md) | REST endpoints and Socket.IO events |
 | [Pixiv Client Kit](PIXIV_CLIENT_KIT.md) | Reusable Pixiv App API client |
-| [Architecture](../ARCHITECTURE.md) (Chinese) | Modules, download pipeline and storage |
+| [Architecture](ARCHITECTURE.md) | Modules, download pipeline and storage |
 | [Observability](../OBSERVABILITY.md) (Chinese) | Logs, metrics and alerts |
 | [Schedule outcomes](../SLOT_OUTCOME.md) (Chinese) | Result types and terminal states |
 | [Architecture index](../architecture/README.md) (Chinese) | Design documents and governance |

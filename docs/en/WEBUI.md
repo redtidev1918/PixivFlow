@@ -15,11 +15,11 @@ It listens on `http://localhost:3000` by default and prints the address in the t
 | What you need | Command |
 | --- | --- |
 | Use another port | `pixivflow web --port 8080` |
-| Use a specific configuration file | `PIXIV_DOWNLOADER_CONFIG=/path/to/config.json pixivflow web` |
+| Use a specific configuration file | `pixivflow web --config "/path/to/my config.json"` |
 | Bind another interface | `pixivflow web --host 0.0.0.0` (configure credentials first, see below) |
 | Use a custom static bundle | `pixivflow web --static-path ./webui-frontend/dist` |
 
-`PIXIV_DOWNLOADER_CONFIG` applies to the WebUI server only; the `--config` flag is used by the other commands.
+Config path precedence is `--config` > `PIXIV_DOWNLOADER_CONFIG` > default. Relative paths use the command's working directory; quote paths containing spaces. Missing explicit files and invalid JSON are errors, with no silent fallback. The WebUI, API, download tasks and scheduler modules share the selected file. The environment variable also applies to other CLI commands.
 
 ## What each page does
 
@@ -33,6 +33,8 @@ It listens on `http://localhost:3000` by default and prints the address in the t
 | Configuration | View and edit the configuration; secret fields are masked by the server |
 | Logs | Follow the runtime log |
 | File browser | Browse downloaded files |
+
+The Scheduler distinguishes no configured plans, disabled plans and plans with no execution records. These are healthy empty states and do not require Pixiv login. Real configuration, API and database failures still appear as errors.
 
 ## Screenshots
 
@@ -65,7 +67,7 @@ Dashboard: download counters and recent activity.
 
 The WebUI and the CLI share one configuration file and one local database. Download tasks started in the interface use the same download and scheduling logic as `pixivflow download`, so nothing is tracked twice.
 
-The interface is only available while `pixivflow web` is running. To keep it online on a server or NAS, see the [Docker deployment guide](../DOCKER.md) (Chinese). Proxies and network settings are covered in the [configuration reference](CONFIG.md).
+The interface is only available while `pixivflow web` is running. To keep it online on a server or NAS, see the [Docker deployment guide](DOCKER.md). Proxies and network settings are covered in the [configuration reference](CONFIG.md).
 
 ## Frontend development and further reading
 

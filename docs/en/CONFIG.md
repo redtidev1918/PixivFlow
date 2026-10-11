@@ -21,6 +21,8 @@ Actual lookup order:
 3. The current file recorded by the configuration manager, or an available file in the configuration directory if that record is unavailable;
 4. Fall back to the default path.
 
+The CLI publishes the selected absolute path for all modules, including the WebUI. A missing explicitly selected file fails without falling back. Relative config paths resolve against the launch directory, while relative storage paths resolve against the config directory. Quote paths with spaces, for example `pixivflow web --config "./profiles/my config.json"`.
+
 Back up an existing configuration before editing, then validate it:
 
 ```bash
@@ -246,7 +248,7 @@ no more two ZIP/JSON documents. No new configuration needed.
 
 With `notificationUrl` configured on a delivery target, PixivFlow can send ops notifications to the review chat — all written into
 the delivery outbox for persistence, carrying stable idempotency identities, retried with exponential backoff. `notificationUrl` can point directly at the
-[Apprise API](../APPRISE.md) (Chinese), which forwards to Email, Telegram, Discord, ntfy, and more:
+[Apprise API](APPRISE.md), which forwards to Email, Telegram, Discord, ntfy, and more:
 
 | Trigger | Message | Notes |
 | --- | --- | --- |
@@ -802,7 +804,7 @@ Proxy: `network.proxy`'s full fields are `enabled / host / port / protocol (http
 Environment-variable injection rules (common in container deployments): when `ALL_PROXY` / `all_proxy` >
 `HTTPS_PROXY` > `HTTP_PROXY` (first non-empty wins) is set and the config has not explicitly enabled a proxy,
 the program automatically parses and enables that proxy, supporting http and socks protocols. Details:
-[DOCKER · environment variables](../DOCKER.md#环境变量参考) (Chinese). Health-check connectivity probes and login-token refresh (since 2.2.1) also follow this proxy.
+[DOCKER · environment variables](DOCKER.md#environment-reference). Health-check connectivity probes and login-token refresh (since 2.2.1) also follow this proxy.
 
 ## download: performance & stability tuning
 
@@ -867,7 +869,7 @@ Same-named environment variables override the corresponding config fields, takin
 | `PIXIV_SCHEDULER_ENABLED` | `scheduler.enabled` (`true`/`false`) |
 | `PIXIV_DOWNLOADER_CONFIG` | Directly specify the config file path |
 
-Docker deployment is built on exactly this mechanism; the full mapping is in [DOCKER](../DOCKER.md) (Chinese).
+Docker deployment is built on exactly this mechanism; the full mapping is in [DOCKER](DOCKER.md).
 
 ## Date placeholders
 
@@ -885,5 +887,5 @@ Combined with the scheduler, targets like "yesterday's daily ranking" need no da
 
 - [USAGE](USAGE.md) — overall usage and examples of each download mode
 - [LOGIN](LOGIN.md) — where the refreshToken comes from
-- [DOCKER](../DOCKER.md) (Chinese) — environment variables vs. containers
+- [DOCKER](DOCKER.md) — environment variables vs. containers
 - [../config/examples/](https://github.com/redtidev1918/PixivFlow/tree/master/config/examples) — official example config collection

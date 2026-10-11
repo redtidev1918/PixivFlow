@@ -20,6 +20,8 @@ pixivflow login
 
 程序会打开本机浏览器。按页面提示登录，等待终端显示成功和配置保存结果。
 
+适配器依次尝试 pixiv-token-getter、Puppeteer（Node.js/PKCE），最后才回退 Python gppt；优先浏览器路径不要求 Python。Android 或无头服务器可能缺少可用浏览器，此时可从其他设备导入令牌。
+
 PixivFlow 使用已有的 Chrome / Chromium，不会自动下载浏览器。无法找到浏览器时，先安装或通过 `PUPPETEER_EXECUTABLE_PATH` 指定可执行文件位置。官方 Docker 镜像已包含浏览器。
 
 ## 导入已有令牌

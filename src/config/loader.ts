@@ -10,6 +10,7 @@ import { ConfigPathMigrator } from '../utils/config-path-migrator';
 import { getBestAvailableToken, isPlaceholderToken, saveTokenToStorage } from '../utils/token-manager';
 import { getConfigManager } from '../utils/config-manager';
 import { getDefaultConfigPath as getSmartDefaultConfigPath } from '../utils/project-root';
+import { getActiveConfigPath, isActiveConfigPathExplicit } from './active-config';
 import { StandaloneConfig } from './types';
 import { generateDefaultConfig } from './defaults';
 import { applyDefaults } from './path-resolution';
@@ -19,16 +20,32 @@ import { validateConfig } from './validation';
 import { configureMediaAssetNamespace } from '../domain/media/MediaAsset';
 
 /**
- * Get the resolved configuration file path
- * If no path is specified, automatically selects the first available config file
- * Uses smart detection to find project root or falls back to user home directory
+ * Get the resolved configuration file path.
+ *
+ * Priority (highest first):
+ *   1. the `configPath` argument (an explicit `--config` value)
+ *   2. the path already resolved for this process by `setActiveConfigPath()`
+ *   3. `PIXIV_DOWNLOADER_CONFIG` (before process resolution)
+ *   4. ConfigManager's current/default config with smart detection
+ *
+ * Steps 1–3 are deterministic: once a path is chosen explicitly the process
+ * never silently switches to a different file.
  */
 export function getConfigPath(configPath?: string): string {
   // If explicitly provided or via environment variable, use it
-  if (configPath || process.env.PIXIV_DOWNLOADER_CONFIG) {
-    return resolve(
-      configPath ?? process.env.PIXIV_DOWNLOADER_CONFIG ?? getSmartDefaultConfigPath()
-    );
+  if (configPath) {
+    return resolve(configPath);
+  }
+
+  // The path resolved once at bootstrap wins over re-detection, so every
+  // consumer inside the process reads the same configuration file.
+  const activeConfigPath = getActiveConfigPath();
+  if (activeConfigPath) {
+    return resolve(activeConfigPath);
+  }
+
+  if (process.env.PIXIV_DOWNLOADER_CONFIG) {
+    return resolve(process.env.PIXIV_DOWNLOADER_CONFIG);
   }
 
   // Otherwise, use ConfigManager with smart detection to find the first available config
@@ -50,19 +67,44 @@ export function getConfigPath(configPath?: string): string {
 }
 
 /**
+ * Whether the effective configuration path was requested explicitly, i.e. it
+ * came from `--config` or `PIXIV_DOWNLOADER_CONFIG` rather than from an
+ * implicit default. Explicit requests must not fall back silently.
+ */
+function isExplicitConfigRequest(configPath?: string): boolean {
+  return Boolean(configPath) || Boolean(process.env.PIXIV_DOWNLOADER_CONFIG) || isActiveConfigPathExplicit();
+}
+
+/**
  * Load configuration from file with environment variable support
  * @param configPath - Path to config file
  * @param skipValidation - If true, skip configuration validation (useful for login commands)
+ * @param resolveDynamicPlaceholders - If true, resolve dynamic placeholders in the config
+ * @param explicitSource - Override the "requested explicitly" detection. Callers that
+ *   pass an already-resolved default path (the CLI bootstrap) set this to false so a
+ *   missing default file still follows the create-default flow.
  */
 export function loadConfig(
   configPath?: string,
   skipValidation: boolean = false,
-  resolveDynamicPlaceholders: boolean = true
+  resolveDynamicPlaceholders: boolean = true,
+  explicitSource: boolean = isExplicitConfigRequest(configPath)
 ): StandaloneConfig {
   let resolvedPath = getConfigPath(configPath);
 
   // If config file doesn't exist, try to find or create one
   if (!existsSync(resolvedPath)) {
+    if (explicitSource) {
+      // An explicitly requested file must never be replaced by another one:
+      // silently loading a different config is what made `web --config` serve
+      // stale credentials and an unrelated database.
+      throw new ConfigError(
+        `Configuration file not found at ${resolvedPath}\n` +
+        `The path was requested explicitly (--config or PIXIV_DOWNLOADER_CONFIG), so PixivFlow will not ` +
+        `fall back to another configuration file.\n` +
+        `Create the file, fix the path, or run the setup wizard: pixivflow setup`
+      );
+    }
     try {
       // getConfigManager() without arguments will use smart detection
       const configManager = getConfigManager();

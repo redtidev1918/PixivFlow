@@ -889,8 +889,9 @@ export class NovelTargetHandler {
    * (dead database / dead token / dead delivery provider): a candidate-level
    * failure is reported as a `skipped` attempt and never as a job verdict.
    *
-   * The cell is bound to `novel` BEFORE any side effect: it is the binding, not
-   * the candidate list, that decides what a later recovery resumes. The binding
+   * Full-text eligibility is checked before binding; the cell is bound BEFORE
+   * artifact persistence. The binding decides what a later recovery resumes.
+   * The binding
    * is only rolled back when the attempt produced no artifact at all, so in-run
    * backfill still works for a cell that has committed to nothing.
    */
@@ -903,7 +904,10 @@ export class NovelTargetHandler {
     const workId = String(novel.id);
     // Recovery continues a work the cell already bound; it must never be released.
     const recovering = Boolean(execution?.lockedWorkId);
-    if (execution && !recovering) {
+    let bound = !execution || recovering;
+    let competingWorkId: string | undefined;
+    const bindEligibleWork = (): boolean => {
+      if (!execution || recovering) return true;
       const binding = execution.bind(workId, 'novel');
       if (!binding.won) {
         // Another writer elected a different work for this cell. First selection
@@ -913,23 +917,21 @@ export class NovelTargetHandler {
           targetId: execution.targetId,
           boundWorkId: binding.workId,
         });
-        return {
-          kind: 'skipped',
-          skip: {
-            code: 'duplicate',
-            workId,
-            reason: `cell already owns work ${binding.workId} (concurrent selection)`,
-          },
-        };
+        competingWorkId = binding.workId;
+        return false;
       }
-    }
+      bound = true;
+      return true;
+    };
 
     let artifact: DownloadedArtifact | undefined;
     try {
-      artifact = await this.novelDownloader.download(novel, tag, target);
+      artifact = execution && !recovering
+        ? await this.novelDownloader.download(novel, tag, target, bindEligibleWork)
+        : await this.novelDownloader.download(novel, tag, target);
     } catch (error) {
       // Nothing was persisted, so the cell may still pick another candidate.
-      if (execution && !recovering) execution.release(workId);
+      if (execution && !recovering && bound) execution.release(workId);
       const failure = classifyCandidateFailure(error, workId);
       if (failure.scope === 'job' || !skipCandidateWithoutRetry(failure.skip)) {
         // Job-level outage, or a transient candidate failure: re-thrown so the
@@ -941,12 +943,19 @@ export class NovelTargetHandler {
       return { kind: 'skipped', skip: failure.skip };
     }
     if (!artifact) {
-      if (execution && !recovering) execution.release(workId);
+      if (competingWorkId) {
+        return {
+          kind: 'skipped',
+          skip: { code: 'duplicate', workId, reason: `cell already owns work ${competingWorkId} (concurrent selection)` },
+        };
+      }
+      if (execution && !recovering && bound) execution.release(workId);
       return {
         kind: 'skipped',
         skip: { code: 'filtered', workId, reason: 'downloader declined this candidate (no artifact)' },
       };
     }
+    if (!bound) throw new Error('Novel artifact was persisted without a cell binding');
     // The artifact is durable, but this cell has NOT committed to it until the
     // delivery below actually claims it. A candidate that turns out to be a
     // duplicate must give the binding BACK, or `bind()` would refuse the next

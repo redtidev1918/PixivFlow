@@ -1,7 +1,7 @@
 import { promises as fs } from 'node:fs';
 import { createHmac } from 'node:crypto';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { isAbsolute, join } from 'node:path';
 
 import {
   WebhookDelivery,
@@ -139,7 +139,7 @@ describe('WebhookDelivery', () => {
       expect(payload.message.media).toHaveLength(2);
       // Reference transport carries absolute host paths, never relative ones.
       for (const item of payload.message.media) {
-        expect(item.path?.startsWith('/')).toBe(true);
+        expect(isAbsolute(item.path!)).toBe(true);
         expect(item.dataBase64).toBeUndefined();
         expect(item.mime).toBe('image/jpeg');
         expect(item.size).toBe(2);

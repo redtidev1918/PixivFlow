@@ -42,6 +42,7 @@ import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { createServer } from 'node:http';
 import { appendFileSync, readFileSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 export const CONTRACT_VERSION = 1;
 export const DEFAULT_STATE_FILE = '.onebot-adapter-state.jsonl';
@@ -552,11 +553,13 @@ async function selftest() {
   const first = await post();
   const second = await post();
   const unauth = await fetch(`${base}/deliver`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+  await unauth.arrayBuffer();
   const pairing = await (await fetch(`${base}/pairing`)).json();
   const health = await (await fetch(`${base}/health`)).json();
 
-  adapter.close();
-  fake.server.close();
+  await Promise.all([adapter, fake.server].map((server) => new Promise((resolvePromise, reject) => {
+    server.close((error) => error ? reject(error) : resolvePromise());
+  })));
   const sent = fake.calls.find((c) => c.action === 'send_group_msg');
   const report = {
     first,
@@ -579,7 +582,7 @@ async function selftest() {
     sent?.params?.message?.[1]?.data?.file === 'base64://AAAA' &&
     fake.calls.some((c) => c.action === 'upload_group_file');
   log(ok ? 'selftest.passed' : 'selftest.FAILED');
-  process.exit(ok ? 0 : 1);
+  process.exitCode = ok ? 0 : 1;
 }
 
 /** Cheap liveness for the adapter process itself (used by tests + operators). */
@@ -587,7 +590,7 @@ export function adapterVersion() {
   return { contractVersion: CONTRACT_VERSION, adapter: 'onebot-v11', build: randomUUID().slice(0, 8) };
 }
 
-const invokedDirectly = process.argv[1] && import.meta.url === `file://${resolve(process.argv[1])}`;
+const invokedDirectly = process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href;
 if (invokedDirectly) {
   if (process.argv.includes('--selftest')) {
     await selftest();

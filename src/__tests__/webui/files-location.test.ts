@@ -13,7 +13,7 @@
  */
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, sep } from 'node:path';
+import { join, resolve, sep } from 'node:path';
 
 // The fixture root must exist before the (hoisted) mocks below run.
 const DIR = mkdtempSync(join(tmpdir(), 'files-location-'));
@@ -157,10 +157,10 @@ describe('downloadDirectoryFor', () => {
 
   it('falls back to the download root plus the type subfolder', () => {
     expect(downloadDirectoryFor('illustration', { downloadDirectory: '/root' })).toBe(
-      join('/root', 'illustrations')
+      resolve('/root', 'illustrations')
     );
     expect(downloadDirectoryFor('novel', { downloadDirectory: '/root' })).toBe(
-      join('/root', 'novels')
+      resolve('/root', 'novels')
     );
   });
 

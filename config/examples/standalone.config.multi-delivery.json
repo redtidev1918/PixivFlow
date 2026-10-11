@@ -46,6 +46,7 @@
         "_comment_2": "凭据只写 ${ENV_VAR} 引用；PixivFlow 不落盘也不打印真实 token。",
         "_comment_3": "readinessUrl 必须指到一个真实存在的探针：多 Bot 路由进程是 <base>/ready，单 Bot 是它自己的 /ready。写错会让 outbox 一直推迟（不消耗 attempt，但也不会投递）。",
         "type": "httpMultipart",
+        "archiveDelivery": "local-only",
         "url": "http://127.0.0.1:8080/api/bot1/v1/submissions",
         "readinessUrl": "http://127.0.0.1:8080/ready",
         "notificationUrl": "http://127.0.0.1:8080/api/bot1/v1/notifications",

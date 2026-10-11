@@ -72,8 +72,13 @@ interface Artifact    {
 
 投递层实际使用 `src/delivery/types.ts` 的 `DownloadedArtifact`（`pixivId` / `type` /
 `title` / `tags` / `artifacts` / `previewFiles` / `cleanupFiles` / …）与
-`deliveryFilePaths(artifact)` 决定实际附件：小说发 `text` + `zip`，插画发 `original`；
+`deliveryFilePaths(artifact)` 决定实际附件：默认小说发 `text` + `zip`，插画发 `original`；
 `metadata` / `markdown` / `preview` 永不作为独立附件发送。
+
+`httpMultipart.archiveDelivery: local-only` 在每条路由冻结意图前排除 ZIP，并同步投影
+附件、预览和 content；本地 artifact 与下载策略不变，默认 `attach` 保持已有目标兼容。
+重试与重启使用已冻结的附件集。成功后的共享缓存清理检查同作品全部 delivery 意图，
+仍有未确认或失败路由时保留文件；历史 duplicate_existing 继续保留原有缓存。
 
 ---
 

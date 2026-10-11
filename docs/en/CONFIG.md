@@ -333,6 +333,17 @@ Invalid declarations (non-boolean, negative, non-integer, `albumMin > albumMax`)
 
 ### TelePost submission chain (`type: "httpMultipart"`)
 
+TelePost blocks both `.zip` and `application/zip` by default. Set
+`"archiveDelivery": "local-only"` alongside `type` / `url` on its delivery target.
+Eager downloads still create local ZIP archives, but this route excludes them from files,
+aligned previews and content before freezing the outbox intent. Novel TXT and existing media
+references remain. This changes neither receiver admission nor acquisition policy. The default
+is `attach`, preserving archive delivery to other receivers. Existing cache cleanup applies;
+shared files remain until every route is confirmed, including files needed by failed routes.
+Online-reading images use the independent `media_assets` field (stable image IDs and source URLs),
+not ZIP contents. TelePost resolves TXT image markers against these references; TelePress rewrites
+them to configured proxy URLs. `local-only` preserves the references in eager and on-demand modes.
+
 `httpMultipart` is **multipart-form** delivery: POST the downloaded files plus rendered form fields to the
 receiver in one shot. The current production receiver is TelePost's `POST /api/botN/v1/submissions`. The request side must get
 these things right:
@@ -819,7 +830,7 @@ the program automatically parses and enables that proxy, supporting http and soc
 | `timeout` | 60000 | Per-file download timeout (ms) |
 | `assetNamespace` | `pixiv` | Media-asset id namespace (the prefix in e.g. `pixiv:<id>:novelcover`); lowercase letters/digits/dashes, max 32 chars; use distinct namespaces when multiple instances coexist so asset ids are not attributed across them |
 | `maxFallbackStages` | `3` | Candidate recovery stage budget (0–10): when a required target has no candidates, the scan scope is widened stage by stage; only after the budget is exhausted may the run roll up as a degraded (partial) terminal result (§schedule-recovery) |
-| `materializationPolicy` | `eager` | Novel preview media materialization policy: `eager` downloads local images up front (legacy behavior); `on-demand` keeps only MediaReference (`assetId`/`sourceUrl`) on the preview path — ZIP/archives are still materialized as needed |
+| `materializationPolicy` | `eager` | Novel preview media materialization policy: `eager` downloads local images up front (legacy behavior); `on-demand` keeps only MediaReference (`assetId`/`sourceUrl`) on the preview path — ordinary novel delivery creates no image ZIP; eager ZIP attachment selection follows the target's `archiveDelivery` |
 | `novelCover.unknown` | `skip` | Policy when the novel cover's **content type cannot be recognized**: `skip` is the safe mode — an unrecognizable cover is not delivered as Telegram media (just not sent; no document is lost); `keep` favors availability. Pixiv-generated designed covers (exactly 640x900) are never delivered either way |
 | `novelCover.probeFailed` | `skip` | Policy when **image fetching fails** (network/auth/rate-limit — bytes never seen): `skip` is the safe mode — the vast majority of novel covers are Pixiv-generated designed covers, and keeping an unjudged cover amounts to redelivering a design the classifier was meant to block; `keep` favors availability (one failed fetch does not cost the author's cover). Both values log a `coverType=probe_failed` warning |
 

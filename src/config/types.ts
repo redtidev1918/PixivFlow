@@ -746,6 +746,10 @@ export interface HttpMultipartDeliveryConfig {
    * 时才需要设为 false。
    */
   autoIdempotencyKey?: boolean;
+  /** ZIP companion archives stay local when the receiver rejects archives.
+   * Defaults to attach for existing integrations; does not change acquisition
+   * or the receiver's file admission policy. */
+  archiveDelivery?: 'attach' | 'local-only';
   /** @deprecated 不生效，仅兼容解析；判定以 `ack` 为准 */
   success?: HttpMultipartSuccessConfig;
   /** 单次交付的最大尝试次数（含首次），默认 3（遗留即时重试；SQLite outbox 是主重试层） */

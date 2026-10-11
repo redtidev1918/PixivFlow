@@ -406,7 +406,7 @@ export class OutboxWorker {
           remoteStatus: ack.remoteStatus ?? (ack.kind === 'idempotent_replay' ? 'idempotent_replay' : 'accepted'),
         });
         this.onDeliveryTerminal?.(row.deliveryId, ack, payload);
-        await this.cleanup(payload);
+        await this.cleanup(payload, row.deliveryId);
         break;
       case 'duplicate_existing':
         this.database.deliveries.recordAck(row.deliveryId, {
@@ -438,8 +438,10 @@ export class OutboxWorker {
     }
   }
 
-  private async cleanup(payload: DeliveryPayload): Promise<void> {
+  private async cleanup(payload: DeliveryPayload, deliveryId: string): Promise<void> {
     if (payload.deleteAfterDelivery === false) return;
+    const delivery = this.database.deliveries.getById(deliveryId);
+    if (!delivery || this.database.deliveries.hasUnconfirmedDeliveryForWork(delivery.workType, delivery.pixivId)) return;
     const files = [
       ...(payload.files ?? []),
       ...(payload.previewFiles ?? []),

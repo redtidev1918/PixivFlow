@@ -6,6 +6,7 @@ import { IDatabase } from '../../interfaces/IDatabase';
 import { IFileService } from '../../interfaces/IFileService';
 import { PixivNovel } from '@redtidev/pixiv-client';
 import type { NovelCoverPolicy } from '../../domain/media/NovelCoverPolicy';
+import { join } from 'node:path';
 
 jest.mock('../../utils/directory-info', () => ({
   displayDownloadPath: jest.fn(),
@@ -99,6 +100,27 @@ describe('NovelDownloader', () => {
     expect(database.insertDownload).not.toHaveBeenCalled();
   });
 
+  it('binds an eligible novel immediately before its first artifact write', async () => {
+    const { downloader, fileService, database } = createDownloader('Actual novel body');
+    const bind = jest.fn(() => {
+      expect(fileService.saveText).not.toHaveBeenCalled();
+      expect(database.insertDownload).not.toHaveBeenCalled();
+      return true;
+    });
+    await downloader.download(novel, 'tag', { type: 'novel', detectLanguage: false }, bind);
+    expect(bind).toHaveBeenCalledTimes(1);
+    expect(fileService.saveText).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not persist a novel when another worker won the binding', async () => {
+    const { downloader, fileService, database } = createDownloader('Actual novel body');
+    const bind = jest.fn(() => false);
+    expect(await downloader.download(novel, 'tag', { type: 'novel', detectLanguage: false }, bind)).toBeUndefined();
+    expect(bind).toHaveBeenCalledTimes(1);
+    expect(fileService.saveText).not.toHaveBeenCalled();
+    expect(database.insertDownload).not.toHaveBeenCalled();
+  });
+
   it('carries the parent series title onto the artifact', async () => {
     const { downloader } = createDownloader('Actual novel body', {
       title: 'Day 1',
@@ -121,6 +143,7 @@ describe('NovelDownloader', () => {
 
   it('strict language filtering skips text that is too short to classify', async () => {
     const { downloader, fileService, database } = createDownloader('短文');
+    const bind = jest.fn(() => true);
 
     await expect(downloader.download(
       novel,
@@ -129,11 +152,13 @@ describe('NovelDownloader', () => {
         type: 'novel',
         languageFilter: 'chinese',
         strictLanguageFilter: true,
-      } as TargetConfig
+      } as TargetConfig,
+      bind
     )).rejects.toThrow('language filter inconclusive');
 
     expect(fileService.saveText).not.toHaveBeenCalled();
     expect(database.insertDownload).not.toHaveBeenCalled();
+    expect(bind).not.toHaveBeenCalled();
   });
 });
 
@@ -174,7 +199,7 @@ describe('NovelDownloader rich media', () => {
     expect(fileService.saveBinary).toHaveBeenCalledWith(
       expect.anything(),
       '11.jpg',
-      '/tmp/novels/images'
+      join('/tmp/novels', 'images')
     );
     const metadata = fileService.saveMetadata.mock.calls[0][1];
     const mdCall = fileService.saveText.mock.calls.find(([, name]) => String(name).endsWith('.md'));
@@ -185,7 +210,7 @@ describe('NovelDownloader rich media', () => {
     // Phase 3: zip archive bundles txt + md + metadata + images and is shipped.
     expect(createZipArchiveMock).toHaveBeenCalledTimes(1);
     const [zipDest, zipEntries] = createZipArchiveMock.mock.calls[0];
-    expect(zipDest).toBe('/tmp/novels/456_Rich novel.zip');
+    expect(zipDest).toBe(join('/tmp/novels', '456_Rich novel.zip'));
     const entryNames = zipEntries.map((e: { name: string }) => e.name);
     expect(entryNames).toEqual([
       '456_Rich novel.txt',
@@ -195,7 +220,7 @@ describe('NovelDownloader rich media', () => {
     ]);
     expect(deliveryFilePaths(artifact!)).toEqual([
       '/tmp/novels/456_Rich novel.txt',
-      '/tmp/novels/456_Rich novel.zip',
+      join('/tmp/novels', '456_Rich novel.zip'),
     ]);
 
     expect(artifact!.mediaAssets).toHaveLength(1);
@@ -209,7 +234,7 @@ describe('NovelDownloader rich media', () => {
       { id: 'pixiv:456:text:456_Rich novel.txt', workId: '456', variant: 'text', path: '/tmp/novels/456_Rich novel.txt' },
       { id: 'pixiv:456:markdown:456_Rich novel.txt', workId: '456', variant: 'markdown', path: '/tmp/novels/456_Rich novel.txt' },
       { id: 'pixiv:456:metadata:456_Rich novel.txt.json', workId: '456', variant: 'metadata', path: '/tmp/456_Rich novel.txt.json' },
-      { id: 'pixiv:456:zip:456_Rich novel.zip', workId: '456', variant: 'zip', path: '/tmp/novels/456_Rich novel.zip' },
+      { id: 'pixiv:456:zip:456_Rich novel.zip', workId: '456', variant: 'zip', path: join('/tmp/novels', '456_Rich novel.zip') },
       { id: 'pixiv:456:original:11.jpg', workId: '456', variant: 'original', path: '/tmp/novels/images/11.jpg', sourceAssetId: 'pixiv:456:uploadedimage:11' },
     ]);
 

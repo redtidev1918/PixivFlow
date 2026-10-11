@@ -47,7 +47,12 @@ export class NovelDownloader {
     this.novelCoverPolicy = novelCoverPolicy;
   }
 
-  async download(novel: PixivNovel, tag: string, target: TargetConfig): Promise<DownloadedArtifact | undefined> {
+  async download(
+    novel: PixivNovel,
+    tag: string,
+    target: TargetConfig,
+    beforePersist?: () => boolean
+  ): Promise<DownloadedArtifact | undefined> {
     // Metadata cache: language filtering otherwise pulls FULL text per candidate
     // on every fallback run. A cached classification short-circuits to the same
     // skip decision without any Pixiv request (bounded detail/text fetch volume).
@@ -142,6 +147,11 @@ export class NovelDownloader {
       }
       logger.debug(`Language filter is set but detection failed for novel ${detail.id}, downloading anyway`);
     }
+
+    // Full-text eligibility is discovery, not a commitment to this work.
+    // Bind only after it passes, but before writing ANY local artifact.
+    // A lost CAS must leave no files or delivery intent behind.
+    if (beforePersist && !beforePersist()) return undefined;
 
     const tagsDisplay = tags
       .map((t: { name: string; translated_name?: string }) => {

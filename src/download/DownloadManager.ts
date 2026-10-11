@@ -226,7 +226,8 @@ export class DownloadManager implements IDownloadManager {
     // deliveries/outbox repositories). Unit tests pass plain mock databases; in
     // that case delivery dedupe/enqueue is simply inactive.
     this.deliveryService = new DeliveryService(
-      database as unknown as import('../storage/Database').Database
+      database as unknown as import('../storage/Database').Database,
+      config.delivery
     );
 
     // One lazily-created topic pipeline (shared resolver/cache) for this run.

@@ -77,6 +77,7 @@
     "targets": {
       "telepost-bot1": {
         "type": "httpMultipart",
+        "archiveDelivery": "local-only",
         "url": "http://127.0.0.1:8080/api/bot1/v1/submissions",
         "readinessUrl": "http://127.0.0.1:8080/ready",
         "notificationUrl": "http://127.0.0.1:8080/api/bot1/v1/notifications",
@@ -110,6 +111,7 @@
       },
       "telepost-bot2": {
         "type": "httpMultipart",
+        "archiveDelivery": "local-only",
         "url": "http://127.0.0.1:8080/api/bot2/v1/submissions",
         "readinessUrl": "http://127.0.0.1:8080/ready",
         "notificationUrl": "http://127.0.0.1:8080/api/bot2/v1/notifications",

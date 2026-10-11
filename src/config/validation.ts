@@ -459,6 +459,9 @@ export function validateConfig(config: Partial<StandaloneConfig>, location: stri
       if (delivery.autoIdempotencyKey !== undefined && typeof delivery.autoIdempotencyKey !== 'boolean') {
         errors.push(`${prefix}.autoIdempotencyKey: Must be a boolean`);
       }
+      if (delivery.archiveDelivery !== undefined && !['attach', 'local-only'].includes(delivery.archiveDelivery)) {
+        errors.push(`${prefix}.archiveDelivery: Must be "attach" or "local-only"`);
+      }
     } else if (delivery.type === 'webhook') {
       // A generic gateway endpoint: the URL is the whole required contract.
       if (!delivery.url?.trim()) {

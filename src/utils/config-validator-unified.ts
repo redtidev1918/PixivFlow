@@ -465,6 +465,13 @@ export class ConfigValidator {
           message: `Delivery target '${name}': autoIdempotencyKey must be a boolean`,
         });
       }
+      if (delivery.archiveDelivery !== undefined && !['attach', 'local-only'].includes(delivery.archiveDelivery)) {
+        errors.push({
+          code: 'CONFIG_VALIDATION_DELIVERY_ARCHIVE_POLICY_INVALID',
+          field: `${prefix}.archiveDelivery`,
+          message: `Delivery target '${name}': archiveDelivery must be attach or local-only`,
+        });
+      }
     }
     const retryBase = config.delivery?.outboxRetryBaseMs;
     const retryMax = config.delivery?.outboxRetryMaxMs;

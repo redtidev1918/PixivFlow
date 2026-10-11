@@ -73,6 +73,15 @@ export class DeliveryRepository extends BaseRepository {
     return row ? this.toRow(row) : null;
   }
 
+  /** A shared work's cached files remain needed until every route confirms it.
+   * Failed intents retain the same files for manual recovery. */
+  hasUnconfirmedDeliveryForWork(workType: string, pixivId: string): boolean {
+    return Boolean(this.db.prepare(
+      `SELECT 1 FROM deliveries WHERE work_type = ? AND pixiv_id = ?
+       AND status NOT IN ('delivered','duplicate') LIMIT 1`
+    ).get(workType, pixivId));
+  }
+
   /**
    * Every delivery intent this ledger recorded for ONE slot cell, oldest first.
    *

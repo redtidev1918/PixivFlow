@@ -37,6 +37,7 @@ import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { createServer } from 'node:http';
 import { stat } from 'node:fs/promises';
 import { join, resolve, sep } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 export const CONTRACT_VERSION = 1;
 
@@ -307,7 +308,9 @@ async function selftest() {
   };
   const first = await post();
   const second = await post();
-  server.close();
+  await new Promise((resolvePromise, reject) => {
+    server.close((error) => error ? reject(error) : resolvePromise());
+  });
   const report = { health, pairing, first, second };
   console.log(JSON.stringify(report, null, 2));
   const ok =
@@ -315,10 +318,10 @@ async function selftest() {
     first.body.status === 'accepted' &&
     second.body.status === 'duplicate_existing';
   log(ok ? 'selftest.passed' : 'selftest.FAILED');
-  process.exit(ok ? 0 : 1);
+  process.exitCode = ok ? 0 : 1;
 }
 
-const invokedDirectly = process.argv[1] && import.meta.url === `file://${resolve(process.argv[1])}`;
+const invokedDirectly = process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href;
 if (invokedDirectly) {
   if (process.argv.includes('--selftest')) {
     await selftest();

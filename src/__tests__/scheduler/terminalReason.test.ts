@@ -77,6 +77,8 @@ describe('terminalReasonFor', () => {
     ['ECONNRESET while reading response', 'network_error'],
     ['missing configuration: delivery target not configured', 'configuration_error'],
     ['something entirely unexpected happened', 'internal_error'],
+    ['LOCKED_WORK_UNAVAILABLE: Novel 29347192 skipped: language filter mismatch (detected: Japanese, required: chinese)', 'filter_exhausted'],
+    ['Novel 42 skipped: language filter inconclusive (required: chinese)', 'filter_exhausted'],
     ['failed to parse metadata for work 42: unexpected JSON structure', 'metadata_failed'],
     ['metadata gather failed for work 1234: no image urls', 'metadata_failed'],
     ['TelePost rejected the work: invalid payload (HTTP 400)', 'telepost_rejected'],

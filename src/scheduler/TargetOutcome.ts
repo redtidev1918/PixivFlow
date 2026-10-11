@@ -761,6 +761,9 @@ function classifyFailedReason(message: string, scan?: CandidateScanSummary): Ter
   }
 
   const text = String(message ?? '').slice(0, 600);
+  if (/language filter (?:mismatch|inconclusive)/i.test(text)) {
+    return { code: 'filter_exhausted', message: TERMINAL_REASON_MESSAGES.filter_exhausted };
+  }
   if (/\b429\b|rate ?limit/i.test(text)) {
     return { code: 'rate_limited', message: TERMINAL_REASON_MESSAGES.rate_limited };
   }

@@ -107,7 +107,7 @@ Global Options:
   -u, --username <id>         Pixiv ID (email, username, or account name)
   -p, --password <password>   Your Pixiv password
   -j, --json                  Output response as JSON
-  --config <path>             Path to config file (default: config/standalone.config.json)
+  --config <path>             Path to config file (default: PIXIV_DOWNLOADER_CONFIG, then the detected config)
   --targets <json>            Custom targets JSON (overrides config file targets)
   -h, --help                  Show help message
 
@@ -123,8 +123,10 @@ Quick Examples:
 
 For more information:
   - Run 'pixivflow help <command>' for detailed help on a specific command
-  - Config file: config/standalone.config.json
-  - Login requires Python 3.9+ and gppt package (pip install gppt)
+  - Config file: --config wins, then PIXIV_DOWNLOADER_CONFIG, then the auto-detected config
+    (run 'pixivflow dirs' to see which file and directories are in use)
+  - Login opens a local Chrome/Chromium window; pass -u/-p for headless login.
+    Python 3 + gppt is only a fallback method (see 'pixivflow help login')
 
 Note: 
   - This is a standalone CLI tool that works independently of any frontend

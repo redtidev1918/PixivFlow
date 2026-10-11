@@ -7,4 +7,12 @@ describe('WebUICommand', () => {
     expect(command.aliases).toContain('webui');
     expect(command.aliases).toContain('w');
   });
+
+  it('documents the configuration file it serves', () => {
+    const command = new WebUICommand();
+    const usage = command.getUsage();
+    expect(usage).toMatch(/--config <path>/);
+    expect(usage).toMatch(/PIXIV_DOWNLOADER_CONFIG/);
+    expect(usage).toMatch(/--config\s+>\s+PIXIV_DOWNLOADER_CONFIG/);
+  });
 });

@@ -1,10 +1,11 @@
 import { Request, Response } from 'express';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
-import { relative, join } from 'path';
+import { relative, join, resolve } from 'path';
 import { logger } from '../../../logger';
 import { ErrorCode } from '../../utils/error-codes';
 import { getConfigManager } from '../../../utils/config-manager';
-import { StandaloneConfig } from '../../../config';
+import { setActiveConfigPath } from '../../../config/active-config';
+import { StandaloneConfig, getConfigPath } from '../../../config';
 import { isValidConfigFilename, validateConfigWithUnifiedStorage } from '../config-utils';
 
 /**
@@ -30,7 +31,7 @@ export async function listConfigFiles(req: Request, res: Response): Promise<void
         modifiedTime: file.modifiedTime.toISOString(),
         size: file.size,
         // Use isActive from listConfigFiles() which correctly compares resolved paths
-        isActive: file.isActive,
+        isActive: resolve(file.path) === getConfigPath(),
       })),
     });
   } catch (error) {
@@ -82,7 +83,10 @@ export async function switchConfigFile(req: Request, res: Response): Promise<voi
 
     // Set as current config
     configManager.setCurrentConfigFile(path);
-    
+    // Keep the process-wide active path in sync: every consumer (API handlers,
+    // download task manager, scheduler runtime) resolves through it.
+    setActiveConfigPath(resolve(path), true);
+
     logger.info('Switched configuration file', { path });
 
     res.json({

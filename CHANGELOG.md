@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.6.3](https://github.com/redtidev1918/PixivFlow/compare/v3.6.2...v3.6.3) (2026-10-11)
+
+
+### Bug Fixes
+
+* support archiver 8 ESM and Windows gateway execution ([#204](https://github.com/redtidev1918/PixivFlow/issues/204)) ([241101a](https://github.com/redtidev1918/PixivFlow/commit/241101a76def68931073e4868369de37c35935b4))
+
 ## [3.6.2](https://github.com/redtidev1918/PixivFlow/compare/v3.6.1...v3.6.2) (2026-10-11)
 
 

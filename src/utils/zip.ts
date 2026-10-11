@@ -1,14 +1,13 @@
 import { createWriteStream } from 'node:fs';
 import { promises as fs } from 'node:fs';
-import { createRequire } from 'node:module';
-import { dirname } from 'node:path';
 import type { Transform } from 'node:stream';
 
-// archiver ships no matching TS factory types; bind it at runtime via
-// createRequire and keep a minimal local contract (nothing Pixiv-specific).
-const archiver = createRequire(__filename)('archiver') as (
-  format: 'zip', options?: { zlib?: { level?: number } }
-) => Archiver;
+// Keep native import(): TypeScript's CommonJS emit would turn a source-level
+// import() into require(), which cannot reliably load archiver's ESM entry.
+// The fixed import contains no configuration or user-provided code.
+const importArchiver = new Function('return import("archiver")') as () => Promise<{
+  ZipArchive: new (options: { zlib: { level: number } }) => Archiver;
+}>;
 
 interface Archiver extends Transform {
   file(sourcePath: string, data: { name: string }): void;
@@ -30,8 +29,9 @@ export interface ArchiveEntry {
  * domain logic.
  */
 export async function createZipArchive(destPath: string, entries: ArchiveEntry[]): Promise<string> {
+  const { ZipArchive } = await importArchiver();
+  const archive = new ZipArchive({ zlib: { level: 9 } });
   const output = createWriteStream(destPath);
-  const archive = archiver('zip', { zlib: { level: 9 } });
 
   const settled = new Promise<string>((resolve, reject) => {
     output.on('close', () => resolve(destPath));
@@ -44,11 +44,15 @@ export async function createZipArchive(destPath: string, entries: ArchiveEntry[]
     for (const e of entries) {
       archive.file(e.sourcePath, { name: e.name });
     }
-    await archive.finalize();
-    await settled;
+    await Promise.all([archive.finalize(), settled]);
     await fs.access(destPath);
     return destPath;
   } catch (error) {
+    archive.abort();
+    output.destroy();
+    if (!output.closed) {
+      await new Promise<void>(resolve => output.once('close', resolve));
+    }
     try {
       await fs.rm(destPath, { force: true });
     } catch {

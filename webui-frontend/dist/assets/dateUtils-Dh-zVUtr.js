@@ -1,2 +1,0 @@
-import{bl as o}from"./index-BtXc5-H2.js";function a(){return o.language.startsWith("zh")?"zh-CN":"en-US"}function g(t,n){if(!t)return"-";try{const i=typeof t=="string"?new Date(t):t;if(isNaN(i.getTime()))return String(t);const r=a(),e={year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit",...n};return i.toLocaleString(r,e)}catch{return String(t)}}export{g as f};
-//# sourceMappingURL=dateUtils-Dh-zVUtr.js.map

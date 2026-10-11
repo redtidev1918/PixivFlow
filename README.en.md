@@ -2,40 +2,86 @@
 
 Language / 语言: [中文](README.md) · English
 
-**Save Pixiv illustrations, manga, novels and animations locally, collect works with filters, or download on a schedule.**
+![PixivFlow](.github/social-preview.png)
 
 [![Version](https://img.shields.io/npm/v/pixivflow?style=flat-square)](https://www.npmjs.com/package/pixivflow)
 [![Node](https://img.shields.io/badge/Node.js-22.13%2B_LTS-green.svg?style=flat-square&logo=node.js)](https://nodejs.org/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](LICENSE)
 [![Documentation](https://img.shields.io/badge/Docs-redtidev1918.github.io-6366f1?style=flat-square)](https://redtidev1918.github.io/PixivFlow/)
 
-- Download links to works, novel series and artist profiles.
-- Collect illustrations or novels by tags, rankings, publication dates and bookmark counts.
-- Set a download schedule and skip works already in your download history.
-- View download records and scheduled task status in your browser.
+**Save Pixiv illustrations, manga, novels and animations to your own computer, collect works by tag or ranking, and run downloads on a schedule.**
 
-Downloaded files stay on your computer by default. Follow the steps below to save your first work, then set up batch or scheduled downloads when you need them.
+Downloaded files stay on your computer or server. No extra account is required.
 
-[Get started](#get-started) · [Batch downloads](#batch-downloads) · [Scheduled downloads](#scheduled-downloads) · [Common questions](#common-questions) · [Full documentation](https://redtidev1918.github.io/PixivFlow/)
+[Interface](#interface) · [What it does](#what-it-does) · [Choose how to install](#choose-how-to-install) · [Get started](#get-started) · [Batch downloads](#batch-downloads) · [Scheduled downloads](#scheduled-downloads) · [Common questions](#common-questions) · [Full documentation](https://redtidev1918.github.io/PixivFlow/)
 
-## Choose how to use it
+## Interface
 
-| How you want to use PixivFlow | Where to start |
-| --- | --- |
-| Use a desktop client | See the [desktop client setup and usage instructions](https://github.com/redtidev1918/pixivflow-desktop) |
-| Enter commands in a terminal | Follow the four steps below to download a work; the installation also includes a browser interface |
-| Keep it running on a server | See the [Docker guide](docs/DOCKER.md) |
-| Run it on Android | See the [Termux guide](docs/TERMUX_INSTALL.md) |
+Run `pixivflow web` to open the browser interface, which covers most day-to-day work. The screenshots below are the real interface.
+
+Paste a work URL to download it, or one URL per line to resolve a batch:
+
+![URL direct download](docs/assets/readme/webui-url-download.en.png)
+
+Start, stop and follow download tasks; the saved file paths are shown here too:
+
+![Download task management](docs/assets/readme/webui-download-tasks.en.png)
+
+The dashboard summarises download counts and recent records:
+
+![Dashboard](docs/assets/readme/webui-dashboard.en.png)
+
+## What it does
+
+**Save a single work.** Paste a work, novel, novel series or artist profile URL. Every page of a multi-page illustration is saved; animations are converted to GIF; novels are saved as TXT with their inline images downloaded alongside.
+
+**Collect works in bulk.** Filter illustrations or novels by tag, ranking, publication date and bookmark count, exclude AI-generated works, or limit novels by language. Works already in your download history are skipped, so a run may add fewer works than the limit you set.
+
+**Run on a schedule.** Set the execution time with a cron expression and a time zone, or configure several independent schedules. Execution state is kept in a local database, so a restarted process continues from its ledger instead of starting over.
+
+**Manage everything in the browser.** `pixivflow web` shows download records, task control, configuration and scheduler state. The scheduling centre reports per-target status and the terminal reason, such as an empty candidate pool or an already-downloaded work.
+
+**Discover related tags.** `pixivflow topic resolve <topic>` expands a topic into related Pixiv tags. It uses tag and work metadata statistics only; no large language model is involved.
+
+**Deliver files downstream.** After a download completes, files can be delivered to your own service over Webhook or HTTP Multipart, or passed to [TelePost](https://github.com/redtidev1918/TelePost) for submission to a Telegram review group. PixivFlow fetches, filters and downloads; TelePost handles submission, review and publishing.
+
+## How it works
+
+For everyday use there is a single path:
+
+```text
+Sign in to Pixiv → pick a work or set collection rules → download → saved locally
+```
+
+For ongoing automatic collection, filtering and delivery are added:
+
+```text
+Set filter rules → set a schedule → discover and rank candidates, skipping duplicates
+→ download → optionally deliver downstream → review results in the interface
+```
+
+## Choose how to install
+
+| How you use it | Who it suits | Notes |
+| --- | --- | --- |
+| Command line + browser interface (recommended start) | Anyone who wants to download or collect soon | Installed from npm; the browser interface is included in the package |
+| Docker / always-on server | Keeping it running long term on a server | The repository ships `Dockerfile`, `Dockerfile.scheduler` and `docker-compose.yml`; build the image yourself following the [Docker guide](docs/DOCKER.md) (Chinese) |
+| Desktop client | A standalone desktop application | Maintained in the separate [pixivflow-desktop](https://github.com/redtidev1918/pixivflow-desktop) repository; releases and completeness are tracked there |
+| Android / Termux | Running it on a phone | Follow the [Termux guide](docs/TERMUX_INSTALL.md) (Chinese) |
+
+The quick start below covers the command-line version, which also provides the browser interface. The frontend itself lives in the [WebUI repository](https://github.com/redtidev1918/pixivflow-webui).
 
 ## Get started
 
-These steps use the command-line version. Open PowerShell on Windows or a terminal on macOS / Linux. Copy each command into it and press Enter.
+Four steps are enough to download a single work. Open PowerShell on Windows or a terminal on macOS / Linux, and copy each command in turn.
 
-To download a single work, you only need these four steps.
+Before you start, check that:
+
+- You have a Pixiv account and your network can reach Pixiv (some networks need a proxy).
+- [Node.js](https://nodejs.org/) 22.13 or newer is installed; npm comes with it and must be version 9 or newer.
+- Chrome or Chromium is installed for the interactive login.
 
 ### 1. Install
-
-Have a Pixiv account ready and check that your computer can reach Pixiv. Install [Node.js](https://nodejs.org/) 22.13 or newer; it comes with npm, which must be version 9 or newer.
 
 After installing Node.js, reopen your terminal. Check the versions with the first two commands, then install PixivFlow:
 
@@ -50,13 +96,15 @@ If `pixivflow --help` displays the command help, installation succeeded.
 
 ### 2. Sign in to Pixiv
 
-Install Chrome or Chromium on your computer. Run this command, then follow the prompts to sign in to your Pixiv account:
-
 ```bash
 pixivflow login
 ```
 
-After sign-in, credentials are saved locally and reused for downloads. See the [login guide](docs/en/LOGIN.md) for server login and importing an existing login token. Configuration files contain credentials; remove sensitive information before sharing them for help.
+The command opens Chrome or Chromium on your machine; sign in to your Pixiv account when prompted. Credentials are then saved locally and reused for downloads.
+
+> **Warning: the login output contains credentials.** The login command prints tokens such as the access token and refresh token to your terminal. Never paste terminal output, logs or screenshots that contain them into an issue, a chat group or any public site. Remove sensitive information before asking for help.
+
+Server login and importing an existing token are covered in the [login guide](docs/en/LOGIN.md).
 
 ### 3. Download your first work
 
@@ -66,29 +114,27 @@ Open the work you want to save on Pixiv and copy its URL from the browser addres
 pixivflow download --url "https://www.pixiv.net/artworks/123456789"
 ```
 
-You can download a novel too:
+Novel, novel series and artist profile URLs work the same way:
 
 ```bash
 pixivflow download --url "https://www.pixiv.net/novel/show.php?id=12345678"
 ```
 
-`--url` also accepts novel series and artist profile links. See the [usage guide](docs/en/USAGE.md) for more examples.
+See the [usage guide](docs/en/USAGE.md) for the URL formats `--url` accepts.
 
 ### 4. Find your files
-
-When the download command finishes, run:
 
 ```bash
 pixivflow dirs
 ```
 
-Find the illustration or novel directory in the output and open that path in your file manager to see the downloaded files. Storage locations depend on your installation; use the paths shown by this command.
+The output lists the actual paths of your configuration file and download directories; open them in your file manager. Locations differ between installation methods, so use the paths this command prints.
 
-To save another work, run the download command again with its URL. Run `pixivflow status` to see download counts and recent records.
+Run `pixivflow status` to see download counts and recent records.
 
 ## Use it in your browser
 
-After installing the command-line version, run:
+Run:
 
 ```bash
 pixivflow web
@@ -96,23 +142,29 @@ pixivflow web
 
 Open the address shown in your terminal, normally [http://localhost:3000](http://localhost:3000). The npm package includes the browser interface.
 
-You can inspect download records, configuration and task results in the scheduling center. Per-target statuses and reasons help explain why a run found no new works.
-
-Keep the command running while using the interface; press `Ctrl+C` to stop the web service. If the port is occupied, choose another one:
+You can inspect download records, configuration and task results there. Keep the command running while you use the interface and press `Ctrl+C` to stop it; if the port is taken, choose another one:
 
 ```bash
 pixivflow web --port 8080
 ```
 
+On a server, configure access credentials as described in the [Docker guide](docs/DOCKER.md) (Chinese) before exposing the interface; it listens on the local address by default.
+
 ## Batch downloads
 
-To collect several works at once, choose tags, bookmark counts or publication dates. For example, you can collect up to 10 illustrations tagged “風景” per run. For initial setup, run the wizard and follow its prompts:
+To collect several works at once, set conditions on tags, rankings, publication dates and bookmark counts. Run the wizard the first time:
 
 ```bash
 pixivflow setup
 ```
 
-After setup, run `pixivflow download` to start collecting. Previously downloaded works are skipped, so you may receive fewer new works than the limit you set.
+Then start collecting:
+
+```bash
+pixivflow download
+```
+
+Previously downloaded works are skipped, so you may get fewer new works than the limit you set.
 
 <details>
 <summary>Set collection rules manually: illustration and novel examples</summary>
@@ -135,34 +187,32 @@ Replace `targets` in your active configuration with the array below, keeping you
 }
 ```
 
-Save, check your configuration, then download:
+Save, validate, then download:
 
 ```bash
 pixivflow config validate
 pixivflow download
 ```
 
+</details>
+
+Common filter fields:
+
 | Setting | Meaning |
 | --- | --- |
 | `type` | `illustration` for illustrations / manga; `novel` for novels |
 | `tag` | A Pixiv search tag; try a tag already shown on a work page |
 | `limit` | Maximum number of works to download per run |
+| `mode` | `search` (by tag), `ranking` (by ranking) or `topic` (resolve a topic into tags) |
 | `minBookmarks` | Minimum bookmark count, for filtering popular works |
 | `startDate` / `endDate` | Publication date range, in `YYYY-MM-DD` format |
-
-</details>
+| `excludeAI` | Whether to exclude AI-generated works |
 
 See the [batch download walkthrough](docs/en/QUICKSTART.md#download-by-tag) for more examples and the [configuration reference](docs/en/CONFIG.md) for all filters.
 
 ## Scheduled downloads
 
-To collect works automatically each day, configure a schedule in the `pixivflow setup` wizard. Check that batch downloads work first, then start:
-
-```bash
-pixivflow scheduler
-```
-
-Keep your computer and this command running; press `Ctrl+C` to stop. Downloads cannot run while the computer is shut down or asleep.
+Make sure batch downloads work first, then set up a schedule. You can do it in the `pixivflow setup` wizard or by editing the configuration.
 
 <details>
 <summary>Set a time manually: every day at 03:00 in Asia/Shanghai</summary>
@@ -186,9 +236,38 @@ pixivflow config validate
 pixivflow scheduler
 ```
 
+To run several times a day, or to give different targets different times, use the `schedules` array to configure independent schedules (when `schedules` is present, the older `scheduler.cron` is ignored). Field details are in the [configuration reference](docs/en/CONFIG.md).
+
 </details>
 
-See the [scheduled download walkthrough](docs/en/QUICKSTART.md#set-a-download-schedule) for the full steps. For continuous server operation, see the [Docker guide](docs/DOCKER.md).
+Scheduled downloads need this command to keep running; nothing runs while the computer is shut down or asleep. By default a process that starts after downtime runs the missed execution once — see the [configuration reference](docs/en/CONFIG.md).
+
+To keep it running on a server, see the [Docker guide](docs/DOCKER.md) (Chinese).
+
+## Where files are stored
+
+- Local storage uses `persistent` mode by default: downloaded files stay on disk.
+- With `cache` mode and a delivery target configured, files can be removed once the receiving service confirms success; files that fail to deliver are kept.
+- Run `pixivflow dirs` to see the configuration, database and download directories actually in use.
+
+See the [configuration reference](docs/en/CONFIG.md) for storage locations, organisation and cleanup policy.
+
+## Common questions
+
+| Problem | What to try |
+| --- | --- |
+| `pixivflow` command not found | Reopen your terminal, confirm the global installation succeeded, and check that the npm global executable directory is in `PATH` |
+| Login fails or credentials have expired | Run `pixivflow login` again; for servers see the [login guide](docs/en/LOGIN.md) |
+| Cannot connect to Pixiv | Run `pixivflow health`; if you need a proxy, see the [configuration reference](docs/en/CONFIG.md) |
+| No works were downloaded | Check the tag, date and bookmark filters; matching works may already be in your history, or every candidate may have been filtered out |
+| Cannot find downloaded files | Run `pixivflow dirs` for the actual locations |
+| Does my computer have to stay on? | Yes. `pixivflow scheduler` needs the process running; nothing runs while the machine is off or asleep, and missed executions can be caught up on the next start. For 24/7 operation use a server or Docker |
+| Missing dependencies for animations | Converting ugoira to GIF needs `python3` and `ffmpeg`; if the conversion fails the original frames are kept. An image built from this repository includes both — see the [Docker guide](docs/DOCKER.md) (Chinese) |
+| A scheduled task did not run | Keep the process running, set `scheduler.enabled` to `true`, and check the cron expression and time zone |
+| How is the desktop client different from the browser interface? | The browser interface ships in this repository's npm package via `pixivflow web`; the desktop client is a separate project, see [pixivflow-desktop](https://github.com/redtidev1918/pixivflow-desktop) |
+| Can I run it on a server? | Yes. See the [Docker guide](docs/DOCKER.md) (Chinese); make sure the process is not reclaimed by the system |
+
+For further help, open an [issue](https://github.com/redtidev1918/PixivFlow/issues) with reproduction steps, version, operating system and sanitized error output. Report security vulnerabilities as described in the [security policy](SECURITY.en.md).
 
 <details>
 <summary>Command reference</summary>
@@ -206,24 +285,12 @@ See the [scheduled download walkthrough](docs/en/QUICKSTART.md#set-a-download-sc
 | Check environment and connectivity | `pixivflow health` |
 | Open the browser interface | `pixivflow web` |
 | Start scheduled downloads | `pixivflow scheduler` |
+| Resolve a topic into tags | `pixivflow topic resolve "<topic>"` |
+| Troubleshoot delivery | `pixivflow outbox` / `pixivflow delivery` |
 
 </details>
 
-## Common questions
-
-| Problem | What to try |
-| --- | --- |
-| `pixivflow` command not found | Reopen your terminal, confirm global installation succeeded, and check that the npm global executable directory is in `PATH` |
-| Login fails or credentials have expired | Run `pixivflow login` again; see the [login guide](docs/en/LOGIN.md) for alternatives |
-| Cannot connect to Pixiv | Run `pixivflow health`; see the network section of the [configuration reference](docs/en/CONFIG.md) if you need a proxy |
-| No works were downloaded | Check tags, dates and bookmark filters; matching works may already be in your download history |
-| Cannot find downloaded files | Run `pixivflow dirs` for actual locations |
-| Missing dependencies for animations | Converting ugoira to GIF needs `python3` and `ffmpeg`; the official Docker image includes both. See the [configuration reference](docs/en/CONFIG.md) |
-| A scheduled task did not run | Keep the program running, set `scheduler.enabled` to `true`, and check the schedule expression and time zone |
-
-For further help, open an [issue](https://github.com/redtidev1918/PixivFlow/issues) with reproduction steps, version, operating system and sanitized error output. Report security vulnerabilities as described in the [security policy](SECURITY.en.md).
-
-## More guides
+## Documentation
 
 | What you want to learn | Documentation |
 | --- | --- |
@@ -231,23 +298,12 @@ For further help, open an [issue](https://github.com/redtidev1918/PixivFlow/issu
 | Packages and download options | [Download page](docs/en/download.md) |
 | Login and credential maintenance | [Login guide](docs/en/LOGIN.md) |
 | Download modes and settings | [Usage guide](docs/en/USAGE.md) · [Configuration reference](docs/en/CONFIG.md) |
-| Server / container deployment | [Docker](docs/DOCKER.md) |
-| Send works to another service | [External gateway guide](docs/GATEWAY.md) · [Configuration reference](docs/en/CONFIG.md) |
-| Configure operational notifications | [Apprise notifications](docs/APPRISE.md) |
-| Upgrade from an older version | [Migration guide](docs/MIGRATION.md) · [Changelog](CHANGELOG.md) |
-
-<details>
-<summary>Service integration and developer documentation</summary>
-
-Local storage uses `persistent` mode by default. With `cache` delivery configured, files can be removed after the receiving service confirms success. Read the [configuration reference](docs/en/CONFIG.md) first to choose the storage behavior you want.
-
-For Telegram submission, review and publishing, you can connect [TelePost](https://github.com/redtidev1918/TelePost). See the [deployment kit](https://github.com/redtidev1918/pixivflow-telepost-deploy) to run both projects together.
-
-- [Project architecture](docs/ARCHITECTURE.md)
-- [Delivery, retries and gateway contracts](docs/architecture/delivery-runtime.md)
-- [Workflow Protocol v1 and Job API](https://github.com/redtidev1918/pixivflow-telepost-deploy/blob/main/docs/architecture/workflow-protocol.md)
-- [npm release process](docs/RELEASING.md)
-- [WebUI frontend project](https://github.com/redtidev1918/pixivflow-webui)
+| Server / container deployment | [Docker guide](docs/DOCKER.md) (Chinese) · [Termux guide](docs/TERMUX_INSTALL.md) (Chinese) |
+| Send works to another service | [External gateway guide](docs/GATEWAY.md) (Chinese) |
+| Configure operational notifications | [Apprise notifications](docs/APPRISE.md) (Chinese) |
+| Upgrade from an older version | [Migration guide](docs/MIGRATION.md) (Chinese) · [Changelog](CHANGELOG.md) |
+| Architecture and troubleshooting | [Architecture](docs/ARCHITECTURE.md) (Chinese) · [Slot outcomes](docs/SLOT_OUTCOME.md) (Chinese) |
+| npm release process | [Release process](docs/RELEASING.md) (Chinese) |
 
 Build from source:
 
@@ -259,7 +315,14 @@ npm run build
 node dist/index.js --help
 ```
 
-</details>
+## Related projects
+
+- [TelePost](https://github.com/redtidev1918/TelePost) — Telegram submission, review and publishing
+- [pixivflow-telepost-deploy](https://github.com/redtidev1918/pixivflow-telepost-deploy) — deployment kit that wires both projects together
+- [pixivflow-webui](https://github.com/redtidev1918/pixivflow-webui) — browser interface frontend
+- [pixivflow-desktop](https://github.com/redtidev1918/pixivflow-desktop) — desktop client
+
+Responsibilities stay separate: PixivFlow handles Pixiv authentication, candidate discovery and downloading; TelePost handles submission and review on the Telegram side; the deployment kit connects the two.
 
 ## Acknowledgments
 
@@ -267,8 +330,6 @@ node dist/index.js --help
 - [pixiv-app-api](https://github.com/akameco/pixiv-app-api) · [pixiv-api](https://github.com/azuline/pixiv-api) — App API endpoint semantics
 - [get-pixivpy-token](https://github.com/eggplants/get-pixivpy-token) — OAuth login flow reference
 - [pixiv-token-getter](https://github.com/redtidev1918/pixiv-token-getter) — login library
-- [pixivflow-webui](https://github.com/redtidev1918/pixivflow-webui) — WebUI frontend
-- [pixivflow-desktop](https://github.com/redtidev1918/pixivflow-desktop) — official desktop client
 
 Not affiliated with Pixiv Inc. Full statement: [docs/ACKNOWLEDGMENTS.md](docs/ACKNOWLEDGMENTS.md).
 

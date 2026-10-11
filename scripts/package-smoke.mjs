@@ -27,6 +27,8 @@
  *  10. login bootstrap: the browser layer loads from the artifact, resolves
  *      puppeteer-core, and can explain a missing browser — i.e. a user who runs
  *      `pixivflow login` gets guidance, not MODULE_NOT_FOUND.
+ *  11. ZIP creation: the installed CommonJS helper loads archiver's ESM entry
+ *      and produces a readable archive with the original Unicode name/content.
  *
  * Usage:
  *   node scripts/package-smoke.mjs            # full smoke (CI + local)
@@ -520,6 +522,38 @@ step('login bootstrap (browser layer loads + resolves from the artifact)', () =>
     throw new Error(`probe produced no verdict:\n${output.slice(0, 400)}`);
   }
   return okLine.slice('LOGIN_BOOTSTRAP_OK: '.length);
+});
+
+step('ZIP creation (installed CommonJS / native ESM / Unicode roundtrip)', () => {
+  const probePath = path.join(tmp, 'zip-probe.cjs');
+  fs.writeFileSync(probePath, `
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const { createRequire } = require('node:module');
+    const { inflateRawSync } = require('node:zlib');
+    const requireFromInstall = createRequire(path.join(process.argv[2], 'package.json'));
+    const { createZipArchive } = requireFromInstall('pixivflow/dist/utils/zip.js');
+    (async () => {
+      const source = path.join(process.argv[3], 'novel source.txt');
+      const dest = path.join(process.argv[3], 'novel.zip');
+      const body = Buffer.from('小说正文\\n');
+      fs.writeFileSync(source, body);
+      await createZipArchive(dest, [{ name: '小说.txt', sourcePath: source }]);
+      const bytes = fs.readFileSync(dest);
+      const end = bytes.length - 22;
+      if (bytes.readUInt32LE(end) !== 0x06054b50 || bytes.readUInt16LE(end + 10) !== 1) throw Error('invalid ZIP directory');
+      const offset = bytes.readUInt32LE(end + 16);
+      const nameLength = bytes.readUInt16LE(offset + 28);
+      if (bytes.subarray(offset + 46, offset + 46 + nameLength).toString('utf8') !== '小说.txt') throw Error('ZIP filename changed');
+      const local = bytes.readUInt32LE(offset + 42);
+      const start = local + 30 + bytes.readUInt16LE(local + 26) + bytes.readUInt16LE(local + 28);
+      const compressed = bytes.subarray(start, start + bytes.readUInt32LE(offset + 20));
+      const restored = bytes.readUInt16LE(offset + 10) === 8 ? inflateRawSync(compressed) : compressed;
+      if (!restored.equals(body)) throw Error('ZIP content changed');
+      process.stdout.write('native ESM loaded; Unicode ZIP roundtrip passed');
+    })().catch(error => { console.error(error); process.exitCode = 1; });
+  `);
+  return run(process.execPath, [probePath, installedPkgRoot(), tmp], { cwd: tmp, shell: false, timeout: 15000 }).stdout.trim();
 });
 
 // ---------------------------------------------------------------- report

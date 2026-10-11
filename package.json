@@ -116,7 +116,7 @@
   },
   "dependencies": {
     "@redtidev/pixiv-client": "0.1.0",
-    "archiver": "^7.0.1",
+    "archiver": "^8.0.0",
     "axios": "^1.20.0",
     "cors": "^2.8.6",
     "cron-parser": "^4.9.0",

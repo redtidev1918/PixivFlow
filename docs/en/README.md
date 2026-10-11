@@ -11,6 +11,7 @@ Start with [Quick start](QUICKSTART.md) to download one work. If downloads alrea
 | Install and download your first work | [Quick start](QUICKSTART.md) · [Download page](download.md) |
 | Sign in, import a token or resolve authentication failures | [Login](LOGIN.md) |
 | Collect by tag, ranking, topic or artist | [Features and commands](USAGE.md) |
+| Manage downloads and configuration in a browser | [WebUI guide](WEBUI.md) |
 | Change limits, dates, bookmarks, directories or proxies | [Configuration](CONFIG.md) · [Examples](https://github.com/redtidev1918/PixivFlow/tree/master/config/examples) |
 | Run scheduled downloads on a server or NAS | [Docker](../DOCKER.md) (Chinese) |
 | Run on Android | [Termux](../TERMUX_INSTALL.md) (Chinese) |
@@ -25,7 +26,7 @@ pixivflow dirs
 pixivflow web
 ```
 
-`dirs` shows the active configuration and download paths. `web` starts the browser interface at the address shown in the terminal, normally `http://localhost:3000`. The scheduling center shows the status and reason for each download target.
+`dirs` shows the active configuration and download paths. `web` starts the browser interface at the address shown in the terminal, normally `http://localhost:3000`. See the [WebUI guide](WEBUI.md) for pages, access credentials and security settings.
 
 See the [desktop client documentation](https://redtidev1918.github.io/pixivflow-desktop/) for desktop installation and troubleshooting.
 

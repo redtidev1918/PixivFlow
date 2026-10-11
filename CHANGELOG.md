@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.6.2](https://github.com/redtidev1918/PixivFlow/compare/v3.6.1...v3.6.2) (2026-10-11)
+
+
+### Bug Fixes
+
+* align WebUI config selection, scheduler empty states and English guides ([7ef5325](https://github.com/redtidev1918/PixivFlow/commit/7ef5325c8074370ca3e5c7ecab5aa8a79573e483))
+
 ## [3.6.1](https://github.com/redtidev1918/PixivFlow/compare/v3.6.0...v3.6.1) (2026-10-11)
 
 

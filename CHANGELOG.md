@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.6.4](https://github.com/redtidev1918/PixivFlow/compare/v3.6.3...v3.6.4) (2026-10-11)
+
+
+### Bug Fixes
+
+* **delivery:** keep eager ZIP companions out of TelePost submissions ([#206](https://github.com/redtidev1918/PixivFlow/issues/206)) ([f04a771](https://github.com/redtidev1918/PixivFlow/commit/f04a771f1e9cdbb233ed4b801678d537f11a69d7))
+
 ## [3.6.3](https://github.com/redtidev1918/PixivFlow/compare/v3.6.2...v3.6.3) (2026-10-11)
 
 

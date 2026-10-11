@@ -6,7 +6,7 @@ import type { Transform } from 'node:stream';
 // import() into require(), which cannot reliably load archiver's ESM entry.
 // The fixed import contains no configuration or user-provided code.
 const importArchiver = new Function('return import("archiver")') as () => Promise<{
-  ZipArchive: new (options: { zlib: { level: number } }) => Archiver;
+  ZipArchive: new (options: { zlib: { level: number }; statConcurrency: number }) => Archiver;
 }>;
 
 interface Archiver extends Transform {
@@ -30,7 +30,9 @@ export interface ArchiveEntry {
  */
 export async function createZipArchive(destPath: string, entries: ArchiveEntry[]): Promise<string> {
   const { ZipArchive } = await importArchiver();
-  const archive = new ZipArchive({ zlib: { level: 9 } });
+  // Files enter the archive after asynchronous stat calls. Serial admission
+  // keeps their archive order equal to the caller's entry order.
+  const archive = new ZipArchive({ zlib: { level: 9 }, statConcurrency: 1 });
   const output = createWriteStream(destPath);
 
   const settled = new Promise<string>((resolve, reject) => {

@@ -340,6 +340,9 @@ aligned previews and content before freezing the outbox intent. Novel TXT and ex
 references remain. This changes neither receiver admission nor acquisition policy. The default
 is `attach`, preserving archive delivery to other receivers. Existing cache cleanup applies;
 shared files remain until every route is confirmed, including files needed by failed routes.
+Online-reading images use the independent `media_assets` field (stable image IDs and source URLs),
+not ZIP contents. TelePost resolves TXT image markers against these references; TelePress rewrites
+them to configured proxy URLs. `local-only` preserves the references in eager and on-demand modes.
 
 `httpMultipart` is **multipart-form** delivery: POST the downloaded files plus rendered form fields to the
 receiver in one shot. The current production receiver is TelePost's `POST /api/botN/v1/submissions`. The request side must get

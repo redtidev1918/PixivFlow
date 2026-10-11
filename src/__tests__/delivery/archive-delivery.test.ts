@@ -37,6 +37,11 @@ describe('receiver archive selection', () => {
         {id:'zip',workId:'123',variant:'zip',path:zip},
       ],
       cleanupFiles: [text, zip],
+      mediaAssets: [{
+        id: 'pixiv:123:uploadedimage:11', source: 'pixiv', kind: 'image',
+        sourceUrl: 'https://i.pximg.net/img/original/11.jpg',
+        artifactId: 'pixiv:123:original:11.jpg',
+      }],
     };
     received = [];
     failNext = false;
@@ -85,6 +90,7 @@ describe('receiver archive selection', () => {
     expect(payloadFor('archive').files).toEqual(artifact.artifacts!.map(item => item.path));
     expect(payloadFor('archive').previewFiles).toEqual(previews);
     expect(payloadFor('telepost').cleanupFiles).toContain(artifact.artifacts![1].path);
+    expect(payloadFor('telepost').mediaAssets).toEqual(artifact.mediaAssets);
     expect(artifact.artifacts).toHaveLength(2);
     expect(existsSync(artifact.artifacts![1].path)).toBe(true);
   });
@@ -97,6 +103,7 @@ describe('receiver archive selection', () => {
 
   it('rejects ZIP-only output before creating an intent', () => {
     artifact.artifacts = [artifact.artifacts![1]];
+    artifact.mediaAssets = [];
     expect(() => new DeliveryService(db, config).enqueue(artifact, target())).toThrow('no deliverable artifacts');
     expect(db.outbox.list(undefined, 20)).toHaveLength(0);
     expect(existsSync(artifact.artifacts[0].path)).toBe(true);
@@ -121,6 +128,9 @@ describe('receiver archive selection', () => {
     for (const request of received) {
       expect(request.body).toContain('filename="novel.txt"');
       expect(request.body).not.toContain('filename="novel.zip"');
+      expect(request.body).toContain('name="media_assets"');
+      expect(request.body).toContain('"asset_id":"pixiv:123:uploadedimage:11"');
+      expect(request.body).toContain('"source_url":"https://i.pximg.net/img/original/11.jpg"');
     }
   });
 

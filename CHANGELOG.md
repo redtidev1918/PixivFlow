@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.7.0](https://github.com/redtidev1918/PixivFlow/compare/v3.6.4...v3.7.0) (2026-10-14)
+
+
+### Features
+
+* **novel:** add EPUB/PDF export and series compilation ([#208](https://github.com/redtidev1918/PixivFlow/issues/208)) ([ef00b04](https://github.com/redtidev1918/PixivFlow/commit/ef00b0431285ccb5e87169e7d22756a3f5cfb32c))
+
 ## [3.6.4](https://github.com/redtidev1918/PixivFlow/compare/v3.6.3...v3.6.4) (2026-10-11)
 
 

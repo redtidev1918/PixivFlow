@@ -1,12 +1,15 @@
 """Development-only PDF assertions; requires pypdf, never a product dependency."""
 import json
+import re
 import sys
 from pypdf import PdfReader
 
 reader = PdfReader(sys.argv[1])
 assert len(reader.pages) >= 4, "cover, contents and paginated chapters expected"
 assert reader.outline, "PDF chapter bookmarks missing"
-text = "\n".join(page.extract_text() for page in reader.pages)
+# CJK text has no meaningful spaces; strip all whitespace so a phrase wrapped
+# across lines by different platform fonts (YaHei vs Noto) still matches.
+text = re.sub(r"\s+", "", "".join(page.extract_text() for page in reader.pages))
 for expected in ["中文", "日本語", "かんじ"]:
     assert expected in text, f"Missing text: {expected}"
 images = sum(len(page.images) for page in reader.pages)

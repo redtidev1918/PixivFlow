@@ -34,6 +34,7 @@ import { OutboxCommand } from './OutboxCommand';
 import { GatewayCommand } from './GatewayCommand';
 import { DeliveryCommand } from './DeliveryCommand';
 import { RunsCommand } from './RunsCommand';
+import { NovelExportCommand } from './NovelExportCommand';
 
 /**
  * Create and register all commands
@@ -44,6 +45,7 @@ export function registerAllCommands(registry: CommandRegistry): void {
   registry.register(new LoginHeadlessCommand());
   registry.register(new RefreshCommand());
   registry.register(new DownloadCommand());
+  registry.register(new NovelExportCommand());
   registry.register(new RandomDownloadCommand());
   registry.register(new SchedulerCommand());
   registry.register(new SchedulerRunOnceCommand());

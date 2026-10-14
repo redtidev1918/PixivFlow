@@ -183,6 +183,15 @@ describe('NovelsApi', () => {
     expect(novels).toHaveLength(2);
     expect(novels[0].user.name).toBe('u');
   });
+
+  it('refuses incomplete membership, duplicate IDs and pagination loops', async () => {
+    const incomplete = jsonClient(() => ({ novels: [{ id: 1 }], novel_series_detail: { content_count: 2 } })).client;
+    await expect(incomplete.novels.listSeries(1)).rejects.toThrow('Incomplete');
+    const duplicate = jsonClient(() => ({ novels: [{ id: 1 }, { id: 1 }] })).client;
+    await expect(duplicate.novels.listSeries(1)).rejects.toThrow('duplicate');
+    const looping = jsonClient(() => ({ novels: [{ id: 1 }], next_url: 'https://x/loop' })).client;
+    await expect(looping.novels.listSeries(1)).rejects.toThrow('did not terminate');
+  });
 });
 
 describe('TagsApi / UsersApi', () => {

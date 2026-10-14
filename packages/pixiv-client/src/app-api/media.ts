@@ -8,13 +8,15 @@ export class MediaApi {
   constructor(private readonly transport: Transport) {}
 
   /** Download a media URL (images, ugoira zips) as ArrayBuffer. */
-  fetch(url: string, options?: { referer?: string; timeoutMs?: number; signal?: AbortSignal }): Promise<ArrayBuffer> {
+  fetch(url: string, options?: { referer?: string; timeoutMs?: number; signal?: AbortSignal; maxBytes?: number; rejectRedirects?: boolean }): Promise<ArrayBuffer> {
     return this.transport.fetchBinary(url, {
       method: 'GET',
       headers: { Referer: options?.referer ?? 'https://app-api.pixiv.net/' },
       skipAuth: true,
       timeoutMs: options?.timeoutMs,
       signal: options?.signal,
+      maxBytes: options?.maxBytes,
+      rejectRedirects: options?.rejectRedirects,
     });
   }
 }

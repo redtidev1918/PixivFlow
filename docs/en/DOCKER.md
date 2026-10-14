@@ -93,6 +93,14 @@ Open `http://localhost:3000`. Set `WEBUI_PORT=8080` in `.env` and recreate the c
 
 Basic Auth protects static files, APIs and Socket.IO; `/api/health` remains available for health checks. Public binding without credentials is refused by default. `WEBUI_ALLOW_PUBLIC_NO_AUTH` is an explicit escape hatch, not a secure deployment setting. For remote access, use authentication and TLS, either in the server or a reverse proxy. Bundled frontend files are under `/app/webui-frontend/dist`.
 
+## Novel ebook export (EPUB / PDF)
+
+With `novelExport` enabled (or `download --formats epub`), EPUB generation is pure Node.js and works out of the box in Docker; PDF relies on Chromium:
+
+- **Full image (`Dockerfile`, Alpine)**: Chromium and Noto CJK fonts are bundled; add `PIXIVFLOW_PDF_BROWSER=/usr/bin/chromium-browser` to `.env` (or set `novelExport.pdf.browserPath`) and PDF works — Chinese/Japanese typesetting needs no extra setup. The image runs as root by default and Chromium refuses its sandbox under root, so PDF renders launch that one browser with `--no-sandbox` (the CI "Full image (Alpine) CJK PDF" job exercises this exact path with the bundled Chromium); with a non-root container user the sandbox is always enabled.
+- **Scheduler image (`Dockerfile.scheduler`, Debian slim)**: intentionally lightweight, no Chromium. For PDF, mount a browser executable and a CJK font into the container and point `PIXIVFLOW_PDF_BROWSER` / `PIXIVFLOW_PDF_FONT` (or `novelExport.pdf.*`) at the in-container paths; EPUB-only export is unaffected.
+- A missing browser reports `PDF_BROWSER_MISSING` and missing CJK fonts report `PDF_CJK_FONT_MISSING` — both explicit errors that never affect TXT download, EPUB export or delivery. Field semantics: see the "Novel ebook export" section in [CONFIG](CONFIG.md).
+
 ## Login and credentials
 
 Compose sets `PIXIV_SKIP_AUTO_LOGIN=true`. Obtain a refresh token outside the container rather than relying on unattended browser login. The login adapter order is pixiv-token-getter → Puppeteer → Python gppt.

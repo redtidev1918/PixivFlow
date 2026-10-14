@@ -4,6 +4,9 @@ import { type MediaAsset } from '../../domain/media/MediaAsset';
 import { type Artifact, artifactId, type ArtifactVariant } from '../../domain/media/Artifact';
 
 export interface MaterializationOptions {
+  maxBytes?: number;
+  signal?: AbortSignal;
+  rejectRedirects?: boolean;
   variant?: 'original' | 'delivery';
   destination?: string;
 }
@@ -41,7 +44,8 @@ export class PixivMediaMaterializer implements MediaMaterializer {
     if (!options.destination) {
       throw new Error('PixivMediaMaterializer requires options.destination');
     }
-    const buffer = await this.client.downloadImage(asset.sourceUrl);
+    const buffer = options.maxBytes === undefined ? await this.client.downloadImage(asset.sourceUrl)
+      : await this.client.downloadImage(asset.sourceUrl, { maxBytes: options.maxBytes, signal: options.signal, rejectRedirects: options.rejectRedirects });
     const fileName = fileNameFor(asset);
     const path = await this.fileService.saveBinary(buffer, fileName, options.destination);
     const variant: ArtifactVariant = options.variant ?? 'original';

@@ -13,6 +13,7 @@ import {
   collectCapabilityOverrideWarnings,
 } from '../delivery/capabilities';
 import { loadConfig } from './loader';
+import { validateNovelExport } from '../download/novel-export/NovelExportService';
 
 const ENV_PLACEHOLDER = /\$\{[A-Za-z_][A-Za-z0-9_]*\}/;
 
@@ -165,6 +166,10 @@ export function validateConfig(config: Partial<StandaloneConfig>, location: stri
     const targetIds = new Set<string>();
     // Only validate target structure if targets are provided
     config.targets.forEach((target, index) => {
+      if (target.novelExport !== undefined) {
+        try { validateNovelExport(target.novelExport); }
+        catch (error) { errors.push(`targets[${index}].${error instanceof Error ? error.message : String(error)}`); }
+      }
       if (target.id) {
         if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(target.id)) {
           errors.push(`targets[${index}].id: Must contain only letters, numbers, '_' or '-' (max 64 characters)`);

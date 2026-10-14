@@ -228,8 +228,25 @@ These fields are equivalent to URL direct links — when in doubt, [`--url`](USA
 | `noMatchPolicy.lookbackDays` | 0–7 (default 0) | When no target-language novel exists today, look back day by day; topic and language conditions are never silently relaxed |
 | `noMatchPolicy.notify` | boolean (default false) | When still no result at the end, notify the review chat via the delivery target's `notificationUrl`; the notification is persisted into the outbox and retried with exponential backoff |
 | `detectLanguage` | boolean (default true) | Record detection results into metadata |
+| `novelExport` | object (optional) | Additionally export local EPUB/PDF ebooks when downloading novels; see the section below |
 
 `mode: "topic"` first takes `languageCandidateLimit` novel candidates by popularity, then serially checks full bodies and stops once `limit` is reached; this preserves popularity order and avoids over-submission from concurrent checks. For low-bandwidth deployments of "hottest 1 Chinese novel", `limit: 1`, `languageCandidateLimit: 20`, `strictLanguageFilter: true` is recommended. When you want "fill as much as possible without silence", additionally set `noMatchPolicy: { "lookbackDays": 3, "notify": true }`; it checks at most yesterday and the 3 days before, and never degrades into Japanese or unrelated topics.
+
+#### Novel ebook export (`novelExport`)
+
+```json
+{
+  "type": "novel",
+  "novelExport": { "formats": ["epub"], "mergeSeries": true }
+}
+```
+
+- `formats`: a combination of `txt` (always retained; listed for explicitness) / `epub` / `pdf`. EPUB/PDF are local companion artifacts registered independently but never enter the delivery queue; TXT, the Markdown sidecar, rich-media ZIP, TelePress online reading and TelePost submissions are unchanged.
+- `mergeSeries`: after a `seriesId` download completes, assemble one ebook in the chapter order returned by Pixiv's series API (nested EPUB TOC, PDF bookmarks). Membership follows the API snapshot taken at download time; missing chapters are reported explicitly and an incomplete series is never silently marked complete.
+- Body text, chapters, `[newpage]` pagination, ruby annotations, inline illustrations, the cover and metadata are all preserved; the EPUB is fully offline with images packed from local bytes and no Pixiv CDN access.
+- Export failures only log a warning and are recorded in metadata `export_errors`; the original TXT download and delivery are unaffected. Output is written to a temporary file and atomically renamed, with a per-output file lock against concurrent writers; unchanged content skips re-export.
+- PDF depends on an optional Chrome/Chromium that PixivFlow never installs for you: point `novelExport.pdf.browserPath` at the executable (or set `PIXIVFLOW_PDF_BROWSER`); on servers/Docker without CJK fonts, embed a font file via `novelExport.pdf.fontPath` (TTF/OTF/TTC). Without a browser, PDF reports `PDF_BROWSER_MISSING` explicitly while EPUB and everything else keep working.
+- Already-downloaded novels can be re-exported offline at any time with the [`novel-export` command](USAGE.md#full-command-cheat-sheet); no re-fetching of body text.
 
 #### Pixiv animations (ugoira)
 

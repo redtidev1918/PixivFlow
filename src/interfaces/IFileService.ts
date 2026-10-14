@@ -5,6 +5,7 @@ import { FileMetadata, PixivMetadata } from '../download/FileService';
  * Provides abstraction for file system operations
  */
 export interface IFileService {
+  saveNovelDocument?(filePath: string, document: import('../download/novel-export/NovelDocument').NovelDocument): Promise<string>;
   /**
    * Initialize file service (create directories)
    */

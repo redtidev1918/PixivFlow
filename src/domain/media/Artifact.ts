@@ -11,6 +11,9 @@ export type ArtifactVariant =
   | 'text'
   | 'markdown'
   | 'zip'
+  | 'epub'
+  | 'pdf'
+  | 'novel-document'
   | 'metadata'
   | 'delivery';
 

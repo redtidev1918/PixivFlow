@@ -5,7 +5,7 @@ import { IDatabase } from '../interfaces/IDatabase';
 import { FileMetadata, PixivMetadata } from './FileService';
 import { IFileService } from '../interfaces/IFileService';
 import { PixivNovel } from '@redtidev/pixiv-client';
-import { dirname, join, basename } from 'node:path';
+import { dirname, join, basename, relative, resolve } from 'node:path';
 import { detectLanguage } from '../utils/language-detection';
 import { DownloadedArtifact } from '../delivery/types';
 import { type MediaAsset } from '../domain/media/MediaAsset';
@@ -25,6 +25,8 @@ import {
 } from '../domain/media/NovelCoverPolicy';
 import { createZipArchive } from '../utils/zip';
 import type { Database } from '../storage/Database';
+import { NovelDocument, assembleSeries } from './novel-export/NovelDocument';
+import { assertPixivImageUrl, atomicJson, exportBook, loadNovelDocument, SeriesManifest } from './novel-export/NovelExportService';
 
 const LANGUAGE_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -219,9 +221,11 @@ export class NovelDownloader {
           continue; // on-demand: keep the media reference, defer local file creation
         }
         try {
+          if (target.novelExport) assertPixivImageUrl(mediaAsset.sourceUrl);
           const artifact = await this.materializer.materialize(mediaAsset, {
             variant: 'original',
             destination: imagesDir,
+            ...(target.novelExport ? { maxBytes: 20 * 1024 * 1024, rejectRedirects: true, signal: AbortSignal.timeout(30_000) } : {}),
           });
           const key = `${mediaAsset.sourceRef?.pixivKind}:${mediaAsset.sourceRef?.sourceId}`;
           const asset = assets.find((a) => `${a.kind}:${a.sourceId}` === key);
@@ -254,7 +258,9 @@ export class NovelDownloader {
     // dedicated `novelcover` MediaAsset so TelePost can build
     // `cover root + TXT reply` without positional guessing. The cover is never
     // materialized locally — Telegram fetches it (via proxy).
-    const coverUrl = await this.resolveCoverUrl(detail.id, typeof textResponse === 'string' ? undefined : textResponse.coverUrl);
+    const coverSeeds = new Map<string, Buffer>();
+    const coverUrl = await this.resolveCoverUrl(detail.id, typeof textResponse === 'string' ? undefined : textResponse.coverUrl,
+      target.novelExport ? (url, bytes) => coverSeeds.set(url, Buffer.from(bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes))) : undefined);
     const coverAsset = coverUrl ? novelCoverAsset(String(detail.id), coverUrl) : undefined;
 
     const downloadByAssetKey = new Map<string, (typeof assets)[number]>(
@@ -289,7 +295,30 @@ export class NovelDownloader {
       }
     }
 
+    const document: NovelDocument = {
+      version: 1, id: String(detail.id), title: detail.title, author: detail.user?.name ?? 'Unknown',
+      sourceUrl: `https://www.pixiv.net/novel/show.php?id=${detail.id}`,
+      language: detectedLang?.code ?? 'und', publishedAt: detail.create_date,
+      tags: tags.map(t => t.name), rawText: text,
+      ...(detail.series?.id ? { series: { id: String(detail.series.id), title: detail.series.title } } : {}),
+      media: [...resolved.mediaAssets, ...(coverAsset ? [coverAsset] : [])].map(asset => {
+        const local = downloadByAssetKey.get(`${asset.sourceRef?.pixivKind}:${asset.sourceRef?.sourceId}`)?.localPath;
+        return { asset, ...(local ? { localPath: relative(dirname(filePath), local) } : {}) };
+      }),
+    };
+    let ebookResult: Awaited<ReturnType<typeof exportBook>> = { artifacts: [], errors: [] };
+    if (target.novelExport) {
+      try {
+        ebookResult = await exportBook({ id: document.id, title: document.title, documents: [document] },
+          new Map([[document.id, dirname(filePath)]]), filePath.replace(/\.txt$/i, ''), target.novelExport, this.materializer, coverSeeds);
+      } catch (error) {
+        ebookResult.errors.push({ format: 'ebook', code: 'NOVEL_EXPORT_FAILED', message: error instanceof Error ? error.message : String(error) });
+      }
+      for (const error of ebookResult.errors) logger.warn('Novel ebook export failed; TXT retained', { novelId: detail.id, ...error });
+    }
     const pixivMetadata: PixivMetadata = {
+      novel_document: document,
+      ...(target.novelExport ? { export_artifacts: ebookResult.artifacts, export_errors: ebookResult.errors } : {}),
       pixiv_id: detail.id,
       title: detail.title,
       author: {
@@ -331,6 +360,9 @@ export class NovelDownloader {
     };
 
     let metadataPath: string | undefined;
+    let documentPath: string | undefined;
+    try { documentPath = await this.fileService.saveNovelDocument?.(filePath, document); }
+    catch (error) { logger.warn('Failed to save re-exportable novel document', { novelId: detail.id, error }); }
     try {
       metadataPath = await this.fileService.saveMetadata(filePath, pixivMetadata);
     } catch (error) {
@@ -385,7 +417,8 @@ export class NovelDownloader {
 
     const workId = String(detail.id);
     const mediaAssets: MediaAsset[] = [];
-    const artifacts: Artifact[] = [];
+    const artifacts: Artifact[] = [...ebookResult.artifacts];
+    if (documentPath) artifacts.push({ id: artifactId(workId, 'novel-document', basename(documentPath)), workId, variant: 'novel-document', path: documentPath });
     if (filePath) {
       artifacts.push({ id: artifactId(workId, 'text', basename(filePath)), workId, variant: 'text', path: filePath });
     }
@@ -464,14 +497,17 @@ export class NovelDownloader {
    */
   private async resolveCoverUrl(
     novelId: number | string,
-    coverUrl?: string | null
+    coverUrl?: string | null,
+    retain?: (url: string, bytes: ArrayBuffer | Uint8Array) => void
   ): Promise<string | null> {
     const normalized = normalizeNovelCoverUrl(coverUrl);
     if (!normalized) return null;
 
     let cover: ArrayBuffer | Uint8Array;
     try {
-      cover = await this.client.downloadImage(normalized);
+      if (retain) assertPixivImageUrl(normalized);
+      cover = retain ? await this.client.downloadImage(normalized, { maxBytes: 20 * 1024 * 1024, rejectRedirects: true, signal: AbortSignal.timeout(30_000) })
+        : await this.client.downloadImage(normalized);
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
       // A failed probe is a policy decision, not an automatic keep: most novel
@@ -535,7 +571,38 @@ export class NovelDownloader {
         coverType,
       });
     }
+    retain?.(normalized, cover);
     return normalized;
+  }
+
+  /** Persist the API's ordered membership snapshot, then assemble only complete books. */
+  public async exportSeries(seriesId: number, novels: PixivNovel[], target: TargetConfig): Promise<void> {
+    if (!target.novelExport?.mergeSeries) return;
+    try {
+      const paths = this.metadataDb?.getNovelDocumentPaths(novels.map(n => String(n.id))) ?? [];
+      if (!paths.length) throw new Error('NOVEL_SERIES_INCOMPLETE: no saved chapter metadata');
+      const documents: NovelDocument[] = [];
+      const roots = new Map<string, string>();
+      for (const file of paths) {
+        try { const doc = await loadNovelDocument(file); documents.push(doc); roots.set(doc.id, dirname(file)); }
+        catch (error) { logger.warn('Series chapter unavailable for export', { seriesId, error }); }
+      }
+      let directory = resolve(dirname(paths[0]));
+      while (paths.some(p => relative(directory, resolve(p)).startsWith('..'))) {
+        const parent = dirname(directory);
+        if (parent === directory) throw new Error('NOVEL_SERIES_PATH: chapters must share an output directory');
+        directory = parent;
+      }
+      const title = documents.find(d => d.series?.id === String(seriesId))?.series?.title ?? `Series ${seriesId}`;
+      const manifest: SeriesManifest = { version: 1, seriesId: String(seriesId), title, orderedIds: novels.map(n => String(n.id)), metadataPaths: paths.map(p => relative(directory, p)) };
+      const output = join(directory, `series-${seriesId}`);
+      await atomicJson(`${output}.series.json`, manifest);
+      const book = assembleSeries(String(seriesId), title, manifest.orderedIds, documents);
+      const result = await exportBook(book, roots, output, target.novelExport, this.materializer);
+      await atomicJson(`${output}.artifacts.json`, result);
+      for (const error of result.errors) logger.warn('Novel series export failed; chapter TXT retained', { seriesId, ...error });
+      for (const artifact of result.artifacts) logger.info('Novel series exported', { seriesId, format: artifact.variant, path: artifact.path });
+    } catch (error) { logger.warn('Novel series export incomplete; chapter TXT retained', { seriesId, error }); }
   }
 }
 

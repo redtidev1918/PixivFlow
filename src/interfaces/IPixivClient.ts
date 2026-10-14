@@ -110,6 +110,6 @@ export interface IPixivClient {
   /**
    * Download image from URL
    */
-  downloadImage(originalUrl: string): Promise<ArrayBuffer>;
+  downloadImage(originalUrl: string, options?: { maxBytes?: number; rejectRedirects?: boolean; signal?: AbortSignal; timeoutMs?: number }): Promise<ArrayBuffer>;
 }
 

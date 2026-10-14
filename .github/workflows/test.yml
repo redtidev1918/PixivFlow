@@ -95,3 +95,45 @@ jobs:
         run: |
           test "$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' pixivflow-scheduler:test)" = "$GITHUB_SHA"
           docker run --rm -e EXPECTED_REVISION="$GITHUB_SHA" --entrypoint sh pixivflow-scheduler:test -c 'test ! -e /usr/local/bin/pixivflow && test -f /app/dist/index.js && test "$PIXIVFLOW_REVISION" = "$EXPECTED_REVISION"'
+
+  full-image:
+    # Skip release-please PRs (authored by github-actions[bot]): GitHub holds their
+    # workflow runs for approval so they never start, which shows a permanent failed
+    # check on every release PR. Self-healing: once RELEASE_PLEASE_TOKEN (a real user
+    # PAT) authors the release PR, this guard no longer matches and CI returns.
+    if: github.event_name != 'pull_request' || github.event.pull_request.user.login != 'github-actions[bot]'
+    name: Full image (Alpine) CJK PDF
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      # The repo ships webui-frontend/dist only; a dummy package.json keeps the
+      # Dockerfile from cloning the frontend repo, and SKIP_WEBUI_BUILD skips
+      # its build. The ebook gate does not need the frontend.
+      - name: Build full image
+        run: |
+          mkdir -p webui-frontend && printf '{"name":"webui-frontend","private":true}' > webui-frontend/package.json
+          docker build -f Dockerfile --build-arg SKIP_WEBUI_BUILD=true -t pixivflow-full:test .
+
+      - name: Verify bundled Chromium and Noto CJK fonts
+        run: |
+          docker run --rm --entrypoint sh pixivflow-full:test -c '
+            test -x /usr/bin/chromium-browser &&
+            apk info -e font-noto-cjk &&
+            fc-match "sans:lang=zh-cn" | grep -i noto &&
+            fc-match "sans:lang=ja" | grep -i noto'
+
+      # Real render inside the shipped image (runs as the image's default root
+      # user, i.e. the exact production default): EPUB packaging plus Chromium
+      # PDF with the in-renderer CJK font gate; pypdf is installed into the
+      # throwaway container only, so the production image stays lean.
+      - name: Render and verify EPUB/PDF inside the container
+        run: |
+          docker run --rm -v "$PWD/scripts:/verify:ro" -e PIXIVFLOW_PDF_BROWSER=/usr/bin/chromium-browser --entrypoint sh pixivflow-full:test -c '
+            apk add --no-cache poppler-utils &&
+            python3 -m pip install --quiet --break-system-packages pypdf &&
+            node /verify/verify-novel-container.cjs /tmp/ebook &&
+            python3 /verify/verify-novel-pdf.py /tmp/ebook/single.pdf &&
+            python3 /verify/verify-novel-pdf.py /tmp/ebook/series.pdf'

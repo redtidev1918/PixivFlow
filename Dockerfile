@@ -80,7 +80,8 @@ WORKDIR /app
 # 安装运行时依赖
 # - Python3/py3-pip: 用于 gppt 登录工具（与应用依赖安装无关，仍需保留）
 # - Chromium 和 ChromeDriver: 用于 gppt/Selenium 登录
-# - 字体: 支持 headless 浏览器渲染
+# - 字体: 支持 headless 浏览器渲染；font-noto-cjk 让小说 PDF 导出
+#   无需额外配置即可正确排版中日文（font-noto 本身不含 CJK 字形）
 # 不再安装 make/g++：npm 依赖中已无原生模块（better-sqlite3 已由内建 node:sqlite 取代），
 # 运行时不需要编译器。
 RUN apk add --no-cache \
@@ -91,6 +92,7 @@ RUN apk add --no-cache \
     chromium-chromedriver \
     ttf-freefont \
     font-noto \
+    font-noto-cjk \
     && python3 -m pip install --no-cache-dir --break-system-packages gppt \
     && rm -rf /var/cache/apk/* \
     && rm -rf /root/.cache

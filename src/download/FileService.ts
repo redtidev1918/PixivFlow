@@ -12,6 +12,9 @@ export interface FileMetadata {
 }
 
 export interface PixivMetadata {
+  novel_document?: import('./novel-export/NovelDocument').NovelDocument;
+  export_artifacts?: import('../domain/media/Artifact').Artifact[];
+  export_errors?: import('./novel-export/NovelExportService').ExportResult['errors'];
   pixiv_id: string | number;
   title: string;
   author: {
@@ -53,6 +56,13 @@ export interface PixivMetadata {
 
 export class FileService implements IFileService {
   constructor(private readonly storage: StorageConfig) {}
+
+  public async saveNovelDocument(filePath: string, document: import('./novel-export/NovelDocument').NovelDocument): Promise<string> {
+    const { atomicJson } = await import('./novel-export/NovelExportService');
+    const path = `${filePath}.novel.json`;
+    await atomicJson(path, { novel_document: document });
+    return path;
+  }
 
   public async initialise() {
     await ensureDir(this.storage.downloadDirectory!);

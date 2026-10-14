@@ -208,6 +208,14 @@ export class Database implements IDatabase {
     return this.downloadRepo.getDownloadedIds(pixivIds, type);
   }
 
+  public getNovelDocumentPaths(ids: string[]): string[] {
+    const query = this.db.prepare("SELECT file_path FROM downloads WHERE pixiv_id = ? AND type = 'novel' ORDER BY id DESC LIMIT 1");
+    return ids.flatMap(id => {
+      const row = query.get(id) as { file_path: string } | undefined;
+      return row ? [`${row.file_path}.novel.json`] : [];
+    });
+  }
+
   public insertDownload(record: DownloadRecordInput): void {
     this.downloadRepo.insertDownload(record);
   }

@@ -228,8 +228,25 @@ target 级 `topicProfile`（`primary` / `related` / `strategy.freshnessWeight` /
 | `noMatchPolicy.lookbackDays` | 0–7（默认 0） | 当天没有目标语言小说时，按日期逐日向前回看；主题和语言条件不会被静默放宽 |
 | `noMatchPolicy.notify` | boolean（默认 false） | 最终仍无结果时，通过交付目标的 `notificationUrl` 通知审核群；通知会持久入 outbox 并指数退避重试 |
 | `detectLanguage` | boolean(默认 true) | 记录检测结果并写入元数据 |
+| `novelExport` | 对象（可选） | 下载小说时额外导出本地 EPUB/PDF 电子书；见下节 |
 
 `mode: "topic"` 会先按热度取 `languageCandidateLimit` 个小说候选，再串行检测完整正文并在达到 `limit` 后停止；这样既保证热度顺序，也避免并发检查造成超额投稿。对“最热 1 部中文小说”的低带宽部署，推荐 `limit: 1`、`languageCandidateLimit: 20`、`strictLanguageFilter: true`。需要“尽量补足且不静默”时，可再设置 `noMatchPolicy: { "lookbackDays": 3, "notify": true }`；它最多检查昨天及之前 3 天，不会退化为日文或无关主题。
+
+#### 小说电子书导出（`novelExport`）
+
+```json
+{
+  "type": "novel",
+  "novelExport": { "formats": ["epub"], "mergeSeries": true }
+}
+```
+
+- `formats`：`txt`（始终保留，列出仅为明示）/ `epub` / `pdf` 的组合。EPUB/PDF 是本地伴生产物，注册为独立 Artifact 但不进入投递队列；TXT、Markdown sidecar、富媒体 ZIP、TelePress 在线阅读与 TelePost 投稿行为完全不变。
+- `mergeSeries`：`seriesId` 下载完成后，按 Pixiv 系列接口返回的章节顺序合订为一本电子书（EPUB 多级目录、PDF 书签）。系列成员以下载时的 API 快照为准，缺章会显式报错，不会把不完整系列静默标记为完整。
+- 正文、章节、`[newpage]` 分页、注音（ruby）、内嵌插图、封面与元数据全部保留；EPUB 完全离线，图片以本地字节打包，不回源 Pixiv CDN。
+- 导出失败只记警告并写入元数据 `export_errors`，原始 TXT 下载与投递不受影响。输出经临时文件原子替换，同一输出有文件锁防止并发写坏；内容未变时跳过重复导出。
+- PDF 依赖可选的 Chrome/Chromium，PixivFlow 不会替用户安装：`novelExport.pdf.browserPath` 指向可执行文件（或环境变量 `PIXIVFLOW_PDF_BROWSER`）；缺少 CJK 字体的服务器/Docker 环境可用 `novelExport.pdf.fontPath` 嵌入字体文件（TTF/OTF/TTC）。未配置浏览器时 PDF 明确报 `PDF_BROWSER_MISSING`，EPUB 与其余功能不受影响。
+- 已下载的小说可随时用 [`novel-export` 命令](USAGE.md#全部命令速查) 离线重导出，无需重新抓取正文。
 
 #### Pixiv 动图（ugoira）
 

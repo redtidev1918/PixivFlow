@@ -50,6 +50,23 @@ function makeClient(
 }
 
 describe('transport status mapping', () => {
+  it('bounds media streams and rejects redirects without changing default downloads', async () => {
+    const requests: RequestInit[] = [];
+    const client = makeClient(async (_url, init) => {
+      requests.push(init);
+      return { ...makeResponse({}), body: new ReadableStream({ start(controller) { controller.enqueue(new Uint8Array([1, 2, 3])); controller.close(); } }) };
+    });
+    expect(new Uint8Array(await client.media.fetch('https://i.pximg.net/a.png', { maxBytes: 3, rejectRedirects: true }))).toEqual(new Uint8Array([1, 2, 3]));
+    expect(requests[0].redirect).toBe('error');
+    await expect(client.media.fetch('https://i.pximg.net/a.png', { maxBytes: 2 })).rejects.toThrow('exceeds maxBytes');
+  });
+
+  it('rejects oversized content-length before reading bytes', async () => {
+    const arrayBuffer = jest.fn();
+    const client = makeClient(async () => ({ ...makeResponse({ headers: { 'content-length': '100' } }), arrayBuffer }));
+    await expect(client.media.fetch('https://i.pximg.net/a.png', { maxBytes: 2 })).rejects.toThrow('exceeds maxBytes');
+    expect(arrayBuffer).not.toHaveBeenCalled();
+  });
   const cases: Array<[number, unknown]> = [
     [200, null],
     [400, PixivHttpError],

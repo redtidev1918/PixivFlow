@@ -45,6 +45,27 @@ You can also express a target ad hoc as JSON without writing it into the config 
 pixivflow download --targets '[{"type":"novel","tag":"アークナイツ","limit":5}]'
 ```
 
+## Novel ebook export (EPUB / PDF)
+
+Add `--formats` to a download to produce local ebooks alongside the TXT; `--merge-series` binds a whole novel series into one book in Pixiv chapter order:
+
+```bash
+pixivflow download --url "https://www.pixiv.net/novel/show.php?id=26132156" --formats epub
+pixivflow download --url "https://www.pixiv.net/novel/series/12345678" --formats epub --merge-series
+```
+
+Already-downloaded novels can be re-exported offline without re-fetching the body:
+
+```bash
+pixivflow novel-export --input "downloads/novels/26132156_Title.txt.novel.json" --formats epub
+pixivflow novel-export --input "downloads/novels/series-12345678.series.json" --formats epub,pdf
+```
+
+- Chapters, `[newpage]` pagination, ruby annotations, inline illustrations, the cover and metadata are all preserved; the EPUB is fully offline with images packed from local bytes and no Pixiv CDN access.
+- The TXT is always retained with an unchanged path; ebook export failures only log a warning and never affect the download result or the delivery queue.
+- PDF depends on an optional Chrome/Chromium that is never auto-installed: `--browser <chrome path>` (or the `PIXIVFLOW_PDF_BROWSER` environment variable); on servers/Docker without CJK fonts, embed one via `--font <font file>`. Without a browser, PDF reports `PDF_BROWSER_MISSING` explicitly while everything else keeps working.
+- The corresponding target field in the config file is `novelExport`; see the "Novel ebook export" section in [CONFIG](CONFIG.md) for semantics and limits.
+
 ## Tag search mode
 
 The default mode. Only four core fields:
@@ -150,6 +171,7 @@ Grouped by the categories of `pixivflow help` (commands evolve with releases —
 | Command | Description |
 | --- | --- |
 | `download [--url \| --targets \| --config]` | Run one download (alias d) |
+| `novel-export --input <file>` | Re-export a downloaded novel/series offline to EPUB/PDF without re-fetching |
 | `random` | Randomly download one from popular tags |
 | `scheduler` | Start the resident scheduled-task process |
 

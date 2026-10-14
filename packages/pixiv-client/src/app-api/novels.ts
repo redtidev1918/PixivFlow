@@ -167,15 +167,20 @@ export class NovelsApi {
   async listSeries(seriesId: number, signal?: AbortSignal): Promise<PixivNovel[]> {
     type SeriesEntry = { id: number; title: string; user: PixivUser; create_date: string };
     type SeriesResponse = {
-      novel_series_detail?: { series_content?: SeriesEntry[] };
+      novel_series_detail?: { series_content?: SeriesEntry[]; content_count?: number };
       series_content?: SeriesEntry[];
       novels?: PixivNovel[];
       next_url?: string | null;
     };
     let currentUrl: string = `/v1/novel/series?series_id=${encodeURIComponent(String(seriesId))}`;
     const out: PixivNovel[] = [];
+    const visited = new Set<string>();
+    let expectedCount: number | undefined;
     for (;;) {
+      if (visited.has(currentUrl) || visited.size >= 100) throw new PixivApiError('Novel series pagination did not terminate.', { endpoint: currentUrl });
+      visited.add(currentUrl);
       const res: SeriesResponse = await this.transport.request<SeriesResponse>(currentUrl, { method: 'GET', signal });
+      expectedCount ??= res.novel_series_detail?.content_count;
 
       const content = res.novel_series_detail?.series_content ?? res.series_content;
       if (content) {
@@ -189,6 +194,9 @@ export class NovelsApi {
       }
       if (!res.next_url) break;
       currentUrl = res.next_url;
+    }
+    if (new Set(out.map(n => String(n.id))).size !== out.length || (expectedCount !== undefined && expectedCount !== out.length)) {
+      throw new PixivApiError('Incomplete or duplicate novel series membership; cannot export a complete series.', { endpoint: currentUrl });
     }
     return out;
   }

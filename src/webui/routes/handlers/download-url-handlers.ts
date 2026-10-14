@@ -2,6 +2,8 @@ import { Request, Response } from 'express';
 import { logger } from '../../../logger';
 import { downloadTaskManager } from '../../services/DownloadTaskManager';
 import { ErrorCode } from '../../utils/error-codes';
+import { validateNovelExport } from '../../../download/novel-export/NovelExportService';
+import type { TargetConfig } from '../../../config';
 import {
   parsePixivUrl,
   parsedUrlToTargetConfig,
@@ -16,8 +18,15 @@ import {
  * artworks / en-artworks / i-short / member_illust legacy / novel show / 
  * novel series / users/{uid} / users/{uid}/artworks|novels/{id} / bare ID.
  */
-function toTarget(parsed: ParsedPixivUrl) {
+function toTarget(parsed: ParsedPixivUrl): TargetConfig {
   return parsedUrlToTargetConfig(parsed);
+}
+
+function requestedNovelExport(value: unknown): TargetConfig['novelExport'] {
+  if (value === undefined) return undefined;
+  validateNovelExport(value);
+  if (Object.keys(value).some(key => !['formats', 'mergeSeries'].includes(key))) throw new Error('WebUI novelExport accepts only formats and mergeSeries; configure PDF browser/font on the server');
+  return { formats: value.formats, mergeSeries: value.mergeSeries };
 }
 
 function describeTarget(target: {
@@ -80,6 +89,14 @@ export async function downloadFromUrl(req: Request, res: Response): Promise<void
 
     const taskId = `url_task_${Date.now()}`;
     const target = toTarget(parsed);
+    if (req.body.novelExport !== undefined) {
+      // Browser clients may choose formats, never executable/font paths.
+      let options: TargetConfig['novelExport'];
+      try { options = requestedNovelExport(req.body.novelExport); }
+      catch (error) { res.status(400).json({ errorCode: ErrorCode.INVALID_REQUEST, message: String(error) }); return; }
+      if (target.type !== 'novel') { res.status(400).json({ errorCode: ErrorCode.INVALID_REQUEST, message: 'novelExport requires a novel target' }); return; }
+      target.novelExport = options;
+    }
     const tempConfig = { targets: [target] };
     const info = describeTarget(target);
 
@@ -149,6 +166,10 @@ export async function downloadFromBatchUrls(req: Request, res: Response): Promis
 
     const taskId = `batch_url_task_${Date.now()}`;
     const targets = valid.map((item) => toTarget(item.parsed!));
+    try {
+      const novelExport = requestedNovelExport(req.body.novelExport);
+      if (novelExport) for (const target of targets) if (target.type === 'novel') target.novelExport = novelExport;
+    } catch (error) { res.status(400).json({ errorCode: ErrorCode.INVALID_REQUEST, message: String(error) }); return; }
     const tempConfig = { targets };
 
     downloadTaskManager.startTask(taskId, undefined, tempConfig).catch((error) => {

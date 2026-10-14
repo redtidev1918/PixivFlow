@@ -718,6 +718,7 @@ export class NovelTargetHandler {
       }
 
       logger.info(`Series download completed: ${downloaded} novel(s) downloaded from series ${seriesId}`);
+      if (target.novelExport?.mergeSeries) await this.novelDownloader.exportSeries(seriesId, novels, target);
     } catch (error) {
       logger.error(`Failed to download novel series ${seriesId}`, {
         error: error instanceof Error ? error.message : String(error),

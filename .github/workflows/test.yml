@@ -132,6 +132,7 @@ jobs:
       - name: Render and verify EPUB/PDF inside the container
         run: |
           docker run --rm -v "$PWD/scripts:/verify:ro" -e PIXIVFLOW_PDF_BROWSER=/usr/bin/chromium-browser --entrypoint sh pixivflow-full:test -c '
+            apk add --no-cache poppler-utils &&
             python3 -m pip install --quiet --break-system-packages pypdf &&
             node /verify/verify-novel-container.cjs /tmp/ebook &&
             python3 /verify/verify-novel-pdf.py /tmp/ebook/single.pdf &&

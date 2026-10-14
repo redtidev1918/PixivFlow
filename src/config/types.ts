@@ -171,6 +171,8 @@ export interface TargetDeliveryConfig {
 }
 
 export interface TargetConfig {
+  /** Optional local ebook companions; TXT and delivery behavior are unchanged. */
+  novelExport?: import('../download/novel-export/NovelExportService').NovelExportOptions;
   /**
    * Stable identifier used by schedules to select this target.
    * Optional for legacy single-schedule configurations.

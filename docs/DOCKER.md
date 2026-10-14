@@ -175,6 +175,14 @@ ports:
 - 前端静态资源已构建进镜像内的 `/app/webui-frontend/dist`，无需额外挂载。
 - 配置只读挂载带来的限制见「服务组成」一节。
 
+## 小说电子书导出（EPUB / PDF）
+
+小说下载加 `novelExport`（或 `download --formats epub`）后，EPUB 纯 Node.js 生成，Docker 内开箱即用；PDF 依赖镜像里的 Chromium：
+
+- **完整镜像（`Dockerfile`，alpine）**：已内置 Chromium 和 Noto CJK 字体，只需告诉 PixivFlow 浏览器位置——在 `.env` 加 `PIXIVFLOW_PDF_BROWSER=/usr/bin/chromium-browser`（或配置 `novelExport.pdf.browserPath`），PDF 即可用，中日文字体无需再配。
+- **调度器镜像（`Dockerfile.scheduler`，Debian slim）**：按轻量目标设计，不带 Chromium。需要 PDF 时挂载一个浏览器可执行文件与 CJK 字体，并通过 `PIXIVFLOW_PDF_BROWSER`、`PIXIVFLOW_PDF_FONT`（或 `novelExport.pdf.*`）指向容器内路径；只导出 EPUB 则完全不受影响。
+- 缺浏览器时报 `PDF_BROWSER_MISSING`，缺 CJK 字体时报 `PDF_CJK_FONT_MISSING`，均为明确错误，不影响 TXT 下载、EPUB 导出与投递。字段语义见 [CONFIG](CONFIG.md) 的「小说电子书导出」一节。
+
 ## 登录与凭据
 
 容器内不能交互式登录：compose 已强制注入 `PIXIV_SKIP_AUTO_LOGIN=true`，阻止调度器在无人值守环境下反复触发浏览器自动化（登录适配链为 pixiv-token-getter → Puppeteer → Python gppt，见[登录指南](./LOGIN.md)）。

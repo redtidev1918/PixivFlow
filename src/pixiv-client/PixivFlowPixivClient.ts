@@ -209,7 +209,7 @@ export class PixivFlowPixivClient implements IPixivClient {
     return this.kit.novels.listSeries(seriesId);
   }
 
-  downloadImage(originalUrl: string): Promise<ArrayBuffer> {
-    return this.kit.media.fetch(originalUrl, { referer: 'https://app-api.pixiv.net/' });
+  downloadImage(originalUrl: string, options?: { maxBytes?: number; rejectRedirects?: boolean; signal?: AbortSignal; timeoutMs?: number }): Promise<ArrayBuffer> {
+    return this.kit.media.fetch(originalUrl, { referer: 'https://app-api.pixiv.net/', ...options });
   }
 }

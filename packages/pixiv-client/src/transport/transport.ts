@@ -295,15 +295,49 @@ export class Transport {
       const token = await this.auth.getAccessToken(options.signal);
       if (token) headers.Authorization = `Bearer ${token}`;
     }
+    if (this.axiosInstance && options.maxBytes !== undefined) {
+      const response = await this.axiosInstance.request({ url, method: 'GET', headers,
+        signal: options.signal, responseType: 'arraybuffer', maxContentLength: options.maxBytes,
+        maxRedirects: options.rejectRedirects ? 0 : 5, validateStatus: () => true });
+      if (response.status < 200 || response.status >= 300) throw this.statusError(response.status, response.statusText, '', url);
+      const bytes = new Uint8Array(response.data);
+      if (bytes.byteLength > options.maxBytes) throw new PixivHttpError('Binary response exceeds maxBytes', { endpoint: url, retryable: false });
+      return bytes.buffer;
+    }
     const res = await this.fetchImpl(url, {
       method: options.method ?? 'GET',
       headers,
       body: options.body,
       signal: options.signal,
+      redirect: options.rejectRedirects ? 'error' : 'follow',
     });
     if (!res.ok) {
       const body = await this.safeText(res);
       throw this.statusError(res.status, res.statusText, body, url);
+    }
+    if (options.maxBytes !== undefined) {
+      const limit = options.maxBytes;
+      if (Number(res.headers.get('content-length')) > limit) {
+        await res.body?.cancel();
+        throw new PixivHttpError('Binary response exceeds maxBytes', { endpoint: url, retryable: false });
+      }
+      if (res.body) {
+        const reader = res.body.getReader();
+        const chunks: Uint8Array[] = []; let size = 0;
+        try {
+          for (;;) {
+            const { value, done } = await reader.read(); if (done) break;
+            size += value.byteLength;
+            if (size > limit) throw new PixivHttpError('Binary response exceeds maxBytes', { endpoint: url, retryable: false });
+            chunks.push(value);
+          }
+        } finally { await reader.cancel(); reader.releaseLock(); }
+        const result = new Uint8Array(size); let offset = 0;
+        for (const chunk of chunks) { result.set(chunk, offset); offset += chunk.length; }
+        return result.buffer;
+      }
+      // A custom fetch implementation must expose a stream for bounded media.
+      throw new PixivHttpError('Bounded binary fetch requires a response stream', { endpoint: url, retryable: false });
     }
     return res.arrayBuffer();
   }

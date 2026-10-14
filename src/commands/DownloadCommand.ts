@@ -14,6 +14,7 @@ import { DownloadManager } from '../download/DownloadManager';
 import { withResources, createResource } from '../utils/resource-manager';
 import { parsePixivUrl, parsedUrlToTargetConfig } from '../utils/pixiv-url-parser';
 import { AuthenticationError, ConfigError } from '../utils/errors';
+import { novelExportArgs } from './NovelExportCommand';
 
 /**
  * Download command - Run download job once
@@ -86,6 +87,11 @@ export class DownloadCommand extends BaseCommand {
           });
           return this.failure('Failed to parse --targets parameter', { error });
         }
+      }
+
+      if (args.options.formats !== undefined || args.options['merge-series'] !== undefined) {
+        const novelExport = novelExportArgs(args);
+        config = { ...config, targets: config.targets.map(t => t.type === 'novel' ? { ...t, novelExport } : t) };
       }
 
       // Apply initial delay if configured
@@ -180,6 +186,10 @@ Options:
   --config <path>        Path to config file
   --targets <json>       Custom targets JSON (overrides config file targets)
   --url <url>            Download from Pixiv URL or ID (overrides config file targets)
+  --formats <list>       Add local novel exports: txt,epub,pdf (TXT always retained)
+  --merge-series         Export a complete series in Pixiv chapter order
+  --browser <path>       Optional Chromium executable for PDF
+  --font <path>          Optional CJK font for PDF
 
 Supported URL formats:
   • Standard artworks:        https://www.pixiv.net/artworks/{id}

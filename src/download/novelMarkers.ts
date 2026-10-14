@@ -28,7 +28,8 @@ export type NovelMarker =
   | { type: 'pixivimage'; raw: string; key: string }
   | { type: 'uploadedimage'; raw: string; key: string }
   | { type: 'jumpuri'; raw: string; url?: string }
-  | { type: 'ruby'; raw: string; reading: string };
+  | { type: 'ruby'; raw: string; reading: string }
+  | { type: 'jump'; raw: string; page: number };
 
 export interface NovelAsset {
   marker: string;
@@ -43,6 +44,7 @@ export interface NovelAsset {
 const linkRegex = /https?:\/\/\S+/;
 
 function parseMarker(span: string): NovelMarker {
+  if (/^\[jump:[1-9]\d*\]$/.test(span)) return { type: 'jump', raw: span, page: Number(span.slice(6, -1)) };
   if (span.startsWith('[newpage]')) return { type: 'newpage', raw: span };
   if (span.startsWith('[chapter:')) {
     return { type: 'chapter', raw: span, title: span.slice('[chapter:'.length, -1) };

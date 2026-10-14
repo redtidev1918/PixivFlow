@@ -129,6 +129,9 @@ export interface PixivClientOptions {
 }
 
 export interface RequestOptions {
+  /** Optional bounded binary download; reject redirects when requested. */
+  maxBytes?: number;
+  rejectRedirects?: boolean;
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
   headers?: Record<string, string>;
   body?: string;
@@ -146,6 +149,7 @@ export interface RequestOptions {
 export type FetchLike = (url: string, init: RequestInit & { dispatcher?: unknown }) => Promise<ResponseLike>;
 
 export interface ResponseLike {
+  body?: ReadableStream<Uint8Array> | null;
   status: number;
   statusText: string;
   headers: { get(name: string): string | null };

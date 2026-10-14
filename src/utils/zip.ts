@@ -10,7 +10,8 @@ const importArchiver = new Function('return import("archiver")') as () => Promis
 }>;
 
 interface Archiver extends Transform {
-  file(sourcePath: string, data: { name: string }): void;
+  file(sourcePath: string, data: { name: string; store?: boolean }): void;
+  append(source: Buffer | string, data: { name: string; store?: boolean }): void;
   finalize(): Promise<void>;
   abort(): void;
 }
@@ -19,7 +20,9 @@ export interface ArchiveEntry {
   /** Path the file is stored under inside the zip (e.g. "images/001.jpg"). */
   name: string;
   /** Absolute path of the file on disk. */
-  sourcePath: string;
+  sourcePath?: string;
+  data?: Buffer | string;
+  store?: boolean;
 }
 
 /**
@@ -44,7 +47,9 @@ export async function createZipArchive(destPath: string, entries: ArchiveEntry[]
   try {
     archive.pipe(output);
     for (const e of entries) {
-      archive.file(e.sourcePath, { name: e.name });
+      if (e.data !== undefined) archive.append(e.data, { name: e.name, store: e.store });
+      else if (e.sourcePath) archive.file(e.sourcePath, { name: e.name, store: e.store });
+      else throw new Error('Archive entry has no source');
     }
     await Promise.all([archive.finalize(), settled]);
     await fs.access(destPath);

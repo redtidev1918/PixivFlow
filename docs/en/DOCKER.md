@@ -97,7 +97,7 @@ Basic Auth protects static files, APIs and Socket.IO; `/api/health` remains avai
 
 With `novelExport` enabled (or `download --formats epub`), EPUB generation is pure Node.js and works out of the box in Docker; PDF relies on Chromium:
 
-- **Full image (`Dockerfile`, Alpine)**: Chromium and Noto CJK fonts are bundled; add `PIXIVFLOW_PDF_BROWSER=/usr/bin/chromium-browser` to `.env` (or set `novelExport.pdf.browserPath`) and PDF works — Chinese/Japanese typesetting needs no extra setup.
+- **Full image (`Dockerfile`, Alpine)**: Chromium and Noto CJK fonts are bundled; add `PIXIVFLOW_PDF_BROWSER=/usr/bin/chromium-browser` to `.env` (or set `novelExport.pdf.browserPath`) and PDF works — Chinese/Japanese typesetting needs no extra setup. The image runs as root by default and Chromium refuses its sandbox under root, so PDF renders launch that one browser with `--no-sandbox` (the CI "Full image (Alpine) CJK PDF" job exercises this exact path with the bundled Chromium); with a non-root container user the sandbox is always enabled.
 - **Scheduler image (`Dockerfile.scheduler`, Debian slim)**: intentionally lightweight, no Chromium. For PDF, mount a browser executable and a CJK font into the container and point `PIXIVFLOW_PDF_BROWSER` / `PIXIVFLOW_PDF_FONT` (or `novelExport.pdf.*`) at the in-container paths; EPUB-only export is unaffected.
 - A missing browser reports `PDF_BROWSER_MISSING` and missing CJK fonts report `PDF_CJK_FONT_MISSING` — both explicit errors that never affect TXT download, EPUB export or delivery. Field semantics: see the "Novel ebook export" section in [CONFIG](CONFIG.md).
 

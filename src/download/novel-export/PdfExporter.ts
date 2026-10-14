@@ -42,8 +42,17 @@ export async function writePdf(book: NovelBook, images: BookImage[], destination
     const cover = byKey.get(imageKey(book.documents[0].id, 'cover'));
     const html = `<!DOCTYPE html><html lang="${xml(book.documents[0].language)}"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; font-src data:"><title>${xml(book.title)}</title><style>${novelCss}${fontCss}</style></head><body><section class="cover"><h1>${xml(book.title)}</h1>${cover ? `<img src="${cover}" alt="Cover">` : ''}${attribution(book.documents[0])}</section>${bookNavigation(book, rendered, false)}${book.documents.map((doc, i) => `<section class="work" id="work-${i}"><h1>${xml(doc.title)}</h1>${rendered[i].body}</section>`).join('')}</body></html>`;
     const puppeteer = (await importPuppeteer()).default;
-    // Keep Chromium's sandbox enabled. Docker users run as a non-root user.
-    browser = await puppeteer.launch({ executablePath, headless: true, timeout, protocolTimeout: timeout });
+    // Containers give Chromium a 64 MiB /dev/shm by default; render through
+    // the normal temp dir instead so large pages do not crash the renderer.
+    const launchArgs = ['--disable-dev-shm-usage'];
+    if (typeof process.geteuid === 'function' && process.geteuid() === 0) {
+      // Chromium refuses to start as root with its sandbox enabled, and the
+      // shipped Docker image runs as root. Drop the sandbox for that launch
+      // only; every non-root environment (npm installs, non-root images)
+      // keeps the sandbox on.
+      launchArgs.push('--no-sandbox');
+    }
+    browser = await puppeteer.launch({ executablePath, headless: true, args: launchArgs, timeout, protocolTimeout: timeout });
     const activeBrowser = browser;
     timer = setTimeout(() => { activeBrowser.process()?.kill(); }, timeout);
     timer.unref();

@@ -30,6 +30,9 @@ imported with its metadata sidecar. Images use canonical MediaAsset references
 and the existing materializer; renderers receive only validated local bytes.
 Network access is disabled inside the PDF browser. PDF requires an explicitly
 configured browser; it is never installed on behalf of ordinary users.
+Chromium refuses its sandbox when the process runs as root, so a root launch
+(the default Docker image) starts that one render with `--no-sandbox`;
+non-root environments always keep the sandbox enabled.
 
 Series membership is checked by series ID. A manifest records the ordered IDs
 returned by Pixiv's paginated series endpoint, independently of download order.

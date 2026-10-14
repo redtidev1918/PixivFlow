@@ -179,7 +179,7 @@ ports:
 
 小说下载加 `novelExport`（或 `download --formats epub`）后，EPUB 纯 Node.js 生成，Docker 内开箱即用；PDF 依赖镜像里的 Chromium：
 
-- **完整镜像（`Dockerfile`，alpine）**：已内置 Chromium 和 Noto CJK 字体，只需告诉 PixivFlow 浏览器位置——在 `.env` 加 `PIXIVFLOW_PDF_BROWSER=/usr/bin/chromium-browser`（或配置 `novelExport.pdf.browserPath`），PDF 即可用，中日文字体无需再配。
+- **完整镜像（`Dockerfile`，alpine）**：已内置 Chromium 和 Noto CJK 字体，只需告诉 PixivFlow 浏览器位置——在 `.env` 加 `PIXIVFLOW_PDF_BROWSER=/usr/bin/chromium-browser`（或配置 `novelExport.pdf.browserPath`），PDF 即可用，中日文字体无需再配。镜像默认以 root 运行，而 Chromium 拒绝在 root 下启用自身沙箱，因此该场景的 PDF 渲染会仅对本次启动加 `--no-sandbox`（CI 的「Full image (Alpine) CJK PDF」作业在容器内用真实 Chromium 验证此路径）；以非 root 用户运行容器时沙箱始终启用。
 - **调度器镜像（`Dockerfile.scheduler`，Debian slim）**：按轻量目标设计，不带 Chromium。需要 PDF 时挂载一个浏览器可执行文件与 CJK 字体，并通过 `PIXIVFLOW_PDF_BROWSER`、`PIXIVFLOW_PDF_FONT`（或 `novelExport.pdf.*`）指向容器内路径；只导出 EPUB 则完全不受影响。
 - 缺浏览器时报 `PDF_BROWSER_MISSING`，缺 CJK 字体时报 `PDF_CJK_FONT_MISSING`，均为明确错误，不影响 TXT 下载、EPUB 导出与投递。字段语义见 [CONFIG](CONFIG.md) 的「小说电子书导出」一节。
 

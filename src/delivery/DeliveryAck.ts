@@ -98,8 +98,15 @@ export function parseDeliveryAck(
     return { kind: 'retryable_failure', error: `delivery endpoint HTTP ${status}` };
   }
   if (status < 200 || status >= 300) {
-    const preview = typeof body === 'string' ? body : safeStringify(body);
-    return { kind: 'permanent_failure', error: `delivery endpoint HTTP ${status}${preview ? ': ' + preview.slice(0, 200) : ''}` };
+    // Never embed the raw body in the error string: downstream JSON previews
+    // carry work ids / message ids whose digits get misread by later
+    // message-shape classification (a TelePost HTTP 400 containing e.g.
+    // "…157812345" was classified as a Pixiv 5xx and reported as
+    // 「Pixiv 服务器返回错误」). Surface only sanitized, structured fields.
+    return {
+      kind: 'permanent_failure',
+      error: `delivery endpoint rejected (HTTP ${status}${summarizeRejection(body)})`,
+    };
   }
 
   const data = dig(body, h.dataPath);
@@ -143,10 +150,21 @@ export function parseDeliveryAck(
   return { kind: 'idempotent_replay', remoteId, remoteStatus, raw: body };
 }
 
-function safeStringify(value: unknown): string {
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return '';
-  }
+/**
+ * Structured, digit-free summary of a rejection body for error strings.
+ * Only known envelope fields (business/status/error codes) are surfaced;
+ * arbitrary payloads (ids, keys, raw HTML) stay out of classification
+ * inputs entirely.
+ */
+function summarizeRejection(body: unknown): string {
+  const data = dig(body, 'data');
+  const rec = data && typeof data === 'object' ? (data as Record<string, unknown>) : null;
+  const parts: string[] = [];
+  const business = rec ? asString(rec.business_status) : undefined;
+  if (business) parts.push(`business_status=${business}`);
+  const status = rec ? asString(rec.status) : undefined;
+  if (status) parts.push(`status=${status}`);
+  const code = rec ? asString(rec.code) : undefined;
+  if (code) parts.push(`code=${code}`);
+  return parts.length ? `, ${parts.join(', ')}` : '';
 }

@@ -1,4 +1,5 @@
 import type { SlotItemRecord } from '../storage/repositories/SlotRepository';
+import { ACTIVE_CELL_STATES } from './SlotStateMachine';
 
 /**
  * Business outcome for one manual recovery request (「放宽条件重试」).
@@ -50,6 +51,6 @@ export function recoveryOutcomeFor(cell: SlotItemRecord | null): RecoveryOutcome
   }
   if (cell.status === 'duplicate') return 'recovery_duplicate_only';
   if (cell.status === 'failed') return 'recovery_failed';
-  if (['pending', 'selected', 'artifact_ready', 'delivery_pending'].includes(cell.status)) return 'recovery_running';
+  if (ACTIVE_CELL_STATES.has(cell.status)) return 'recovery_running';
   return 'recovery_pending';
 }

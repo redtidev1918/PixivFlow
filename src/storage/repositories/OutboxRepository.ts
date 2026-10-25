@@ -75,6 +75,11 @@ export interface SlotEventWrite {
 export type OutboxKind = 'delivery' | 'notification' | 'event_callback';
 export type OutboxStatus = 'pending' | 'processing' | 'retry_wait' | 'done' | 'dead' | 'cancelled';
 
+/** All valid OutboxStatus values — single source for CLI/HTTP input validation. */
+export const OUTBOX_STATUSES: ReadonlySet<OutboxStatus> = new Set<OutboxStatus>([
+  'pending', 'processing', 'retry_wait', 'done', 'dead', 'cancelled',
+]);
+
 export interface OutboxRow {
   id: string;
   kind: OutboxKind;

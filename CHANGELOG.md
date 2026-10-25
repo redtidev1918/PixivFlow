@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.7.1](https://github.com/redtidev1918/PixivFlow/compare/v3.7.0...v3.7.1) (2026-10-25)
+
+
+### Bug Fixes
+
+* attribute delivery-endpoint verdicts to the delivery domain ([#210](https://github.com/redtidev1918/PixivFlow/issues/210)) ([f4461c2](https://github.com/redtidev1918/PixivFlow/commit/f4461c2be9fbc53dc0a8ec40a1448734ddd8c3e0))
+
 ## [3.7.0](https://github.com/redtidev1918/PixivFlow/compare/v3.6.4...v3.7.0) (2026-10-14)
 
 

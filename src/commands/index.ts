@@ -34,6 +34,7 @@ import { OutboxCommand } from './OutboxCommand';
 import { GatewayCommand } from './GatewayCommand';
 import { DeliveryCommand } from './DeliveryCommand';
 import { RunsCommand } from './RunsCommand';
+import { RecoveryStatusCommand } from './RecoveryStatusCommand';
 import { NovelExportCommand } from './NovelExportCommand';
 
 /**
@@ -72,6 +73,7 @@ export function registerAllCommands(registry: CommandRegistry): void {
   registry.register(new GatewayCommand());
   registry.register(new DeliveryCommand());
   registry.register(new RunsCommand());
+  registry.register(new RecoveryStatusCommand());
 }
 
 /**
@@ -109,4 +111,5 @@ export {
   GatewayCommand,
   DeliveryCommand,
   RunsCommand,
+  RecoveryStatusCommand,
 };

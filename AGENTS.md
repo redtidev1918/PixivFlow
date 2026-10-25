@@ -9,8 +9,19 @@
 
 本文件只保留本仓边界与特殊约束；与上面权威冲突时以上面为准，并顺手修正。
 
-一次性/阶段文档不进仓库；动态状态只更新跨仓库 `current-state.md`，确需保留的证据
-放 `docs/archive/` 并带 docsite 生命周期块（`docsite.py lifecyclecheck` 校验）。
+一次性/阶段文档不进仓库；确需保留的证据放 `docs/archive/` 并带 docsite 生命周期块
+（`docsite.py lifecyclecheck` 校验）。
+
+## 工程状态的事实来源（2026-10-26 起生效）
+
+* 本仓**开发**状态（任务、计划、交接、决策、教训）由本仓 `.agent/` 六件套管理
+  （STATUS / PLAN / TASKS / HANDOFF / DECISIONS / LESSONS）；进入本仓的 Agent
+  先读它们恢复现场。
+* 跨仓库**生态生产**状态（版本、部署、事故）的唯一权威仍是 deploy 仓
+  `docs/operations/current-state.md` 与 `CONTRACT.md`。
+* 禁止在本仓 `.agent/` 维护生态生产版本号快照（与 deploy 漂移）；跨仓行为
+  变更落地后由 deploy 仓条目承接，本仓只记录代码事实。
+* 仓库发布流程见 `.agents/skills/release/SKILL.md`。
 
 ## 一句话
 

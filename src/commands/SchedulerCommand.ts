@@ -16,7 +16,7 @@ import { legacyRefetchStatus, legacyRefetchSubmit } from '../scheduler/ManualRef
 import { selectScheduleTargets } from '../scheduler/schedules';
 import { primaryDeliveryName } from '../delivery/targetRoutes';
 import { createSchedulerRuntime } from './scheduler-runtime';
-import { recoveryOutcomeFor, recoveryUserMessage } from '../scheduler/RecoveryOutcome';
+import { queryRecoveryStatus } from '../scheduler/RecoveryStatusQuery';
 import { SchedulerIdleLifecycle } from './SchedulerIdleLifecycle';
 
 /**
@@ -264,23 +264,8 @@ export class SchedulerCommand extends BaseCommand {
               const started = manager.triggerSchedule(plan.id, { slot, onlyTarget: targetId, triggerSource: 'manual' });
               return { slotId: slot.slotId, disposition: started ? 'accepted' : 'queued' };
             },
-            recoverStatus: (targetId, requestId) => {
-              const slot = runtime.database.slots.findRecoverySlot(requestId, targetId);
-              const cell = slot && runtime.database.slots.getCell(slot.id, targetId);
-              if (!slot || !cell) return null;
-              const businessState = recoveryOutcomeFor(cell);
-              return {
-                requestId,
-                slotId: slot.id,
-                state: cell.status,
-                slotStatus: slot.status,
-                business_state: businessState,
-                targetId,
-                scheduleId: slot.scheduleId,
-                errorCode: cell.terminalReasonCode || null,
-                message: recoveryUserMessage(businessState),
-              };
-            },
+            recoverStatus: (targetId, requestId) =>
+              queryRecoveryStatus(runtime.database, targetId, requestId),
             status: (scheduleId) => {
               const cfg = resolveConfig();
               const plan = findPlan(cfg, scheduleId);

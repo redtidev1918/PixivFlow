@@ -17,6 +17,7 @@ import {
 import { TERMINAL_REASON_MESSAGES, TargetOutcome, terminalReasonFor } from './TargetOutcome';
 import { sqliteUtcMs } from './ledger-time';
 import { SlotBusinessStatus, classifySlotBusinessStatus } from './SlotBusinessStatus';
+import { TERMINAL_CELL_STATES } from './SlotStateMachine';
 import { CANCELLED_BY_CONSUMER } from './ProtocolErrors';
 import { TargetExecutionContext, WorkBinding, isSingleWorkCell } from './WorkIdentity';
 import { targetDeliveryNames } from '../delivery/targetRoutes';
@@ -358,7 +359,7 @@ export class SlotCoordinator {
       if (membership.size > 0 && !membership.has(target.id)) continue; // config reload: not part of this occurrence
       const cell = this.database.slots.getCell(slotId, target.id);
       if (!cell) continue;
-      if (cell.status === 'submitted' || cell.status === 'no_candidate' || cell.status === 'duplicate' || cell.status === 'failed') continue;
+      if (TERMINAL_CELL_STATES.has(cell.status)) continue;
       // A cell whose work already has a durable delivery intent is NOT the
       // scheduler's to re-run: the OutboxWorker retries the SAME work to a
       // terminal ACK. Re-selecting here is what let recovery stop pointing at the

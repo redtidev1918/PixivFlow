@@ -199,6 +199,9 @@ export interface TriggerHandlers {
     slotStatus: string;
     /** Recovery business outcome (recovery_success / no_candidate / duplicate_only / failed / running / pending). */
     business_state?: string;
+    targetId?: string;
+    scheduleId?: string;
+    errorCode?: string | null;
     /** User-facing copy; never leaks internal error names. */
     message?: string;
   } | null;

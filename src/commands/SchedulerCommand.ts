@@ -275,6 +275,9 @@ export class SchedulerCommand extends BaseCommand {
                 state: cell.status,
                 slotStatus: slot.status,
                 business_state: businessState,
+                targetId,
+                scheduleId: slot.scheduleId,
+                errorCode: cell.terminalReasonCode || null,
                 message: recoveryUserMessage(businessState),
               };
             },

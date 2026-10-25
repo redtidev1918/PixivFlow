@@ -778,6 +778,19 @@ function classifyFailedReason(message: string, scan?: CandidateScanSummary): Ter
   if (/\b(?:download|image fetch|image write)\b.{0,80}\b(?:fail|failed|error|unable)\b|\b(?:failed|unable)\b.{0,40}\b(?:download|fetch image|write image)\b/i.test(text)) {
     return { code: 'download_failed', message: TERMINAL_REASON_MESSAGES.download_failed };
   }
+  // Delivery-domain verdicts win over the generic 5xx heuristic BELOW. The
+  // 5xx regex matches any three digits starting with 5, so a delivery error
+  // whose text carries ids/keys (a work id like 157812345) was misread as a
+  // Pixiv-side 5xx and reported as「Pixiv 服务器返回错误」for what was really
+  // a TelePost rejection (2026-10-25 incident). A delivery endpoint's verdict
+  // never implies anything about the Pixiv source.
+  if (/\btele[ _-]?post\b[^.\n]{0,60}\b(?:reject|invalid|4\d\d)\b/i.test(text)
+    || /permanent delivery failure|delivery endpoint rejected|downstream reported terminal/i.test(text)) {
+    return { code: 'telepost_rejected', message: TERMINAL_REASON_MESSAGES.telepost_rejected };
+  }
+  if (/retryable delivery failure|delivery endpoint/i.test(text)) {
+    return { code: 'delivery_failed', message: TERMINAL_REASON_MESSAGES.delivery_failed };
+  }
   if (/502|503|504|bad gateway|service unavailable|server error|5\d\d/i.test(text)) {
     return { code: 'remote_http_error', message: TERMINAL_REASON_MESSAGES.remote_http_error };
   }

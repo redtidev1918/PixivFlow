@@ -103,6 +103,48 @@ describe('terminalReasonFor', () => {
     expect(terminalReasonFor(outcome)?.code).toBe('auth_failed');
   });
 
+  it('classifies a TelePost 4xx rejection as telepost_rejected, never a Pixiv 5xx', () => {
+    // 2026-10-25 incident: a TelePost HTTP 400 (business permanent_failure)
+    // reached classification with the raw JSON body embedded in the error
+    // string; digits inside ids (a work id like 157812345) matched the broad
+    // 5\d\d heuristic and the operator read「Pixiv 服务器返回错误」for a
+    // downstream rejection.
+    const outcome: TargetOutcome = {
+      kind: 'failed',
+      retryable: false,
+      error:
+        'permanent delivery failure: delivery endpoint rejected (HTTP 400, business_status=permanent_failure, status=failed)',
+    };
+    expect(terminalReasonFor(outcome)?.code).toBe('telepost_rejected');
+  });
+
+  it('classifies a downstream terminal record as telepost_rejected even when its id contains 5xx digits', () => {
+    const outcome: TargetOutcome = {
+      kind: 'failed',
+      retryable: false,
+      error: 'downstream reported terminal status failed (review 578)',
+    };
+    expect(terminalReasonFor(outcome)?.code).toBe('telepost_rejected');
+  });
+
+  it('classifies an exhausted retryable delivery outage as delivery_failed, not remote_http_error', () => {
+    const outcome: TargetOutcome = {
+      kind: 'failed',
+      retryable: true,
+      error: 'retryable delivery failure: delivery endpoint HTTP 503',
+    };
+    expect(terminalReasonFor(outcome)?.code).toBe('delivery_failed');
+  });
+
+  it('still classifies a genuine Pixiv-side 5xx as remote_http_error', () => {
+    const outcome: TargetOutcome = {
+      kind: 'failed',
+      retryable: false,
+      error: 'pixiv api responded 503 service unavailable',
+    };
+    expect(terminalReasonFor(outcome)?.code).toBe('remote_http_error');
+  });
+
   it('never leaks raw error internals into the user-facing message', () => {
     const outcome: TargetOutcome = {
       kind: 'failed',

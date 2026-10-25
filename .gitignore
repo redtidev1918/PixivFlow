@@ -147,6 +147,10 @@ REFACTORING_PLAN.md
 !docs/**/*PROGRESS*.md
 *STATUS*.md
 !docs/**/*STATUS*.md
+# .agent/ is the repo's permanent engineering-state system (AGENTS.md §事实来源),
+# not a one-off snapshot — un-ignore its STATUS/PLAN files explicitly.
+!.agent/STATUS.md
+!.agent/PLAN.md
 *PERFORMANCE*.md
 !docs/**/*PERFORMANCE*.md
 *COMPLETE*.md
@@ -179,6 +183,7 @@ SEO_OPTIMIZATION*.md
 !docs/**/*REWRITE*.md
 *PLAN*.md
 !docs/**/*PLAN*.md
+!.agent/PLAN.md
 *INDEX*.md
 !docs/**/*INDEX*.md
 

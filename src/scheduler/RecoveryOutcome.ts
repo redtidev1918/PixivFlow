@@ -20,7 +20,7 @@ export type RecoveryOutcomeState =
 const USER_MESSAGES: Record<RecoveryOutcomeState, string> = {
   recovery_pending: '正在等待恢复任务...',
   recovery_running: '正在尝试扩大搜索范围...',
-  recovery_success: '恢复成功，已找到并发布新作品。',
+  recovery_success: '恢复执行成功，作品已投递；审核与发布结果请查看接收端。',
   recovery_no_candidate: '扩大搜索范围后，仍未找到符合条件的新作品。\n任务已正常结束。',
   recovery_duplicate_only: '扩大搜索范围后，找到的作品均已发布过。\n没有新的内容可发布。',
   recovery_failed: '恢复任务执行失败。\n请查看日志或稍后重试。',

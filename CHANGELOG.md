@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.8.0](https://github.com/redtidev1918/PixivFlow/compare/v3.7.2...v3.8.0) (2026-10-25)
+
+
+### Features
+
+* **cli:** recovery-status command enters the release ([#216](https://github.com/redtidev1918/PixivFlow/issues/216)) ([50d2f76](https://github.com/redtidev1918/PixivFlow/commit/50d2f763347de8e2e314b93ca30438ba9e7fc3ad))
+
 ## [3.7.2](https://github.com/redtidev1918/PixivFlow/compare/v3.7.1...v3.7.2) (2026-10-25)
 
 

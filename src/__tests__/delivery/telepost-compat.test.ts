@@ -197,6 +197,40 @@ describe('TelePost submission ACK compatibility', () => {
     });
   });
 
+  describe('a rejection error string never embeds the raw body', () => {
+    it('keeps ids/keys out of the classification input (digit-leak regression)', () => {
+      // The 2026-10-25 incident: the raw JSON preview carried the work id
+      // 157812345; downstream message-shape classification matched `5\d\d`
+      // inside it and reported a TelePost rejection as a Pixiv 5xx.
+      const ack = ackFrom(400, {
+        ok: false,
+        data: {
+          status: 'failed',
+          review_id: 157812345,
+          matched_idempotency_key: 'bot1-daily@2026-10-25T1000:illust:157812345',
+          business_status: 'permanent_failure',
+        },
+      });
+      expect(ack.kind).toBe('permanent_failure');
+      if (ack.kind === 'permanent_failure') {
+        expect(ack.error).toContain('business_status=permanent_failure');
+        expect(ack.error).not.toContain('157812345');
+        expect(ack.error).not.toContain('bot1-daily');
+      }
+    });
+
+    it('surfaces the structured status/code fields without the payload', () => {
+      const ack = ackFrom(400, {
+        ok: false,
+        data: { code: 'blocked_file_type', business_status: 'permanent_failure' },
+      });
+      expect(ack.kind).toBe('permanent_failure');
+      if (ack.kind === 'permanent_failure') {
+        expect(ack.error).toContain('code=blocked_file_type');
+      }
+    });
+  });
+
   describe('a 2xx never masks a downstream failure', () => {
     it('reports a failed record as remote_failed rather than accepted', () => {
       // The production incident this guards: a reused `failed` record answered

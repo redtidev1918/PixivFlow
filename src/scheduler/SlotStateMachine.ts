@@ -44,6 +44,11 @@ const ALLOWED: Record<CellState, CellState[]> = {
   failed: [],
 };
 
+/** Complement of TERMINAL_CELL_STATES — the single source for "still active". */
+export const ACTIVE_CELL_STATES: ReadonlySet<CellState> = new Set(
+  (Object.keys(ALLOWED) as CellState[]).filter((s) => !TERMINAL_CELL_STATES.has(s)),
+);
+
 export function canTransition(from: CellState, to: CellState): boolean {
   if (from === to) return false;
   return ALLOWED[from].includes(to);
@@ -65,16 +70,4 @@ export function assertTransition(from: CellState, to: CellState): void {
   if (!canTransition(from, to)) {
     throw new IllegalCellTransition(from, to);
   }
-}
-
-/** Roll cell states up into an aggregate slot status. */
-export type SlotAggregate = 'pending' | 'running' | 'success' | 'partial' | 'failed';
-
-export function aggregateSlot(cells: CellState[]): SlotAggregate {
-  if (cells.length === 0) return 'pending';
-  const terminal = cells.filter((c) => TERMINAL_CELL_STATES.has(c));
-  if (terminal.length < cells.length) return 'running';
-  if (cells.every((c) => c === 'submitted')) return 'success';
-  if (cells.some((c) => c === 'submitted')) return 'partial';
-  return 'failed';
 }

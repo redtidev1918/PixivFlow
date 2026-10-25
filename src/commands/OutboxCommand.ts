@@ -2,11 +2,9 @@ import { BaseCommand } from './Command';
 import { CommandCategory } from './metadata';
 import { CommandArgs, CommandContext, CommandResult } from './types';
 import { Database } from '../storage/Database';
-import { OutboxRow, OutboxStatus } from '../storage/repositories/OutboxRepository';
+import { OutboxRow, OutboxStatus, OUTBOX_STATUSES } from '../storage/repositories/OutboxRepository';
 
-const STATUSES = new Set<OutboxStatus>([
-  'pending', 'processing', 'retry_wait', 'done', 'dead', 'cancelled',
-]);
+const STATUSES = OUTBOX_STATUSES;
 
 /** Operator-initiated audit event (never counts as an attempt). */
 function recordCliEvent(db: Database, row: OutboxRow, event: string): void {

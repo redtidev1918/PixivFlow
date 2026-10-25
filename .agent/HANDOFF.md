@@ -1,19 +1,14 @@
 # 会话交接（PixivFlow）
 
-## 2026-10-26 集中式优化轮交接
+## 2026-10-26 集中式优化轮交接（已闭环）
 
-- 生产 3.7.2（`bd188cb`）；本轮分支 `codex/pixivflow-optimization`。
-- 已完成：架构盘点、词表 SSOT 收敛（4 文件 + 死代码删除）、
-  `pixivflow recovery-status` CLI（与 HTTP handler 同源）、`.agent/` 体系、
-  三操作语义审计。任务明细与 DEFERRED 清单见 TASKS.md。
-- 架构审计要点（下一会话勿重复盘点）：
-  - 后台循环共 4 类：OutboxWorker pump(10s)、MultiScheduleManager 恢复循环(60s)、
-    IdleLifecycle 空闲检测(15s，不 mutate)、slot 租约心跳。无重复常驻轮询。
-  - 状态词表：Cell FSM（SlotStateMachine）是 SSOT；ACTIVE/TERMINAL 集合已导出；
-    SlotBusinessStatus 是有意的业务派生词表（非重复）。
-  - 大文件与依赖反转清单在 TASKS.md P-09/P-10（DEFERRED）。
-- 悬而未决（用户侧）：TelePost 审核 #212（PixivFlow 恢复链头，作品 151271923，
-  4 图）待用户在审核群批准发布；#112（bot2，25 天前空载荷 failed）从未被恢复，
-  可由操作者点恢复按钮走新链路。
-- 下一步：P-07 交付链（PR → CI → release-please → deploy pin → fly deploy →
-  只读验收）→ 更新本文件与 deploy current-state。
+- 生产 **3.7.2**（`bd188cb`）不变——本轮 PR #214（`refactor:`）CI 全绿已合并，
+  零行为/协议变化不触发发版，deploy pin 无需更新；`pixivflow recovery-status`
+  CLI 已入 master，随下次功能发版进入镜像。
+- 已完成：架构盘点、词表 SSOT 收敛、死抽象删除、`recovery-status` CLI 同源化、
+  `.agent/` 体系、三操作语义审计、deploy 仓 smoke 三处误报修复（PR #276）。
+- 任务明细与 DEFERRED 清单见 TASKS.md；决策见 DECISIONS.md（D-01~D-07）。
+- 悬而未决（用户侧）：TelePost 审核 #212（恢复链头，作品 151271923，4 图）待
+  用户在审核群批准发布；#112（bot2，25 天前空载荷 failed）从未被恢复。
+- 本轮集中治理**正式结束**，回归正常功能迭代；后续任务从 TASKS.md 的
+  DEFERRED 项按需立项。

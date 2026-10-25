@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.7.2](https://github.com/redtidev1918/PixivFlow/compare/v3.7.1...v3.7.2) (2026-10-25)
+
+
+### Bug Fixes
+
+* **scheduler:** recovery status carries correlation; success copy no longer claims publication ([#212](https://github.com/redtidev1918/PixivFlow/issues/212)) ([86c071f](https://github.com/redtidev1918/PixivFlow/commit/86c071fcbcab53ce5c7569b13155d2915a24c0d1))
+
 ## [3.7.1](https://github.com/redtidev1918/PixivFlow/compare/v3.7.0...v3.7.1) (2026-10-25)
 
 

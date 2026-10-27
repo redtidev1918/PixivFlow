@@ -175,7 +175,7 @@ describe('NovelDownloader rich media', () => {
   } as PixivNovel;
 
   it('downloads inline images and records assets in metadata', async () => {
-    const text = 'intro [uploadedimage:11] outro';
+    const text = 'intro [uploadedimage:11] middle [uploadedimage:11] outro';
     const client = {
       getNovelDetailWithTags: jest.fn().mockResolvedValue({ novel, tags: [] }),
       getNovelText: jest.fn().mockResolvedValue({
@@ -196,6 +196,7 @@ describe('NovelDownloader rich media', () => {
     const artifact = await downloader.download(novel, 'bg', { type: 'novel', detectLanguage: false } as TargetConfig);
 
     expect(client.downloadImage).toHaveBeenCalledWith('https://i.pximg.net/img/original/u/11.jpg');
+    expect(client.downloadImage).toHaveBeenCalledTimes(1);
     expect(fileService.saveBinary).toHaveBeenCalledWith(
       expect.anything(),
       '11.jpg',
@@ -206,6 +207,7 @@ describe('NovelDownloader rich media', () => {
     expect(mdCall![1]).toBe('456_Rich novel.md');
     expect(mdCall![0]).toContain('![](images/11.jpg)');
     expect(mdCall![0]).toContain('intro');
+    expect(String(mdCall![0]).match(/!\[\]\(images\/11.jpg\)/g)).toHaveLength(2);
 
     // Phase 3: zip archive bundles txt + md + metadata + images and is shipped.
     expect(createZipArchiveMock).toHaveBeenCalledTimes(1);
@@ -252,7 +254,7 @@ describe('NovelDownloader rich media', () => {
   });
 
   it('on-demand policy keeps media references without materializing files', async () => {
-    const text = 'intro [uploadedimage:11] outro';
+    const text = 'intro [uploadedimage:11] middle [uploadedimage:11] outro';
     const client = {
       getNovelDetailWithTags: jest.fn().mockResolvedValue({ novel, tags: [] }),
       getNovelText: jest.fn().mockResolvedValue({
@@ -284,6 +286,7 @@ describe('NovelDownloader rich media', () => {
     // On-demand still emits a resolvable md sidecar (no local images).
     expect(fileService.saveText).toHaveBeenCalledTimes(2);
     expect(fileService.saveText.mock.calls[1][0]).toContain('![](images/11.jpg)');
+    expect(String(fileService.saveText.mock.calls[1][0]).match(/!\[\]\(images\/11.jpg\)/g)).toHaveLength(2);
     const metadata = fileService.saveMetadata.mock.calls[0][1] as { assets?: unknown[] };
     expect(metadata.assets).toEqual([
       {

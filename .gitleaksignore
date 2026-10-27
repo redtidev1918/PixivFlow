@@ -1,0 +1,4 @@
+# Historical fixture false positive: generic-api-key captured the Python
+# identifier actor_subject after surface="api". No credential was present.
+# The fixture is now a multi-line dict; exempt only that exact old finding.
+c9b0fee28b5036f759e22f0399ca547fdfaefe49:scripts/verify-telepost-contract.py:generic-api-key:66

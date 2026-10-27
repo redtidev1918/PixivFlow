@@ -87,6 +87,9 @@ jobs:
         run: npm run test:app
 
       - name: Verify ugoira GIF conversion
+        # This exercises Python/FFmpeg, independently of Node. Run it once;
+        # installing the same OS packages in both matrix jobs adds no coverage.
+        if: matrix.node == '22'
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends python3 ffmpeg

@@ -48,12 +48,27 @@ export { redactUrl } from '../utils/redact';
  * instead of forwarding the internal MediaAsset object.
  */
 export function toTelepostMediaAssetsWire(assets: MediaAsset[]): unknown[] {
-  return assets.map((asset) => ({
-    asset_id: asset.id,
-    kind: asset.kind,
-    source_url: asset.sourceUrl,
-    ...(asset.mimeType ? { mime_type: asset.mimeType } : {}),
-  }));
+  const unique = new Map<string, ReturnType<typeof wireAsset>>();
+  function wireAsset(asset: MediaAsset) {
+    return {
+      asset_id: asset.id,
+      kind: asset.kind,
+      source_url: asset.sourceUrl,
+      ...(asset.mimeType ? { mime_type: asset.mimeType } : {}),
+    };
+  }
+  for (const asset of assets) {
+    const wire = wireAsset(asset);
+    const previous = unique.get(asset.id);
+    // Old durable outbox payloads can contain repeated references. Normalize
+    // identical facts on replay without rewriting the frozen intent or key.
+    if (previous && (previous.kind !== wire.kind || previous.source_url !== wire.source_url
+      || previous.mime_type !== wire.mime_type)) {
+      throw new Error('invalid media_assets: conflicting asset identity');
+    }
+    if (!previous) unique.set(asset.id, wire);
+  }
+  return [...unique.values()];
 }
 
 /** Generic streaming HTTP multipart delivery provider. */

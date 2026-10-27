@@ -124,7 +124,14 @@ export function extractNovelAssets(
   }
 ): NovelAsset[] {
   const assets: NovelAsset[] = [];
+  const seen = new Set<string>();
   for (const marker of scanNovelMarkers(text)) {
+    if (marker.type !== 'uploadedimage' && marker.type !== 'pixivimage') continue;
+    // Markers are occurrences; assets are identities. Renderers still scan the
+    // original text and replace EVERY occurrence using this ordered asset set.
+    const key = `${marker.type}:${marker.key}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
     if (marker.type === 'uploadedimage') {
       const url = uploadedImageUrl(response?.images?.[marker.key]);
       assets.push({

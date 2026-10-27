@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import subprocess
 import sys
 import tempfile
 from contextlib import ExitStack
@@ -114,3 +115,17 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+    # The transport harness doubles the external staging port. Keep the actual
+    # Telegram adapters' album/typing/retry/recovery regressions in this SAME
+    # required check, so a broken sender cannot hide behind a green wire test.
+    result = subprocess.run(
+        [sys.executable, "-m", "pytest", "-q", "--no-cov", "-o", "log_cli=false", "-o", "addopts=",
+         "tests/test_staging_recovery.py", "tests/test_media_delivery_pipeline.py",
+         "tests/test_mixed_media_integrity.py", "tests/test_review_service.py",
+         "tests/test_publish_regressions.py", "tests/test_submission_timeout_idempotency.py"],
+        cwd=CONSUMER, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=180,
+    )
+    print(result.stdout if result.returncode else "\n".join(result.stdout.splitlines()[-8:]))
+    if result.returncode:
+        print(result.stderr)
+        raise SystemExit(result.returncode)

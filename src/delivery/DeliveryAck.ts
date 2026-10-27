@@ -92,10 +92,10 @@ export function parseDeliveryAck(
   const h = { ...DEFAULT_HINTS, ...hints };
 
   if (status === 429) {
-    return { kind: 'retryable_failure', error: 'HTTP 429 rate limited by delivery endpoint' };
+    return { kind: 'retryable_failure', error: `HTTP 429 rate limited by delivery endpoint${summarizeRejection(body)}` };
   }
   if (status === 408 || status >= 500) {
-    return { kind: 'retryable_failure', error: `delivery endpoint HTTP ${status}` };
+    return { kind: 'retryable_failure', error: `delivery endpoint HTTP ${status}${summarizeRejection(body)}` };
   }
   if (status < 200 || status >= 300) {
     // Never embed the raw body in the error string: downstream JSON previews
@@ -157,14 +157,24 @@ export function parseDeliveryAck(
  * inputs entirely.
  */
 function summarizeRejection(body: unknown): string {
+  const machineCode = (value: unknown): string | undefined =>
+    typeof value === 'string' && /^[a-z_]{1,80}$/.test(value) ? value : undefined;
   const data = dig(body, 'data');
   const rec = data && typeof data === 'object' ? (data as Record<string, unknown>) : null;
   const parts: string[] = [];
-  const business = rec ? asString(rec.business_status) : undefined;
+  const business = rec ? machineCode(rec.business_status) : undefined;
   if (business) parts.push(`business_status=${business}`);
-  const status = rec ? asString(rec.status) : undefined;
+  const status = rec ? machineCode(rec.status) : undefined;
   if (status) parts.push(`status=${status}`);
-  const code = rec ? asString(rec.code) : undefined;
+  const code = rec ? machineCode(rec.code) : undefined;
   if (code) parts.push(`code=${code}`);
+  // TelePost validation failures use {ok:false,error:{code,message}}, not
+  // the business ACK's data envelope. Keep only a bounded machine code.
+  const error = dig(body, 'error');
+  const errorCode = error && typeof error === 'object'
+    ? machineCode((error as Record<string, unknown>).code) : undefined;
+  if (!code && errorCode) {
+    parts.push(`code=${errorCode}`);
+  }
   return parts.length ? `, ${parts.join(', ')}` : '';
 }

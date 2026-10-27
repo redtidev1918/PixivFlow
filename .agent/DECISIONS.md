@@ -1,5 +1,20 @@
 # 架构决策（PixivFlow，长期有效）
 
+## D-08 媒体引用出现次数与资产身份分离（2026-10-27）
+
+小说正文可以多次引用同一插图；`extractNovelAssets` 按 kind + sourceId 输出
+有序资产集合，Markdown/TXT 的正文出现位置全部保留。重复引用不得导致重复
+下载、ZIP 条目或重复 `media_assets.asset_id`。插画逐页身份不按 URL 合并。
+
+HTTP adapter 为历史冻结的 outbox 清单折叠完全相同的 wire 事实；同一身份的 URL /
+kind / MIME 冲突明确失败，禁止择一覆盖。适配不改持久 intent、幂等键或历史 slot。
+接收端唯一身份校验保持严格。拒绝诊断只带受限机器代码，不转发正文、raw body 或密钥。
+
+防复发使用 `scripts/verify-telepost-contract.py <TelePost checkout>`：真实 producer
+下载器 → SQLite outbox → HTTP multipart → consumer 路由/校验/审核服务/SQLite。
+仅身份认证与外部 Telegram staging 用 fixture；独立的 Telegram adapter 测试继续
+验证分组、限流与发布。两仓 PR CI 均运行同一脚本，日志记录被测两端 commit。
+
 ## D-01 恢复执行权威（2026-10-25，跨仓审计已固化）
 
 PixivFlow 的 slot/cell 账本是恢复执行的唯一事实源；消费者（TelePost）保存

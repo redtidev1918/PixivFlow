@@ -229,6 +229,30 @@ describe('TelePost submission ACK compatibility', () => {
         expect(ack.error).toContain('code=blocked_file_type');
       }
     });
+
+    it('preserves TelePost validation codes without exposing messages', () => {
+      const ack = ackFrom(400, {
+        ok: false, error: { code: 'invalid_tags', message: 'private 157812345' },
+      });
+      expect(ack.kind).toBe('permanent_failure');
+      if (ack.kind === 'permanent_failure') {
+        expect(ack.error).toContain('code=invalid_tags');
+        expect(ack.error).not.toContain('157812345');
+      }
+    });
+
+    it.each([429, 503])('keeps retryable HTTP %s diagnostic codes', status => {
+      const ack = ackFrom(status, { ok: false, error: { code: 'recovery_in_progress', message: 'private' } });
+      expect(ack.kind).toBe('retryable_failure');
+      if (ack.kind === 'retryable_failure') expect(ack.error).toContain('code=recovery_in_progress');
+    });
+
+    it('does not trust machine-code fields containing arbitrary text or identifiers', () => {
+      const ack = ackFrom(400, { data: { code: 'private157812345', status: 'secret payload', business_status: '<html>' },
+        error: { code: 'private157812345', message: 'private157812345' } });
+      if (ack.kind !== 'permanent_failure') throw new Error('expected permanent rejection');
+      expect(ack.error).toBe('delivery endpoint rejected (HTTP 400)');
+    });
   });
 
   describe('a 2xx never masks a downstream failure', () => {

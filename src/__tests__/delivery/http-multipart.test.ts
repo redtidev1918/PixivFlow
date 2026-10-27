@@ -1,7 +1,7 @@
 import { promises as fs } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { HttpMultipartDelivery, buildTemplateVariables, renderDeliveryTemplate } from '../../delivery/HttpMultipartDelivery';
+import { HttpMultipartDelivery, buildTemplateVariables, renderDeliveryTemplate, toTelepostMediaAssetsWire } from '../../delivery/HttpMultipartDelivery';
 import { logger } from '../../logger';
 
 describe('HttpMultipartDelivery', () => {
@@ -165,6 +165,19 @@ describe('HttpMultipartDelivery', () => {
     expect(await provider.isReady()).toBe(false);
     expect(await provider.isReady()).toBe(true);
     expect(fetchMock.mock.calls[1][0]).toBe('https://example.test/ready');
+  });
+
+  it('normalizes repeated assets in historical intents while preserving cover order and distinct identities', () => {
+    const asset = { id: 'pixiv:1:pixivimage:9', source: 'pixiv' as const, kind: 'image' as const, sourceUrl: 'https://i.pximg.net/page.jpg' };
+    const cover = { ...asset, id: 'pixiv:1:novelcover' };
+    const assets = [cover, asset, { ...asset }];
+    expect(toTelepostMediaAssetsWire(assets)).toEqual([
+      { asset_id: cover.id, kind: 'image', source_url: cover.sourceUrl },
+      { asset_id: asset.id, kind: 'image', source_url: asset.sourceUrl },
+    ]);
+    expect(assets).toHaveLength(3);
+    expect(() => toTelepostMediaAssetsWire([asset, { ...asset, sourceUrl: 'https://i.pximg.net/other.jpg' }]))
+      .toThrow('invalid media_assets: conflicting asset identity');
   });
 
   it('sends authenticated JSON no-match notifications', async () => {

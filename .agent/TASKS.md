@@ -4,6 +4,14 @@
 
 ## 本轮（2026-10-26 集中式优化与收尾）
 
+## 2026-10-27 投递可靠性修复
+
+| ID | 任务 | 状态 | 证据 |
+| --- | --- | --- | --- |
+| P-13 | 重复小说插图身份、历史 intent 兼容、拒绝码诊断 | IN_PROGRESS | novelMarkers.ts / HttpMultipartDelivery.ts / DeliveryAck.ts；bot2 HTTP 400 的旧 payload 含相同 asset id + URL 两次 |
+| P-14 | 双仓真实 HTTP 契约门禁 | IN_PROGRESS | scripts/verify-telepost-contract.py + .cjs；真实下载器/outbox/HTTP/审核 SQLite，Telegram staging 与认证为 fixture；ACK 丢失后重启、12 页插画、拒绝路径 |
+| P-15 | CI / 正式发行 / 固定版本部署 / 生产验收 | IN_PROGRESS | 生态事实由 deploy current-state.md 承接 |
+
 | ID | 任务 | 状态 | 证据 |
 | --- | --- | --- | --- |
 | P-01 | 架构盘点（组件/定时器/状态机/重试/大文件/CLI/三操作语义） | DONE | Explore 审计报告 + DECISIONS.md 沉淀 |

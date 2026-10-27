@@ -1,5 +1,13 @@
 # 工程状态（PixivFlow）
 
+## 2026-10-27 投递可靠性（当前）
+
+- 已确认：小说重复图片 marker 被展开为重复媒体身份，TelePost 拒绝；拒绝错误码
+  同时被错误 envelope 解析遗漏。详见 DECISIONS D-08、TASKS P-13~15。
+- 已实现：源头唯一资产、旧 intent 传输兼容、安全错误摘要；全量 148 suites /
+  1620 tests + kit 6 suites / 67 tests、typecheck、本地真实 HTTP 契约通过。
+- 发行/部署尚未完成；生态生产事实查 deploy current-state.md。本仓不维护版本快照。
+
 ## 当前核验：2026-10-26 晚（Asia/Shanghai）
 
 - 生产版本：**3.8.0**（`78ed437`，用户授权发版；`/health` 已验证）。

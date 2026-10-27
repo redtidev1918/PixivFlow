@@ -37,6 +37,22 @@ describe('novelMarkers', () => {
     expect(assets[0].status).toBe('unavailable');
     expect(assets[0].url).toBeUndefined();
   });
+
+  it('registers repeated images once while retaining every text occurrence in both render modes', () => {
+    const source = 'a [pixivimage:9] b [uploadedimage:11] c [pixivimage:9] d [uploadedimage:11]';
+    const assets = extractNovelAssets(source, {
+      images: { '11': { urls: { original: 'https://i.pximg.net/upload.jpg' } } },
+      illusts: { '9': { illust: { images: { original: 'https://i.pximg.net/page.jpg' } } } },
+    });
+    expect(assets.map(a => a.kind)).toEqual(['pixivimage', 'uploadedimage']);
+    expect(renderNovelMarkdownReference(source, assets)).toBe(
+      'a ![](images/9.jpg) b ![](images/11.jpg) c ![](images/9.jpg) d ![](images/11.jpg)'
+    );
+    const downloaded = assets.map(a => ({ ...a, status: 'downloaded' as const, localPath: `/tmp/${a.kind}.jpg` }));
+    expect(renderNovelMarkdown(source, downloaded)).toBe(
+      'a ![](images/pixivimage.jpg) b ![](images/uploadedimage.jpg) c ![](images/pixivimage.jpg) d ![](images/uploadedimage.jpg)'
+    );
+  });
 });
 
 

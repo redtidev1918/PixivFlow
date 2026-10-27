@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Database } from '../../storage/Database';
 import { OutboxWorker } from '../../delivery/OutboxWorker';
-import { DeliveryAck } from '../../delivery/DeliveryAck';
+import { DeliveryAck, parseDeliveryAck } from '../../delivery/DeliveryAck';
 
 function withDb<T>(fn: (db: Database) => Promise<T>): Promise<T> {
   const dir = mkdtempSync(join(tmpdir(), 'pixivflow-outbox-fi-'));
@@ -34,7 +34,7 @@ class FakeDispatcher {
   deliveredKeys: string[] = [];
   ready = true;
   constructor(
-    private deliverScript: Array<() => Promise<{ ack: DeliveryAck }>> = [],
+    private deliverScript: Array<() => Promise<{ ack: DeliveryAck; status?: number }>> = [],
     private notifyScript: Array<() => Promise<void>> = [],
   ) {}
   async isReady(): Promise<boolean> {
@@ -63,6 +63,30 @@ class FakeDispatcher {
 const ctx = { idempotencyKey: 'k-1' } as any;
 
 describe('OutboxWorker failure injection', () => {
+  it.each([
+    { status: 408, code: 'request_expired', retryable: true },
+    { status: 503, code: 'invalid_dependency_state', retryable: true },
+    { status: 400, code: 'invalid_timeout_setting', retryable: false },
+  ])('keeps ACK retry authority for HTTP $status / $code', async ({ status, code, retryable }) => {
+    await withDb(async db => {
+      const ack = parseDeliveryAck(status, { ok: false, error: { code } });
+      const dispatcher = new FakeDispatcher([async () => ({ status, ack })]);
+      const { row: delivery } = db.deliveries.insertIntent({
+        id: 'ack-authority', deliveryTarget: 'bot1', workType: 'novel',
+        pixivId: '100', idempotencyKey: 'ack-authority',
+      });
+      const row = db.outbox.enqueue({
+        kind: 'delivery', deliveryTarget: 'bot1', idempotencyKey: 'ack-authority',
+        deliveryId: delivery.id, payload: { files: [], context: ctx }, maxAttempts: 5,
+      });
+      const worker = new OutboxWorker(db, dispatcher as any, { retryBaseMs: 0 });
+      expect(await worker.drainOnce(1)).toMatchObject(retryable ? { retried: 1, dead: 0 } : { retried: 0, dead: 1 });
+      expect(db.outbox.get(row.id)!.status).toBe(retryable ? 'retry_wait' : 'dead');
+      expect(db.outbox.get(row.id)!.attempts).toBe(1);
+      expect(dispatcher.deliverCalls).toBe(1);
+    });
+  });
+
   it('ACK loss converges to one remote record via idempotent_replay', async () => {
     await withDb(async (db) => {
       const dispatcher = new FakeDispatcher([

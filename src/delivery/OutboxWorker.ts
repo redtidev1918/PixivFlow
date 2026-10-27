@@ -63,6 +63,16 @@ export function backoffDelayMs(attempt: number, base: number, max: number): numb
   return Math.round(capped * (0.5 + Math.random() * 0.5));
 }
 
+/** Carry the adapter's decision across exception cleanup without re-parsing it. */
+class DeliveryAckFailure extends Error {
+  readonly retryable: boolean;
+  constructor(ack: Extract<DeliveryAck, { kind: 'permanent_failure' | 'retryable_failure' }>,
+    readonly status?: number) {
+    super(`${ack.kind === 'retryable_failure' ? 'retryable' : 'permanent'} delivery failure: ${ack.error}`);
+    this.retryable = ack.kind === 'retryable_failure';
+  }
+}
+
 /**
  * Independently pumps the SQLite outbox so deliveries and notifications retry
  * promptly instead of piggy-backing on the next scheduled download run.
@@ -330,7 +340,7 @@ export class OutboxWorker {
         };
         if (ack.kind === 'idempotent_replay' || ack.kind === 'duplicate_existing') reused = ack;
         this.recordMediaFallback(row, ack);
-        await this.handleDeliveryAck(row, ack, payload);
+        await this.handleDeliveryAck(row, ack, payload, result.status);
       }
       this.database.outbox.markDone(row.id);
       this.recordEvent(row, { event: 'outbox.delivered', countsAsAttempt: 0 });
@@ -350,7 +360,9 @@ export class OutboxWorker {
       // A provider that answers with an HTTP status is classified by that status
       // (429/5xx retry, other 4xx dead-letter); transport errors classify from
       // their message as before.
-      const { errorClass, retryable } = classifyError(error, (error as { status?: number } | null)?.status);
+      const classification = classifyError(error, (error as { status?: number } | null)?.status);
+      const { errorClass } = classification;
+      const retryable = error instanceof DeliveryAckFailure ? error.retryable : classification.retryable;
 
       // Deterministic failures cannot improve under the same idempotent intent.
       // Retrying them only leaves the owning Slot running until the budget expires.
@@ -395,7 +407,7 @@ export class OutboxWorker {
     }
   }
 
-  private async handleDeliveryAck(row: OutboxRow, ack: DeliveryAck, payload: DeliveryPayload): Promise<void> {
+  private async handleDeliveryAck(row: OutboxRow, ack: DeliveryAck, payload: DeliveryPayload, status?: number): Promise<void> {
     if (!row.deliveryId) return;
     switch (ack.kind) {
       case 'accepted':
@@ -432,9 +444,9 @@ export class OutboxWorker {
         break;
       case 'permanent_failure':
         // Deterministic rejection: the same idempotent intent cannot recover.
-        throw new Error(`permanent delivery failure: ${ack.error}`);
+        throw new DeliveryAckFailure(ack, status);
       case 'retryable_failure':
-        throw new Error(`retryable delivery failure: ${ack.error}`);
+        throw new DeliveryAckFailure(ack, status);
     }
   }
 

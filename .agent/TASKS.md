@@ -11,6 +11,7 @@
 | P-13 | 重复小说插图身份、历史 intent 兼容、拒绝码诊断 | IN_PROGRESS | novelMarkers.ts / HttpMultipartDelivery.ts / DeliveryAck.ts；bot2 HTTP 400 的旧 payload 含相同 asset id + URL 两次 |
 | P-14 | 双仓真实 HTTP 契约门禁 | IN_PROGRESS | scripts/verify-telepost-contract.py + .cjs；真实下载器/outbox/HTTP/审核 SQLite，Telegram staging 与认证为 fixture；ACK 丢失后重启、12 页插画、拒绝路径 |
 | P-15 | CI / 正式发行 / 固定版本部署 / 生产验收 | IN_PROGRESS | 生态事实由 deploy current-state.md 承接 |
+| P-16 | 保留 ACK 重试权威，避免诊断码反向污染 | IN_PROGRESS | 三例 red→green：408 / 503 invalid_dependency_state / 400 invalid_timeout_setting；真实 HTTP harness 加入 503 故障 |
 
 | ID | 任务 | 状态 | 证据 |
 | --- | --- | --- | --- |

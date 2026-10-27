@@ -12,6 +12,7 @@ const { NovelDownloader } = require('../dist/download/NovelDownloader');
 async function main() {
   const [url, directory] = process.argv.slice(2);
   const config = { targets: { telepost: { type: 'httpMultipart', url, archiveDelivery: 'local-only',
+    headers: { 'X-Contract-Fault': 'transient' },
     fields: { tags: '{{topicTag}},{{workTags}}', title: '{{displayTitle}}', work_id: '{{workId}}',
       work_type: '{{type}}', target_id: '{{targetId}}' } } } };
   const file = (name, bytes = 'synthetic fixture') => {
@@ -55,11 +56,14 @@ async function main() {
   let loseResponse = true;
   global.fetch = async (...args) => {
     const response = await originalFetch(...args);
-    if (loseResponse) { loseResponse = false; await response.text(); throw new Error('network connection response lost'); }
+    if (loseResponse && response.ok) { loseResponse = false; await response.text(); throw new Error('network connection response lost'); }
     return response;
   };
   try {
     const worker = new OutboxWorker(db, new DeliveryDispatcher(config), { batchSize: 1, retryBaseMs: 0, retryMaxMs: 0 });
+    assert.equal((await worker.drainOnce(1)).retried, 1);
+    // The first 503 has a diagnostic code containing "invalid". That word must
+    // never override the adapter's retryable ACK. Then lose a successful ACK.
     assert.equal((await worker.drainOnce(1)).retried, 1);
     db.close(); db = new Database(dbPath); db.migrate();
     const resumed = new OutboxWorker(db, new DeliveryDispatcher(config));

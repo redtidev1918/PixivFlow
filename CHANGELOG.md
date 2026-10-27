@@ -1,5 +1,14 @@
 # Changelog
 
+## [3.8.1](https://github.com/redtidev1918/PixivFlow/compare/v3.8.0...v3.8.1) (2026-10-27)
+
+
+### Bug Fixes
+
+* **agent:** un-ignore .agent/STATUS.md and PLAN.md; commit the two missing files ([#218](https://github.com/redtidev1918/PixivFlow/issues/218)) ([9ee11d7](https://github.com/redtidev1918/PixivFlow/commit/9ee11d79b2dcd25c02dd537921f977c6b48b1edc))
+* **delivery:** 保留结构化 ACK 的重试权威 ([#222](https://github.com/redtidev1918/PixivFlow/issues/222)) ([4885ace](https://github.com/redtidev1918/PixivFlow/commit/4885aced731a46a0612725859d141a963dc73c70))
+* **delivery:** 修复重复媒体身份并加入 TelePost 真实契约门禁 ([#220](https://github.com/redtidev1918/PixivFlow/issues/220)) ([61efecd](https://github.com/redtidev1918/PixivFlow/commit/61efecd374776125a05280a3f0aa8d9867e45d62))
+
 ## [3.8.0](https://github.com/redtidev1918/PixivFlow/compare/v3.7.2...v3.8.0) (2026-10-25)
 
 

@@ -62,8 +62,14 @@ class Stager:
 
 
 async def main():
-    principal = dict(kind="service", telegram_user_id=123456789, name="contract-fixture",
-                     surface="api", actor_subject="api_token:1", token_id=1)
+    principal = {
+        "kind": "service",
+        "telegram_user_id": 123456789,
+        "name": "contract-fixture",
+        "surface": "api",
+        "actor_subject": "api_token:1",
+        "token_id": 1,
+    }
     with tempfile.TemporaryDirectory(prefix="telepost-contract-") as temporary, ExitStack() as stack:
         previous = Path.cwd()
         os.chdir(temporary)

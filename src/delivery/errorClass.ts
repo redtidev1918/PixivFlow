@@ -34,6 +34,7 @@ export function classifyError(error: unknown, status?: number): ErrorClassificat
   }
 
   // Explicit HTTP status wins when present.
+  if (status === 408) return { errorClass: 'network_timeout', retryable: true };
   if (status === 429) return { errorClass: 'rate_limited', retryable: true };
   if (typeof status === 'number' && status >= 500) return { errorClass: 'remote_5xx', retryable: true };
   if (status === 409) return { errorClass: 'duplicate', retryable: false };

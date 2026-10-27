@@ -83,7 +83,19 @@ async def main():
         stack.enter_context(patch.object(review, "_stager", lambda bot: stager))
         await db_manager.init_db()
         application = MagicMock()
-        app = web.Application()
+        injected = False
+
+        @web.middleware
+        async def temporary_receiver_failure(request, handler):
+            nonlocal injected
+            if request.headers.get("X-Contract-Fault") == "transient" and not injected:
+                injected = True
+                return web.json_response(
+                    {"ok": False, "error": {"code": "invalid_dependency_state"}}, status=503,
+                )
+            return await handler(request)
+
+        app = web.Application(middlewares=[temporary_receiver_failure])
         api_server.add_api_routes(app, application)
         server = TestServer(app)
         await server.start_server()

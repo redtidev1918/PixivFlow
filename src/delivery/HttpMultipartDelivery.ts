@@ -205,7 +205,11 @@ export class HttpMultipartDelivery implements DeliveryProvider {
     const text = await response.text();
     let parsed: unknown = text;
     if (text) { try { parsed = JSON.parse(text); } catch { /* plain ok */ } }
-    if (!response.ok) throw new Error(`notification endpoint returned HTTP ${response.status}`);
+    if (!response.ok) {
+      throw Object.assign(new Error(`notification endpoint returned HTTP ${response.status}`), {
+        status: response.status,
+      });
+    }
     logger.info('HTTP delivery notification sent', {
       url: redactUrl(url),
       status: response.status,

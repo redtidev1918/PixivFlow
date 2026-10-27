@@ -15,6 +15,7 @@ import { join } from 'node:path';
 import { Database } from '../../storage/Database';
 import { OutboxWorker } from '../../delivery/OutboxWorker';
 import { DeliveryAck, parseDeliveryAck } from '../../delivery/DeliveryAck';
+import { HttpMultipartDelivery } from '../../delivery/HttpMultipartDelivery';
 
 function withDb<T>(fn: (db: Database) => Promise<T>): Promise<T> {
   const dir = mkdtempSync(join(tmpdir(), 'pixivflow-outbox-fi-'));
@@ -63,6 +64,30 @@ class FakeDispatcher {
 const ctx = { idempotencyKey: 'k-1' } as any;
 
 describe('OutboxWorker failure injection', () => {
+  it('retries a notification HTTP 408 using the same durable notification', async () => {
+    const originalFetch = global.fetch;
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce(new Response('{}', { status: 408 }))
+      .mockResolvedValueOnce(new Response('{}', { status: 200 }));
+    try {
+      await withDb(async db => {
+        const provider = new HttpMultipartDelivery({
+          type: 'httpMultipart', url: 'https://fixture.test/submissions', notificationUrl: 'https://fixture.test/notifications',
+        });
+        const send = async () => { await provider.notifyOnce({ text: 'fixture', idempotencyKey: 'notify-408' }); };
+        const dispatcher = new FakeDispatcher([], [send, send]);
+        const row = db.outbox.enqueue({ kind: 'notification', deliveryTarget: 'bot1',
+          idempotencyKey: 'notify-408', payload: { text: 'fixture' }, maxAttempts: 3 });
+        const worker = new OutboxWorker(db, dispatcher as any, { retryBaseMs: 0 });
+        expect(await worker.drainOnce(1)).toMatchObject({ retried: 1, dead: 0 });
+        expect(db.outbox.get(row.id)!.status).toBe('retry_wait');
+        expect(await worker.drainOnce(1)).toMatchObject({ done: 1 });
+        expect(db.outbox.get(row.id)!.status).toBe('done');
+        expect(dispatcher.notifyCalls).toBe(2);
+      });
+    } finally { global.fetch = originalFetch; }
+  });
+
   it.each([
     { status: 408, code: 'request_expired', retryable: true },
     { status: 503, code: 'invalid_dependency_state', retryable: true },

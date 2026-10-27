@@ -1,5 +1,13 @@
 # 架构决策（PixivFlow，长期有效）
 
+## D-09 ACK 重试判定不能被字符串二次分类覆盖（2026-10-27）
+
+`parseDeliveryAck` 的 kind 决定接收端拒绝是否可重试。Outbox 的异常清理路径用
+有类型的 `DeliveryAckFailure` 携带 retryable 与 HTTP status，只将通用分类器用于
+诊断类别和未收到 ACK 的传输异常；严禁从错误码中的 timeout / invalid 单词反推
+业务重试资格。HTTP 408 的诊断类别是 network_timeout。故障注入须覆盖 408、
+含 invalid 的 503、含 timeout 的 400，以及同意图重启恢复。
+
 ## D-08 媒体引用出现次数与资产身份分离（2026-10-27）
 
 小说正文可以多次引用同一插图；`extractNovelAssets` 按 kind + sourceId 输出

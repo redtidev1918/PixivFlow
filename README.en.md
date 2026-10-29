@@ -33,7 +33,7 @@ pixivflow dirs
 - `download --url "<work URL>"` downloads one work. Illustration, manga, ugoira, novel, novel-series and artist-profile URLs all work.
 - `dirs` prints the configuration file, database and download directories actually in use.
 
-> **Watch out for credential leaks.** The login command prints the access token, refresh token and similar values to the terminal. Never paste terminal output, logs or screenshots containing them into issues, chat groups or public sites. Remove them before asking for help.
+> **Protect your credentials.** `login` / `login-headless` / `refresh` never print the access token or refresh token to the terminal (JSON output is credential-free too); credentials are written only to the selected config file — treat that file like a password. Still review terminal output, logs and screenshots for sensitive data before sharing them.
 
 Server login and importing an existing token are covered in the [login guide](docs/en/LOGIN.md); the supported URL formats are listed in the [usage guide](docs/en/USAGE.md).
 

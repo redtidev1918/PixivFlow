@@ -231,7 +231,10 @@ describe('RefreshCommand', () => {
       const result = await command.execute(context, args);
 
       expect(result.success).toBe(false);
-      expect(result.error?.message).toBe('Invalid refresh token');
+      // Raw upstream messages are sanitized (safeAuthError); only the bounded
+      // classification may reach the user.
+      expect(result.error?.message).toContain('Authentication failed');
+      expect(result.error?.message).not.toContain('Invalid refresh token');
       expect(consoleErrorSpy).toHaveBeenCalled();
     });
 
@@ -263,12 +266,16 @@ describe('RefreshCommand', () => {
 
       await command.execute(context, args);
 
+      // The structured log carries the sanitized Error (message + bounded
+      // status/code), never the raw provider text.
       expect(loggerErrorSpy).toHaveBeenCalledWith(
         'Token refresh failed',
         expect.objectContaining({
-          error: 'Network error',
+          error: expect.objectContaining({ message: expect.stringContaining('Authentication failed') }),
         })
       );
+      const logged = JSON.stringify(loggerErrorSpy.mock.calls);
+      expect(logged).not.toContain('Network error');
     });
   });
 

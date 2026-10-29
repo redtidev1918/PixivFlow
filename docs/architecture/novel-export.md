@@ -1,8 +1,27 @@
-# Novel ebook export
+# Novel export
 
-EPUB and PDF are local Artifact variants. TXT paths, Markdown, ZIP, TelePress
-and delivery selection remain authoritative for their existing consumers.
-Export errors are reported separately and never roll back a saved TXT.
+Markdown (`md`), EPUB and PDF are local Artifact variants. TXT paths, the
+rich-media sidecar, ZIP, TelePress and delivery selection remain authoritative
+for their existing consumers. Export errors are reported separately and never
+roll back a saved TXT.
+
+## Markdown format
+
+`md` is the reader-facing export: `<base>.novel.md`, converted structure
+(chapter headings, page separators with anchors, jumpuri links, ruby with a
+plain-text `rp` degradation, escaped Markdown metacharacters). It reuses the
+same `parseNovel` node stream as EPUB/PDF — there is no second marker parser.
+
+It differs from the rich-media sidecar (`<base>.md`, variant `markdown`) on
+purpose: the sidecar keeps raw markers except image substitution and feeds
+TelePress; the export converts structure and ships as variant
+`markdown-export`, which TelePress's `find` and `deliveryFilePaths` both
+ignore. Inline images are referenced (not embedded): files already inside the
+export's `images/` directory are referenced in place; anything else is copied
+once under a content-hash name, and unresolvable images degrade to the literal
+marker plus a recorded warning instead of failing the export — the inverse of
+EPUB's fail-closed `prepareImages` contract. Output naming, locking, atomic
+rename and unchanged-content skipping follow the EPUB/PDF path.
 
 ## Community Research
 

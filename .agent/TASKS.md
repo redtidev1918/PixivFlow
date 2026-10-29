@@ -2,6 +2,15 @@
 
 > 状态：TODO / IN_PROGRESS / DONE / DEFERRED / BLOCKED。每行带证据。
 
+## 本轮（2026-10-29 Markdown 正式导出）
+
+| ID | 任务 | 状态 | 证据 |
+| --- | --- | --- | --- |
+| P-17 | `md` 正式格式：渲染器、图片离线化、`.novel.md` 命名、`markdown-export` variant | DONE | MarkdownExporter.ts / NovelExportService.ts / Artifact.ts；13 个新增测试 |
+| P-18 | TelePress sidecar 兼容边界固化（`find` 不受新 variant 影响、不投递） | DONE | TelePressRichNovel 零改动 + novel-markdown-export.test.ts 两例门禁 |
+| P-19 | CLI/config/WebUI 同语义（`validateNovelExport` 单一词表）+ 中英文文档 | DONE | validateNovelExport 'txt,md,epub,pdf'；USAGE/CONFIG/DOCKER/architecture |
+| P-20 | PR / CI / 发版 / 部署 pin | IN_PROGRESS | 待 PR 合并与用户授权发版 |
+
 ## 本轮（2026-10-26 集中式优化与收尾）
 
 ## 2026-10-27 投递可靠性修复

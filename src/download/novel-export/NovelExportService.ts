@@ -1,5 +1,5 @@
 import { promises as fs } from 'node:fs';
-import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { buildMediaAsset } from '../../domain/media/MediaAsset';
 import { readImageDimensions } from '../../utils/imageDimensions';
 import { createHash, randomUUID } from 'node:crypto';
@@ -8,46 +8,33 @@ import type { MediaMaterializer } from '../materialization/MediaMaterializer';
 import { NovelBook, NovelDocument, parseNovel, assembleSeries } from './NovelDocument';
 import { BookImage, imageKey, writeEpub } from './EpubExporter';
 import { PdfOptions, writePdf } from './PdfExporter';
+import { MARKDOWN_RENDERER_VERSION, writeMarkdownBook } from './MarkdownExporter';
+import { assertPixivImageUrl, atomicJson, containedPath, readBounded } from './NovelIo';
 
-export interface NovelExportOptions { formats?: Array<'txt' | 'epub' | 'pdf'>; mergeSeries?: boolean; pdf?: PdfOptions }
-export interface ExportResult { artifacts: Artifact[]; errors: Array<{ format: string; code: string; message: string }> }
+// Shared IO primitives live in NovelIo (leaf module); re-exported here so the
+// historical NovelExportService import surface keeps working.
+export { assertPixivImageUrl, atomicJson, containedPath, readBounded } from './NovelIo';
+
+export type NovelExportFormat = 'txt' | 'md' | 'epub' | 'pdf';
+export interface NovelExportOptions { formats?: Array<NovelExportFormat>; mergeSeries?: boolean; pdf?: PdfOptions }
+export interface ExportResult {
+  artifacts: Artifact[];
+  errors: Array<{ format: string; code: string; message: string }>;
+  /** Non-fatal degradations (e.g. Markdown kept an unavailable image marker). */
+  warnings?: string[];
+}
 export interface SeriesManifest { version: 1; seriesId: string; title: string; orderedIds: string[]; metadataPaths: string[] }
 
 export function validateNovelExport(value: unknown): asserts value is NovelExportOptions {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('novelExport must be an object');
   const v = value as NovelExportOptions;
-  if (v.formats !== undefined && (!Array.isArray(v.formats) || !v.formats.length || v.formats.some(f => !['txt', 'epub', 'pdf'].includes(f)))) throw new Error('novelExport.formats must contain txt, epub or pdf');
+  if (v.formats !== undefined && (!Array.isArray(v.formats) || !v.formats.length || v.formats.some(f => !['txt', 'md', 'epub', 'pdf'].includes(f)))) throw new Error('novelExport.formats must contain txt, md, epub or pdf');
   if (v.mergeSeries !== undefined && typeof v.mergeSeries !== 'boolean') throw new Error('novelExport.mergeSeries must be boolean');
   if (v.pdf !== undefined) {
     if (!v.pdf || typeof v.pdf !== 'object') throw new Error('novelExport.pdf must be an object');
     for (const key of ['browserPath', 'fontPath'] as const) if (v.pdf[key] !== undefined && (typeof v.pdf[key] !== 'string' || !isAbsolute(v.pdf[key]!))) throw new Error(`novelExport.pdf.${key} must be an absolute path`);
     if (v.pdf.timeoutMs !== undefined && (!Number.isInteger(v.pdf.timeoutMs) || v.pdf.timeoutMs < 1000 || v.pdf.timeoutMs > 120_000)) throw new Error('novelExport.pdf.timeoutMs must be 1000..120000');
   }
-}
-
-export async function containedPath(root: string, candidate: string): Promise<string> {
-  const base = await fs.realpath(root);
-  const full = await fs.realpath(resolve(root, candidate));
-  const rel = relative(base, full);
-  if (rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel)) throw new Error('NOVEL_PATH_UNSAFE: asset must stay inside its source directory');
-  return full;
-}
-
-export async function readBounded(file: string, max: number): Promise<Buffer> {
-  const handle = await fs.open(file, 'r');
-  try {
-    const stat = await handle.stat();
-    if (!stat.isFile() || stat.size > max) throw new Error('NOVEL_FILE_LIMIT: input is not a bounded regular file');
-    const bytes = Buffer.alloc(stat.size + 1);
-    let length = 0;
-    while (length < bytes.length) {
-      const chunk = await handle.read(bytes, length, bytes.length - length, null);
-      if (!chunk.bytesRead) break;
-      length += chunk.bytesRead;
-    }
-    if (length > stat.size) throw new Error('NOVEL_FILE_CHANGED: input grew while reading');
-    return bytes.subarray(0, length);
-  } finally { await handle.close(); }
 }
 
 function imageType(bytes: Buffer): { mime: string; ext: string } {
@@ -57,11 +44,6 @@ function imageType(bytes: Buffer): { mime: string; ext: string } {
   if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return { mime: 'image/jpeg', ext: 'jpg' };
   if (/^GIF8[79]a$/.test(bytes.subarray(0, 6).toString())) return { mime: 'image/gif', ext: 'gif' };
   throw new Error('NOVEL_IMAGE_TYPE: EPUB images must be PNG, JPEG or GIF; HTML/SVG/WebP are not silently embedded');
-}
-
-export function assertPixivImageUrl(source: string): void {
-  const url = new URL(source);
-  if (url.protocol !== 'https:' || url.hostname !== 'i.pximg.net' || url.port || url.username || url.password) throw new Error('NOVEL_IMAGE_URL_UNSAFE: expected https://i.pximg.net');
 }
 
 export async function prepareImages(book: NovelBook, roots: Map<string, string>, materializer?: MediaMaterializer, seeds = new Map<string, Buffer>()): Promise<BookImage[]> {
@@ -116,22 +98,19 @@ export async function prepareImages(book: NovelBook, roots: Map<string, string>,
   return images;
 }
 
-export async function atomicJson(file: string, value: unknown): Promise<void> {
-  const tmp = `${file}.${randomUUID()}.tmp`;
-  try { await fs.writeFile(tmp, JSON.stringify(value, null, 2), { flag: 'wx' }); await fs.rename(tmp, file); }
-  finally { await fs.rm(tmp, { force: true }); }
-}
-
 export async function exportBook(book: NovelBook, roots: Map<string, string>, outputBase: string, options: NovelExportOptions, materializer?: MediaMaterializer, seeds?: Map<string, Buffer>): Promise<ExportResult> {
   validateNovelExport(options);
   if (!book.documents.length || book.documents.length > 1000) throw new Error('NOVEL_BOOK_LIMIT');
   if (book.documents.reduce((size, d) => size + Buffer.byteLength(d.rawText), 0) > 8 * 1024 * 1024) throw new Error('NOVEL_TEXT_LIMIT: maximum 8 MiB per book');
   const result: ExportResult = { artifacts: [], errors: [] };
-  const formats = [...new Set(options.formats ?? ['epub'] as const)].filter((f): f is 'epub' | 'pdf' => f !== 'txt');
+  const formats = [...new Set(options.formats ?? ['epub'] as const)].filter((f): f is 'md' | 'epub' | 'pdf' => f !== 'txt');
   if (!formats.length) return result;
   let images: BookImage[] | undefined;
+  let markdown: Awaited<ReturnType<typeof writeMarkdownBook>> | undefined;
   for (const format of formats) {
-    const dest = resolve(`${outputBase}.${format}`);
+    // `.novel.md` never collides with the rich-media sidecar (`<base>.md`),
+    // which TelePress consumes with raw-marker semantics.
+    const dest = resolve(format === 'md' ? `${outputBase}.novel.md` : `${outputBase}.${format}`);
     const lockPath = `${dest}.lock`;
     const temp = `${dest}.${randomUUID()}.tmp`;
     let lock: Awaited<ReturnType<typeof fs.open>> | undefined;
@@ -139,8 +118,14 @@ export async function exportBook(book: NovelBook, roots: Map<string, string>, ou
       await fs.mkdir(dirname(dest), { recursive: true });
       try { lock = await fs.open(lockPath, 'wx'); } catch (error) { if ((error as NodeJS.ErrnoException).code === 'EEXIST') throw new Error('NOVEL_EXPORT_BUSY: output is locked by another export'); throw error; }
       await lock.writeFile(JSON.stringify({ pid: process.pid, started: new Date().toISOString() }));
-      images ??= await prepareImages(book, roots, materializer, seeds);
-      const fingerprint = createHash('sha256').update(JSON.stringify({ renderer: 1, book, format, pdf: options.pdf, images: images.map(i => i.name) })).digest('hex');
+      let fingerprint: string;
+      if (format === 'md') {
+        markdown ??= await writeMarkdownBook(book, roots, dest, materializer);
+        fingerprint = createHash('sha256').update(JSON.stringify({ renderer: MARKDOWN_RENDERER_VERSION, book, format, refs: markdown.refs })).digest('hex');
+      } else {
+        images ??= await prepareImages(book, roots, materializer, seeds);
+        fingerprint = createHash('sha256').update(JSON.stringify({ renderer: 1, book, format, pdf: options.pdf, images: images.map(i => i.name) })).digest('hex');
+      }
       const receipt = `${dest}.export.json`;
       let cached = false;
       try {
@@ -149,15 +134,24 @@ export async function exportBook(book: NovelBook, roots: Map<string, string>, ou
         cached = prior.fingerprint === fingerprint && prior.checksum === createHash('sha256').update(bytes).digest('hex');
       } catch { /* No usable cached artifact. */ }
       if (!cached) {
-        if (format === 'epub') await writeEpub(book, images, temp);
-        else await writePdf(book, images, temp, options.pdf ?? {});
+        if (format === 'md' && markdown) await fs.writeFile(temp, markdown.content, 'utf-8');
+        else if (format === 'epub' && images) await writeEpub(book, images, temp);
+        else if (images) await writePdf(book, images, temp, options.pdf ?? {});
         const bytes = await readBounded(temp, 150 * 1024 * 1024);
         const checksum = createHash('sha256').update(bytes).digest('hex');
         await fs.rename(temp, dest);
         await atomicJson(receipt, { fingerprint, checksum });
       }
+      if (format === 'md' && markdown?.warnings.length) result.warnings = [...(result.warnings ?? []), ...markdown.warnings];
+      const variant: Artifact['variant'] = format === 'md' ? 'markdown-export' : format;
       const stat = await fs.stat(dest);
-      result.artifacts.push({ id: artifactId(book.id, format, basename(dest)), workId: book.id, variant: format, path: dest, mimeType: format === 'epub' ? 'application/epub+zip' : 'application/pdf', size: stat.size });
+      result.artifacts.push({
+        id: artifactId(book.id, variant, basename(dest)), workId: book.id,
+        variant,
+        path: dest,
+        mimeType: format === 'md' ? 'text/markdown' : format === 'epub' ? 'application/epub+zip' : 'application/pdf',
+        size: stat.size,
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       result.errors.push({ format, code: message.split(':')[0], message });

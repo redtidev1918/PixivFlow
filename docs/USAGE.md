@@ -45,26 +45,31 @@ pixivflow download --url "https://www.pixiv.net/artworks/123456789"
 pixivflow download --targets '[{"type":"novel","tag":"アークナイツ","limit":5}]'
 ```
 
-## 小说电子书导出（EPUB / PDF）
+## 小说导出（Markdown / EPUB / PDF）
 
-下载时加 `--formats` 即可在 TXT 之外顺手产出本地电子书；`--merge-series` 把整个小说系列按 Pixiv 章节顺序合订为一本：
-
-```bash
-pixivflow download --url "https://www.pixiv.net/novel/show.php?id=26132156" --formats epub
-pixivflow download --url "https://www.pixiv.net/novel/series/12345678" --formats epub --merge-series
-```
-
-已下载的小说可以离线重导出，不重新抓取正文：
+下载时加 `--formats` 即可在 TXT 之外顺手产出本地导出；`--merge-series` 把整个小说系列按 Pixiv 章节顺序合订为一本：
 
 ```bash
-pixivflow novel-export --input "downloads/novels/26132156_标题.txt.novel.json" --formats epub
-pixivflow novel-export --input "downloads/novels/series-12345678.series.json" --formats epub,pdf
+pixivflow download --url "https://www.pixiv.net/novel/show.php?id=26132156" --formats md
+pixivflow download --url "https://www.pixiv.net/novel/show.php?id=26132156" --formats md,epub,pdf
+pixivflow download --url "https://www.pixiv.net/novel/series/12345678" --formats md --merge-series
 ```
 
+已下载的小说可以离线重导出，不重新抓取正文、无需重新登录：
+
+```bash
+pixivflow novel-export --input "downloads/novels/26132156_标题.txt.novel.json" --formats md
+pixivflow novel-export --input "downloads/novels/series-12345678.series.json" --formats md --merge-series
+```
+
+- **Markdown（`md`）** 是面向阅读的导出：输出 `<小说文件名>.novel.md`，与 TXT 放在同一目录，内嵌插图引用同目录的 `images/`，拷走 `.novel.md` + `images/` 两个条目即可离线阅读、换机可读。纯文本小说同样可以导出，不依赖插图。
+  - `[chapter:]` 转为标题、`[newpage]` 转为分页分隔、`[[jumpuri:]]` 转为链接、`[[rb:]]` 转为带纯文本降级的注音、`[jump:n]` 转为页内锚点跳转；Markdown 特殊字符做转义，无法转换或资源缺失的标记以原文保留并在结果里给出 warning，正文永不丢失。
+  - 它与富媒体中间产物 sidecar（`<小说文件名>.md`，供 TelePress 在线阅读）是两个文件、两种语义；sidecar 与 TelePress 行为不变，Markdown 导出也不会作为 Telegram 附件投递。
+  - 系列：不加 `--merge-series` 时逐章节各自导出；加上后额外产出 `series-<id>.novel.md` 合订本（含目录与章节锚点，重复章节标题也能正确跳转）。
 - 章节、`[newpage]` 分页、注音（ruby）、内嵌插图、封面与元数据全部保留；EPUB 完全离线，图片以本地字节打包，不回源 Pixiv CDN。
-- TXT 始终保留且路径不变；电子书导出失败只记警告，不影响下载结果与投递队列。
+- TXT 始终保留且路径不变；导出失败只记警告，不影响下载结果与投递队列。
 - PDF 依赖可选的 Chrome/Chromium，不会自动安装：`--browser <chrome 路径>`（或环境变量 `PIXIVFLOW_PDF_BROWSER`）；缺少 CJK 字体的服务器/Docker 环境用 `--font <字体文件>` 嵌入。未配置浏览器时 PDF 明确报 `PDF_BROWSER_MISSING`，其余功能不受影响。
-- 配置文件里对应的 target 字段是 `novelExport`，语义与限制见 [CONFIG](CONFIG.md) 的「小说电子书导出」一节。
+- 配置文件里对应的 target 字段是 `novelExport`，语义与限制见 [CONFIG](CONFIG.md) 的「小说导出」一节。
 
 ## 标签搜索模式
 
@@ -170,7 +175,7 @@ pixivflow web     # 监听 3000 端口,浏览器打开 http://localhost:3000
 | 命令 | 说明 |
 | --- | --- |
 | `download [--url \| --targets \| --config]` | 执行一次下载(别名 d) |
-| `novel-export --input <文件>` | 把已下载的小说/系列离线重导出为 EPUB/PDF,不重新抓取 |
+| `novel-export --input <文件>` | 把已下载的小说/系列离线重导出为 Markdown/EPUB/PDF,不重新抓取 |
 | `random` | 从热门标签随机下载一张 |
 | `scheduler` | 启动定时任务常驻进程 |
 

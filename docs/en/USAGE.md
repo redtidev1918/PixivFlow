@@ -45,26 +45,31 @@ You can also express a target ad hoc as JSON without writing it into the config 
 pixivflow download --targets '[{"type":"novel","tag":"アークナイツ","limit":5}]'
 ```
 
-## Novel ebook export (EPUB / PDF)
+## Novel export (Markdown / EPUB / PDF)
 
-Add `--formats` to a download to produce local ebooks alongside the TXT; `--merge-series` binds a whole novel series into one book in Pixiv chapter order:
-
-```bash
-pixivflow download --url "https://www.pixiv.net/novel/show.php?id=26132156" --formats epub
-pixivflow download --url "https://www.pixiv.net/novel/series/12345678" --formats epub --merge-series
-```
-
-Already-downloaded novels can be re-exported offline without re-fetching the body:
+Add `--formats` to a download to produce local exports alongside the TXT; `--merge-series` binds a whole novel series into one book in Pixiv chapter order:
 
 ```bash
-pixivflow novel-export --input "downloads/novels/26132156_Title.txt.novel.json" --formats epub
-pixivflow novel-export --input "downloads/novels/series-12345678.series.json" --formats epub,pdf
+pixivflow download --url "https://www.pixiv.net/novel/show.php?id=26132156" --formats md
+pixivflow download --url "https://www.pixiv.net/novel/show.php?id=26132156" --formats md,epub,pdf
+pixivflow download --url "https://www.pixiv.net/novel/series/12345678" --formats md --merge-series
 ```
 
+Already-downloaded novels can be re-exported offline without re-fetching the body or logging in again:
+
+```bash
+pixivflow novel-export --input "downloads/novels/26132156_Title.txt.novel.json" --formats md
+pixivflow novel-export --input "downloads/novels/series-12345678.series.json" --formats md --merge-series
+```
+
+- **Markdown (`md`)** is the reader-facing export: it writes `<novel file name>.novel.md` next to the TXT and references the sibling `images/` directory for inline illustrations — copy the `.novel.md` plus `images/` pair anywhere (another machine included) and it reads offline. Pure-text novels export too; no illustration required.
+  - `[chapter:]` becomes a heading, `[newpage]` a page separator, `[[jumpuri:]]` a link, `[[rb:]]` a ruby annotation with plain-text fallback, and `[jump:n]` an in-page anchor jump; Markdown metacharacters are escaped. Unconvertible markers and missing resources stay as literal text with a warning in the result — the body is never dropped.
+  - It is a different file with different semantics from the rich-media sidecar (`<novel file name>.md`, consumed by TelePress for online reading); the sidecar and TelePress behavior are unchanged, and the Markdown export is never attached to a Telegram delivery.
+  - Series: without `--merge-series` each chapter exports individually; with it you additionally get a `series-<id>.novel.md` omnibus (with a table of contents and chapter anchors that stay unique even for duplicate chapter titles).
 - Chapters, `[newpage]` pagination, ruby annotations, inline illustrations, the cover and metadata are all preserved; the EPUB is fully offline with images packed from local bytes and no Pixiv CDN access.
-- The TXT is always retained with an unchanged path; ebook export failures only log a warning and never affect the download result or the delivery queue.
+- The TXT is always retained with an unchanged path; export failures only log a warning and never affect the download result or the delivery queue.
 - PDF depends on an optional Chrome/Chromium that is never auto-installed: `--browser <chrome path>` (or the `PIXIVFLOW_PDF_BROWSER` environment variable); on servers/Docker without CJK fonts, embed one via `--font <font file>`. Without a browser, PDF reports `PDF_BROWSER_MISSING` explicitly while everything else keeps working.
-- The corresponding target field in the config file is `novelExport`; see the "Novel ebook export" section in [CONFIG](CONFIG.md) for semantics and limits.
+- The corresponding target field in the config file is `novelExport`; see the "Novel export" section in [CONFIG](CONFIG.md) for semantics and limits.
 
 ## Tag search mode
 
@@ -171,7 +176,7 @@ Grouped by the categories of `pixivflow help` (commands evolve with releases —
 | Command | Description |
 | --- | --- |
 | `download [--url \| --targets \| --config]` | Run one download (alias d) |
-| `novel-export --input <file>` | Re-export a downloaded novel/series offline to EPUB/PDF without re-fetching |
+| `novel-export --input <file>` | Re-export a downloaded novel/series offline to Markdown/EPUB/PDF without re-fetching |
 | `random` | Randomly download one from popular tags |
 | `scheduler` | Start the resident scheduled-task process |
 

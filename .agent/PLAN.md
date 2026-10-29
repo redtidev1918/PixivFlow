@@ -1,5 +1,15 @@
 # 当前计划（PixivFlow）
 
+## 2026-10-29 小说 Markdown 正式导出
+
+1. ✅ 审计确认：sidecar（`<base>.md`，TelePress 消费）与阅读型导出必须分轨。
+2. ✅ 实现：`md` 格式 + `MarkdownExporter`（复用 parseNovel，无第二解析器）；
+   `.novel.md` 命名 + `markdown-export` variant 隔离 TelePress 兼容面。
+3. ✅ 图片策略：dest `images/` 内原位引用、目录外内容寻址复制、缺失降级为
+   原标记 + warning（与 EPUB fail-closed 相反的契约）。
+4. ✅ 单篇/系列合订/`novel-export` 离线重导出/CLI+config+WebUI 同一校验。
+5. ⬜ PR → CI → （用户授权后）release-please → deploy pin。
+
 ## 2026-10-27 小说/插画投递可靠性
 
 1. 已取证 bot2 小说 29478076：旧 outbox 含相同资产身份/URL 两次，接收端拒绝。

@@ -15,7 +15,7 @@ export function novelExportArgs(args: CommandArgs): NovelExportOptions {
 
 export class NovelExportCommand extends BaseCommand {
   readonly name = 'novel-export';
-  readonly description = 'Export saved novel metadata or series manifest to EPUB/PDF offline';
+  readonly description = 'Export saved novel metadata or series manifest to Markdown/EPUB/PDF offline';
   readonly requiresToken = false;
   readonly metadata = { category: CommandCategory.DOWNLOAD, requiresAuth: false, rendersResult: true, longRunning: true };
   async execute(_context: CommandContext, args: CommandArgs): Promise<CommandResult> {
@@ -23,9 +23,13 @@ export class NovelExportCommand extends BaseCommand {
       const input = args.options.input;
       if (typeof input !== 'string') return this.failure('Provide --input <novel.txt.json|novel.txt|series-ID.series.json>');
       const result = await exportSavedNovel(input, novelExportArgs(args), typeof args.options.output === 'string' ? args.options.output : undefined, typeof args.options.metadata === 'string' ? args.options.metadata : undefined);
-      const message = [...result.artifacts.map(a => `${a.variant.toUpperCase()}: ${a.path}`), ...result.errors.map(e => `${e.format}: ${e.message}`)].join('\n');
-      return result.errors.length ? this.failure(message, result) : this.success(message || 'TXT retained; no ebook format requested', result);
+      const message = [
+        ...result.artifacts.map(a => `${a.variant === 'markdown-export' ? 'MD' : a.variant.toUpperCase()}: ${a.path}`),
+        ...(result.warnings ?? []).map(w => `warning: ${w}`),
+        ...result.errors.map(e => `${e.format}: ${e.message}`),
+      ].join('\n');
+      return result.errors.length ? this.failure(message, result) : this.success(message || 'TXT retained; no export format requested', result);
     } catch (error) { return this.failure(error instanceof Error ? error : String(error)); }
   }
-  getUsage(): string { return 'novel-export --input <novel.txt.novel.json|novel.txt|series-ID.series.json> [--metadata legacy-metadata.json] [--formats epub,pdf] [--output path-without-extension] [--browser executable] [--font CJK-font.otf] [--json]'; }
+  getUsage(): string { return 'novel-export --input <novel.txt.novel.json|novel.txt|series-ID.series.json> [--metadata legacy-metadata.json] [--formats md,epub,pdf] [--output path-without-extension] [--browser executable] [--font CJK-font.otf] [--json]'; }
 }

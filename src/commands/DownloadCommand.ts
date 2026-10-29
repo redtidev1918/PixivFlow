@@ -186,7 +186,7 @@ Options:
   --config <path>        Path to config file
   --targets <json>       Custom targets JSON (overrides config file targets)
   --url <url>            Download from Pixiv URL or ID (overrides config file targets)
-  --formats <list>       Add local novel exports: txt,epub,pdf (TXT always retained)
+  --formats <list>       Add local novel exports: txt,md,epub,pdf (TXT always retained)
   --merge-series         Export a complete series in Pixiv chapter order
   --browser <path>       Optional Chromium executable for PDF
   --font <path>          Optional CJK font for PDF

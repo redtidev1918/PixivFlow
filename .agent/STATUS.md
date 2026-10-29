@@ -1,6 +1,14 @@
 # 工程状态（PixivFlow）
 
-## 2026-10-27 投递可靠性（当前）
+## 2026-10-29 小说 Markdown 正式导出（当前）
+
+- 已实现：`novelExport.formats` 新增 `md`；`<base>.novel.md` 阅读型导出
+  （标记转换、图片离线化、系列合订、离线重导出、幂等缓存）。与 TelePress
+  sidecar 的边界见 DECISIONS D-10；实现细节见 `docs/architecture/novel-export.md`。
+- 本地验证：全量 149 suites / 1637 tests + typecheck 全绿；PR/CI/发版待办。
+- 生态生产事实仍以 deploy current-state.md 为准。
+
+## 2026-10-27 投递可靠性
 
 - 已确认：小说重复图片 marker 被展开为重复媒体身份，TelePost 拒绝；拒绝错误码
   同时被错误 envelope 解析遗漏。详见 DECISIONS D-08、TASKS P-13~15。

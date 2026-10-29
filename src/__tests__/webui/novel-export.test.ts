@@ -8,8 +8,8 @@ beforeEach(() => jest.clearAllMocks());
 
 it('passes ebook choices through the existing download task', async () => {
   const res = response();
-  await downloadFromUrl({ body: { url: 'https://www.pixiv.net/novel/series/42', novelExport: { formats: ['epub'], mergeSeries: true } } } as never, res as never);
-  expect(downloadTaskManager.startTask).toHaveBeenCalledWith(expect.any(String), undefined, { targets: [expect.objectContaining({ seriesId: 42, novelExport: { formats: ['epub'], mergeSeries: true } })] });
+  await downloadFromUrl({ body: { url: 'https://www.pixiv.net/novel/series/42', novelExport: { formats: ['md', 'epub'], mergeSeries: true } } } as never, res as never);
+  expect(downloadTaskManager.startTask).toHaveBeenCalledWith(expect.any(String), undefined, { targets: [expect.objectContaining({ seriesId: 42, novelExport: { formats: ['md', 'epub'], mergeSeries: true } })] });
   expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
 });
 

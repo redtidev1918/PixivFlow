@@ -4,6 +4,7 @@
  */
 
 import axios from 'axios';
+import { safeAuthError } from './output';
 import { AUTH_TOKEN_URL, CLIENT_ID, CLIENT_SECRET, USER_AGENT, TIMEOUT } from './constants';
 import { LoginInfo, OAuthResponse, PixivLoginFailedError } from './types';
 
@@ -43,8 +44,7 @@ export async function refreshToken(refreshToken: string): Promise<LoginInfo> {
       response: response.data,
     };
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    throw new PixivLoginFailedError(`Failed to refresh token: ${errorMessage}`);
+    throw safeAuthError(error);
   }
 }
 

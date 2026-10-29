@@ -33,7 +33,7 @@ describe('login command help', () => {
 
   it('keeps the credential-leak warning', () => {
     const usage = login.getUsage();
-    expect(usage).toMatch(/plain text/i);
+    expect(usage).toMatch(/never printed/i);
     expect(usage).toMatch(/Never share/i);
   });
 

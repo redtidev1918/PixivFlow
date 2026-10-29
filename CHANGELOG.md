@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.9.1](https://github.com/redtidev1918/PixivFlow/compare/v3.9.0...v3.9.1) (2026-10-29)
+
+
+### Bug Fixes
+
+* **auth:** 登录/无头登录/令牌刷新不再向终端输出凭据 ([#228](https://github.com/redtidev1918/PixivFlow/issues/228)) ([ae79423](https://github.com/redtidev1918/PixivFlow/commit/ae79423db3358a6ae4503fdf434472f4d24e8b1d))
+
 ## [3.9.0](https://github.com/redtidev1918/PixivFlow/compare/v3.8.1...v3.9.0) (2026-10-29)
 
 

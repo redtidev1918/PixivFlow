@@ -6,26 +6,10 @@ import { readStdinLine } from '../utils/stdin';
 import { BaseCommand } from './Command';
 import { CommandCategory } from './metadata';
 import { CommandContext, CommandArgs, CommandResult } from './types';
-import type { LoginInfo } from '../terminal-login';
+import { printAuthTokenResponse, publicLoginResult, safeAuthError } from '../terminal-login/output';
 import { updateConfigWithToken } from '../utils/login-helper';
 import { getConfigPath } from '../config';
 
-/**
- * Output login result
- */
-function outputLoginResult(loginInfo: LoginInfo, json: boolean = false): void {
-  if (json) {
-    console.log(JSON.stringify(loginInfo.response || loginInfo, null, 2));
-  } else {
-    console.log('[+]: Success!');
-    console.log(`access_token: ${loginInfo.access_token}`);
-    console.log(`refresh_token: ${loginInfo.refresh_token}`);
-    console.log(`expires_in: ${loginInfo.expires_in}`);
-    if (loginInfo.user) {
-      console.log(`user: ${loginInfo.user.name} (${loginInfo.user.account})`);
-    }
-  }
-}
 
 /**
  * Login headless command - requires username and password
@@ -39,6 +23,7 @@ export class LoginHeadlessCommand extends BaseCommand {
     category: CommandCategory.AUTHENTICATION,
     requiresAuth: false,
     longRunning: false,
+    printsOwnErrors: true,
   };
 
   validate(args: CommandArgs): { valid: boolean; errors: string[] } {
@@ -103,16 +88,17 @@ export class LoginHeadlessCommand extends BaseCommand {
       } catch (error) {
         // Config update failed, but login succeeded
         if (!json) {
-          context.logger.warn('Login successful but config update failed', { error });
+          context.logger.warn('Login successful but config update failed; credentials were not printed');
         }
       }
 
-      outputLoginResult(loginInfo, json);
-      return this.success('Login successful', loginInfo);
+      printAuthTokenResponse(loginInfo, json);
+      return this.success('Login successful', publicLoginResult(loginInfo));
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const safeError = safeAuthError(error);
+      const errorMessage = safeError.message;
       console.error('[!]: Login failed:', errorMessage);
-      return this.failure(errorMessage, { error });
+      return this.failure(safeError);
     }
   }
 
@@ -125,7 +111,7 @@ Options:
   --password-stdin       Read the password from stdin (e.g. pass -p is stored
                          in shell history; stdin avoids that):
                          echo "password" | pixivflow login-headless -u me --password-stdin
-  -j, --json             Output response as JSON
+  -j, --json             Output a credential-free result as JSON
   --config <path>        Path to config file
 
 Examples:

@@ -1,17 +1,22 @@
 # 工程状态（PixivFlow）
 
-## 2026-10-29 小说 Markdown 正式导出（当前）
+## 2026-10-29 Markdown 导出 + 认证输出安全（当前，已发版并部署）
 
-- 已实现：`novelExport.formats` 新增 `md`；`<base>.novel.md` 阅读型导出
-  （标记转换、图片离线化、系列合订、离线重导出、幂等缓存）。与 TelePress
-  sidecar 的边界见 DECISIONS D-10；实现细节见 `docs/architecture/novel-export.md`。
-- 已合并 PR #224（`fa1a9a4696079f53087d406fabf80df84acaf7af`）；release PR #225
-  已合并，v3.9.0 tag 解引用为 `a5ab9fe6bd7cdf4927a478b512ecea2497e56ca3`。
-  2026-10-29 重新核实三件 Release 资产与发布工作流 40868519496 成功。
-- 本次本地验证：149 suites / 1638 tests、kit 6 suites / 67 tests、`tsc --noEmit` 全绿。
-- 真实 Pixiv 验收：纯文本 / 含图 / 系列均 BLOCKED；本机配置为占位符，未发现
-  可用本地凭据或真实保存数据。测试通过不代表真实验收通过，详见 HANDOFF。
-- 部署升级尚未完成，本轮未获新部署授权；发布与生产验收分开追踪（P-20~22）。
+- **v3.9.0**（PR #224，`fa1a9a4`）：`novelExport.formats` 新增 `md`；
+  `<base>.novel.md` 阅读型导出（标记转换、图片离线化、系列合订、离线重导出、
+  幂等缓存）。与 TelePress sidecar 的边界见 DECISIONS D-10；细节见
+  `docs/architecture/novel-export.md`。Release 资产与工作流 40868519496 已核实。
+- **v3.9.1**（PR #228）：认证输出安全——login/login-headless/refresh 不再向
+  终端或 --json 输出令牌与原始 OAuth 响应，失败路径 safeAuthError 有界分类
+  （产品审计 A1/P0）。AuthOutputSafety canary 测试；150 suites / 1653 tests +
+  tsc + CI 全绿。
+- 发行/部署 VERIFIED：v3.9.1 = `ac72cdaa88f55f283e20303f52c56bed1a7fad27`；
+  deploy pin PR #285 → fly deploy（--ha=false）→ 生产
+  `/health` = `3.9.1+ac72cdaa88f5`（代码=Release=Deploy=Runtime）。
+  Rollback = 3.8.1 / `eb70cee…`（deploy pin 注释块内）。
+- 真实 Pixiv 验收：纯文本 / 含图 / 系列仍 BLOCKED（本机无有效凭据/无已存真实
+  数据）；解锁条件与隔离方案见 HANDOFF。测试通过不代表真实验收通过。
+- 产品体验审计结论（A1 令牌泄露已随 3.9.1 关闭；B1 结果汇总等）待用户批准立项。
 - 生态生产事实仍以 deploy current-state.md 为准。
 
 ## 2026-10-27 投递可靠性

@@ -5,7 +5,7 @@
 import { BaseCommand } from './Command';
 import { CommandCategory } from './metadata';
 import { CommandContext, CommandArgs, CommandResult } from './types';
-import type { LoginInfo } from '../terminal-login/types';
+import { printAuthTokenResponse, publicLoginResult, safeAuthError } from '../terminal-login/output';
 import { updateConfigWithToken } from '../utils/login-helper';
 import { generateDefaultConfig } from '../config/defaults';
 import { readStdinAll } from '../utils/stdin';
@@ -13,22 +13,6 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { logger } from '../logger';
 
-/**
- * Output login result
- */
-function outputLoginResult(loginInfo: LoginInfo, json: boolean = false): void {
-  if (json) {
-    console.log(JSON.stringify(loginInfo.response || loginInfo, null, 2));
-  } else {
-    console.log('[+]: Success!');
-    console.log(`access_token: ${loginInfo.access_token}`);
-    console.log(`refresh_token: ${loginInfo.refresh_token}`);
-    console.log(`expires_in: ${loginInfo.expires_in}`);
-    if (loginInfo.user) {
-      console.log(`user: ${loginInfo.user.name} (${loginInfo.user.account})`);
-    }
-  }
-}
 
 /**
  * Refresh token command
@@ -42,6 +26,7 @@ export class RefreshCommand extends BaseCommand {
     category: CommandCategory.AUTHENTICATION,
     requiresAuth: false,
     longRunning: false,
+    printsOwnErrors: true,
   };
 
   /**
@@ -82,7 +67,7 @@ export class RefreshCommand extends BaseCommand {
       // If updating config fails, log warning but continue.
       // The refresh command will still work with the provided token.
       logger.warn('Failed to update config file with refresh token, continuing anyway', {
-        error: error instanceof Error ? error.message : String(error),
+        error: 'Config update failed; credentials were not printed',
       });
     }
   }
@@ -115,22 +100,19 @@ export class RefreshCommand extends BaseCommand {
     try {
       const { TerminalLogin } = await import('../terminal-login');
       const loginInfo = await TerminalLogin.refresh(refreshToken);
-      outputLoginResult(loginInfo, json);
-      return this.success('Token refresh successful', loginInfo);
+      printAuthTokenResponse(loginInfo, json);
+      return this.success('Token refresh successful', publicLoginResult(loginInfo));
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      const errorStack = error instanceof Error ? error.stack : undefined;
+      const safeError = safeAuthError(error);
+      const errorMessage = safeError.message;
       
       if (!json) {
         console.error('[!]: Token refresh failed:', errorMessage);
-        if (errorStack && process.env.DEBUG) {
-          console.error('[!]: Stack trace:', errorStack);
-        }
-        context.logger.error('Token refresh failed', { error: errorMessage, stack: errorStack });
+        context.logger.error('Token refresh failed', { error: safeError });
       } else {
         console.error(JSON.stringify({ error: errorMessage, success: false }, null, 2));
       }
-      return this.failure(errorMessage, { error, stack: errorStack });
+      return this.failure(safeError);
     }
   }
 
@@ -146,7 +128,7 @@ Arguments:
 
 Options:
   --token <token>        Provide the refresh token via option
-  -j, --json             Output response as JSON
+  -j, --json             Output a credential-free result as JSON
 
 Examples:
   pixivflow refresh <refresh_token>

@@ -5,26 +5,10 @@
 import { BaseCommand } from './Command';
 import { CommandCategory } from './metadata';
 import { CommandContext, CommandArgs, CommandResult } from './types';
-import type { LoginInfo } from '../terminal-login';
+import { printAuthTokenResponse, publicLoginResult, safeAuthError } from '../terminal-login/output';
 import { updateConfigWithToken } from '../utils/login-helper';
 import { getConfigPath } from '../config';
 
-/**
- * Output login result
- */
-function outputLoginResult(loginInfo: LoginInfo, json: boolean = false): void {
-  if (json) {
-    console.log(JSON.stringify(loginInfo.response || loginInfo, null, 2));
-  } else {
-    console.log('[+]: Success!');
-    console.log(`access_token: ${loginInfo.access_token}`);
-    console.log(`refresh_token: ${loginInfo.refresh_token}`);
-    console.log(`expires_in: ${loginInfo.expires_in}`);
-    if (loginInfo.user) {
-      console.log(`user: ${loginInfo.user.name} (${loginInfo.user.account})`);
-    }
-  }
-}
 
 /**
  * Login command - supports both interactive and headless modes
@@ -41,6 +25,7 @@ export class LoginCommand extends BaseCommand {
     category: CommandCategory.AUTHENTICATION,
     requiresAuth: false,
     longRunning: false,
+    printsOwnErrors: true,
   };
 
   async execute(context: CommandContext, args: CommandArgs): Promise<CommandResult> {
@@ -90,20 +75,20 @@ export class LoginCommand extends BaseCommand {
       } catch (error) {
         // Config update failed, but login succeeded
         if (!json) {
-          context.logger.warn('Login successful but config update failed', { error });
+          context.logger.warn('Login successful but config update failed; credentials were not printed');
         }
       }
 
-      outputLoginResult(loginInfo, json);
+      printAuthTokenResponse(loginInfo, json);
       if (!json) {
-        console.log('[i]: \u5728\u65e0\u6d4f\u89c8\u5668\u7684\u670d\u52a1\u5668\u4e0a\uff1f\u590d\u5236\u4e0a\u9762\u7684 refresh_token\uff0c\u5728\u670d\u52a1\u5668\u4e0a\u8fd0\u884c:');
-        console.log('[i]:   pixivflow refresh <refresh_token>');
+        console.log('[i]: Credentials are stored in the selected config when the update succeeds. Keep that file private.');
       }
-      return this.success('Login successful', loginInfo);
+      return this.success('Login successful', publicLoginResult(loginInfo));
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const safeError = safeAuthError(error);
+      const errorMessage = safeError.message;
       console.error('[!]: Login failed:', errorMessage);
-      return this.failure(errorMessage, { error });
+      return this.failure(safeError);
     }
   }
 
@@ -124,13 +109,13 @@ Login methods (tried in this order):
 Options:
   -u, --username <id>    Pixiv ID (email, username, or account name)
   -p, --password <pwd>   Your Pixiv password
-  -j, --json             Output response as JSON
+  -j, --json             Output a credential-free result as JSON
   --config <path>        Configuration file to update (default: PIXIV_DOWNLOADER_CONFIG,
                          then the detected config)
 
 Security:
-  The access token and refresh token are printed in plain text. Never share your
-  terminal output, logs or screenshots containing them.
+  Tokens and raw OAuth responses are never printed, including with --json.
+  Never share your configuration or credential files; they contain secrets.
 
 Examples:
   pixivflow login                    # Interactive login (opens browser)

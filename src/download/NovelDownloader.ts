@@ -315,6 +315,7 @@ export class NovelDownloader {
         ebookResult.errors.push({ format: 'ebook', code: 'NOVEL_EXPORT_FAILED', message: error instanceof Error ? error.message : String(error) });
       }
       for (const error of ebookResult.errors) logger.warn('Novel ebook export failed; TXT retained', { novelId: detail.id, ...error });
+      for (const warning of ebookResult.warnings ?? []) logger.info('Novel ebook export warning; marker kept as text', { novelId: detail.id, format: 'md', warning });
     }
     const pixivMetadata: PixivMetadata = {
       novel_document: document,
@@ -601,6 +602,7 @@ export class NovelDownloader {
       const result = await exportBook(book, roots, output, target.novelExport, this.materializer);
       await atomicJson(`${output}.artifacts.json`, result);
       for (const error of result.errors) logger.warn('Novel series export failed; chapter TXT retained', { seriesId, ...error });
+      for (const warning of result.warnings ?? []) logger.info('Novel series export warning; marker kept as text', { seriesId, format: 'md', warning });
       for (const artifact of result.artifacts) logger.info('Novel series exported', { seriesId, format: artifact.variant, path: artifact.path });
     } catch (error) { logger.warn('Novel series export incomplete; chapter TXT retained', { seriesId, error }); }
   }

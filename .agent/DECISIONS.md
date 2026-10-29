@@ -1,5 +1,18 @@
 # 架构决策（PixivFlow，长期有效）
 
+## D-10 阅读型 Markdown 导出与富媒体 sidecar 是两个产品（2026-10-29）
+
+`novelExport.formats` 的 `md` 输出 `<base>.novel.md`（variant
+`markdown-export`）：标记转换为真实结构（章节标题/分页锚点/链接/注音降级/
+转义），图片相对引用 `images/`，缺图降级为原标记 + warning、正文不丢——
+与 EPUB 的 fail-closed `prepareImages` 契约相反，是刻意的。TelePress 消费的
+sidecar `<base>.md`（variant `markdown`）保持 raw-marker 语义不变；
+`findRichNovelSources` 的 `find(a => a.variant === 'markdown')` 与
+`deliveryFilePaths` 的白名单都不会命中新 variant。禁止：让正式导出复用
+sidecar 路径或 variant；在 TelePress 兼容验证前改 sidecar 语义。图片文件名
+策略：dest `images/` 内原位引用；目录外按内容寻址 `<sha256>.<ext>` 复制一次，
+保证重复引用与重复导出的确定性。
+
 ## D-09 ACK 重试判定不能被字符串二次分类覆盖（2026-10-27）
 
 `parseDeliveryAck` 的 kind 决定接收端拒绝是否可重试。Outbox 的异常清理路径用

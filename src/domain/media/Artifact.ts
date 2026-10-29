@@ -9,7 +9,10 @@
 export type ArtifactVariant =
   | 'original'
   | 'text'
+  /** Rich-media sidecar (`<base>.md`): raw markers except image substitution; consumed by TelePress. */
   | 'markdown'
+  /** Reader-facing Markdown export (`<base>.novel.md`): converted structure; local-only, never delivered. */
+  | 'markdown-export'
   | 'zip'
   | 'epub'
   | 'pdf'

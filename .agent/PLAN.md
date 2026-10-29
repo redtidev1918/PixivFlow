@@ -8,30 +8,32 @@
 3. ✅ 图片策略：dest `images/` 内原位引用、目录外内容寻址复制、缺失降级为
    原标记 + warning（与 EPUB fail-closed 相反的契约）。
 4. ✅ 单篇/系列合订/`novel-export` 离线重导出/CLI+config+WebUI 同一校验。
-5. ⬜ PR → CI → （用户授权后）release-please → deploy pin。
+5. ✅ PR #224 → CI → release PR #225 → v3.9.0 三件资产；2026-10-29 已重新核实。
+6. BLOCKED：真实小说三场景验收缺本地访问条件/真实保存数据（P-21）。
+7. DEFERRED：生产升级需另行授权；不得重复发布 v3.9.0（P-22）。
+8. ✅ 本轮只做状态核验和文档收尾；产品审计见 TASKS，建议尚未批准，不自动修复。
 
 ## 2026-10-27 小说/插画投递可靠性
 
 1. 已取证 bot2 小说 29478076：旧 outbox 含相同资产身份/URL 两次，接收端拒绝。
 2. 源头有序去重 + 历史清单传输兼容 + 安全错误码；不改变审核/归属/重试权威。
 3. 双仓 PR 运行真实 HTTP/SQLite 契约；旧 payload、响应丢失重启、多页插画与校验拒绝。
-4. 完成全量测试与 CI，正式发行，deploy pin，运行时/只读生产验收及文档同步。
+4. 已闭环：本仓 #220~222 已合并；发行/部署与历史运行验收见 deploy current-state.md
+   2026-10-27 条目。本次仅复核该证据，不重投历史作品。
 
-## 2026-10-26 集中式优化与正式收尾（执行中）
+## 2026-10-26 集中式优化与正式收尾（历史，已结束）
 
 目标：以有证据的 P0/P1 修复 + Agent 工程体系收尾本仓集中治理；完成后回归正常迭代。
 
-1. ✅ 现场核查（master=bd188cb 同步；生产 3.7.2）。
+1. ✅ 当时现场核查完成；历史生产状态查 deploy 权威文档。
 2. ✅ 架构盘点（Explore）：组件清单、4 类后台循环、状态词表、重试边界、
    大文件、CLI 缺口、三操作语义、错误分类、耦合、测试缺口。
 3. ✅ P1 修复：词表 SSOT 收敛 + 死代码删除 + `recovery-status` CLI 同源化。
 4. ✅ 行为疑点核实：双层重试/IdleLifecycle drain/SlotAggregate（两澄清一删除）。
 5. ✅ `.agent/` 六件套 + release SKILL + AGENTS.md 边界段。
-6. ⬜ 全量测试 + typecheck + lint → PR → CI → release-please → deploy pin →
-   fly deploy → 只读验收。
-7. ⬜ deploy 仓：recovery-ownership.md 修正 aggregateSlot 表述（L-2）；
-   smoke-pixivflow.sh 误报修复交付（fly_app_state.py 已实现待接线）。
-8. ⬜ 收尾：TASKS/STATUS/HANDOFF 关闭、deploy current-state 同步、最终报告 A–K。
+6. ✅ 测试/PR/CI/发行及部署验收已闭环，证据见 P-07 与 deploy 2026-10-26 条目。
+7. ✅ deploy 文档与 smoke 误报已交付（#276/#278）。
+8. ✅ 历史治理已关闭；2026-10-29 清理遗留未勾选状态。
 
 ## 范围冻结（本轮不做）
 

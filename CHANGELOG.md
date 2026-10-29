@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.9.0](https://github.com/redtidev1918/PixivFlow/compare/v3.8.1...v3.9.0) (2026-10-29)
+
+
+### Features
+
+* **novel:** 正式 Markdown 导出格式（md） ([#224](https://github.com/redtidev1918/PixivFlow/issues/224)) ([fa1a9a4](https://github.com/redtidev1918/PixivFlow/commit/fa1a9a4696079f53087d406fabf80df84acaf7af))
+
 ## [3.8.1](https://github.com/redtidev1918/PixivFlow/compare/v3.8.0...v3.8.1) (2026-10-27)
 
 

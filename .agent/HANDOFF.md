@@ -2,6 +2,10 @@
 
 ## 2026-10-30 新任务（优先于下方历史范围）
 
+三仓受控分支/标签历史已匿名化推送，保护与 Actions 已恢复。PR 说明与用户文档仅
+用中性例子；具体策略保留在私有运行配置。GitHub 内部旧 PR 引用/缓存与外部副本
+仍需独立处理，不能把分支清理描述为互联网副本清除。发布产物修复与功能发行继续。
+
 用户授权通用候选 tag 约束与偏好，并为指定 target 在私有运行配置中启用。
 分支 `codex/candidate-tag-preferences`；deploy 分支 `codex/bot2-tag-preferences`。
 旧有 `config/.current-config` 与 `src/version.ts` 改动保留，不提交。

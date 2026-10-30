@@ -136,6 +136,10 @@ its semantics and governance rules live in the [candidate-supply RFC](../archite
 
 #### `candidateSelection`: required tags and bounded preferences
 
+Live topics, required/preferred tags and aliases belong in private runtime
+configuration. The examples below are fictional; do not publish real values,
+configuration diffs or mappings in public repositories, PRs or release notes.
+
 Optional per-target policy shared by illustrations and novels:
 
 ```json

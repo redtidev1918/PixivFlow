@@ -136,6 +136,9 @@ target 级 `topicProfile`（`primary` / `related` / `strategy.freshnessWeight` /
 
 #### `candidateSelection`：必需 tag 与有限偏好
 
+真实业务主题、必需/偏好 tag 和别名属于私有运行配置。下面只用中性示例说明语义；
+不要把生产配置、其差异或原值映射粘贴到公开仓库、PR 或发布说明。
+
 这是通用的 per-target 配置，插画与小说共用，不绑定 Bot 或具体主题。
 
 ```json

@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.10.0](https://github.com/redtidev1918/PixivFlow/compare/v3.9.1...v3.10.0) (2026-10-30)
+
+
+### Features
+
+* **selection:** 通用主主题约束与 tag 偏好加分 ([#232](https://github.com/redtidev1918/PixivFlow/issues/232)) ([61a6ed7](https://github.com/redtidev1918/PixivFlow/commit/61a6ed722ed8e6f4733801bc824cbc9a684c8c9a))
+
 ## [3.9.1](https://github.com/redtidev1918/PixivFlow/compare/v3.9.0...v3.9.1) (2026-10-29)
 
 

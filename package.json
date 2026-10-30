@@ -86,7 +86,10 @@
     "versions:unpublish-old": "./scripts/manage-versions.sh unpublish-old",
     "versions:unpublish-all-but-latest": "./scripts/manage-versions.sh unpublish-old 1",
     "tags:cleanup": "./scripts/cleanup-github-tags.sh",
-    "tags:cleanup:dry-run": "./scripts/cleanup-github-tags.sh --dry-run"
+    "tags:cleanup:dry-run": "./scripts/cleanup-github-tags.sh --dry-run",
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "vitepress build docs",
+    "docs:preview": "vitepress preview docs"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",
@@ -101,7 +104,8 @@
     "nodemon": "^3.1.14",
     "npm-run-all": "^4.1.5",
     "ts-jest": "^29.4.12",
-    "typescript": "^5.6.2"
+    "typescript": "^5.6.2",
+    "vitepress": "1.6.4"
   },
   "overrides": {
     "glob": "^10.3.10",

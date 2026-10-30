@@ -1,3 +1,5 @@
+::: v-pre
+
 # Docker 部署指南
 
 在服务器或 NAS 上运行 PixivFlow，可以用 Docker Compose 管理进程、配置和数据目录。本文命令使用 Compose V2（`docker compose`）。电脑上的 npm 安装见 [快速开始](QUICKSTART.md)。
@@ -154,7 +156,7 @@ docker compose up -d pixivflow-webui
 
 由于 `depends_on: condition: service_healthy`，这条命令会同时拉起 `pixivflow` 并等待其健康后才启动 WebUI 容器。只要 WebUI 不想被定时服务捆绑，可在 `docker-compose.yml` 中删除这段 `depends_on`。
 
-浏览器访问 <http://localhost:3000>。更换宿主机端口的两种方式：
+浏览器访问 `http://localhost:3000`。更换宿主机端口的两种方式：
 
 ```bash
 # 方式一：编辑 .env 后重建容器
@@ -366,3 +368,5 @@ CPU/内存限制的注释模板位于 `docker-compose.yml` 的 `deploy.resources
 - [配置手册](./CONFIG.md) — 配置文件全部字段与网络代理
 - [使用指南](./USAGE.md) — 下载模式与全部子命令
 - [README](https://github.com/redtidev1918/PixivFlow) — 项目概览与文档索引
+
+:::

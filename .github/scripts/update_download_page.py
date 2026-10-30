@@ -1,5 +1,5 @@
 # docsite-managed-file: update_download_page.py
-# docsite-managed-version: 3
+# docsite-managed-version: 4
 # docsite: managed file, run `python3 docsite.py update` to refresh.
 """Generate download page(s) from a GitHub release.
 
@@ -19,6 +19,7 @@ Outputs and languages come from the config file, not hardcoded code:
     {
       "displayName": "TelePost",            # page title; default: repo name
       "previewFile": "docs/download-preview.md",   # hand-written snippet, injected into the first language
+      "previewFiles": {"en": "docs/en/download-preview.md"},  # optional per-language snippets
       "linkBase": "",                       # site path prefix when docs/ is NOT the site root, e.g. "/docs"
       "languages": ["zh", "en"],            # which pages to render (default ["zh", "en"])
       "outputs": {                          # per-language output paths (defaults shown)
@@ -58,22 +59,22 @@ MARKER_TAG = "docsite-release-tag"
 
 LANGS = {
     "zh": {
-        "title": lambda display: f"# 📥 下载 {display}",
+        "title": lambda display: f"# 下载 {display}",
         "lang_line": lambda base: f"**语言 / Language:** 中文 · [English]({base}/en/download.md)",
-        "auto_note": "本页由 GitHub Actions 在每次发版时**自动更新**，始终指向最新 Release。",
+        "auto_note": "本页由 GitHub Actions 根据发布资产生成。若页面尚未更新，请到 Releases 查看最新版本。",
         "latest_head": lambda tag, date: f"## 最新版本：`{tag}`（{date}）",
-        "release_link": lambda url: f"👉 [查看 Release 说明与校验和]({url})",
+        "release_link": lambda url: f"[查看 Release 说明与校验和]({url})",
         "table_head": "| 平台 | 文件 | 大小 | 下载 |",
         "download_word": "下载",
         "no_assets": "> 本仓库没有附带二进制资产；安装方式见文档。",
     },
     "en": {
-        "title": lambda display: f"# 📥 Download {display}",
+        "title": lambda display: f"# Download {display}",
         "lang_line": lambda base: f"**Language / 语言:** [中文]({base}/download.md) · English",
-        "auto_note": "This page is **generated automatically** by GitHub Actions on every release "
-        "and always points at the latest one.",
+        "auto_note": "GitHub Actions generates this page from release assets. "
+        "If the page has not been updated yet, check Releases for the latest version.",
         "latest_head": lambda tag, date: f"## Latest version: `{tag}` ({date})",
-        "release_link": lambda url: f"👉 [Release notes and checksums]({url})",
+        "release_link": lambda url: f"[Release notes and checksums]({url})",
         "table_head": "| Platform | File | Size | Download |",
         "download_word": "Download",
         "no_assets": "> This repository ships no binary assets; see the docs for installation.",
@@ -166,7 +167,7 @@ def render_page(lang: str, display: str, base: str, payload: dict,
              text["lang_line"](base), "",
              f"<!-- docsite: generated from {cfg['repo']} release {tag}; do not edit by hand -->",
              "",
-             text["auto_note"], "",
+             text["auto_note"] + f" [Releases](https://github.com/{cfg['repo']}/releases)", "",
              text["latest_head"](tag, published), "",
              text["release_link"](rel_url), ""]
 
@@ -176,6 +177,8 @@ def render_page(lang: str, display: str, base: str, payload: dict,
     rows = []
     for a in payload.get("assets", []):
         os_name, arch = platform_of(a["name"])
+        if lang == "en":
+            os_name = EN_OS.get(os_name, os_name)
         size = a.get("size", 0)
         size_s = f"{size / 1048576:.1f} MB" if size >= 1048576 else f"{size / 1024:.0f} KB"
         rows.append((os_name, arch, a["name"], size_s, a["browser_download_url"]))
@@ -184,7 +187,7 @@ def render_page(lang: str, display: str, base: str, payload: dict,
     if rows:
         lines += [text["table_head"], "|---|---|---|---|"]
         lines += [f"| {os_name + (f' · {arch}' if arch else '')} | `{fn}` | {size_s} "
-                  f"| [⬇️ {text['download_word']}]({url}) |" for os_name, arch, fn, size_s, url in rows]
+                  f"| [{text['download_word']}]({url}) |" for os_name, arch, fn, size_s, url in rows]
     else:
         lines += [text["no_assets"]]
     lines.append("")
@@ -204,6 +207,7 @@ def load_config(path: Path, repo: str) -> dict:
     project = repo.split("/")[1]
     cfg["displayName"] = data.get("displayName") or project
     cfg["previewFile"] = data.get("previewFile") or PREVIEW_DEFAULT
+    cfg["previewFiles"] = data.get("previewFiles") or {}
     cfg["linkBase"] = (data.get("linkBase") or "").rstrip("/")
     cfg["languages"] = data.get("languages") or ["zh", "en"]
     cfg["outputs"] = data.get("outputs") or {"zh": "docs/download.md", "en": "docs/en/download.md"}
@@ -277,10 +281,14 @@ def cmd_render(args) -> int:
             continue
         if not guard_stale_write(path, payload, cfg, args.force):
             continue
+        language_preview = preview if lang == first_lang else None
+        language_preview_path = cfg["previewFiles"].get(lang)
+        if language_preview_path:
+            language_preview = Path(language_preview_path).read_text(encoding="utf-8").strip()
         body = render_page(lang, cfg["displayName"], cfg["linkBase"], payload,
-                           preview if lang == first_lang else None, cfg)
+                           language_preview, cfg)
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(body, encoding="utf-8")
+        path.write_text(body, encoding="utf-8", newline="")
         print(f"wrote {path} <- {repo} {tag}")
         wrote += 1
     print(f"download page(s) written for {repo} {tag} ({wrote} page(s))")

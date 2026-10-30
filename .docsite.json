@@ -1,0 +1,11 @@
+{
+  "repo": "redtidev1918/PixivFlow",
+  "name": "PixivFlow",
+  "emoji": "🎨",
+  "description": "Pixiv 下载、筛选与自动收集工具",
+  "branch": "master",
+  "engine": "vitepress",
+  "engineVersion": "1.6.4",
+  "version": 2,
+  "packageMode": "merge"
+}

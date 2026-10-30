@@ -1,3 +1,5 @@
+::: v-pre
+
 # Docker deployment
 
 Language: [中文](../DOCKER.md) · English
@@ -194,3 +196,5 @@ curl http://localhost:${WEBUI_PORT:-3000}/api/health
 ```
 
 Related: [Configuration](CONFIG.md), [Usage](USAGE.md), [WebUI](WEBUI.md), [Apprise](APPRISE.md).
+
+:::

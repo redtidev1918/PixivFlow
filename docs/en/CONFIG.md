@@ -1,3 +1,5 @@
+::: v-pre
+
 # Configuration Reference
 
 Language: [中文](../CONFIG.md) · English
@@ -951,3 +953,5 @@ Combined with the scheduler, targets like "yesterday's daily ranking" need no da
 - [LOGIN](LOGIN.md) — where the refreshToken comes from
 - [DOCKER](DOCKER.md) — environment variables vs. containers
 - [../config/examples/](https://github.com/redtidev1918/PixivFlow/tree/master/config/examples) — official example config collection
+
+:::

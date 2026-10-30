@@ -32,7 +32,7 @@ PixivFlow 可以将作品发给网关，由网关调用 QQ、飞书或其他平�
 }
 ```
 
-这个例子保留投递后的文件。`reference` 要求网关能读取 PixivFlow 的文件；跨机器投递可选 `base64`，限制见下文。鉴权和多个投递目标见 [完整配置示例](../config/examples/standalone.config.multi-delivery.json)。
+这个例子保留投递后的文件。`reference` 要求网关能读取 PixivFlow 的文件；跨机器投递可选 `base64`，限制见下文。鉴权和多个投递目标见 [完整配置示例](https://github.com/redtidev1918/PixivFlow/blob/master/config/examples/standalone.config.multi-delivery.json)。
 
 ```bash
 pixivflow config validate
@@ -280,7 +280,7 @@ GET  /health       你 → NapCat: POST /get_status（判 data.online !== false 
 - **幂等**：`retcode 0` 之后的重试**不要重发** —— 用 `idempotencyKey` 在你自己这侧短路返回
   `duplicate_existing`。
 
-这一节的**可运行实例**是 [`examples/onebot-adapter/`](../examples/onebot-adapter/README.md)：
+这一节的**可运行实例**是 [`examples/onebot-adapter/`](https://github.com/redtidev1918/PixivFlow/blob/master/examples/onebot-adapter/README.md)：
 零依赖、带 `--selftest`，段构造与 ACK 映射逐条写死，可以直接拿来跑，也可以当作自己写适配器时的对照物。
 它同样不实现 QQ 协议、不做扫码 —— 扫码仍在 NapCat 自己的面板里。
 
@@ -382,7 +382,7 @@ WebUI 的只读投影：`GET /api/gateways`、`GET /api/gateways/:name/pairing`�
 - **[Gateway Contract v1](GATEWAY_CONTRACT.md)** —— 规范：端点、消息 schema、响应词汇表、
   配对 schema、错误码。本文档是「怎么写」，那份是「长什么样」。**两者冲突时以那份为准**，
   因为它由 `src/delivery/gatewayContract.ts` 和测试逐行钉住。
-- **[`examples/gateway/`](../examples/gateway/README.md)** —— 零依赖参考网关，实现全部三个端点
+- **[`examples/gateway/`](https://github.com/redtidev1918/PixivFlow/blob/master/examples/gateway/README.md)** —— 零依赖参考网关，实现全部三个端点
   并把收到的消息打印出来。它是「协议本身通不通」的最小验证物，**不是** QQ 适配器；
   写真正的适配器之前先把契约跑通。
 
@@ -391,7 +391,7 @@ node examples/gateway/server.mjs --selftest   # 契约自检
 node examples/gateway/server.mjs              # 起服务，默认 127.0.0.1:8790
 ```
 
-- **[`examples/onebot-adapter/`](../examples/onebot-adapter/README.md)** —— 零依赖的 OneBot v11
+- **[`examples/onebot-adapter/`](https://github.com/redtidev1918/PixivFlow/blob/master/examples/onebot-adapter/README.md)** —— 零依赖的 OneBot v11
   适配器实例（§5.3 的可运行版本）：把契约翻译成 `send_group_msg` / `upload_group_file`，
   并把 OneBot 的 `retcode` 翻译回契约词汇。**它不实现 QQ 协议、不做扫码**，QQ 会话仍属于 NapCat。
 

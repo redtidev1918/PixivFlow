@@ -33,6 +33,10 @@ jobs:
         uses: actions/checkout@v7
       - name: Setup Pages
         uses: actions/configure-pages@v6
+      - name: Verify pinned documentation runtime
+        run: |
+          (cd docs/assets/vendor && sha256sum -c SOURCES.sha256)
+          node --check docs/assets/vendor/docsify.min.js
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v5
         with:

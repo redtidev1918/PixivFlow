@@ -1,5 +1,12 @@
 # AGENTS.md —— 本仓库是「Pixiv 执行平面」
 
+## 公开仓库的业务隐私
+
+真实运行中的主题、必需/偏好 tag、别名和可推断主题的 target 昵称是私有配置。
+不得写入公开源码、示例、测试夹具、文档、PR 或发布说明；使用互不映射真实业务的
+中性虚构数据。运行配置留在私有卷或 gitignored `*.private.json`，不导出回公开仓库。
+历史清理后的旧克隆不得直接推送；先从清理后的远端重新克隆或迁移补丁。
+
 这份文件写给任何进入本仓库的智能体或工程师。跨仓库的职责与执行纪律的唯一权威在：
 
 * `pixivflow-telepost-deploy/AGENTS.md`（PixivFlow Ecosystem Agent Operating Contract）

@@ -58,6 +58,13 @@ score = recall × specificity × suggestionWeight × genericPenalty
 2. `seedTier: "on"`：在热度之前插入一层**硬层级**——带主题 Tag 的作品永远排在只带相关 Tag 的作品之前，无论后者多热；同层内再按热度。这样即使某个同级相关 Tag（例如抓 `主题甲` 时空间里的 `主题乙`）当天有一个爆款，也不会把主题本身的作品挤出 Top N。
 3. `relatedTags: "when_seed_insufficient"` / `"never"`：本身即“主题优先”模式，会先只搜主题 Tag，只有填不满 `limit` 时才扩展，同样带硬层级。
 
+可选的 `candidateSelection` 在上述规则之上增加作品级约束：`requiredTags` 必须
+命中至少一个，`preferredTags` 只在通过准入后、同一 seed 层级内提供有限热度加分。
+加分公式为 `popularity × (1 + preferredTagBoost)`（默认 0.25，最多 1，不叠加）；
+不配置时保留以上纯热度行为。偏好不参与主题相关性门槛，不增加搜索词，不能把
+只与偏好相关的作品变成主题作品。字段、别名规则与待发池语义见
+[配置参考](CONFIG.md#candidateselection必需-tag-与有限偏好)。
+
 `weight` 参与相关性打分：一个作品命中多个相关 Tag 时按 `weight` 累加（单个 Tag 贡献封顶 0.6，总量封顶 0.6；命中 ≥2 个相关 Tag 才有全额系数）。**同一个 resolved Tag 在同一个作品上只计一次**——即使这个作品同时写了 Tag 名和它的 `translated_name`。
 
 ## 五、配置项

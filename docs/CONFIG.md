@@ -134,6 +134,37 @@ target 级 `topicProfile`（`primary` / `related` / `strategy.freshnessWeight` /
 `inventory.maxAgeDays` / `inventory.reserveSize` 等）是候选供给的高级覆盖，面向供给调优而非常规配置；
 语义与治理规则见 [候选供给 RFC](architecture/candidate-supply-rfc.md)。
 
+#### `candidateSelection`：必需 tag 与有限偏好
+
+真实业务主题、必需/偏好 tag 和别名属于私有运行配置。下面只用中性示例说明语义；
+不要把生产配置、其差异或原值映射粘贴到公开仓库、PR 或发布说明。
+
+这是通用的 per-target 配置，插画与小说共用，不绑定 Bot 或具体主题。
+
+```json
+{
+  "candidateSelection": {
+    "requiredTags": ["主主题", "主主题别名"],
+    "preferredTags": ["偏好主题"],
+    "preferredTagBoost": 0.25,
+    "matchTranslatedNames": false
+  }
+}
+```
+
+- `requiredTags`：非空时必须精确命中至少一个；别名显式列出。标题/简介不算命中。
+- `preferredTags`：只给已通过主题/必需 tag 筛选的作品加分，不新增搜索通道、不授予主题资格。
+- `preferredTagBoost`：0..1，默认 0.25；命中任一偏好时，排序热度乘以 `1 + boost`。
+  多个偏好或重复 tag 不叠加。例：热度 90 的偏好作品变为 112.5，可超过 100，仍低于 200。
+- `matchTranslatedNames`：默认 false；开启才读取作品 tag 译名。匹配先去首尾空白、
+  NFKC 和大小写归一，不做子串匹配。
+
+主 tag 的 `seedTier` 始终优先于偏好。搜索、lookback、重抓/恢复使用同一配置；
+待发池在每个最多 `reserveSize` 的最老候选批次内应用同一偏好，旧快照不符合硬约束时
+标为 filtered，并继续找下一批。下载 planner 对最新作品详情再次检查硬约束。
+缺省/空配置完全保留既有排序（待发池仍 FIFO）。偏好不能与 `random` 同时启用。
+日志显示 `rankScore` 与 `requiredTagFiltered`；候选报告记录 `required_tag_filtered`。
+
 #### `topicDiscovery.relatedTags`：相关 Tag 是否可以作为独立检索通道
 
 推导出的 Tag 空间是**有层级的**（主题词是操作者要的主题，其余 Tag 只是提示），不是一堆可互换的同级 Tag。默认 `always` 会每天把空间里每个 Tag 都当作一条检索通道，因此一个同级的高权重相关 Tag（例如抓 `主题甲` 时空间里的 `主题乙`）可能用自己当天的作品占满 `limit`：

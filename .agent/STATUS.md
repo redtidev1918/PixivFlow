@@ -1,5 +1,13 @@
 # 工程状态（PixivFlow）
 
+## 2026-10-30 通用候选 tag 约束与偏好（进行中）
+
+- 用户确认：主主题始终成立，偏好只在主主题内加分；要求通用能力与用户文档同步。
+- `candidateSelection` 复用 TopicPipeline / DownloadPlanner / CandidateInventoryRepository，
+  默认行为不变；细则见 DECISIONS D-11 与中英文 CONFIG、TAG_RANKING。
+- 定向测试通过；全量 app 151 suites / 1661 tests 通过，tsc 通过。
+  最终 npm test、PR/CI/发行/部署待完成；不能据此声称生产生效。
+
 ## 2026-10-30 业务隐私与历史清理
 
 用户授权三仓当前文件与 Git 历史匿名化；源码、夹具、示例与文档只保留虚构主题。

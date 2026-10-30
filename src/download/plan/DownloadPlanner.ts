@@ -6,6 +6,7 @@ import { isAIIllustration } from '../../utils/ai-detection';
 import { logger } from '../../logger';
 import type { IDatabase } from '../../interfaces/IDatabase';
 import type { CandidateSkip } from '../../scheduler/TargetOutcome';
+import { CandidateTagPolicy } from '../../topic/CandidateTagPolicy';
 
 export type DownloadItem = PixivIllust | PixivNovel;
 
@@ -133,7 +134,7 @@ export class DownloadPlanner {
       if (!ruleFiltered.has(id)) {
         // Excluded by the target's own rules (bookmarks/date/AI) — or a
         // repeated id inside the page. Both are candidate-level skips.
-        prefiltered.push({ code: 'filtered', workId: id, reason: 'excluded by target filters (bookmarks/date/AI)' });
+        prefiltered.push({ code: 'filtered', workId: id, reason: 'excluded by target filters (bookmarks/date/AI/tags)' });
       }
     }
 
@@ -222,6 +223,11 @@ export class DownloadPlanner {
       }
     }
 
+    const tagPolicy = new CandidateTagPolicy(target.candidateSelection);
+    // TopicPipeline already ordered its candidates with seed tiers intact.
+    if (target.mode !== 'topic' && tagPolicy.hasPreference && !target.random) {
+      available.sort((a, b) => tagPolicy.compare(a, b));
+    }
     const limit = target.limit && target.limit > 0 ? target.limit : 10;
     // How many candidates this run may ATTEMPT. Distinct from `limit`, which is
     // how many it may PRODUCE. A scheduled one-post-per-slot target has
@@ -295,6 +301,8 @@ export class DownloadPlanner {
   ): FilterResult<T> {
     let filtered = [...items];
     const originalCount = filtered.length;
+    const policy = new CandidateTagPolicy(target.candidateSelection);
+    filtered = filtered.filter(item => policy.accepts(item));
 
     if (target.minBookmarks !== undefined) {
       const beforeCount = filtered.length;

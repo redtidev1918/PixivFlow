@@ -53,4 +53,19 @@ describe('CandidateInventoryRepository', () => {
       expect(repo.claimNext({ topic, targetId, reserveSize: 5, date: '2026-09-18' })).toBeNull();
     });
   });
+
+  it('applies hard tags to historical batches and soft preference before durable claim', async () => {
+    await withDb(async db => {
+      const repo = db.candidateInventory;
+      const base = { workType: 'illustration' as const, topic: 'main', targetId: 'generic', date: '2026-09-18', maxAgeDays: 30 };
+      for (const [id, tags, bookmarks] of [[1, ['accent'], 10000], [2, ['accent'], 10000], [3, ['main'], 100], [4, ['main', 'accent'], 90]] as const) {
+        repo.upsert({ ...base, pixivId: String(id), snapshot: { id, tags: tags.map(name => ({ name })), total_bookmarks: bookmarks } });
+      }
+      const input = { topic: base.topic, targetId: base.targetId, date: base.date, reserveSize: 2, selection: { requiredTags: ['main'], preferredTags: ['accent'], preferredTagBoost: 0.25 } };
+      expect(repo.claimNext(input)?.pixivId).toBe('4');
+      expect(repo.claimNext(input)?.pixivId).toBe('3');
+      expect(repo.claimNext(input)).toBeNull();
+      expect(repo.pendingSummary(base.topic, base.targetId).count).toBe(0);
+    });
+  });
 });

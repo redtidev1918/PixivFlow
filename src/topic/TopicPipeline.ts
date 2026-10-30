@@ -6,6 +6,7 @@ import { isAIIllustration } from '../utils/ai-detection';
 import { PaginationError, rethrowIfCancelled, throwIfAborted } from '../utils/errors';
 import type { TargetConfig } from '../config';
 import type { TopicResolver } from './TopicResolver';
+import { CandidateTagPolicy } from './CandidateTagPolicy';
 import type {
   RelatedTagMode,
   ResolvedTag,
@@ -44,6 +45,8 @@ export interface TopicSelection {
   aiExcludedCount: number;
   /** Works seen more than once across the topic tag space (recorded, dropped). */
   duplicateRemovedCount: number;
+  /** Rejected by the target's explicit required tag admission rule. */
+  tagFilteredCount?: number;
 }
 
 /** Normalization shared by the tag-relation filter and the pipeline itself. */
@@ -198,9 +201,11 @@ export class TopicPipeline {
       requestedMode === 'when_seed_insufficient' || requestedMode === 'never' ? requestedMode : 'always';
 
     const byId = new Map<number, { work: T; candidate: TopicCandidate }>();
+    const policy = new CandidateTagPolicy(target.candidateSelection);
     let rawCount = 0;
     let aiExcludedCount = 0;
     let duplicateRemovedCount = 0;
+    let tagFilteredCount = 0;
     const seedKey = this.key(topic);
     // §tag-provenance: apply tagRelations where the walked list is built, so the
     // filter governs seedTags/relatedTags BEFORE any search is issued. The seed
@@ -234,6 +239,7 @@ export class TopicPipeline {
           duplicateRemovedCount += 1;
           continue;
         }
+        if (!policy.accepts(work)) { tagFilteredCount += 1; continue; }
         byId.set(work.id, { work, candidate: this.toCandidate(work, contentType) });
         if (byId.size >= maxCandidates) break;
       }
@@ -260,7 +266,7 @@ export class TopicPipeline {
       await runTags(recallChannels(walked, seedKey, relatedMode).map((t) => t.name));
     } else {
       await runTags(seedTags);
-      const seedAccepted = this.acceptedWorks(byId, seedKey, tagScores, minMetadataScore, limit, contentType, matchTranslatedNames).length;
+      const seedAccepted = this.acceptedWorks(byId, seedKey, tagScores, minMetadataScore, limit, contentType, matchTranslatedNames, policy).length;
       if (relatedMode === 'never') {
         logger.info('[TopicRecall] mode=never tag=' + topic + ' day=' + day + ' accepted=' + seedAccepted);
       } else if (seedAccepted < limit) {
@@ -274,12 +280,12 @@ export class TopicPipeline {
     const dedupedCount = byId.size;
     logger.info('[TopicCollector] type=' + contentType + ' raw=' + rawCount + ' deduplicated=' + dedupedCount + ' aiExcluded=' + aiExcludedCount + ' searchedTags=' + searchedTags.length);
 
-    const accepted = this.acceptedWorks(byId, seedKey, tagScores, minMetadataScore, limit, contentType, matchTranslatedNames);
-    const chosen = this.topByPopularity(accepted, limit, hardSeedTier ? seedKey : undefined);
+    const accepted = this.acceptedWorks(byId, seedKey, tagScores, minMetadataScore, limit, contentType, matchTranslatedNames, policy);
+    const chosen = this.topByPopularity(accepted, limit, hardSeedTier ? seedKey : undefined, policy);
     const selected = chosen.map((e) => e.candidate);
     logger.info('[MetadataTopicFilter] accepted=' + accepted.length);
     if (selected[0]) {
-      logger.info('[PopularityRanker] selected=' + selected[0].id + ' popularity=' + selected[0].popularity.toFixed(1) + ' meta=' + selected[0].metadataScore.toFixed(2) + (hardSeedTier ? ' seedTier=on' : '') + ' title=' + selected[0].title);
+      logger.info('[PopularityRanker] selected=' + selected[0].id + ' popularity=' + selected[0].popularity.toFixed(1) + ' rankScore=' + policy.score(selected[0]).toFixed(1) + ' meta=' + selected[0].metadataScore.toFixed(2) + ' requiredTagFiltered=' + tagFilteredCount + (hardSeedTier ? ' seedTier=on' : '') + ' title=' + selected[0].title);
     }
 
     return {
@@ -294,6 +300,7 @@ export class TopicPipeline {
         acceptedCount: accepted.length,
         aiExcludedCount,
         duplicateRemovedCount,
+        tagFilteredCount,
       },
     };
   }
@@ -359,7 +366,8 @@ export class TopicPipeline {
     minMetadataScore: number,
     limit: number,
     contentType: TopicContentType,
-    matchTranslatedNames: boolean
+    matchTranslatedNames: boolean,
+    policy: CandidateTagPolicy
   ): Array<{ work: T; candidate: TopicCandidate }> {
     const accepted: Array<{ work: T; candidate: TopicCandidate }> = [];
     const hitsSeed = (candidate: TopicCandidate): boolean => {
@@ -374,7 +382,7 @@ export class TopicPipeline {
     if (accepted.length === 0 && byId.size > 0) {
       const fallback = [...byId.values()]
         .filter((e) => hitsSeed(e.candidate))
-        .sort((a, b) => b.candidate.popularity - a.candidate.popularity);
+        .sort((a, b) => policy.compare(a.candidate, b.candidate));
       accepted.push(...fallback.slice(0, Math.max(limit, 1)));
       logger.warn('[MetadataTopicFilter] type=' + contentType + ' none above threshold ' + minMetadataScore + '; kept ' + accepted.length + ' seed-tag fallback');
     }
@@ -450,10 +458,11 @@ export class TopicPipeline {
 
 
   /**
-   * Ranking is PURELY by local popularity (calculatePopularityScore). Metadata
+   * Default ranking is purely by local popularity (calculatePopularityScore). Metadata
    * relevance is only a gate: once a work clears minMetadataScore it is accepted
    * as on-topic, and the choice between accepted works is decided by popularity
-   * alone. A work with a higher metadata score does NOT outrank a more popular
+   * alone. Optional candidateSelection preferences add a bounded popularity
+   * multiplier within each seed tier, never topic admission. A higher metadata score does NOT outrank a more popular
    * accepted work.
    *
    * `seedKey` adds a single tier in front of that popularity order and is
@@ -468,22 +477,23 @@ export class TopicPipeline {
     return b.popularity - a.popularity;
   }
 
-  private rankCompare(seedKey: string | undefined) {
-    if (!seedKey) return (a: TopicCandidate, b: TopicCandidate) => this.popCompare(a, b);
+  private rankCompare(seedKey: string | undefined, policy: CandidateTagPolicy) {
+    if (!seedKey) return (a: TopicCandidate, b: TopicCandidate) => policy.compare(a, b);
     const tier = (c: TopicCandidate) => (c.tags.some((t) => this.key(t) === seedKey) ? 0 : 1);
     return (a: TopicCandidate, b: TopicCandidate) => {
       const diff = tier(a) - tier(b);
-      return diff !== 0 ? diff : this.popCompare(a, b);
+      return diff !== 0 ? diff : policy.compare(a, b);
     };
   }
 
   private topByPopularity<T>(
     items: Array<{ work: T; candidate: TopicCandidate }>,
     limit: number,
-    seedKey?: string
+    seedKey: string | undefined,
+    policy: CandidateTagPolicy
   ) {
-    if (items.length <= limit) return items.sort((a, b) => this.rankCompare(seedKey)(a.candidate, b.candidate));
-    if (seedKey) return items.sort((a, b) => this.rankCompare(seedKey)(a.candidate, b.candidate)).slice(0, limit);
+    if (items.length <= limit) return items.sort((a, b) => this.rankCompare(seedKey, policy)(a.candidate, b.candidate));
+    if (seedKey || policy.hasPreference) return items.sort((a, b) => this.rankCompare(seedKey, policy)(a.candidate, b.candidate)).slice(0, limit);
     // O(n) top-`limit` selection (limit is tiny, e.g. 1); avoids a full sort.
     const top: Array<{ work: T; candidate: TopicCandidate }> = [];
     for (const item of items) {

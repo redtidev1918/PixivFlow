@@ -6,8 +6,8 @@
 
 | ID | 任务 | 状态 | 证据 |
 | --- | --- | --- | --- |
-| P-23 | 通用 requiredTags + preferredTags 有界加分，共享搜索/待发池/planner | IN_PROGRESS | CandidateTagPolicy / CandidateSelection.test.ts / candidateInventoryRepo.test.ts；D-11 |
-| P-24 | 用户文档、PR/CI/发行与生产配置同步 | IN_PROGRESS | CONFIG 中英文 / TAG_RANKING；deploy bot2 target 配置，尚未上线 |
+| P-23 | 通用 requiredTags + preferredTags 有界加分，共享搜索/待发池/planner | DONE | #232/#233；CandidateTagPolicy / CandidateSelection.test.ts / candidateInventoryRepo.test.ts；D-11 |
+| P-24 | 用户文档、PR/CI/发行与生产配置同步 | DONE | CONFIG 中英文 / TAG_RANKING；deploy #287 + 私有配置原子更新、回读、应用配置代次验证；生产事实见 deploy current-state |
 
 ## 本轮（2026-10-29 Markdown 正式导出）
 

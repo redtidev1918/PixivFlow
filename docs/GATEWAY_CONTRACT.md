@@ -1,3 +1,5 @@
+::: v-pre
+
 # Gateway Contract v1
 
 > 这份文档是**规范**：它定义一个外部网关必须实现什么，PixivFlow 就会怎么和它对话。
@@ -328,8 +330,8 @@ WebUI 暴露的、与网关相关的错误码：
 
 ## 相关文档
 
-- [`examples/gateway/`](../examples/gateway/README.md) —— 本文档的零依赖参考实现（`server.mjs`），被测试直接启动验证
-- [`examples/onebot-adapter/`](../examples/onebot-adapter/README.md) —— 零依赖的 OneBot v11 适配器实例（QQ 场景）：契约消息 → OneBot 消息段，OneBot `retcode` → 契约 ACK 词；不实现 QQ 协议、不做扫码
+- [`examples/gateway/`](https://github.com/redtidev1918/PixivFlow/blob/master/examples/gateway/README.md) —— 本文档的零依赖参考实现（`server.mjs`），被测试直接启动验证
+- [`examples/onebot-adapter/`](https://github.com/redtidev1918/PixivFlow/blob/master/examples/onebot-adapter/README.md) —— 零依赖的 OneBot v11 适配器实例（QQ 场景）：契约消息 → OneBot 消息段，OneBot `retcode` → 契约 ACK 词；不实现 QQ 协议、不做扫码
 - [GATEWAY.md](GATEWAY.md) —— 面向网关作者的实现指南与配置样例
 - [delivery-runtime.md](architecture/delivery-runtime.md) —— PixivFlow 侧的投递运行时
 - [API.md](API.md) —— 只读投影端点（`/api/gateways`、`/api/deliveries`）
@@ -348,3 +350,4 @@ WebUI 暴露的、与网关相关的错误码：
 
 第三层是「外部系统能否作为网关接入」这个产品主张唯一的直接证据：前两层各自的替身都无法反驳自己。
 
+:::

@@ -2,7 +2,7 @@
 
 [English](./en/PIXIV_CLIENT_KIT.md) | **中文**
 
-Pixiv 协议 / 网络层代码是一个独立的内置 npm 工作区包，位于 [`packages/pixiv-client`](../packages/pixiv-client)。PixivFlow 是该 kit 的使用方；kit 对 PixivFlow 一无所知。
+Pixiv 协议 / 网络层代码是一个独立的内置 npm 工作区包，位于 [`packages/pixiv-client`](https://github.com/redtidev1918/PixivFlow/blob/master/packages/pixiv-client)。PixivFlow 是该 kit 的使用方；kit 对 PixivFlow 一无所知。
 
 > 该 kit **尚未**拆分为独立的 GitHub 仓库 —— 见
 > [何时拆分到独立仓库](#何时拆分到独立仓库)。

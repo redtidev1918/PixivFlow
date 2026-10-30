@@ -1,0 +1,55 @@
+# docsite: managed file, run `python3 docsite.py update` to refresh.
+# VitePress 构建 + GitHub Pages 部署(引擎迁移 D-009 后的标准形态)。
+# actions 版本由本模板统一维护(当前:checkout v7 / setup-node v6 /
+# configure-pages v6 / upload-pages-artifact v5 / deploy-pages v5)。
+# 升级只改这里,再由 update 下发;依赖版本锁在根 package-lock.json(npm ci)。
+
+name: Deploy docs to Pages
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+    paths:
+      - 'docs/**'
+      - '.github/workflows/docs.yml'
+      - 'package.json'
+      - 'package-lock.json'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+      - name: Setup Pages
+        uses: actions/configure-pages@v6
+      - name: Install dependencies
+        run: npm ci
+      - name: Build docs
+        run: npm run docs:build
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: './docs/.vitepress/dist'
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

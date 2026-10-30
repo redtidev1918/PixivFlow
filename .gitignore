@@ -295,3 +295,7 @@ config/*.tag-apply.bak
 **/*.tag-apply.bak
 
 docs/ADD_GITHUB_PAGES_LINK.md
+
+node_modules/
+docs/.vitepress/dist/
+docs/.vitepress/cache/

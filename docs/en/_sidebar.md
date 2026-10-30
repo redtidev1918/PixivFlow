@@ -14,6 +14,5 @@
   - [Architecture](/en/ARCHITECTURE.md)
   - [WebUI API](/en/API.md)
   - [Pixiv Client Kit](/en/PIXIV_CLIENT_KIT.md)
-  - [中文](/)
 
 > User-facing guides and the architecture overview are bilingual. Detailed internal design documents and RFCs may remain Chinese-only.

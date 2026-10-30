@@ -1,3 +1,5 @@
+::: v-pre
+
 # Delivery Runtime（内容投递平面）
 
 本文档描述 PixivFlow **当前真实实现**的内容投递架构：一个作品如何从下载完成，
@@ -485,7 +487,7 @@ Gateway，Apprise 等），它们才是平台适配的归属地；重复实现�
 | P6 | **网关契约固化**：[GATEWAY_CONTRACT.md](../GATEWAY_CONTRACT.md)（规范）+ `src/delivery/gatewayContract.ts`（可执行形式）+ 零依赖参考实现 `examples/gateway/`，三者由 `gateway-contract.test.ts` 逐行钉住 | 已完成 |
 | P3c | 原生 OneBot v11 Connector | **明确不实现**（与「平台生态交给网关」冲突，见下方决定） |
 | P7 | 一致性与可靠性收口：投稿必带 `idempotency_key`（缺省自动补齐）+ 能力字段名以 `TargetCapabilities` 为唯一来源（未知键 warning）+ `success` 明确不参与判定（判定只看 ACK）+ `type: "telegram"` 标记废弃 | **已实现**（`src/delivery/HttpMultipartDelivery.ts`、`src/delivery/capabilities.ts`、`idempotency-key-field.test.ts`） |
-| P8 | QQ 场景的**可运行适配器示例**（[`examples/onebot-adapter/`](../../examples/onebot-adapter/README.md)）：零依赖、`--selftest` 自检、契约 `message.parts` → OneBot v11 消息段、OneBot `retcode` → 契约 ACK 词；与 `examples/gateway/` 互补（一个证明契约通不通，一个证明平台映射写对没有） | **已实现**（`onebot-adapter-e2e.test.ts` 用**真实**投递运行时驱动它打到假 OneBot API） |
+| P8 | QQ 场景的**可运行适配器示例**（[`examples/onebot-adapter/`](https://github.com/redtidev1918/PixivFlow/blob/master/examples/onebot-adapter/README.md)）：零依赖、`--selftest` 自检、契约 `message.parts` → OneBot v11 消息段、OneBot `retcode` → 契约 ACK 词；与 `examples/gateway/` 互补（一个证明契约通不通，一个证明平台映射写对没有） | **已实现**（`onebot-adapter-e2e.test.ts` 用**真实**投递运行时驱动它打到假 OneBot API） |
 
 补充：P1 / P2 / P3a / P3b 都**未新增 deliveries/outbox 的任何表或列**。扇出完全落在既有的
 `(delivery_target, work_type, pixiv_id)` 去重域与 `outbox.delivery_target` 上；Content 模型
@@ -505,7 +507,7 @@ type，现已**取消**。PixivFlow 的定位是 **Messaging Gateway Client**（
 `PixivFlow --webhook--> 你的网关 --OneBot v11--> NapCat/Lagrange --> QQ`：
 网关侧要做的三件事（按 `idempotencyKey` 去重、把 `message.parts` 翻成消息段、
 把 `retcode` 映射成 ACK 状态词）已写成可直接照做的对接手册，并有一个**可运行实例**：
-[`examples/onebot-adapter/`](../../examples/onebot-adapter/README.md)。若将来确有需求，
+[`examples/onebot-adapter/`](https://github.com/redtidev1918/PixivFlow/blob/master/examples/onebot-adapter/README.md)。若将来确有需求，
 正确做法仍是把它做成**仓库外**的独立网关，而不是在 PixivFlow 里加协议实现。
 
 **`examples/onebot-adapter/` 不推翻上面的决定**：它和 `examples/gateway/` 一样，是**网关侧**的
@@ -519,7 +521,7 @@ QQ 会话仍属于 NapCat。`P3c`（PixivFlow 内置 `onebot` connector type）�
 
 - [外部网关投递指南](../GATEWAY.md) —— 面向网关实现者的对接手册（统一消息 JSON、HMAC 验签、ACK 契约、capability、QQ/OneBot 网关侧模式、排障命令）
 - [Gateway Contract v1](../GATEWAY_CONTRACT.md) —— 对外契约规范（端点、schema、响应词汇表、配对、错误码）
-- [`examples/gateway/`](../../examples/gateway/README.md) —— 契约的零依赖参考实现
+- [`examples/gateway/`](https://github.com/redtidev1918/PixivFlow/blob/master/examples/gateway/README.md) —— 契约的零依赖参考实现
 
 - [Principles（不变量与治理准则）](./principles.md)
 - [Operational Result Contract（终态原因/恢复语义）](./operational-result-contract.md)
@@ -528,3 +530,5 @@ QQ 会话仍属于 NapCat。`P3c`（PixivFlow 内置 `onebot` connector type）�
 - [CONFIG.md](../CONFIG.md)
 - [API.md](../API.md)
 - [OBSERVABILITY.md](../OBSERVABILITY.md)
+
+:::

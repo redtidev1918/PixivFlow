@@ -1,3 +1,5 @@
+::: v-pre
+
 # PixivFlow architecture
 
 Language: [中文](../ARCHITECTURE.md) · English
@@ -178,3 +180,5 @@ To add a command, extend `BaseCommand`, register it, declare rendering/long-runn
 Validate with focused regressions, `npx jest --silent --runInBand`, typecheck and required CI/package checks. Production behavior changes require test → PR → merge → release/artifact → deploy pin → runtime verification. Tests alone do not prove production rollout. Update stable architecture and dynamic deploy current-state documentation according to their ownership.
 
 Related: [API](API.md), [Configuration](CONFIG.md), [Login](LOGIN.md), [Frontend development guide](https://github.com/redtidev1918/pixivflow-webui/blob/master/docs/DEVELOPMENT_GUIDE.md).
+
+:::

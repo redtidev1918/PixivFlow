@@ -1,0 +1,46 @@
+name: Check documentation site
+
+on:
+  pull_request:
+    paths:
+      - 'docs/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.docsite.json'
+      - '.github/scripts/download-page.json'
+      - '.github/workflows/docs*.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run docs:build
+      - name: Checkout the pinned docsite generator
+        uses: actions/checkout@v7
+        with:
+          repository: redtidev1918/docsite
+          ref: db706b1c5d8de4caa02add9c5e2451e463dc85db
+          path: .docsite-tool
+          persist-credentials: false
+      - name: Check managed files and navigation
+        run: |
+          mkdir -p "$RUNNER_TEMP/docs-check"
+          cp -R docs .github .docsite.json .gitignore package.json package-lock.json "$RUNNER_TEMP/docs-check/"
+          python3 .docsite-tool/docsite.py check "$RUNNER_TEMP/docs-check"
+          python3 .docsite-tool/docsite.py navcheck "$RUNNER_TEMP/docs-check"
+      - name: Save the built site for review
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.0
+        with:
+          name: pixivflow-docs-preview
+          path: docs/.vitepress/dist
+          include-hidden-files: true

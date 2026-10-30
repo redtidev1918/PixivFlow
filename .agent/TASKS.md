@@ -2,6 +2,13 @@
 
 > 状态：TODO / IN_PROGRESS / DONE / DEFERRED / BLOCKED。每行带证据。
 
+## 本轮（2026-10-30 通用候选 tag 偏好）
+
+| ID | 任务 | 状态 | 证据 |
+| --- | --- | --- | --- |
+| P-23 | 通用 requiredTags + preferredTags 有界加分，共享搜索/待发池/planner | IN_PROGRESS | CandidateTagPolicy / CandidateSelection.test.ts / candidateInventoryRepo.test.ts；D-11 |
+| P-24 | 用户文档、PR/CI/发行与生产配置同步 | IN_PROGRESS | CONFIG 中英文 / TAG_RANKING；deploy bot2 target 配置，尚未上线 |
+
 ## 本轮（2026-10-29 Markdown 正式导出）
 
 | ID | 任务 | 状态 | 证据 |

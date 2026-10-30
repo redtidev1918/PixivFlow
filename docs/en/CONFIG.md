@@ -134,6 +134,35 @@ The target-level `topicProfile` (`primary` / `related` / `strategy.freshnessWeig
 `inventory.maxAgeDays` / `inventory.reserveSize`, etc.) is an advanced candidate-supply override, aimed at supply tuning rather than routine configuration;
 its semantics and governance rules live in the [candidate-supply RFC](../architecture/candidate-supply-rfc.md) (Chinese).
 
+#### `candidateSelection`: required tags and bounded preferences
+
+Optional per-target policy shared by illustrations and novels:
+
+```json
+{ "candidateSelection": {
+  "requiredTags": ["main-topic", "main-alias"],
+  "preferredTags": ["preferred-topic"],
+  "preferredTagBoost": 0.25,
+  "matchTranslatedNames": false
+} }
+```
+
+Non-empty `requiredTags` requires an exact match of **at least one** listed tag.
+Aliases must be explicit; title/caption text does not count. `preferredTags` never
+adds search channels or grants topic admission. It multiplies accepted candidates'
+popularity by `1 + preferredTagBoost` (0..1, default 0.25); multiple hits do not
+stack. A preferred score of 90 becomes 112.5, beating 100 but not 200. Seed tiers
+still take precedence. Names use trim/NFKC/case normalization; translations count
+only with `matchTranslatedNames: true`. There is no substring matching.
+
+Fresh search, lookback, refetch/recovery and inventory share this policy. Inventory
+ranks each oldest batch of at most `reserveSize` rows; historical snapshots failing
+the hard gate become filtered and the next batch is considered. The download
+planner rechecks current details. Absent/empty policy preserves existing ordering,
+including FIFO inventory. Preferences cannot be combined with `random` selection.
+Logs include `rankScore` and `requiredTagFiltered`; candidate reports expose
+`required_tag_filtered`.
+
 #### `topicDiscovery.relatedTags`: may related tags act as independent search channels
 
 The derived tag space is **hierarchical** (the topic word is what the operator wants; the other tags are only hints), not a set of interchangeable peers. The default `always` treats every tag in the space as a search channel each day, so a high-weight peer tag (e.g. `主题乙` in the space when collecting `主题甲`) may fill `limit` with its own works of the day:

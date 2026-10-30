@@ -297,6 +297,7 @@ export class IllustrationTargetHandler {
     report.reasons = [
       { code: 'duplicate', count: selection.duplicateRemovedCount },
       { code: 'ai_filtered', count: selection.aiExcludedCount },
+      { code: 'required_tag_filtered', count: selection.tagFilteredCount ?? 0 },
       { code: 'metadata_filtered', count: Math.max(0, selection.dedupedCount - selection.acceptedCount) },
     ].filter((r) => r.count > 0);
     this.supplyRep = mergeCandidateSupplyReports(this.supplyRep ?? undefined, report);
@@ -389,7 +390,7 @@ export class IllustrationTargetHandler {
     const targetId = inventoryTargetId(target);
     const repo = this.database.candidateInventory;
     while (true) {
-      const row = repo.claimNext({ topic, targetId, reserveSize: policy.reserveSize, date: getTodayDate() });
+      const row = repo.claimNext({ topic, targetId, reserveSize: policy.reserveSize, date: getTodayDate(), selection: target.candidateSelection });
       if (!row) break;
       const id = Number(row.pixivId);
       if (!Number.isFinite(id)) {

@@ -9,6 +9,7 @@
 export type {
   TargetType,
   TargetConfig,
+  CandidateSelectionConfig,
   DeliveryFieldValue,
   TargetDeliveryConfig,
   PixivCredentialConfig,

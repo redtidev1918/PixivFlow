@@ -292,6 +292,7 @@ export class NovelTargetHandler {
     report.rejected = Math.max(0, selection.rawCount - selection.acceptedCount);
     report.reasons = [
       { code: 'duplicate', count: selection.duplicateRemovedCount },
+      { code: 'required_tag_filtered', count: selection.tagFilteredCount ?? 0 },
       { code: 'metadata_filtered', count: Math.max(0, selection.dedupedCount - selection.acceptedCount) },
     ].filter((r) => r.count > 0);
     this.supplyRep = mergeCandidateSupplyReports(this.supplyRep ?? undefined, report);
@@ -388,7 +389,7 @@ export class NovelTargetHandler {
     const targetId = inventoryTargetId(target);
     const repo = this.database.candidateInventory;
     while (aggregate.downloaded < (target.limit || 1)) {
-      const row = repo.claimNext({ topic, targetId, reserveSize: policy.reserveSize, date: getTodayDate() });
+      const row = repo.claimNext({ topic, targetId, reserveSize: policy.reserveSize, date: getTodayDate(), selection: target.candidateSelection });
       if (!row) break;
       const id = Number(row.pixivId);
       if (!Number.isFinite(id)) {

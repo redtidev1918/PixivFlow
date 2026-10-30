@@ -77,6 +77,18 @@ export interface TopicDiscoveryConfig {
   matchTranslatedNames?: boolean;
 }
 
+/** Optional per-target tag admission and soft ranking preference. */
+export interface CandidateSelectionConfig {
+  /** Exact tag names; a candidate must match at least one when non-empty. */
+  requiredTags?: string[];
+  /** Soft preference only: never adds recall channels or grants topic admission. */
+  preferredTags?: string[];
+  /** One non-stacking popularity multiplier bonus, 0..1 (default 0.25). */
+  preferredTagBoost?: number;
+  /** Include translated tag names in exact matching (default false). */
+  matchTranslatedNames?: boolean;
+}
+
 /** Candidate collection tuning for mode='topic'. */
 export interface CandidateCollectionConfig {
   /** Max works fetched per related tag for the target day (default 40). */
@@ -277,6 +289,8 @@ export interface TargetConfig {
   /** Tunable discovery/collection knobs for mode='topic' (all optional). */
   topicDiscovery?: TopicDiscoveryConfig;
   candidateCollection?: CandidateCollectionConfig;
+  /** Optional hard tag admission and bounded soft preference, shared with inventory. */
+  candidateSelection?: CandidateSelectionConfig;
   /** Bounded fallback and notification policy for an empty result. */
   noMatchPolicy?: NoMatchPolicyConfig;
   /** Phase 4/5: topic supply profile + candidate inventory policy (all optional). */

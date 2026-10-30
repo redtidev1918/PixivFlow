@@ -1,4 +1,6 @@
 import { BaseRepository } from './BaseRepository';
+import type { CandidateSelectionConfig } from '../../config/types';
+import { CandidateTagPolicy } from '../../topic/CandidateTagPolicy';
 
 export type CandidateInventoryStatus = 'pending' | 'selected' | 'submitted' | 'filtered' | 'expired';
 
@@ -69,28 +71,45 @@ export class CandidateInventoryRepository extends BaseRepository {
     targetId: string;
     reserveSize: number;
     date: string;
+    selection?: CandidateSelectionConfig;
   }): CandidateInventoryRow | null {
-    const rows = this.db
-      .prepare(
-        `SELECT * FROM candidate_inventory
-         WHERE topic = ? AND target_id = ?
-           AND status = 'pending'
-           AND expires_at >= ?
-         ORDER BY first_seen_date ASC, seen_count ASC
-         LIMIT ?`
-      )
-      .all(input.topic, input.targetId, this.addDaysUtc(input.date, 0), input.reserveSize) as any[];
-    for (const row of rows) {
-      const updated = this.db
+    const policy = new CandidateTagPolicy(input.selection);
+    // Scan bounded FIFO batches. Ineligible historical snapshots cannot occupy
+    // the whole reserve forever; applying a new hard rule retires those rows.
+    while (true) {
+      const rows = this.db
         .prepare(
-          `UPDATE candidate_inventory
-           SET status = 'selected', attempt_count = attempt_count + 1, updated_at = CURRENT_TIMESTAMP
-           WHERE pixiv_id = ? AND work_type = ? AND topic = ? AND target_id = ? AND status = 'pending'`
+          `SELECT * FROM candidate_inventory
+           WHERE topic = ? AND target_id = ?
+             AND status = 'pending'
+             AND expires_at >= ?
+           ORDER BY first_seen_date ASC, seen_count ASC
+           LIMIT ?`
         )
-        .run(row.pixiv_id, row.work_type, row.topic, row.target_id);
-      if (updated.changes > 0) return this.toRow(row);
+        .all(input.topic, input.targetId, this.addDaysUtc(input.date, 0), input.reserveSize) as any[];
+      if (rows.length === 0) return null;
+      const entries = rows.map(row => {
+        let snapshot: unknown;
+        try { snapshot = JSON.parse(row.snapshot_json); } catch { snapshot = null; }
+        return { row, snapshot };
+      });
+      const eligible = entries.filter(({ row, snapshot }) => {
+        if (policy.accepts(snapshot)) return true;
+        this.markFiltered(row.pixiv_id, row.work_type, row.topic, row.target_id);
+        return false;
+      });
+      if (policy.hasPreference) eligible.sort((a, b) => policy.compare(a.snapshot, b.snapshot));
+      for (const { row } of eligible) {
+        const updated = this.db
+          .prepare(
+            `UPDATE candidate_inventory
+             SET status = 'selected', attempt_count = attempt_count + 1, updated_at = CURRENT_TIMESTAMP
+             WHERE pixiv_id = ? AND work_type = ? AND topic = ? AND target_id = ? AND status = 'pending'`
+          )
+          .run(row.pixiv_id, row.work_type, row.topic, row.target_id);
+        if (updated.changes > 0) return this.toRow(row);
+      }
     }
-    return null;
   }
 
   public markSubmitted(pixivId: string, workType: string, topic: string, targetId: string): void {

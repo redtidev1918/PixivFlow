@@ -1,5 +1,19 @@
 # 架构决策（PixivFlow，长期有效）
 
+## D-11 通用候选 tag 约束与有限偏好（2026-10-30）
+
+按 target 配置 `candidateSelection`：`requiredTags` 是 any-of 硬准入，
+`preferredTags` 仅对已准入候选的热度乘以 `1 + preferredTagBoost`
+（默认 0.25，范围 0..1，多个命中不叠加）。精确 tag 匹配，NFKC/去首尾空白/
+大小写归一；译名仅在显式开启时参与。偏好不创建搜索通道、不影响 metadata
+准入、不越过 seed tier；空配置保留既有行为。鲜活搜索、lookback、重抓/恢复和
+待发池复用同一个策略；下载 planner 再校验硬约束，防止旧快照绕过。
+
+复用调查：现有 TopicPipeline 负责召回/主题准入，DownloadPlanner 负责最终筛选，
+CandidateInventoryRepository 负责耐久 claim；本次扩展这些入口，不引入搜索器、
+依赖、模型、数据库或重试器。tagRelations 控制召回通道，不能充当作品级偏好。
+实际业务主题、别名与偏好只存在于私有运行配置；公开模板和文档使用中性示例。
+
 ## D-10 阅读型 Markdown 导出与富媒体 sidecar 是两个产品（2026-10-29）
 
 `novelExport.formats` 的 `md` 输出 `<base>.novel.md`（variant

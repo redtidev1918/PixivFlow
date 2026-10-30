@@ -250,6 +250,29 @@ export function validateConfig(config: Partial<StandaloneConfig>, location: stri
           }
         }
       }
+      const cs = target.candidateSelection;
+      if (cs !== undefined) {
+        const at = `targets[${index}].candidateSelection`;
+        if (!cs || typeof cs !== 'object' || Array.isArray(cs)) {
+          errors.push(`${at}: Must be an object`);
+        } else {
+          for (const field of ['requiredTags', 'preferredTags'] as const) {
+            const value = cs[field];
+            if (value !== undefined && (!Array.isArray(value) || value.some(tag => typeof tag !== 'string' || !tag.trim()))) {
+              errors.push(`${at}.${field}: Must be an array of non-empty tag names`);
+            }
+          }
+          if (cs.preferredTagBoost !== undefined && (typeof cs.preferredTagBoost !== 'number' || !Number.isFinite(cs.preferredTagBoost) || cs.preferredTagBoost < 0 || cs.preferredTagBoost > 1)) {
+            errors.push(`${at}.preferredTagBoost: Must be a finite number between 0 and 1`);
+          }
+          if (cs.matchTranslatedNames !== undefined && typeof cs.matchTranslatedNames !== 'boolean') {
+            errors.push(`${at}.matchTranslatedNames: Must be a boolean`);
+          }
+          if (target.random && (cs.preferredTags?.length ?? 0) > 0) {
+            errors.push(`${at}.preferredTags: Cannot be combined with random selection`);
+          }
+        }
+      }
       const cc = target.candidateCollection;
       if (cc) {
         const bound = (field: 'maxPerTag' | 'maxCandidates', min: number, max: number) => {

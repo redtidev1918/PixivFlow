@@ -1,5 +1,13 @@
 # 会话交接（PixivFlow）
 
+## 2026-10-30 新任务（优先于下方历史范围）
+
+用户授权通用候选 tag 约束与偏好，并为指定 target 在私有运行配置中启用。
+分支 `codex/candidate-tag-preferences`；deploy 分支 `codex/bot2-tag-preferences`。
+旧有 `config/.current-config` 与 `src/version.ts` 改动保留，不提交。
+实现与用户文档已落地，最终 npm test / PR / CI / release / deploy / 卷配置验收待完成。
+配置旧版不识别，必须先发行支持能力的上游再改生产卷；不要把仓库配置当生产事实。
+
 ## 2026-10-29 收尾核验（Asia/Shanghai）
 
 范围：仅事实核验、产品审计与最小文档收尾。禁止据此自动开始修复、发版、部署、

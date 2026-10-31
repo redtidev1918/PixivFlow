@@ -1,5 +1,5 @@
 # docsite-managed-file: update_download_page.py
-# docsite-managed-version: 4
+# docsite-managed-version: 5
 # docsite: managed file, run `python3 docsite.py update` to refresh.
 """Generate download page(s) from a GitHub release.
 
@@ -26,7 +26,12 @@ Outputs and languages come from the config file, not hardcoded code:
         "zh": "docs/download.md",
         "en": "docs/en/download.md"
       },
-      "trackPrerelease": false              # allow a prerelease tag to overwrite a stable page
+      "trackPrerelease": false,             # allow a prerelease tag to overwrite a stable page
+      "showAssetTable": true                # false: omit the release-asset table AND the auto-note
+                                            #   that introduces it. For registry-only projects
+                                            #   (npm/PyPI) whose hand-written preview already
+                                            #   carries the install story; the release table
+                                            #   would only duplicate metadata files.
     }
 
 The refresh workflow also reads "docsWorkflow" (default "docs.yml") from this config to
@@ -160,36 +165,44 @@ def render_page(lang: str, display: str, base: str, payload: dict,
     tag = payload.get("tag_name", "")
     published = (payload.get("published_at") or "")[:10]
     rel_url = payload.get("html_url", "")
+    # showAssetTable: false is for registry-only projects (npm/PyPI): their
+    # hand-written preview already carries the install story, so the generated
+    # asset table — plus the auto-note that introduces it — would only repeat
+    # metadata files users should never download by hand. Default keeps the
+    # table byte-identical for every binary-distribution repository.
+    show_assets = cfg.get("showAssetTable", True)
 
     lines = [f"<!-- {MARKER_REPO}: {cfg['repo']} -->",
              f"<!-- {MARKER_TAG}: {tag} -->",
              text["title"](display), "",
              text["lang_line"](base), "",
              f"<!-- docsite: generated from {cfg['repo']} release {tag}; do not edit by hand -->",
-             "",
-             text["auto_note"] + f" [Releases](https://github.com/{cfg['repo']}/releases)", "",
-             text["latest_head"](tag, published), "",
-             text["release_link"](rel_url), ""]
+             ""]
+    if show_assets:
+        lines += [text["auto_note"] + f" [Releases](https://github.com/{cfg['repo']}/releases)", ""]
+    lines += [text["latest_head"](tag, published), "",
+              text["release_link"](rel_url), ""]
 
     if preview:
         lines += [preview, ""]
 
-    rows = []
-    for a in payload.get("assets", []):
-        os_name, arch = platform_of(a["name"])
-        if lang == "en":
-            os_name = EN_OS.get(os_name, os_name)
-        size = a.get("size", 0)
-        size_s = f"{size / 1048576:.1f} MB" if size >= 1048576 else f"{size / 1024:.0f} KB"
-        rows.append((os_name, arch, a["name"], size_s, a["browser_download_url"]))
-    rows.sort(key=lambda r: (r[0], r[1], r[2]))
+    if show_assets:
+        rows = []
+        for a in payload.get("assets", []):
+            os_name, arch = platform_of(a["name"])
+            if lang == "en":
+                os_name = EN_OS.get(os_name, os_name)
+            size = a.get("size", 0)
+            size_s = f"{size / 1048576:.1f} MB" if size >= 1048576 else f"{size / 1024:.0f} KB"
+            rows.append((os_name, arch, a["name"], size_s, a["browser_download_url"]))
+        rows.sort(key=lambda r: (r[0], r[1], r[2]))
 
-    if rows:
-        lines += [text["table_head"], "|---|---|---|---|"]
-        lines += [f"| {os_name + (f' · {arch}' if arch else '')} | `{fn}` | {size_s} "
-                  f"| [{text['download_word']}]({url}) |" for os_name, arch, fn, size_s, url in rows]
-    else:
-        lines += [text["no_assets"]]
+        if rows:
+            lines += [text["table_head"], "|---|---|---|---|"]
+            lines += [f"| {os_name + (f' · {arch}' if arch else '')} | `{fn}` | {size_s} "
+                      f"| [{text['download_word']}]({url}) |" for os_name, arch, fn, size_s, url in rows]
+        else:
+            lines += [text["no_assets"]]
     lines.append("")
     return "\n".join(lines)
 
@@ -212,6 +225,7 @@ def load_config(path: Path, repo: str) -> dict:
     cfg["languages"] = data.get("languages") or ["zh", "en"]
     cfg["outputs"] = data.get("outputs") or {"zh": "docs/download.md", "en": "docs/en/download.md"}
     cfg["trackPrerelease"] = bool(data.get("trackPrerelease", False))
+    cfg["showAssetTable"] = bool(data.get("showAssetTable", True))
     if not cfg["languages"]:
         cfg["languages"] = ["zh", "en"]
     # 语言集合缺 zh 或 en 时默认补全，避免写出少一半的页面。

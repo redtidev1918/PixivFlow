@@ -1,4 +1,7 @@
 {
   "docsWorkflow": "docs.yml",
-  "previewFiles": {"en": "docs/en/download-preview.md"}
+  "previewFiles": {
+    "en": "docs/en/download-preview.md"
+  },
+  "showAssetTable": false
 }

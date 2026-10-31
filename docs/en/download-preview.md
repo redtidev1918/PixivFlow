@@ -1,37 +1,36 @@
-PixivFlow is distributed primarily as an npm package; an offline tarball and an official Docker image are also available. See [Releases](https://github.com/redtidev1918/PixivFlow/releases) for all assets and past versions.
+## Requirements
 
-## Install
+- Node.js 22.13 or newer (npm 9+)
+- A Pixiv account; the network must be able to reach Pixiv (a proxy is needed on some networks)
+- Interactive login uses a local Chrome or Chromium
 
-### npm (recommended)
+## Install (npm)
 
 ```bash
 npm install -g pixivflow
+```
+
+Verify the install:
+
+```bash
 pixivflow --help
 ```
 
-Node.js 22.13 or newer is required.
+npm package page: <https://www.npmjs.com/package/pixivflow>
 
-### Docker
+## Docker deployment
 
-See [Docker deployment](/en/DOCKER.md) and [DOCKER.md](https://github.com/redtidev1918/PixivFlow/blob/master/docs/en/DOCKER.md).
+Suited to servers, NAS boxes and long-running scheduled jobs; see [Docker deployment](/en/DOCKER.md) for the setup steps.
 
-### Release tarball (offline / manual install)
+## Offline install and past versions
 
-For offline machines or manual installs only; for everyday use, prefer the npm command above.
-
-| Asset | What it is |
-| :-- | :-- |
-| `pixivflow-<version>.tgz` | the `npm pack` tarball; install with `npm install -g ./pixivflow-<version>.tgz` |
-| `SHA256SUMS` | checksum file |
-| `RELEASE-METADATA.json` | release metadata |
-
-Get them from the [latest Release](https://github.com/redtidev1918/PixivFlow/releases/latest).
-
-## Verifying downloads
+Where npm is not an option, download the release tarball `pixivflow-<version>.tgz` from [GitHub Releases](https://github.com/redtidev1918/PixivFlow/releases) and install it directly:
 
 ```bash
-grep '\.tgz' SHA256SUMS | sha256sum -c -
+npm install -g ./pixivflow-<version>.tgz
 ```
+
+Past versions, source code and checksum files live on the same Releases page.
 
 ## Changelog
 

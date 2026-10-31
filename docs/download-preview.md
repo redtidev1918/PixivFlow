@@ -13,9 +13,11 @@ pixivflow --help
 
 ### Docker
 
-见 [Docker 部署](/DOCKER.md) 与 [DOCKER.md](https://github.com/redtidev1918/PixivFlow/blob/master/DOCKER.md)。
+见 [Docker 部署](/DOCKER.md) 与 [DOCKER.md](https://github.com/redtidev1918/PixivFlow/blob/master/docs/DOCKER.md)。
 
-### 发布包
+### 发布包（离线 / 手动安装）
+
+仅适合离线环境或需要手动安装的场景；日常安装与升级直接用上面的 npm 命令。
 
 | 资产 | 说明 |
 | :-- | :-- |

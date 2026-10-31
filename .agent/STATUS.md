@@ -1,5 +1,15 @@
 # 工程状态（PixivFlow）
 
+## 2026-10-31 下载页精简：生成器停用资产表（已交付）
+
+- docsite 上游 #15 新增 showAssetTable 可选配置（默认 true 字节不变，7 个共用仓
+  默认路径不受影响）；本仓 pin 升至 b82126b0，启用配置后按 v3.10.0 重新生成。
+- 双语下载页主体改为「版本头 + 环境要求 + npm 安装 + Docker + 离线安装与历史
+  版本 + 更新日志」，不再出现 RELEASE-METADATA/SHA256SUMS/tgz 资产表与自动生成
+  说明；版本号由生成器维护，preview 不写死版本。
+- 发布链路、Release 附件、Tags、ReleaseGraph 与 update-download-page.yml 均未改。
+- 遗留观察：下次真实发版时确认新 tag 重新生成后结构保持（预期保持）。
+
 ## 2026-10-31 下载入口 npm 优先（已交付）
 
 - 发布体系最小化治理：npm 正式分发的项目不再把 GitHub Release 附件呈现为默认安装方式。

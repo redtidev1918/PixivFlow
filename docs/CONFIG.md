@@ -389,8 +389,8 @@ TelePost 默认同时禁止 `.zip` 和 `application/zip`。对接目标在 `type
 从该目标的附件、预览与内容投影排除 ZIP，发送小说 TXT 与既有媒体引用。此设置不改变
 接收端黑名单或下载策略；未配置时默认为 `attach`，其他接收端继续接收 ZIP。
 ZIP 遵循原有缓存清理策略；多目标共享文件须等所有投递确认后才清理，失败目标保留恢复所需文件。
-在线阅读插图通过独立的 `media_assets`（图片 ID 与原始 URL）传递，不依赖 ZIP：TelePost
-将 TXT 的图片标记关联到媒体引用，TelePress 将对应图片地址改写为已配置的反代 URL。
+在线阅读插图通过独立的 `media_assets`（图片 ID 与原始 URL）传递，不依赖 ZIP：接收端
+将 TXT 的图片标记关联到媒体引用，其预览层负责把图片地址改写为反代 URL。
 `local-only` 保留这些引用，eager / on-demand 均沿用同一链路。
 
 `httpMultipart` 是**多部分表单**投递：把已下载的文件与渲染好的表单字段一次性 POST 给

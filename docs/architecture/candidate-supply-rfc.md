@@ -116,8 +116,9 @@ TopicPipeline.selectWorks
 - maxAgeDays 默认 30；过期项只能被 `evictExpired`，不会自动发布。
 - CandidateSupplyReport 增加 `inventory`：
   `{ pendingCount, reserveSize, maxAgeDays, oldestSeenDate }`，随既有
-  `candidate_report` 字段一起到 TelePost。
-- TelePost 空结果消息增加一行：`待发池：N 条（预计可用到 YYYY-MM-DD）`。
+  `candidate_report` 字段一起提供给消费端。
+- 消费端基于 `inventory` 渲染待发池信息（空结果消息的一行提示），
+  渲染细节以 TelePost 侧文档为准。
 
 ### 为什么不在本期做的事
 
@@ -156,7 +157,7 @@ Code -> Tests -> PR -> Merge -> Release -> Deploy -> Runtime Verification
 Production Verification：
 
 1. 更新后的 `candidate_report` 在 bot1 `no_candidate` 时含 `inventory`；
-2. TelePost 空结果消息显示 `待发池：N 条`；
+2. 消费端渲染待发池信息（在 TelePost 侧验收）；
 3. 未开启 inventory 的 target 行为完全不变（回归）；
 4. 开启后磁盘/DB 迁移幂等，滚动重启不停机；
 5. 旧 recovery callback 不变。
@@ -173,7 +174,7 @@ Production Verification：
 - [x] Illustration / Novel 的 topic 扫描写入 pending inventory
 - [x] 空窗 fallback：`claimNext` → 按 target 再跑 `pipeline.run`
 - [x] `CandidateSupplyReport.inventory` 字段 + 持久化
-- [x] TelePost 空结果消息渲染 `待发池：N 条`
+- [x] 消费端渲染待发池信息（已在 TelePost 侧落地）
 
 ## Final Report 模板
 

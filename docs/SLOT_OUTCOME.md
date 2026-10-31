@@ -89,8 +89,8 @@ Admin still sees full stack / trace_id / pixiv_id / stage / retryable in logs an
 submitted cell 不改写；终结后用同一条 `deriveSlotStatus` 投影派生 slot 状态（因此部分
 投递过的 occurrence 可能报 `partial` 而不是 `failed`）。这三类都算系统失败
 （`business_status = failed`，alertable），与 `no_candidate`/`duplicate_only` 这类正常业务
-空结果严格分开。对外只暴露**封闭的协议错误码**（见
-`pixivflow-telepost-deploy/docs/protocol/v1/error-mapping.json`），内部原因码仅用于诊断。
+空结果严格分开。对外只暴露**封闭的协议错误码**（见本仓 vendored 副本
+`protocol/v1/error-mapping.json`，权威与校验清单 `SOURCES.sha256` 同目录），内部原因码仅用于诊断。
 
 ## Consumer cancel（`cancelled_by_consumer`）
 

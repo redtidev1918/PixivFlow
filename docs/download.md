@@ -1,16 +1,16 @@
 <!-- docsite-release-repo: redtidev1918/PixivFlow -->
 <!-- docsite-release-tag: v3.10.0 -->
-# 📥 下载 PixivFlow
+# 下载 PixivFlow
 
 **语言 / Language:** 中文 · [English](/en/download.md)
 
 <!-- docsite: generated from redtidev1918/PixivFlow release v3.10.0; do not edit by hand -->
 
-本页由 GitHub Actions 在每次发版时**自动更新**，始终指向最新 Release。
+本页由 GitHub Actions 根据发布资产生成。若页面尚未更新，请到 Releases 查看最新版本。 [Releases](https://github.com/redtidev1918/PixivFlow/releases)
 
 ## 最新版本：`v3.10.0`（2026-10-30）
 
-👉 [查看 Release 说明与校验和](https://github.com/redtidev1918/PixivFlow/releases/tag/v3.10.0)
+[查看 Release 说明与校验和](https://github.com/redtidev1918/PixivFlow/releases/tag/v3.10.0)
 
 PixivFlow 以 npm 包为主，同时提供发布包与官方 Docker 镜像。完整资产与历史版本见 [Releases](https://github.com/redtidev1918/PixivFlow/releases)。
 
@@ -27,9 +27,11 @@ pixivflow --help
 
 ### Docker
 
-见 [Docker 部署](/DOCKER.md) 与 [DOCKER.md](https://github.com/redtidev1918/PixivFlow/blob/master/DOCKER.md)。
+见 [Docker 部署](/DOCKER.md) 与 [DOCKER.md](https://github.com/redtidev1918/PixivFlow/blob/master/docs/DOCKER.md)。
 
-### 发布包
+### 发布包（离线 / 手动安装）
+
+仅适合离线环境或需要手动安装的场景；日常安装与升级直接用上面的 npm 命令。
 
 | 资产 | 说明 |
 | :-- | :-- |
@@ -51,6 +53,6 @@ grep '\.tgz' SHA256SUMS | sha256sum -c -
 
 | 平台 | 文件 | 大小 | 下载 |
 |---|---|---|---|
-| 通用 | `RELEASE-METADATA.json` | 2 KB | [⬇️ 下载](https://github.com/redtidev1918/PixivFlow/releases/download/v3.10.0/RELEASE-METADATA.json) |
-| 通用 | `SHA256SUMS` | 0 KB | [⬇️ 下载](https://github.com/redtidev1918/PixivFlow/releases/download/v3.10.0/SHA256SUMS) |
-| 通用 | `pixivflow-3.10.0.tgz` | 2.5 MB | [⬇️ 下载](https://github.com/redtidev1918/PixivFlow/releases/download/v3.10.0/pixivflow-3.10.0.tgz) |
+| 通用 | `RELEASE-METADATA.json` | 2 KB | [下载](https://github.com/redtidev1918/PixivFlow/releases/download/v3.10.0/RELEASE-METADATA.json) |
+| 通用 | `SHA256SUMS` | 0 KB | [下载](https://github.com/redtidev1918/PixivFlow/releases/download/v3.10.0/SHA256SUMS) |
+| 通用 | `pixivflow-3.10.0.tgz` | 2.5 MB | [下载](https://github.com/redtidev1918/PixivFlow/releases/download/v3.10.0/pixivflow-3.10.0.tgz) |

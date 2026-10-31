@@ -1,3 +1,4 @@
 {
-  "docsWorkflow": "docs.yml"
+  "docsWorkflow": "docs.yml",
+  "previewFiles": {"en": "docs/en/download-preview.md"}
 }

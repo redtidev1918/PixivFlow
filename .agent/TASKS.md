@@ -2,6 +2,13 @@
 
 > 状态：TODO / IN_PROGRESS / DONE / DEFERRED / BLOCKED。每行带证据。
 
+## 本轮（2026-10-31 下载入口 npm 优先）
+
+| ID | 任务 | 状态 | 证据 |
+| --- | --- | --- | --- |
+| P-25 | 英文下载页补安装指引；zh 发布包标注离线场景；DOCKER.md 死链修复 | DONE | PR #239；docs/en/download-preview.md；download-page.json previewFiles；v3.10.0 双语页重新生成 |
+| P-26 | v3.10.0 Release 正文改 npm 安装优先 | DONE | gh release edit v3.10.0；releasegraph-post-release 标记回读一致 |
+
 ## 本轮（2026-10-30 通用候选 tag 偏好）
 
 | ID | 任务 | 状态 | 证据 |

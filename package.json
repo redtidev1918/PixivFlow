@@ -93,7 +93,7 @@
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",
-    "@types/express": "^4.17.21",
+    "@types/express": "^5.0.6",
     "@types/jest": "^29.5.0",
     "@types/node": "^22.20.1",
     "@types/node-cron": "^3.0.11",
@@ -124,7 +124,7 @@
     "axios": "^1.20.0",
     "cors": "^2.8.6",
     "cron-parser": "^4.9.0",
-    "express": "^4.22.2",
+    "express": "^5.3.0",
     "franc-min": "^6.2.0",
     "node-cron": "^4.6.0",
     "pixiv-token-getter": "^2.6.1",

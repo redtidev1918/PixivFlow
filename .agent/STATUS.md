@@ -1,5 +1,16 @@
 # 工程状态（PixivFlow）
 
+## 2026-10-31 下载入口 npm 优先（已交付）
+
+- 发布体系最小化治理：npm 正式分发的项目不再把 GitHub Release 附件呈现为默认安装方式。
+- 英文下载页此前只有 Release 资产表、无安装指引（en preview 未注入）；新增
+  docs/en/download-preview.md 并在 .github/scripts/download-page.json 配置 previewFiles，
+  zh preview 把发布包标注为离线/手动场景并修正 DOCKER.md 的 GitHub 失效链接；
+  托管生成器按 v3.10.0 重新生成双语 download.md。
+- v3.10.0 Release 正文一次性改为 npm 安装优先（releasegraph-post-release 标记逐字节
+  保留，附件不动）。发布/部署工作流与 ReleaseGraph 均未改动；未来版本正文仍由 pinned
+  notes.py 生成旧样式，改进需 ReleaseGraph 展示优化 + 两仓 repin（未排期）。
+
 ## 2026-10-30 通用候选 tag 约束与偏好（已交付）
 
 - 用户确认：主主题始终成立，偏好只在主主题内加分；要求通用能力与用户文档同步。

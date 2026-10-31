@@ -2,6 +2,8 @@
 
 > 状态：TODO / IN_PROGRESS / DONE / DEFERRED / BLOCKED。每行带证据。
 
+| P-27 | 下载页生成器停用资产表（showAssetTable），双语页精简为安装指引 | DONE | docsite#15 b82126b0；PR #240 合并 9fc3279；docs-check pin/生成器/flag/preview/重新生成；本地幂等+--check+构建全过 |
+
 ## 本轮（2026-10-31 下载入口 npm 优先）
 
 | ID | 任务 | 状态 | 证据 |

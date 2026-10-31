@@ -4,7 +4,7 @@
 
 Language: [中文](../ARCHITECTURE.md) · English
 
-This guide helps contributors locate code, follow data and extend the system. Day-to-day commands are in [Usage](USAGE.md); HTTP and Socket.IO contracts are in [API](API.md). Cross-repository authority lives in the deploy repository's [operating contract](https://github.com/redtidev1918/pixivflow-telepost-deploy/blob/master/AGENTS.md), [platform architecture](https://github.com/redtidev1918/pixivflow-telepost-deploy/blob/master/docs/architecture/ecosystem-platform.md) and [production contract](https://github.com/redtidev1918/pixivflow-telepost-deploy/blob/master/CONTRACT.md).
+This guide helps contributors locate code, follow data and extend the system. Day-to-day commands are in [Usage](USAGE.md); HTTP and Socket.IO contracts are in [API](API.md). Cross-repository boundaries and contracts are owned by the [deploy repository](https://github.com/redtidev1918/pixivflow-telepost-deploy).
 
 ## Responsibilities and code map
 

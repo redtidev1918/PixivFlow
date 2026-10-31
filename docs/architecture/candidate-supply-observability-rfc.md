@@ -194,18 +194,18 @@ Production Verification 必须验证：
 - [x] Topic 漏斗（`duplicate_removed` / `ai_excluded` / `metadata_filtered` /
       `language_filter`）随 lookback 聚合；
 - [x] `candidate_report` 持久化在 `schedule_slot_items`（同一 Slot Ledger，非新库）；
-- [x] 经 schedule-outcome HTTP 传到 TelePost。
+- [x] 经 schedule-outcome HTTP 传到消费端（wire 契约见部署仓库跨仓契约文档）。
 
 ### Phase 2 — Empty Result Classification
 
 - [x] 保留既有 terminal codes（`no_candidate` / `duplicate_exhausted` 不变）；
-- [x] TelePost 渲染端 projection：`no_content_today` / `policy_too_narrow` /
-      `candidate_supply_low`（由 candidate_report + terminal reason 推导，不落库）。
+- [x] 消费端基于 `candidate_report` + terminal reason 推导渲染投影
+      （分类词表与渲染细节以 TelePost 侧文档为准）。
 
 ### Phase 3 — Telegram UX Improvement
 
-- [x] 审核群消息增加候选漏斗与判断行；
-- [x] 按钮改为 `重试·插画` / `放宽·插画` 等带目标名的短标签；
+- [x] 审核群消息由消费端渲染候选漏斗与判断行；
+- [x] 消费端按钮文案迭代（短标签、带目标名）；
 - [x] callback 仍为 `sched_recover|<target_id>|normal|relaxed`，协议不变。
 
 ### Phase 4 — Topic Profile
@@ -214,19 +214,14 @@ Production Verification 必须验证：
 
 ### Phase 5 — Candidate Inventory
 
-- [x] 已实现（PixivFlow v2.30.0 + TelePost v2.37.0）：Collector → Candidate Inventory →
-      Reserve → Publish 已上线，`bot1` / `bot2` 四个 target 启用；
-- [x] 空结果消息渲染 `待发池：N 条（预计可用到 YYYY-MM-DD）`，保留去重与 ACK 语义。
+- [x] 已实现：Collector → Candidate Inventory → Reserve → Publish 上线；
+- [x] `inventory` 字段随 `candidate_report` 提供，消费端渲染待发池信息
+      （渲染细节见 TelePost 侧文档），保留去重与 ACK 语义。
 
-### Phase 6 — Empty-Run UX Hardening（TelePost v2.38.0）
+### Phase 6 — Empty-Run UX Hardening
 
-- [x] 前置告知：空待发池时终态消息增加「前瞻：待发池为空，下一发布时点若仍无新作则无法按时更新」；
-- [x] Watchdog：独立周期任务，识别超过 26h 无终态通知的 schedule，直接向审核群发静默告警，
-      按 UTC 日期幂等，每天最多一条；
-- [x] `GET /api/v1/schedule/status`：只读返回每个 schedule 最近终态时间/状态，供状态页/置顶查询；
-- [x] 公共纯文本状态页 `GET /status`（多 Bot 父路由）：汇总各 Bot 最近终态，
-      适合频道置顶/收藏；
-- [x] Telegram 命令 `/status`（公开）与 `/pin_status`（仅 OWNER，置顶当前群/频道）：渠道置顶区落地。
+- [x] 消费端配套（空待发池前瞻告知、终态静默 watchdog、只读状态查询端点/状态页/置顶命令）
+      已在 TelePost 侧落地，细节见其仓库文档。
 
 ## Final Report 模板
 

@@ -105,3 +105,7 @@ P-13~16 的历史发行/部署/验收已由 deploy 2026-10-27 VERIFIED 条目确
 - 复用共享 VitePress 1.6.4 模板，packageMode merge 逐字段保留业务 package 信息，原有 49 个 Markdown 文件全部保留。旧 Pages workflow 留作 `.docsite.bak`；外部完整备份不提交。
 - 修复站内模板字面量的 Vue 解析与源码相对链接；本地 docs build 零断链，无 .git fixture 的 check 9/9、navcheck 与现有 Release 离线下载页 check 通过。
 - PR 待审，禁止自动合并。未发版、未部署应用或修改运行配置；回滚可 revert 本文档迁移提交。CI 使用 docsite db706b1c5d8de4caa02add9c5e2451e463dc85db。
+
+## 2026-11-01 文档 CI 模板同步
+
+固定 docsite #16 合并 SHA `3fa6b643de6d2843ce713ccacb16e4ca2475656b`，用 update 再生成 docs.yml，修复 Dependabot setup-node v7 与模板 v6 的 DRIFT。npm ci、docs:build、无 .git 的 check/navcheck 通过。远程 CI 待验收；不涉及业务代码和生产部署。未来先修上游模板，再同步下游固定 SHA。

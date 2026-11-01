@@ -87,3 +87,7 @@ Actions 已恢复；GitHub 内部旧 PR 引用/缓存、fork 和外部克隆不�
 | 业务执行状态 | 生产 SQLite slot/outbox 账本 |
 
 禁止在本目录记录生态生产版本号快照（会与 deploy 漂移）；需要时链接查询。
+
+## 2026-11-01 文档 CI 模板同步
+
+固定 docsite #16 合并 SHA `3fa6b643de6d2843ce713ccacb16e4ca2475656b`，用 update 再生成 docs.yml，修复 Dependabot setup-node v7 与模板 v6 的 DRIFT。npm ci、docs:build、无 .git 的 check/navcheck 通过。远程 CI 待验收；不涉及业务代码和生产部署。未来先修上游模板，再同步下游固定 SHA。

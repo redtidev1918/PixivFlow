@@ -74,3 +74,5 @@
 审计未改功能、未创建修复 PR；C2 的 AGENTS/WEBUI 旧说明已做事实纠正，无恢复代码变更。
 A1 的 P0 来自实际默认泄露行为；B1 有失败 warning，
 限定为 P1，不据历史报告升级成 P0。C2 不再列“缺少恢复能力”的开发任务。
+
+| DOC-CI-20261101 | docsite setup-node 模板同步 | IN_PROGRESS | 本地文档门禁通过，远程 CI 待验收 |

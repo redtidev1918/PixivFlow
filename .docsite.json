@@ -7,5 +7,6 @@
   "engine": "vitepress",
   "engineVersion": "1.6.4",
   "version": 2,
-  "packageMode": "merge"
+  "packageMode": "merge",
+  "themeKey": "pixivflow-theme"
 }

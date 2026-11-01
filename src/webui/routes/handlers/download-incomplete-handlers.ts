@@ -4,6 +4,7 @@ import { downloadTaskManager } from '../../services/DownloadTaskManager';
 import { Database } from '../../../storage/Database';
 import { loadConfig, getConfigPath } from '../../../config';
 import { ErrorCode } from '../../utils/error-codes';
+import { routeParam } from '../../../utils/route-params';
 
 /**
  * GET /api/download/incomplete
@@ -145,7 +146,7 @@ export async function deleteIncompleteTask(req: Request, res: Response): Promise
   let database: Database | null = null;
   try {
     // Parse and validate task ID
-    const rawId = req.params.id;
+    const rawId = routeParam(req.params.id);
     const id = parseInt(rawId, 10);
     
     if (isNaN(id) || !Number.isInteger(id) || id <= 0) {
@@ -236,7 +237,7 @@ export async function deleteIncompleteTask(req: Request, res: Response): Promise
     logger.error('Unexpected error while deleting incomplete task', { 
       error,
       taskId: req.params.id,
-      parsedTaskId: parseInt(req.params.id, 10),
+      parsedTaskId: parseInt(routeParam(req.params.id), 10),
       errorMessage: error instanceof Error ? error.message : String(error),
       errorStack: error instanceof Error ? error.stack : undefined,
     });

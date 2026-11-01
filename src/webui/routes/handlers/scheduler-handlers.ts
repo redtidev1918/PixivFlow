@@ -7,6 +7,7 @@ import { StandaloneConfig } from '../../../config/types';
 import { logger } from '../../../logger';
 import { ErrorCode } from '../../utils/error-codes';
 import { buildConfigAwareErrorBody } from '../../utils/config-error';
+import { routeParam } from '../../../utils/route-params';
 
 const RECOVERY_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const TARGET_ID_SAFE = /^[A-Za-z0-9._-]{1,80}$/;
@@ -296,7 +297,7 @@ export async function listExecutions(req: Request, res: Response): Promise<void>
  * Pure filtering of existing structured logger output, no new store.
  */
 export async function getSlotLogs(req: Request, res: Response): Promise<void> {
-  const slotId = req.params.slotId;
+  const slotId = routeParam(req.params.slotId);
   if (!slotId || slotId.length > 200) {
     res.status(400).json({ errorCode: ErrorCode.SCHEDULER_LIST_FAILED, message: 'invalid slotId' });
     return;
@@ -365,7 +366,7 @@ export async function recoverTarget(req: Request, res: Response): Promise<void> 
     });
     return;
   }
-  const targetId = req.params.targetId;
+  const targetId = routeParam(req.params.targetId);
   if (!TARGET_ID_SAFE.test(targetId)) {
     res.status(400).json({ status: 'error', error: 'invalid targetId' });
     return;
@@ -400,12 +401,13 @@ export async function recoverStatus(
   req: Request,
   res: Response
 ): Promise<void> {
-  const { targetId, requestId } = req.params;
+  const targetId = routeParam(req.params.targetId);
+  const requestId = routeParam(req.params.requestId);
   if (!TARGET_ID_SAFE.test(targetId) || !RECOVERY_UUID.test(requestId ?? '')) {
     res.status(400).json({ status: 'error', error: 'invalid targetId or requestId' });
     return;
   }
-  await forwardRecovery(res, targetId, `/internal/targets/${encodeURIComponent(targetId)}/recover/${encodeURIComponent(requestId!)}`, {
+  await forwardRecovery(res, targetId, `/internal/targets/${encodeURIComponent(targetId)}/recover/${encodeURIComponent(requestId)}`, {
     method: 'GET',
   });
 }

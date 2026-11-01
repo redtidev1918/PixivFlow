@@ -14,6 +14,7 @@ import { redactUrl } from '../../../utils/redact';
 import { logger } from '../../../logger';
 import { ErrorCode } from '../../utils/error-codes';
 import { buildConfigAwareErrorBody } from '../../utils/config-error';
+import { routeParam } from '../../../utils/route-params';
 
 const GATEWAY_NAME_SAFE = /^[A-Za-z0-9._-]{1,80}$/;
 
@@ -124,7 +125,7 @@ export async function listGateways(_req: Request, res: Response): Promise<void> 
  * connection state and most recent delivery facts (read-only).
  */
 export async function getGateway(req: Request, res: Response): Promise<void> {
-  const name = req.params.name;
+  const name = routeParam(req.params.name);
   if (!GATEWAY_NAME_SAFE.test(name ?? '')) {
     res.status(400).json({ errorCode: ErrorCode.GATEWAY_NOT_FOUND, message: 'invalid gateway name' });
     return;

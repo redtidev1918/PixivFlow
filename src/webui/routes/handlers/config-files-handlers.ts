@@ -7,6 +7,7 @@ import { getConfigManager } from '../../../utils/config-manager';
 import { setActiveConfigPath } from '../../../config/active-config';
 import { StandaloneConfig, getConfigPath } from '../../../config';
 import { isValidConfigFilename, validateConfigWithUnifiedStorage } from '../config-utils';
+import { routeParam } from '../../../utils/route-params';
 
 /**
  * GET /api/config/files
@@ -159,7 +160,7 @@ export async function importConfigFile(req: Request, res: Response): Promise<voi
  */
 export async function deleteConfigFile(req: Request, res: Response): Promise<void> {
   try {
-    const { filename } = req.params;
+    const filename = routeParam(req.params.filename);
     const configManager = getConfigManager('config');
     const configDir = configManager.getConfigDir();
     const path = join(configDir, filename);
@@ -204,7 +205,7 @@ export async function deleteConfigFile(req: Request, res: Response): Promise<voi
  */
 export async function getConfigFileContent(req: Request, res: Response): Promise<void> {
   try {
-    const { filename } = req.params;
+    const filename = routeParam(req.params.filename);
     const configManager = getConfigManager('config');
     const configDir = configManager.getConfigDir();
     const path = join(configDir, filename);
@@ -255,7 +256,7 @@ export async function getConfigFileContent(req: Request, res: Response): Promise
  */
 export async function updateConfigFileContent(req: Request, res: Response): Promise<void> {
   try {
-    const { filename } = req.params;
+    const filename = routeParam(req.params.filename);
     const { content } = req.body;
     
     if (!content || typeof content !== 'string') {

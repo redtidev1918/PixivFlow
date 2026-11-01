@@ -7,6 +7,7 @@ import { Database } from '../../../storage/Database';
 import { FileService } from '../../../download/FileService';
 import { FileNormalizationService } from '../../../download/FileNormalizationService';
 import { ErrorCode } from '../../utils/error-codes';
+import { routeParam } from '../../../utils/route-params';
 
 /**
  * GET /api/files/preview
@@ -162,7 +163,7 @@ export async function previewFile(req: Request, res: Response): Promise<void> {
  */
 export async function deleteFile(req: Request, res: Response): Promise<void> {
   try {
-    const { id } = req.params;
+    const id = routeParam(req.params.id);
     const { path: filePath, type = 'illustration' } = req.query;
     const configPath = getConfigPath();
     const config = loadConfig(configPath);

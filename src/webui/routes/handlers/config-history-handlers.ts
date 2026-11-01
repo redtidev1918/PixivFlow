@@ -6,6 +6,7 @@ import { ErrorCode } from '../../utils/error-codes';
 import { Database } from '../../../storage/Database';
 import { readConfigRaw } from '../config-utils';
 import { validateConfigWithUnifiedStorage } from '../config-utils';
+import { routeParam } from '../../../utils/route-params';
 
 /**
  * GET /api/config/history
@@ -118,7 +119,7 @@ export async function saveConfigHistory(req: Request, res: Response): Promise<vo
 export async function getConfigHistoryById(req: Request, res: Response): Promise<void> {
   let database: Database | null = null;
   try {
-    const id = parseInt(req.params.id, 10);
+    const id = parseInt(routeParam(req.params.id), 10);
     if (isNaN(id)) {
       res.status(400).json({
         errorCode: ErrorCode.CONFIG_INVALID,
@@ -186,7 +187,7 @@ export async function getConfigHistoryById(req: Request, res: Response): Promise
 export async function deleteConfigHistory(req: Request, res: Response): Promise<void> {
   let database: Database | null = null;
   try {
-    const id = parseInt(req.params.id, 10);
+    const id = parseInt(routeParam(req.params.id), 10);
     if (isNaN(id)) {
       res.status(400).json({
         errorCode: ErrorCode.CONFIG_INVALID,
@@ -245,7 +246,7 @@ export async function deleteConfigHistory(req: Request, res: Response): Promise<
 export async function applyConfigHistory(req: Request, res: Response): Promise<void> {
   let database: Database | null = null;
   try {
-    const id = parseInt(req.params.id, 10);
+    const id = parseInt(routeParam(req.params.id), 10);
     if (isNaN(id)) {
       res.status(400).json({
         errorCode: ErrorCode.CONFIG_INVALID,

@@ -16,6 +16,7 @@ import type { JobEventQuery } from './JobEventStream';
 import { ProtocolRequestError, protocolErrorBody, protocolErrorResponse } from './ProtocolErrors';
 import { TriggerSource } from './OccurrenceResolver';
 import { BUILD } from '../version';
+import { routeParam } from '../utils/route-params';
 
 /**
  * Authenticated HTTP schedule trigger — a DISPATCH endpoint, not a run endpoint.
@@ -347,7 +348,7 @@ export class ScheduleTriggerServer {
         return;
       }
       try {
-        const job = jobs.jobStatus(req.params.jobId);
+        const job = jobs.jobStatus(routeParam(req.params.jobId));
         if (!job) {
           throw new ProtocolRequestError('invalid_params', 404, { message: 'unknown job' });
         }
@@ -364,7 +365,7 @@ export class ScheduleTriggerServer {
         return;
       }
       try {
-        const job = jobs.cancelJob(req.params.jobId);
+        const job = jobs.cancelJob(routeParam(req.params.jobId));
         this.triggerOutcome('schedule.job_cancelled', 200, req, res, {
           job_id: job.job_id,
           status: job.status,
@@ -386,7 +387,7 @@ export class ScheduleTriggerServer {
       }
       try {
         const query = parseEventQuery(req.query as { after?: unknown; unacked?: unknown });
-        res.json(jobs.jobEvents(req.params.jobId, query));
+        res.json(jobs.jobEvents(routeParam(req.params.jobId), query));
       } catch (error) {
         this.jobFailure(req, res, error, 'job events failed');
       }
@@ -401,7 +402,7 @@ export class ScheduleTriggerServer {
         return;
       }
       try {
-        res.json(jobs.ackJobEvents(req.params.jobId, req.body));
+        res.json(jobs.ackJobEvents(routeParam(req.params.jobId), req.body));
       } catch (error) {
         this.jobFailure(req, res, error, 'job ack failed');
       }
@@ -426,7 +427,7 @@ export class ScheduleTriggerServer {
       this.auth,
       async (req: Request, res: Response) => {
         try {
-          const scheduleId = req.params.scheduleId;
+          const scheduleId = routeParam(req.params.scheduleId);
           if (!this.handlers.listSchedules().includes(scheduleId)) {
             res.status(404).json({ status: 'error', error: `unknown schedule: ${scheduleId}` });
             this.triggerOutcome('schedule.trigger_not_found', 404, req, res, { schedule_id: scheduleId });
@@ -501,7 +502,7 @@ export class ScheduleTriggerServer {
         return;
       }
       try {
-        const result = await this.handlers.refetch(req.params.targetId, requestId, correlationId ?? undefined);
+        const result = await this.handlers.refetch(routeParam(req.params.targetId), requestId, correlationId ?? undefined);
         res.status(202).json({ status: 'accepted', ...result });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -512,7 +513,8 @@ export class ScheduleTriggerServer {
     });
 
     app.get('/internal/targets/:targetId/refetch/:requestId', this.refetchAuth, (req: Request, res: Response) => {
-      const { targetId, requestId } = req.params;
+      const targetId = routeParam(req.params.targetId);
+      const requestId = routeParam(req.params.requestId);
       if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestId)) {
         res.status(400).json({ status: 'error', error: 'requestId must be a UUID' });
         return;
@@ -556,7 +558,7 @@ export class ScheduleTriggerServer {
       }
       try {
         const result = await this.handlers.recover(
-          req.params.targetId, requestId, retryMode, correlationId ?? undefined
+          routeParam(req.params.targetId), requestId, retryMode, correlationId ?? undefined
         );
         res.status(202).json({ status: 'accepted', retryMode, ...result });
       } catch (error) {
@@ -570,7 +572,8 @@ export class ScheduleTriggerServer {
     });
 
     app.get('/internal/targets/:targetId/recover/:requestId', this.refetchAuth, (req: Request, res: Response) => {
-      const { targetId, requestId } = req.params;
+      const targetId = routeParam(req.params.targetId);
+      const requestId = routeParam(req.params.requestId);
       if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestId)) {
         res.status(400).json({ status: 'error', error: 'requestId must be a UUID' });
         return;

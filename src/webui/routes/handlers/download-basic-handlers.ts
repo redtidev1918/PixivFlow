@@ -6,6 +6,7 @@ import { loadConfig, getConfigPath } from '../../../config';
 import { join } from 'path';
 import { ErrorCode } from '../../utils/error-codes';
 import { serializeTaskStatus } from '../../utils/task-serialize';
+import { routeParam } from '../../../utils/route-params';
 
 /**
  * Convert host file path to container path if needed
@@ -291,7 +292,7 @@ export async function getDownloadLogs(req: Request, res: Response): Promise<void
 export async function deleteTaskHistory(req: Request, res: Response): Promise<void> {
   let database: Database | null = null;
   try {
-    const { taskId } = req.params;
+    const taskId = routeParam(req.params.taskId);
 
     if (!taskId) {
       res.status(400).json({

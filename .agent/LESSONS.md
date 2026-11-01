@@ -27,3 +27,7 @@ grep（含测试），并在 PR 描述里列出引用核查结果。
 防复发不变量（D-02）：任何终态/非终态判断引用 `TERMINAL/ACTIVE_CELL_STATES`；
 代码评审看到内联状态数组直接要求改为集合引用。TelePost 侧消费者映射
 （CellStatus → 恢复投影）在 2.84.9 已做同源核对，两侧改动需同步评估。
+
+## 2026-11-01 文档 CI 模板同步
+
+固定 docsite #16 合并 SHA `3fa6b643de6d2843ce713ccacb16e4ca2475656b`，用 update 再生成 docs.yml，修复 Dependabot setup-node v7 与模板 v6 的 DRIFT。npm ci、docs:build、无 .git 的 check/navcheck 通过。远程 CI 待验收；不涉及业务代码和生产部署。未来先修上游模板，再同步下游固定 SHA。

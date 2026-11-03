@@ -11,7 +11,7 @@
 运行脚本保留固定来源与校验和，并通过语法检查。私有备份和本机应用检查点不推送。
 历史清理后的旧克隆不得直接推送；先从清理后的远端重新克隆或迁移补丁。
 
-这份文件写给任何进入本仓库的智能体或工程师。跨仓库的职责与执行纪律的唯一权威在：
+以下文档是跨仓库权威来源，但不要求每次任务全部读取。普通开发仅加载适用约束；涉及跨仓库接口、生产状态或部署变更时，按根目录 AGENTS.md 的默认读取规则读取对应文档：
 
 * `pixivflow-telepost-deploy/AGENTS.md`（PixivFlow Ecosystem Agent Operating Contract）
 * `pixivflow-telepost-deploy/docs/architecture/ecosystem-platform.md`（长期架构）

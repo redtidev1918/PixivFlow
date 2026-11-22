@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.10.1](https://github.com/redtidev1918/PixivFlow/compare/v3.10.0...v3.10.1) (2026-11-22)
+
+
+### Bug Fixes
+
+* **scheduler:** report timeouts independently and bound stalled runs ([#247](https://github.com/redtidev1918/PixivFlow/issues/247)) ([ba1e6d8](https://github.com/redtidev1918/PixivFlow/commit/ba1e6d81f9f840d02b35732c7b5ab1c05aa5e4dd))
+
 ## [3.10.0](https://github.com/redtidev1918/PixivFlow/compare/v3.9.1...v3.10.0) (2026-10-30)
 
 

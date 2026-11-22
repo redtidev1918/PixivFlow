@@ -539,6 +539,8 @@ export interface SchedulerConfig {
    * undefined means no timeout.
    */
   timeout?: number;
+  /** Optional time without completed work progress before cancelling a scheduled run (milliseconds). */
+  progressTimeoutMs?: number;
   /**
    * Maximum consecutive failures before stopping the scheduler.
    * If set, scheduler will stop after this many consecutive failures.

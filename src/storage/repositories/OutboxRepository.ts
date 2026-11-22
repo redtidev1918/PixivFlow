@@ -242,16 +242,22 @@ export class OutboxRepository extends BaseRepository {
    * crashed prior worker). The claim is a compare-and-set inside one
    * statement, so two workers/processes never grab the same row.
    */
-  claimDue(owner: string, leaseMs: number, limit: number, now: number = Date.now()): OutboxRow[] {
+  claimDue(
+    owner: string, leaseMs: number, limit: number, now: number = Date.now(),
+    lane?: 'notification' | 'work',
+  ): OutboxRow[] {
     const ids = (this.db
       .prepare(
         `SELECT id FROM outbox
-         WHERE status IN ('pending','retry_wait') AND next_attempt_at <= @now
-            OR (status = 'processing' AND lease_until IS NOT NULL AND lease_until <= @now)
+         WHERE ((status IN ('pending','retry_wait') AND next_attempt_at <= @now)
+            OR (status = 'processing' AND lease_until IS NOT NULL AND lease_until <= @now))
+           AND (@notification IS NULL OR (kind = 'notification') = @notification)
          ORDER BY next_attempt_at ASC
          LIMIT @limit`
       )
-      .all({ now, limit }) as Array<{ id: string }>).map((r) => r.id);
+      .all({
+        now, limit, notification: lane === undefined ? null : Number(lane === 'notification'),
+      }) as Array<{ id: string }>).map((r) => r.id);
 
     if (ids.length === 0) return [];
     const claim = this.db.prepare(

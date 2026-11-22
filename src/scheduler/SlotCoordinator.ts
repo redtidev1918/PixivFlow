@@ -680,7 +680,7 @@ export class SlotCoordinator {
     slot: SlotContext,
     schedule: ScheduleConfig,
     targets: TargetConfig[],
-    options: { leaseOwner?: string } = {}
+    options: { leaseOwner?: string; executionTimedOut?: boolean } = {}
   ): SlotRunSummary {
     const membership = this.database.slots.getSlotTargetIds(slot.slotId);
     const ids = membership.length > 0 ? membership : targets.map((t) => t.id).filter(Boolean) as string[];
@@ -721,17 +721,21 @@ export class SlotCoordinator {
         continue;
       }
       if (cell.status === 'pending' || cell.status === 'selected') {
+        if (options.executionTimedOut && foreignLiveLease) continue;
         // Ran but never reached a terminal state (target threw before delivery).
         // Persist a normalized reason so the operator sees a first-level cause,
         // not a bare "target did not complete".
-        const error = cell.lastError ?? 'target did not complete';
+        const code = options.executionTimedOut ? 'execution_timeout' : 'internal_error';
+        const error = options.executionTimedOut
+          ? TERMINAL_REASON_MESSAGES[code]
+          : cell.lastError ?? 'target did not complete';
         this.database.slots.setCellStatus(slot.slotId, targetId, 'failed', error);
         try {
           this.database.slots.setCellTerminalReason(
             slot.slotId,
             targetId,
-            'internal_error',
-            TERMINAL_REASON_MESSAGES.internal_error
+            code,
+            TERMINAL_REASON_MESSAGES[code]
           );
         } catch (reasonError) {
           logger.debug('Failed to persist terminal reason in rollup', {

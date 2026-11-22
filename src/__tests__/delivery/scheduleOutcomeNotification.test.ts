@@ -88,6 +88,28 @@ function withDb<T>(fn: (db: Database) => T): T {
 }
 
 describe('schedule outcome notification', () => {
+  it('queues one early timeout notice per occurrence while the summary still waits for media', () => {
+    withDb((db) => {
+      const config = cfg();
+      config.delivery.targets['bot1-submit'].notificationUrl = 'https://telepost.example/notifications';
+      const policy = new NotificationPolicy(db, config);
+      expect(policy.noteExecutionTimeout(slot, schedule, config.targets)).toBe(true);
+      policy.noteExecutionTimeout(slot, schedule, config.targets);
+      policy.sendSlotSummary(slot, schedule, [
+        r('bot1-illust', 'illustration', 'delivery_pending'),
+        r('bot1-novel', 'novel', 'failed'),
+      ]);
+      expect(enqueued(db)).toHaveLength(1);
+      expect(payloadJson(db)).not.toHaveProperty('scheduleOutcome');
+      expect(payloadJson(db).text).toContain('执行超时');
+      policy.sendSlotSummary(slot, schedule, [
+        r('bot1-illust', 'illustration', 'submitted'),
+        r('bot1-novel', 'novel', 'failed'),
+      ]);
+      expect(enqueued(db)).toHaveLength(2);
+    });
+  });
+
   it('a FULL success is notified (no news is NOT good news)', () => {
     withDb((db) => {
       new NotificationPolicy(db, cfg()).sendSlotSummary(slot, schedule, [

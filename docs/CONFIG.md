@@ -728,12 +728,15 @@ dead row 用 `pixivflow outbox retry <id>` 或 `retry --dead` 正式重放，幂
 | `timezone` | `Asia/Shanghai` | IANA 时区名 |
 | `maxExecutions` | 不限 | 总执行次数上限,达到即退出(适合限量采集) |
 | `minInterval` | 0(ms) | 两次执行的最小间隔,触发过密则跳过 |
-| `timeout` | 不限 | 单次任务超时时间(ms),超时终止本次任务 |
+| `timeout` | 1800000 ms | 调度器单次执行的总时长上限，排队等待时间不计入 |
+| `progressTimeoutMs` | 未启用 | 连续无进展多久后中止执行。完成作品、目标或一轮候选筛选会刷新计时，失败重试和租约心跳不会刷新；总时长仍受 `timeout` 限制 |
 | `maxConsecutiveFailures` | 不限 | 连续失败 N 次后停止调度器 |
 | `failureRetryDelay` | 0(ms) | 失败后的等待间隔 |
 
 计划失败或超时时，只要对应 target 的交付目标配置了 `notificationUrl`，审核群就会收到
-持久化运维通知；达到 `maxConsecutiveFailures` 自动停止时会在同一条消息中明确说明。
+持久化运维通知。定时班次触发超时时会按班次立即入队，绕开媒体投递与投稿就绪探测；
+待同班所有稿件收敛后另发最终汇总。两条消息各自去重。达到 `maxConsecutiveFailures`
+时还会报告计划已自动停止。
 
 ### 多计划格式
 

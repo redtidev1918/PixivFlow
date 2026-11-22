@@ -64,6 +64,41 @@ class FakeDispatcher {
 const ctx = { idempotencyKey: 'k-1' } as any;
 
 describe('OutboxWorker failure injection', () => {
+  it('delivers a timeout notice while media is still awaiting its ACK', async () => {
+    jest.useFakeTimers();
+    try {
+      await withDb(async (db) => {
+        let finishUpload!: (result: { ack: DeliveryAck }) => void;
+        const upload = new Promise<{ ack: DeliveryAck }>((resolve) => { finishUpload = resolve; });
+        const dispatcher = new FakeDispatcher([() => upload], [async () => {}]);
+        const media = db.outbox.enqueue({
+          kind: 'delivery', deliveryTarget: 'fixture', idempotencyKey: 'media',
+          payload: { files: [], context: ctx }, maxAttempts: 3,
+        });
+        const worker = new OutboxWorker(db, dispatcher as any, { pollIntervalMs: 100 });
+        worker.start();
+        try {
+          await jest.advanceTimersByTimeAsync(0);
+          expect(dispatcher.deliverCalls).toBe(1);
+          dispatcher.ready = false;
+          const alert = db.outbox.enqueue({
+            kind: 'notification', deliveryTarget: 'fixture', idempotencyKey: 'timeout',
+            payload: { text: 'Execution timed out' }, maxAttempts: 3,
+          });
+          await jest.advanceTimersByTimeAsync(100);
+          expect(db.outbox.get(media.id)?.status).toBe('processing');
+          expect(db.outbox.get(alert.id)?.status).toBe('done');
+        } finally {
+          finishUpload({ ack: { kind: 'accepted' } });
+          await jest.advanceTimersByTimeAsync(0);
+          worker.stop();
+        }
+      });
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it('retries a notification HTTP 408 using the same durable notification', async () => {
     const originalFetch = global.fetch;
     global.fetch = jest.fn()

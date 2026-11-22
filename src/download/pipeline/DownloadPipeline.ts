@@ -12,7 +12,6 @@ import {
   CandidateScanSummary,
   CandidateSkip,
   classifyCandidateFailure,
-  isSelectedAttempt,
 } from '../../scheduler/TargetOutcome';
 
 type DownloadItem = PixivIllust | PixivNovel;
@@ -50,6 +49,7 @@ export interface DownloadPipelineDependencies {
    * remaining items become no-ops so the current batch drains quickly.
    */
   isCancelled?: () => boolean;
+  onWorkCompleted?: () => void;
 }
 
 /**
@@ -71,6 +71,7 @@ export class DownloadPipeline {
   private readonly progressReporter: ProgressReporter;
   private readonly recovery: ErrorRecoveryStrategy;
   private readonly isRunCancelled: () => boolean;
+  private readonly onWorkCompleted?: () => void;
 
   constructor(deps: DownloadPipelineDependencies) {
     this.config = deps.config;
@@ -79,6 +80,7 @@ export class DownloadPipeline {
     this.progressReporter = deps.progressReporter;
     this.recovery = deps.recovery;
     this.isRunCancelled = deps.isCancelled ?? (() => false);
+    this.onWorkCompleted = deps.onWorkCompleted;
   }
 
   async run<T extends DownloadItem>(
@@ -192,12 +194,11 @@ export class DownloadPipeline {
           scan.attempted = attemptedIndices.size;
         }
         const attempt = await downloadFn(item, tagForLog);
-        if (isSelectedAttempt(attempt)) {
-          state.downloaded++;
-        } else if (attempt?.kind === 'skipped') {
+        if (attempt?.kind === 'skipped') {
           recordCandidateSkip(attempt.skip);
         } else {
           state.downloaded++;
+          this.onWorkCompleted?.();
         }
         this.updateProgress(
           state.downloaded,

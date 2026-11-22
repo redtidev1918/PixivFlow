@@ -36,7 +36,7 @@ export interface JobTelemetry {
   /** Called after a successful/failed-but-not-timed-out run; derives items from the baseline. */
   endRun(baseline: number): Promise<number> | number;
   /** Called when the configured timeout fires; should abort the in-flight job. */
-  requestCancel?(reason: string): void;
+  requestCancel?(reason: string): boolean | void;
 }
 
 export interface JobLease {
@@ -50,6 +50,7 @@ export interface JobFailure {
   errorMessage: string | null;
   consecutiveFailures: number;
   stopped: boolean;
+  startedAt?: number;
 }
 
 /**
@@ -275,22 +276,38 @@ export class Scheduler {
       scheduleId: this.scheduleId,
     });
 
-    // Set up timeout if configured
+    // Progress can move the inactivity deadline but never the hard deadline.
     let abandoned = false;
+    let timeoutReported = false;
     let resolveDrainExpired: (() => void) | null = null;
     const drainExpired = new Promise<void>((resolve) => {
       resolveDrainExpired = resolve;
     });
 
-    if (this.config.timeout) {
+    const hardTimeoutMs = this.config.timeout;
+    const progressTimeoutMs = this.config.progressTimeoutMs;
+    const budgetStartedAt = performance.now();
+    const hardDeadline = hardTimeoutMs ? budgetStartedAt + hardTimeoutMs : Infinity;
+    let progressDeadline = progressTimeoutMs ? budgetStartedAt + progressTimeoutMs : Infinity;
+    const armTimeout = () => {
+      const deadline = Math.min(hardDeadline, progressDeadline);
+      if (!Number.isFinite(deadline)) return;
+      if (this.timeoutHandle) clearTimeout(this.timeoutHandle);
       this.timeoutHandle = setTimeout(() => {
         if (this.running) {
-          logger.error(`Job execution timeout after ${this.config.timeout}ms, requesting cancellation`);
+          const elapsedMs = Math.round(performance.now() - budgetStartedAt);
+          const stalled = progressDeadline < hardDeadline;
+          const description = stalled
+            ? `Execution timeout: no progress for ${progressTimeoutMs}ms`
+            : `Execution timeout after ${hardTimeoutMs}ms`;
+          logger.error(`Job ${description[0].toLowerCase() + description.slice(1)}, requesting cancellation`, {
+            elapsedMs, scheduleId: this.scheduleId, deadline: stalled ? 'no_progress' : 'total_budget',
+          });
           timeoutOccurred = true;
           status = 'timeout';
-          errorMessage = `Execution timeout after ${this.config.timeout}ms`;
+          errorMessage = description;
           try {
-            this.telemetry?.requestCancel?.('scheduler timeout');
+            timeoutReported = this.telemetry?.requestCancel?.('scheduler timeout') === true;
           } catch (cancelError) {
             logger.warn('Failed to request job cancellation', { error: cancelError });
           }
@@ -301,7 +318,7 @@ export class Scheduler {
           this.drainHandle = setTimeout(() => {
             abandoned = true;
             errorMessage =
-              `Execution timeout after ${this.config.timeout}ms; the job was still running after the ` +
+              `${description}; the job was still running after the ` +
               `${ABORT_DRAIN_MS}ms drain window and has been abandoned`;
             logger.error('Job did not settle within the drain window; abandoning it', {
               scheduleId: this.scheduleId,
@@ -313,20 +330,28 @@ export class Scheduler {
           // Keep running=true until the aborted job settles (or the drain
           // expires) so the concurrent-run guard stays correct.
         }
-      }, this.config.timeout);
+      }, Math.max(1, Math.ceil(deadline - performance.now())));
       this.timeoutHandle.unref?.();
-    }
+    };
+    armTimeout();
+    const reportProgress = () => {
+      if (!progressTimeoutMs || timeoutOccurred || !this.timeoutHandle) return;
+      const now = performance.now();
+      if (now >= Math.min(hardDeadline, progressDeadline)) return;
+      progressDeadline = now + progressTimeoutMs;
+      armTimeout();
+    };
 
     const jobPromise = this.executeWithTracking(
       job,
       (count) => {
         itemsDownloaded = count;
       },
-      triggerOptions
+      progressTimeoutMs ? { ...triggerOptions, reportProgress } : triggerOptions
     );
 
     try {
-      await (this.config.timeout ? Promise.race([jobPromise, drainExpired]) : jobPromise);
+      await (this.timeoutHandle ? Promise.race([jobPromise, drainExpired]) : jobPromise);
 
       if (timeoutOccurred) {
         status = 'timeout';
@@ -350,6 +375,8 @@ export class Scheduler {
         }
         logger.warn('Scheduled job was cancelled', { executionNumber, reason: errorMessage });
         itemsDownloaded = await accountItems();
+      } else if (timeoutOccurred) {
+        this.consecutiveFailures++;
       } else {
         status = 'failed';
         errorMessage = error instanceof Error ? error.message : String(error);
@@ -430,7 +457,7 @@ export class Scheduler {
         this.stop();
       }
 
-      if ((status === 'failed' || status === 'timeout') && this.onFailure) {
+      if ((status === 'failed' || (status === 'timeout' && (!timeoutReported || failureLimitReached))) && this.onFailure) {
         try {
           await this.onFailure({
             scheduleId: this.scheduleId,
@@ -439,6 +466,7 @@ export class Scheduler {
             errorMessage,
             consecutiveFailures: this.consecutiveFailures,
             stopped: failureLimitReached,
+            startedAt: startTime.getTime(),
           });
         } catch (error) {
           logger.warn('Failed to report scheduled job failure', {

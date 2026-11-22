@@ -146,7 +146,7 @@ export interface SchedulerRuntime {
    * run is finished and its Slot must be terminalised) or going away
    * (`shutdown`: leave the Slot non-terminal so recovery resumes it).
    */
-  cancelActive(reason: string, origin?: CancelOrigin): void;
+  cancelActive(reason: string, origin?: CancelOrigin): boolean;
   /**
    * Cancel the in-flight run **only if it is the one owning `slotId`**.
    *
@@ -167,7 +167,7 @@ export interface SchedulerRuntime {
    * renewing its lease and take its Slot terminal so recovery cannot re-dispatch
    * the same occurrence alongside the still-running job.
    */
-  abandonActiveRun(reason: string): void;
+  abandonActiveRun(reason?: string): void;
   /** Notify the affected review group after a failed scheduled run. */
   notifyScheduleFailure(
     snapshot: StandaloneConfig,
@@ -308,7 +308,7 @@ export async function notifyScheduleFailure(
     targetNames,
     `⚠️ PixivFlow 定时任务${status}\n计划：${schedule.name?.trim() || schedule.id}` +
       `\n连续失败：${failure.consecutiveFailures}${error}${stopped}`,
-    `pixivflow:schedule-failure:${schedule.id}:${failure.executionNumber}`
+    `pixivflow:schedule-failure:${schedule.id}:${failure.startedAt ?? failure.executionNumber}`
   );
 }
 
@@ -431,7 +431,11 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
    * cancelActive()/abandonActiveRun() (defined below, outside runJob's closure).
    * Set while a lease is held and cleared as soon as it is released.
    */
-  let activeLeaseHooks: { stopHeartbeat(): void; abandon(reason: string): void } | null = null;
+  let activeLeaseHooks: {
+    stopHeartbeat(): void;
+    reportTimeout(): boolean;
+    abandon(): void;
+  } | null = null;
   /**
    * Why the in-flight run was cancelled, if it was. This is what lets the abort
    * path tell a CRASH (nothing runs here — the process is gone) apart from an
@@ -632,11 +636,14 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
       heartbeat.unref?.();
       varReleaseLease = () => {
         clearInterval(heartbeat);
-        activeLeaseHooks = null;
-        activeSlotId = null;
+        if (!slotAbandoned) {
+          activeLeaseHooks = null;
+          activeSlotId = null;
+        }
         coordinator.releaseRunLease(activeSlot.slotId, runOwner);
       };
       activeLeaseHooks = {
+        reportTimeout: () => notificationPolicy.noteExecutionTimeout(activeSlot, schedule, targets),
         stopHeartbeat: () => {
           cancelled = true;
           clearInterval(heartbeat);
@@ -648,21 +655,14 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
          * still-running job. Merely dropping the lease would be wrong here —
          * unlike a crash, this worker is alive.
          */
-        abandon: (reason: string) => {
+        abandon: () => {
           cancelled = true;
           slotAbandoned = true;
           clearInterval(heartbeat);
+          coordinator.finish(activeSlot, schedule, targets, { leaseOwner: runOwner, executionTimedOut: true });
           for (const target of targets) {
-            if (!target.id) continue;
-            if (database.slots.getCell(activeSlot.slotId, target.id)?.status === 'delivery_pending') continue;
-            coordinator.applyOutcome(activeSlot.slotId, target.id, { kind: 'failed', retryable: false, error: reason });
-            notificationPolicy.noteTerminalRefetchCell(activeSlot.slotId, target.id);
+            if (target.id) notificationPolicy.noteTerminalRefetchCell(activeSlot.slotId, target.id);
           }
-          database.slots.markSlotStatus(
-            activeSlot.slotId,
-            'failed',
-            `abandoned after scheduler timeout; no delivery (${reason})`
-          );
           coordinator.releaseRunLease(activeSlot.slotId, runOwner);
           activeLeaseHooks = null;
           activeSlotId = null;
@@ -787,7 +787,8 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
     // (execute-slot) runs without a Slot and still has to report a
     // machine-readable per-target result to its caller.
     const outcomeHook = (target: TargetConfig, outcome: TargetOutcome) => {
-      if (!target.id) return;
+      if (!target.id || slotAbandoned || downloadManager?.signal?.aborted) return;
+      if (outcome.kind !== 'failed') options.reportProgress?.();
       options.onTargetOutcome?.(target.id, outcome);
       if (!scheduleSlot) {
         // No durable slot (run-once CLI): nothing to converge or report.
@@ -912,7 +913,9 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
         //  - the process is going away (`shutdown`). Deliberately leave the Slot
         //    non-terminal so recovery resumes the same occurrence after restart.
         if (slotCtx && shouldTerminaliseAbortedSlot(activeAbortOrigin, slotAbandoned)) {
-          coordinator.finish(slotCtx, schedule, targets, { leaseOwner: runOwner });
+          coordinator.finish(slotCtx, schedule, targets, {
+            leaseOwner: runOwner, executionTimedOut: activeAbortOrigin === 'timeout',
+          });
           for (const target of targets) if (target.id) notificationPolicy.noteTerminalRefetchCell(slotCtx.slotId, target.id);
         }
         // Hand the lease back either way: a terminal Slot cannot be re-dispatched,
@@ -930,7 +933,9 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
     const duration = Math.round((Date.now() - startTime) / 1000);
 
     if (slotCtx && !slotAbandoned) {
-      const summary = coordinator.finish(slotCtx, schedule, targets, { leaseOwner: runOwner });
+      const summary = coordinator.finish(slotCtx, schedule, targets, {
+        leaseOwner: runOwner, executionTimedOut: activeAbortOrigin === 'timeout',
+      });
       for (const target of targets) if (target.id) notificationPolicy.noteTerminalRefetchCell(slotCtx.slotId, target.id);
       // Terminal summaries are for SCHEDULED occurrences (P0-B). Remote manual
       // replacements already report through their own verdict channel
@@ -970,7 +975,7 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
     }
   };
 
-  const cancelActive = (reason: string, origin: CancelOrigin = 'timeout'): void => {
+  const cancelActive = (reason: string, origin: CancelOrigin = 'timeout'): boolean => {
     activeAbortOrigin = origin;
     activeDownloadManager?.cancel(reason);
     // Scheduler timeout / process shutdown also stop the lease heartbeat. The run
@@ -978,6 +983,7 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
     // keep the slot locked while it unwinds. Whether the Slot is then terminalised
     // or left recoverable is decided by `origin` in the abort path of runJob.
     activeLeaseHooks?.stopHeartbeat();
+    return origin === 'timeout' && (activeLeaseHooks?.reportTimeout() ?? false);
   };
 
   const cancelSlot = (slotId: string, reason: string): boolean => {
@@ -989,11 +995,11 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
     return true;
   };
 
-  const abandonActiveRun = (reason: string): void => {
+  const abandonActiveRun = (): void => {
     // Cancellation did not take effect inside the drain window — a request that
     // ignores the abort. This run will never settle, so finish the lease
     // bookkeeping it cannot do itself.
-    activeLeaseHooks?.abandon(reason);
+    activeLeaseHooks?.abandon();
   };
 
   const close = (): void => {

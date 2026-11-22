@@ -66,9 +66,28 @@ export class NotificationPolicy {
     noMatch: (slotId: string, targetId: string) => `notification:${slotId}:${targetId}:no-candidate`,
     hardFail: (slotId: string, targetId: string) => `notification:${slotId}:${targetId}:failed`,
     summary: (slotId: string) => `notification:${slotId}:summary`,
+    timeout: (slotId: string, route: string) => `notification:${slotId}:${route}:execution-timeout`,
     dead: (slotId: string, targetId: string) => `notification:${slotId}:${targetId}:delivery-dead`,
     refetchOutcome: (slotId: string, targetId: string) => `refetch-outcome:${slotId}:${targetId}`,
   };
+
+  /** The timeout is visible even while another cell awaits delivery. */
+  noteExecutionTimeout(slot: SlotContext, schedule: ScheduleConfig, targets: TargetConfig[]): boolean {
+    if (slot.manualRequestId || slot.recoveryRequestId) return false;
+    const notifiable = this.notifiableTargets();
+    const routes = new Set(targets.map((target) => this.targetName(target)));
+    let queued = false;
+    for (const route of routes) {
+      if (!route || !notifiable.has(route)) continue;
+      const sent = this.send(route, NotificationPolicy.keys.timeout(slot.slotId, route), [
+        '⚠️ PixivFlow 定时任务执行超时',
+        `计划：${schedule.name?.trim() || schedule.id} · ${slot.occurrenceLabel}`,
+        '正在停止未完成的处理。已进入投递的稿件继续重试，最终结果将在审核群通知。',
+      ].join('\n'));
+      queued = sent || queued;
+    }
+    return queued;
+  }
 
   noteOutcome(
     slotId: string,
@@ -251,12 +270,14 @@ export class NotificationPolicy {
     }
   }
 
-  private send(targetName: string, key: string, text: string): void {
+  private send(targetName: string, key: string, text: string): boolean {
     try {
       new DeliveryService(this.database).enqueueNotification(targetName, text, key);
+      return true;
     } catch (error) {
       // Durable enqueue failure must not unwind the content run.
       logger.warn('notification enqueue failed', { targetName, key, error: (error as Error).message });
+      return false;
     }
   }
 

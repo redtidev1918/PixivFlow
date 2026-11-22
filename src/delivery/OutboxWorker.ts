@@ -81,7 +81,7 @@ class DeliveryAckFailure extends Error {
  */
 export class OutboxWorker {
   private timer: NodeJS.Timeout | null = null;
-  private running = false;
+  private readonly running = new Set<'notification' | 'work'>();
   private stopped = false;
   private readonly owner = `worker-${process.pid}-${randomUUID().slice(0, 8)}`;
   private readonly pollIntervalMs: number;
@@ -113,8 +113,18 @@ export class OutboxWorker {
     if (this.timer) return;
     logger.info('Outbox worker started', { pollMs: this.pollIntervalMs, owner: this.owner });
     // Pump immediately on start so a crash-resume drains without waiting.
-    void this.pump();
-    this.timer = setInterval(() => void this.pump(), this.pollIntervalMs);
+    const pump = () => {
+      if (this.stopped || this.running.size === 2) return;
+      try {
+        this.options.beforeDrain?.();
+      } catch (error) {
+        logger.warn('Outbox reconciliation failed', { error: redactError(error) });
+      }
+      void this.pump('notification');
+      void this.pump('work');
+    };
+    pump();
+    this.timer = setInterval(pump, this.pollIntervalMs);
     // Don't keep the event loop alive solely for the pump during shutdown.
     this.timer.unref?.();
   }
@@ -161,12 +171,13 @@ export class OutboxWorker {
     return { processed, done, retried, dead };
   }
 
-  private async pump(): Promise<void> {
-    if (this.running || this.stopped) return;
-    this.running = true;
+  private async pump(lane: 'notification' | 'work'): Promise<void> {
+    if (this.running.has(lane) || this.stopped) return;
+    this.running.add(lane);
     try {
-      this.options.beforeDrain?.();
-      const rows = this.database.outbox.claimDue(this.owner, this.leaseMs, this.batchSize);
+      const rows = this.database.outbox.claimDue(
+        this.owner, this.leaseMs, lane === 'notification' ? 1 : this.batchSize, Date.now(), lane,
+      );
       for (const row of rows) {
         if (this.stopped) {
           this.database.outbox.release(row.id);
@@ -184,12 +195,15 @@ export class OutboxWorker {
     } catch (error) {
       logger.warn('Outbox pump failed', { error: redactError(error) });
     } finally {
-      this.running = false;
+      this.running.delete(lane);
     }
   }
 
   /** Probe via structured readinessProbe when available; boolean fallback stays compatible. */
   private async checkReadiness(row: OutboxRow): Promise<{ ready: boolean; reason?: string; status?: number }> {
+    // The authenticated notification endpoint owns its own availability and
+    // retry verdict. Submission readiness cannot veto an operational alert.
+    if (row.kind === 'notification') return { ready: true };
     const dispatcher = this.dispatcher as unknown as {
       readinessProbe?: (name: string) => Promise<{ ready: boolean; reason?: string; status?: number }>;
     };

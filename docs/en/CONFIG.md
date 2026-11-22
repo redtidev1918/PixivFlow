@@ -729,12 +729,15 @@ Changing `*_Organization` does not move existing files automatically; run
 | `timezone` | `Asia/Shanghai` | IANA timezone name |
 | `maxExecutions` | unlimited | Total execution cap; exits when reached (good for limited collection) |
 | `minInterval` | 0 (ms) | Minimum interval between two runs; overly dense triggers are skipped |
-| `timeout` | unlimited | Per-task timeout (ms); the run is terminated on timeout |
+| `timeout` | 1800000 ms | Hard deadline for one scheduler run, excluding time spent waiting for admission |
+| `progressTimeoutMs` | disabled | Abort after this long without a completed target or candidate-search pass. Retries and lease heartbeats do not renew this deadline. `timeout` still caps the total runtime. |
 | `maxConsecutiveFailures` | unlimited | Stop the scheduler after N consecutive failures |
 | `failureRetryDelay` | 0 (ms) | Wait interval after a failure |
 
 On schedule failure or timeout, as long as the corresponding target's delivery target has `notificationUrl` configured, the review chat receives a
-persistent ops notification; when auto-stopping at `maxConsecutiveFailures`, the same message states it explicitly.
+persistent ops notification. A scheduled timeout queues one occurrence-scoped alert immediately.
+The alert can be sent during a media upload or a failing submission readiness probe. The final
+summary is sent separately after all targets settle. The failure-limit alert also reports auto-stop.
 
 ### Multi-schedule format
 

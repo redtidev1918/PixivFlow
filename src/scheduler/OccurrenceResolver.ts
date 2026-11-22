@@ -44,6 +44,8 @@ export interface ScheduleRunOptions {
    * now via the schedule's own cron + timezone.
    */
   slot?: SlotContext;
+  /** Called by the local executor when it reaches a new work checkpoint. */
+  reportProgress?: () => void;
 }
 
 export interface OccurrenceInput {

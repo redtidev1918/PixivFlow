@@ -6,7 +6,7 @@ import cron from 'node-cron';
 import { logger } from '../logger';
 import { ConfigError } from '../utils/errors';
 import { getBestAvailableToken, isPlaceholderToken } from '../utils/token-manager';
-import { StandaloneConfig, TelegramReviewDeliveryConfig } from './types';
+import { SchedulerConfig, StandaloneConfig, TelegramReviewDeliveryConfig } from './types';
 import { targetDeliveryNames } from '../delivery/targetRoutes';
 import {
   collectCapabilityOverrideErrors,
@@ -611,8 +611,21 @@ export function validateConfig(config: Partial<StandaloneConfig>, location: stri
     }
   }
 
+  // The inactivity budget is optional. Omit it to preserve a fixed deadline.
+  const validateProgressTimeout = (plan: SchedulerConfig, prefix: string): void => {
+    const budget = plan.progressTimeoutMs;
+    if (budget === undefined) return;
+    if (!Number.isInteger(budget) || budget < 1000 || budget > 2_147_483_647) {
+      errors.push(`${prefix}.progressTimeoutMs: Must be an integer from 1000 to 2147483647 milliseconds`);
+    } else if (plan.timeout !== undefined && (!Number.isInteger(plan.timeout) ||
+      plan.timeout < budget || plan.timeout > 2_147_483_647)) {
+      errors.push(`${prefix}.timeout: Must be at least progressTimeoutMs and at most 2147483647`);
+    }
+  };
+
   // Validate scheduler config
   if (config.scheduler) {
+    validateProgressTimeout(config.scheduler, 'scheduler');
     if (config.scheduler.enabled && !config.scheduler.cron) {
       errors.push('scheduler.cron: Required when scheduler is enabled');
     }
@@ -641,6 +654,7 @@ export function validateConfig(config: Partial<StandaloneConfig>, location: stri
       const targetIds = new Set((config.targets ?? []).flatMap(target => target.id ? [target.id] : []));
       config.schedules.forEach((schedule, index) => {
         const prefix = `schedules[${index}]`;
+        validateProgressTimeout(schedule, prefix);
         if (!schedule.id || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(schedule.id)) {
           errors.push(`${prefix}.id: Required and must contain only letters, numbers, '_' or '-' (max 64 characters)`);
         } else if (scheduleIds.has(schedule.id)) {

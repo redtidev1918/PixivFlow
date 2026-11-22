@@ -106,6 +106,7 @@ export class HttpMultipartDelivery implements DeliveryProvider {
     if (this.dispatcher) options.dispatcher = this.dispatcher;
     try {
       const response = await fetch(this.interpolateEnvironment(url), options as Parameters<typeof fetch>[1]);
+      await response.body?.cancel();
       if (response.ok) return { ready: true, status: response.status };
       return { ready: false, reason: `http_${response.status}`, status: response.status };
     } catch (error) {
@@ -198,7 +199,7 @@ export class HttpMultipartDelivery implements DeliveryProvider {
       method: 'POST',
       headers,
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(5 * 60_000),
+      signal: AbortSignal.timeout(60_000),
     };
     if (this.dispatcher) options.dispatcher = this.dispatcher;
     const response = await fetch(this.interpolateEnvironment(url), options as Parameters<typeof fetch>[1]);

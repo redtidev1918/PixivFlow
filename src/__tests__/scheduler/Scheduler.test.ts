@@ -54,3 +54,45 @@ it('counts a timed-out cancellation as a failure', async () => {
   }));
   scheduler.stop();
 });
+
+it.each([
+  { checkpoints: [], deadline: 1_000, reason: 'no progress' },
+  { checkpoints: [800, 1600, 2400], deadline: 3_000, reason: 'after 3000ms' },
+])('bounds adaptive execution at $deadline ms', async ({ checkpoints, deadline, reason }) => {
+  jest.useFakeTimers();
+  const cancel = jest.fn();
+  const onFailure = jest.fn();
+  const scheduler = new Scheduler(
+    { enabled: true, cron: '0 0 1 1 *', timeout: 3_000, progressTimeoutMs: 1_000 },
+    undefined, { beginRun: () => 0, endRun: () => 0, requestCancel: cancel },
+    'fixture', undefined, onFailure,
+  );
+  let reportProgress: (() => void) | undefined;
+  let rejectJob!: (error: Error) => void;
+  cancel.mockImplementation(() => rejectJob(new Error('late abort failure')));
+  scheduler.init((options) => new Promise<void>((_resolve, reject) => {
+    reportProgress = options?.reportProgress;
+    rejectJob = reject;
+  }));
+  try {
+    scheduler.runNow();
+    await jest.advanceTimersByTimeAsync(0);
+    let elapsed = 0;
+    for (const checkpoint of checkpoints) {
+      await jest.advanceTimersByTimeAsync(checkpoint - elapsed);
+      expect(cancel).not.toHaveBeenCalled();
+      reportProgress?.();
+      elapsed = checkpoint;
+    }
+    await jest.advanceTimersByTimeAsync(deadline - elapsed - 1);
+    expect(cancel).not.toHaveBeenCalled();
+    await jest.advanceTimersByTimeAsync(1);
+    expect(cancel).toHaveBeenCalledTimes(1);
+    expect(onFailure).toHaveBeenCalledWith(expect.objectContaining({
+      status: 'timeout', errorMessage: expect.stringContaining(reason),
+    }));
+  } finally {
+    scheduler.stop();
+    jest.useRealTimers();
+  }
+});

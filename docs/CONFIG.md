@@ -729,7 +729,7 @@ dead row 用 `pixivflow outbox retry <id>` 或 `retry --dead` 正式重放，幂
 | `maxExecutions` | 不限 | 总执行次数上限,达到即退出(适合限量采集) |
 | `minInterval` | 0(ms) | 两次执行的最小间隔,触发过密则跳过 |
 | `timeout` | 1800000 ms | 调度器单次执行的总时长上限，排队等待时间不计入 |
-| `progressTimeoutMs` | 未启用 | 连续无进展多久后中止执行。完成目标或完成一轮候选筛选会刷新计时，失败重试和租约心跳不会刷新；总时长仍受 `timeout` 限制 |
+| `progressTimeoutMs` | 未启用 | 连续无进展多久后中止执行。完成作品、目标或一轮候选筛选会刷新计时，失败重试和租约心跳不会刷新；总时长仍受 `timeout` 限制 |
 | `maxConsecutiveFailures` | 不限 | 连续失败 N 次后停止调度器 |
 | `failureRetryDelay` | 0(ms) | 失败后的等待间隔 |
 

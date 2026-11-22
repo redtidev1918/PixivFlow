@@ -763,7 +763,7 @@ export async function createSchedulerRuntime(configPathArg?: string): Promise<Sc
           options.deliveryMode
         ),
       };
-      const manager = new DownloadManager(scoped, pixivClient, database, fileService);
+      const manager = new DownloadManager(scoped, pixivClient, database, fileService, options.reportProgress);
       if (targetExecutionContexts) manager.setTargetExecutionContexts(targetExecutionContexts);
       if (excludedWorkIds) manager.setProcessedWorkIds(excludedWorkIds);
       manager.setTargetOutcomeHook(outcomeHook);

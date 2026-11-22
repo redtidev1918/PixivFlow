@@ -144,7 +144,8 @@ export class DownloadManager implements IDownloadManager {
     private readonly config: StandaloneConfig,
     client: IPixivClient,
     database: IDatabase,
-    private readonly fileService: IFileService
+    private readonly fileService: IFileService,
+    onWorkCompleted?: () => void,
   ) {
     this.progressReporter = new ProgressReporter();
     this.rankingService = new RankingService(client);
@@ -220,6 +221,7 @@ export class DownloadManager implements IDownloadManager {
       progressReporter: this.progressReporter,
       recovery: this.errorRecovery,
       isCancelled: () => this.cancelled,
+      onWorkCompleted,
     });
 
     // Delivery ledger + SQLite outbox. Requires the concrete Database (with the

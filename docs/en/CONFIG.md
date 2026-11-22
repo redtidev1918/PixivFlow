@@ -730,7 +730,7 @@ Changing `*_Organization` does not move existing files automatically; run
 | `maxExecutions` | unlimited | Total execution cap; exits when reached (good for limited collection) |
 | `minInterval` | 0 (ms) | Minimum interval between two runs; overly dense triggers are skipped |
 | `timeout` | 1800000 ms | Hard deadline for one scheduler run, excluding time spent waiting for admission |
-| `progressTimeoutMs` | disabled | Abort after this long without a completed target or candidate-search pass. Retries and lease heartbeats do not renew this deadline. `timeout` still caps the total runtime. |
+| `progressTimeoutMs` | disabled | Abort after this long without a completed work, target, or candidate-search pass. Retries and lease heartbeats do not renew this deadline. `timeout` still caps the total runtime. |
 | `maxConsecutiveFailures` | unlimited | Stop the scheduler after N consecutive failures |
 | `failureRetryDelay` | 0 (ms) | Wait interval after a failure |
 

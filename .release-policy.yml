@@ -38,7 +38,7 @@
         "id": "refresh-download-page",
         "type": "github-workflow",
         "required": true,
-        "workflow": "update-download-page.yml",
+        "workflow": "refresh-release-download-page.yml",
         "inputs": {
           "tag": "{{tag}}",
           "deploy-docs": "false"
@@ -48,7 +48,7 @@
         "id": "deploy-docs",
         "type": "github-workflow",
         "required": true,
-        "workflow": "static.yml",
+        "workflow": "docs.yml",
         "ref": "default"
       }
     ]

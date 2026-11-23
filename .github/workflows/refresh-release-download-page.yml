@@ -1,0 +1,84 @@
+# Repository adapter for protected-branch updates. Keep the docsite-managed
+# update-download-page.yml unchanged so template synchronization remains valid.
+name: Refresh release download page
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        type: string
+        required: true
+      deploy-docs:
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+concurrency:
+  group: update-download-page
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
+      - name: Regenerate download pages for the exact release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: python3 .github/scripts/update_download_page.py "$GITHUB_REPOSITORY" --tag "$RELEASE_TAG"
+      - name: Merge download pages through a checked PR
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          BASE: ${{ github.event.repository.default_branch }}
+          BRANCH: codex/download-page-${{ github.run_id }}-${{ github.run_attempt }}
+          REQUIRED_CHECK: TelePost delivery contract
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- docs/; then
+            echo "download pages already up to date"
+            exit 0
+          fi
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::RELEASE_PLEASE_TOKEN is required to trigger protected-branch checks"
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$BRANCH"
+          git add docs/download.md docs/en/download.md
+          git commit -m "docs: refresh download page ($RELEASE_TAG)"
+          git push origin "$BRANCH"
+          pr=$(gh pr create --base "$BASE" --head "$BRANCH" \
+            --title "docs: refresh download page ($RELEASE_TAG)" \
+            --body "Regenerate download links for the exact release tag. Merge only after CI passes.")
+          registered=false
+          for attempt in $(seq 1 30); do
+            names=$(gh pr checks "$pr" --json name --jq '.[].name' || true)
+            if printf '%s\n' "$names" | grep -Fxq "$REQUIRED_CHECK"; then
+              registered=true
+              break
+            fi
+            sleep 10
+          done
+          if [ "$registered" != true ]; then
+            echo "::error::Required delivery check was not registered; leaving PR open"
+            exit 1
+          fi
+          gh pr checks "$pr" --watch --interval 20
+          gh pr merge "$pr" --squash --delete-branch
+      - name: Deploy docs when requested
+        if: inputs.deploy-docs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE: ${{ github.event.repository.default_branch }}
+        run: gh workflow run docs.yml --ref "$BASE"

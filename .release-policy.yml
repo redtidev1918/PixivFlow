@@ -39,6 +39,7 @@
         "type": "github-workflow",
         "required": true,
         "workflow": "refresh-release-download-page.yml",
+        "ref": "default",
         "inputs": {
           "tag": "{{tag}}",
           "deploy-docs": "false"

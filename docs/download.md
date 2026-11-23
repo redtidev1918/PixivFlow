@@ -1,14 +1,14 @@
 <!-- docsite-release-repo: redtidev1918/PixivFlow -->
-<!-- docsite-release-tag: v3.10.0 -->
+<!-- docsite-release-tag: v3.10.1 -->
 # 下载 PixivFlow
 
 **语言 / Language:** 中文 · [English](/en/download.md)
 
-<!-- docsite: generated from redtidev1918/PixivFlow release v3.10.0; do not edit by hand -->
+<!-- docsite: generated from redtidev1918/PixivFlow release v3.10.1; do not edit by hand -->
 
-## 最新版本：`v3.10.0`（2026-10-30）
+## 最新版本：`v3.10.1`（2026-11-22）
 
-[查看 Release 说明与校验和](https://github.com/redtidev1918/PixivFlow/releases/tag/v3.10.0)
+[查看 Release 说明与校验和](https://github.com/redtidev1918/PixivFlow/releases/tag/v3.10.1)
 
 ## 环境要求
 

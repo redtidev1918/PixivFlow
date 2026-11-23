@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.10.2](https://github.com/redtidev1918/PixivFlow/compare/v3.10.1...v3.10.2) (2026-11-23)
+
+
+### Bug Fixes
+
+* **ci:** 修复发布后下载页更新与文档部署 ([#249](https://github.com/redtidev1918/PixivFlow/issues/249)) ([7d0642a](https://github.com/redtidev1918/PixivFlow/commit/7d0642ae346f95fbe860b9241cd242bb8373f301))
+
 ## [3.10.1](https://github.com/redtidev1918/PixivFlow/compare/v3.10.0...v3.10.1) (2026-11-22)
 
 
